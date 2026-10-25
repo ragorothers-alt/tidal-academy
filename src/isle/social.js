@@ -5,6 +5,7 @@ import { I, S, save, available, find, list, icon, addItem, itemName, fmtHours, w
 import { pickQ, record, pick, dayKey } from './quiz.js';
 import { drill, picker } from './drill.js';
 import * as miles from './miles.js';
+import * as ledger from './ledger.js';
 
 const TA = window.TA, L = TA.L;
 let VS = [];  // 島民（不含店長）
@@ -119,7 +120,7 @@ async function complete(v, sp, r, slot, remote, bonus) {
   const s = S();
   if (slot >= 0) s.pockets[slot] = null;
   r.done = true;
-  const bells = bonus || 800 + Math.floor(Math.random() * 8) * 100; s.bells += bells;
+  const bells = bonus || 800 + Math.floor(Math.random() * 8) * 100; ledger.mark('request'); s.bells += bells;
   s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + 2); s.stats = s.stats || {}; s.stats.reqs = (s.stats.reqs || 0) + 1; save();
   if (!remote) await ui.say(sp, pick((lines(v.sid).req || {}).thanks || ['謝謝你！']));
   else hooks.toast && hooks.toast(`${v.name}的委託完成了！`);

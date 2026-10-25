@@ -67,6 +67,7 @@ import * as written from './written.js';
 import * as route from './route.js';
 import * as fieldnote from './fieldnote.js';
 import * as bond from './bond.js';
+import * as ledger from './ledger.js';
 import * as highland from './highland.js';
 import * as details from './details.js';
 import * as hotel from './hotel.js';
@@ -368,8 +369,8 @@ async function villagerTalk(v) {
     const k = opts[i] ? opts[i][0] : 'bye';
     if (k === 'fn') { const r = await opts[i][2](); paintHud(); if (r === 'exit') return; continue; }
     if (k === 'bye') { await ui.say(sp(v), pick(['下次見！', '要常來找我喔！', '加油喔！']) + tail(v)); return; }
-    if (k === 'practice') { await challenge.practice(v); paintHud(); }
-    if (k === 'quiz') { await challenge.streak(v); paintHud(); }
+    if (k === 'practice') { await ledger.run('practice', () => challenge.practice(v)); paintHud(); }
+    if (k === 'quiz') { await ledger.run('streak', () => challenge.streak(v)); paintHud(); }
     if (k === 'tip') { const n = (s.tips[v.sid] || 0) % (v.tips || []).length; s.tips[v.sid] = n + 1; save(); await ui.say(sp(v), (v.tips || ['多練習就會進步！'])[n] || '多練習就會進步！'); }
     if (k === 'chat') await ui.say(sp(v), pick(v.chat || ['今天天氣真好。']) + tail(v));
     if (k === 'appraise') await appraise(v);
@@ -469,7 +470,7 @@ async function shopTalk(v) {
   if (k === 'ticket') {
     if (s.ticketDay === dayKey()) { await ui.say(sp(v), '今天的潮汐券已經賣完了，明天再來吧！潮汐里程也可以換潮汐券喔。'); return; }   // 每天限買一張
     if (s.bells < 3000) { await ui.say(sp(v), '鈴錢不夠呢。潮汐里程也可以換潮汐券喔！'); return; }
-    s.bells -= 3000; s.ticketDay = dayKey(); trip.addTickets(1); Audio.sfx('coin'); paintHud(); await ui.say(sp(v), `這是潮汐券！到碼頭盡頭找船長海鷗就能出發。你現在有 ${trip.tickets()} 張。`); return;
+    ledger.mark('shop'); s.bells -= 3000; s.ticketDay = dayKey(); trip.addTickets(1); Audio.sfx('coin'); paintHud(); await ui.say(sp(v), `這是潮汐券！到碼頭盡頭找船長海鷗就能出發。你現在有 ${trip.tickets()} 張。`); return;
   }
   if (k !== 'sell') { await ui.say(sp(v), pick(v.bye || ['下次再來！'])); return; }
   if (!has) { await ui.say(sp(v), pick(v.poor || ['口袋空空的呢。'])); return; }
@@ -483,7 +484,7 @@ async function gemTrade(v) {
   const opts = [10, 50, 100].filter(n => n <= left);
   const i = await ui.ask(sp(v), `1 潮晶可以換 100 鈴錢。今天還能換 ${left} 潮晶。`, opts.map(n => `${n} 潮晶 → ${n * 100} 鈴錢`).concat(['不用了']));
   if (i < 0 || i >= opts.length) return;
-  const n = opts[i]; TA.S.gems -= n; s.gemDay.n += n; s.bells += n * 100; save(); Audio.sfx('coin'); paintHud();
+  const n = opts[i]; TA.S.gems -= n; s.gemDay.n += n; ledger.mark('exchange'); s.bells += n * 100; save(); Audio.sfx('coin'); paintHud();
   await ui.say(sp(v), `成交！這是 ${n * 100} 鈴錢。`);
 }
 
@@ -522,7 +523,7 @@ const isPaperItem = f => !f.cat && (I.WALLPAPER || []).concat(I.FLOORING || []).
 function buyShopItem(f) {
   const s = S(), paper = isPaperItem(f);
   if (s.bells < f.price || (paper && (s.papers || []).includes(f.id))) return false;
-  s.bells -= f.price; if (paper) { s.papers = s.papers || []; s.papers.push(f.id); } else room.addStorage(f.id);
+  ledger.mark('shop'); s.bells -= f.price; if (paper) { s.papers = s.papers || []; s.papers.push(f.id); } else room.addStorage(f.id);
   const B = shopBought(); B[f.id] = (B[f.id] || 0) + 1;
   save(); Audio.sfx('coin'); paintHud();
   return true;
@@ -584,7 +585,7 @@ function openPockets(mode, shopV) {
     const it = s.pockets[i], spc = it.k === 'unk' ? null : find(it.k, it.id), price = itemPrice(it);
     info.innerHTML = `<div class="pk-sel"><img src="${itemIcon(it)}" alt=""><div><b>${ui.esc(itemName(it))}</b><small>${it.k === 'unk' ? '拿去博物館鑑定 · 收購價 ' + price + ' 鈴錢' : it.k === 'pkg' ? '委託的包裹，送到收件島民手上' : it.k === 'ore' ? '拿去給岳鑑定 · 收購價 ' + price + ' 鈴錢' : it.k === 'food' ? `料理 · ${cooking.EFFECT[(cooking.food(it.id) || {}).effect || 'bells'][1]} 30 分鐘 · 收購價 ${price} 鈴錢` : (KINDS[it.k] + (s.museum[it.k][it.id] ? ' · 已捐贈' : ' · 未捐贈') + ' · 收購價 ' + price + ' 鈴錢')}</small>${spc && spc.desc ? `<p>${ui.esc(spc.desc)}</p>` : ''}</div></div>`;
     const row = ui.el('div', 'pk-act');
-    if (mode === 'sell' && it.k !== 'pkg') { const b = ui.el('button', 'btn gold', `賣出 ${price} 鈴錢`); b.type = 'button'; b.onclick = () => { removeAt(i); s.bells += price; save(); Audio.sfx('coin'); paintHud(); paint(); info.innerHTML = `賣出了！現在有 ${s.bells.toLocaleString()} 鈴錢`; }; row.appendChild(b); }
+    if (mode === 'sell' && it.k !== 'pkg') { const b = ui.el('button', 'btn gold', `賣出 ${price} 鈴錢`); b.type = 'button'; b.onclick = () => { removeAt(i); ledger.mark('sell'); s.bells += price; save(); Audio.sfx('coin'); paintHud(); paint(); info.innerHTML = `賣出了！現在有 ${s.bells.toLocaleString()} 鈴錢`; }; row.appendChild(b); }
     else if (it.k === 'food') { const b = ui.el('button', 'btn gold', '吃掉'); b.type = 'button'; b.onclick = () => { removeAt(i); cooking.eat(it.id); paint(); paintHud(); info.innerHTML = '好好吃！'; }; row.appendChild(b); }
     else if (it.k === 'fish' || it.k === 'bug') { const b = ui.el('button', 'btn', '放生'); b.type = 'button'; b.onclick = () => { removeAt(i); Audio.sfx('swish'); paint(); info.innerHTML = '再見啦～'; }; row.appendChild(b); }
     info.appendChild(row);
@@ -662,12 +663,12 @@ function phone() {
       ['島民', '🐰', '#ffb3c8', phoneVillagers], ['研究計畫' + (lab.firstReady(villagers.filter(v => !v.shop && !v.guest)) ? '（!）' : ''), '🔬', '#d8e0ff', () => lab.openBook(villagers.filter(v => !v.shop && !v.guest))], ['口袋', '🎒', '#ffd36b', () => openPockets()], ['地圖', '🗺', '#a6e3ff', phoneMap], ['潮汐表', '〽️', '#b0e0f0', () => tide.openTable(simDate())], ['島嶼評價', '⭐', '#ffe08a', () => rating.open()]
     ]],
     ['收藏與手作', [
-      ['收藏目錄', '🗂', '#e8dcc8', () => catalog.open({ openDex: k => openDex(k) })],
+      ['收藏目錄', '🗂', '#e8dcc8', () => catalog.open({ openDex: k => openDex(k), stock: () => dailyStock(), paint: paintHud })],
       ['圖鑑', '📖', '#b9d0ff', () => openDex()], ['星座圖鑑', '🔭', '#c0c8ff', () => astro.openBook()], ['花園筆記', '🌱', '#d8f5b0', () => garden.openBook()], ['DIY 配方', '🔨', '#f0d8b0', () => diy.openBench(false)],
       ['衣櫃', '👕', '#ffd0e8', () => wardrobe.openCloset(player)], ['相機', '📷', '#ffd6a0', () => { ui.closePanel(); if (elsewhere()) ui.toast('這裡暫時不能拍照'); else photo.toggle(room.inside); }], ['相簿', '🖼', '#e0d0ff', () => photo.album()], ['回憶錄', '📔', '#ffd8c8', () => memo.open()],
       ['島嶼設計', '🌷', '#c8f0c0', () => { if (room.inside || elsewhere()) ui.toast('回到潮汐小島的戶外才能設計島嶼'); else design.open(player, paintHud); }], ['裝潢', '🛋', '#e0c8a8', () => { if (room.inside) room.openDecor(); else ui.toast('回到家裡才能裝潢'); }]
     ]],
-    ['工具', [['我的檔案', '🪪', '#dce6ff', openProfile], ['島上指南', '🧭', '#d8f0e0', () => settings.guide()], ['我的生日', '🎂', '#ffd0e0', () => gifts.openBirthday(paintHud)], ['時間', '⏰', '#ffc0a0', phoneTime], ['設定', '⚙️', '#e0e0e8', () => settings.open()]]]
+    ['工具', [['我的檔案', '🪪', '#dce6ff', openProfile], ['鈴錢帳本', '📒', '#f0e6c8', openLedger], ['島上指南', '🧭', '#d8f0e0', () => settings.guide()], ['我的生日', '🎂', '#ffd0e0', () => gifts.openBirthday(paintHud)], ['時間', '⏰', '#ffc0a0', phoneTime], ['設定', '⚙️', '#e0e0e8', () => settings.open()]]]
   ];
   const base = n => n.replace(/（.*?）$/, '');   // 「信箱（5）」→「信箱」
   // 新手期（新手引導沒做完、玩不到 3 天）：先列常用的 App，其他收在「更多」；熟手在設定裡打開「手機顯示全部 App」
@@ -735,6 +736,14 @@ function weekHtml() {
   if (!tutors().some(v => lab.available(v))) return '';
   const w = lab.weekLine(tutors());
   return `<button type="button" class="rt-wk">${w ? `📌 本週計畫：${ui.esc(w.v.name)}「${ui.esc(w.title)}」第 ${w.stage} 階段${w.done ? ' ✔ 這週推進了' : w.ready ? `<b>可以推進了！找${ui.esc(w.v.name)}聊天</b>` : `<small>還差：${ui.esc(w.left.join('、'))}</small>`}` : '📌 選一個本週計畫：一次追蹤一位導師的研究，做完一個階段就是小島的永久成果'}</button>`;
+}
+/** 鈴錢帳本（ledger.js）：最近 7 天的收入與支出，依來源分 */
+function openLedger() {
+  const rows = ledger.sum(7), inc = rows.reduce((a, r) => a + r[1], 0), out = rows.reduce((a, r) => a + r[2], 0);
+  const body = ui.el('div', 'ph-list ledger', `<p class="muted">最近 7 天：收入 <b>${inc.toLocaleString()}</b> · 支出 <b>${out.toLocaleString()}</b> 鈴錢（從 v7.1 開始記錄）</p>` +
+    (rows.length ? rows.map(([k, a, b]) => `<div class="ph-row"><div><b>${ui.esc(ledger.NAMES[k] || k)}</b><small>${a ? `+${a.toLocaleString()}` : ''}${a && b ? ' · ' : ''}${b ? `−${b.toLocaleString()}` : ''}</small></div><i class="lg-bar" style="--k:${Math.max(a, b) / Math.max(1, ...rows.map(r => Math.max(r[1], r[2])))};--c:${a >= b ? '#2fb38f' : '#e0875a'}"></i></div>`).join('') : '<p class="muted">還沒有紀錄。</p>') +
+    '<p class="muted">各種玩法的收入應該差不多：一起練習、委託、賣東西都是穩定的來源；連續挑戰的回報主要是紀錄與獎品。</p>');
+  ui.panel('鈴錢帳本', body, { cls: 'phone' });
 }
 /** 收工摘要：今天學了什麼、島上做了什麼；選「收工」就進入自由時間 */
 function daySummary() {
@@ -1149,7 +1158,7 @@ function popTick() {
 async function popTalk(v) {
   if (talking || life.busy || life.tourney || life.fishing() || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen() || astro.isOpen() || photo.active() || focus.active() || design.active() || room.inside || elsewhere()) { greetPlayer(v); return; }   // 走到時玩家剛好在忙：打聲招呼就好
   talking = v; v.lastTalkT = simT; moveTo = null; life.cancel(); town.interrupt(v); Audio.sfx('pop'); setExpr(v.mesh, 'happy', 1.4);
-  try { await challenge.popQuiz(v); } finally { ui.closeDialog(); talking = null; paintHud(); }
+  try { await ledger.run('popquiz', () => challenge.popQuiz(v)); } finally { ui.closeDialog(); talking = null; paintHud(); }
 }
 /** 走過來的島民對玩家說一句當下時段的問候 */
 function greetPlayer(v) {
@@ -1465,6 +1474,7 @@ function startGame() {
     openToday: () => { if (!talking && !ui.dialogOpen()) phoneToday(); },
     chest: () => route.state().ready,
     cramDone: () => cram.doneToday(),
+    wishShelf: () => { const w = catalog.wishInfo(dailyStock()).find(x => x.ready && !catalog.orderable(x.f)); return w ? w.f.name : ''; },
     week: () => { const w = tutors().some(v => lab.available(v)) && lab.weekLine(tutors()); return w ? (w.done ? `本週計畫 ✔ ${w.v.name}的研究推進了` : w.ready ? `本週計畫：${w.v.name}的研究可以推進了` : `本週計畫：${w.v.name}「${w.title}」第 ${w.stage} 階段`) : ''; },
     openCram: () => { if (!talking && !ui.dialogOpen()) cram.open(paintHud); },
     labReady: () => { const v = lab.firstReady(villagers.filter(x => !x.shop && !x.guest)); return v ? v.name : ''; },

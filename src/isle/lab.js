@@ -6,6 +6,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
 import * as memo from './memo.js';
+import * as ledger from './ledger.js';
 
 const TA = window.TA, L = TA.L;
 export const OPEN_AT = 4;   // 好感度 4（第一段心事之後）開始可以聊研究計畫
@@ -77,7 +78,7 @@ export async function talk(v, sp, H) {
   }
   const i = await ui.ask(sp, `條件都齊了：<br>${reqLines(v, c).join('<br>')}<br>要資助這個階段的研究嗎？`, [`資助 ${c.st.bells.toLocaleString()} 鈴錢，開始研究`, '下次再說'], { html: true, keys: true });
   if (i !== 0) { await ui.say(sp, '好，等你準備好再一起做。'); return; }
-  S().bells -= c.st.bells; r.stage++; r.at.push(Date.now()); save(); Audio.sfx('coin');
+  ledger.mark('research'); S().bells -= c.st.bells; r.stage++; r.at.push(Date.now()); save(); Audio.sfx('coin');
   await ui.card({ icon: '', title: `🔬 研究計畫 · ${R.title}`, sub: `第 ${r.stage} 階段：${st.title}` });
   for (const line of st.lines) await ui.say(sp, line);
   if (st.furn) await H.giveFurn(st.furn, `${v.name}的研究成果（第 ${r.stage} 階段）`);

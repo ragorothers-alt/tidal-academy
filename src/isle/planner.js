@@ -4,6 +4,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { S, save } from './state.js';
 import { dayKey } from './quiz.js';
+import * as ledger from './ledger.js';
 
 const TA = window.TA, L = TA.L;
 const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -29,7 +30,7 @@ export function check(paint) {
   const p = plan(), d = dayKey(), pr = progress();
   if (redraw && shownDay !== d) redraw();
   if (!pr.length || p.done[d] || pr.some(x => x.n < x.need)) return false;
-  p.done = { [d]: true }; const s = S(); s.bells += 1000; s.stats = s.stats || {}; s.stats.plans = (s.stats.plans || 0) + 1; save(); Audio.sfx('catch');
+  p.done = { [d]: true }; const s = S(); ledger.mark('plan'); s.bells += 1000; s.stats = s.stats || {}; s.stats.plans = (s.stats.plans || 0) + 1; save(); Audio.sfx('catch');
   ui.toast('📅 今天的讀書計畫完成了！+1,000 鈴錢'); paint && paint(); redraw && redraw(); return true;
 }
 /** 導師見面時的提醒（今天的計畫有他的科目、還沒完成） */

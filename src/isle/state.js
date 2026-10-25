@@ -2,6 +2,7 @@
 /** 今天的日期字串（本地時間 YYYY-MM-DD）；quiz.js 也會轉出同一個函式 */
 export const dayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
+import { watch } from './ledger.js';
 const TA = window.TA;
 export const I = TA.ISLE = TA.ISLE || {};
 export const POCKET_N = 20;
@@ -36,8 +37,8 @@ export function S() {
   const s = TA.S;
   if (!isObj(s.isle)) s.isle = {};
   const d = s.isle;
-  if (checked !== d) { checked = d; normalize(d); }
-  d.bells = typeof d.bells === 'number' ? d.bells : 1000;
+  if (checked !== d) { checked = d; normalize(d); watch(d); }   // 鈴錢帳本：bells 換成存取器（ledger.js）
+  if (typeof d.bells !== 'number') d.bells = 1000;
   if (!Array.isArray(d.pockets)) d.pockets = Array(POCKET_N).fill(null);
   else if (d.pockets.length !== POCKET_N) { const items = d.pockets.filter(Boolean).slice(0, POCKET_N); d.pockets = items.concat(Array(POCKET_N - items.length).fill(null)); }   // 格數對不上（舊版或匯入的存檔）：東西往前排、補空格，不整包清空
   d.dex = Object.assign({ fish: {}, bug: {}, fossil: {}, sea: {}, mineral: {} }, d.dex || {});

@@ -8,6 +8,7 @@ import { colliders, blocked, SITES, homes } from './props.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { S, save } from './state.js';
+import * as ledger from './ledger.js';
 
 export const ITEMS = [
   { id: 'p_stone', name: '石板步道', price: 100, kind: 'path', c: '#cfc6b6', c2: '#b8ad9b' },
@@ -158,7 +159,7 @@ export function act() {
   if (why) { ui.toast(why); Audio.sfx('deny'); return true; }
   if (s.bells < it.price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return true; }
   if (d[k]) { const old = item(d[k]); s.bells += Math.floor((old ? old.price : 0) / 2); unbuild(k); }
-  s.bells -= it.price; d[k] = it.id; build(k, it.id); save(); Audio.sfx('place'); onChange && onChange();
+  ledger.mark('shop'); s.bells -= it.price; d[k] = it.id; build(k, it.id); save(); Audio.sfx('place'); onChange && onChange();
   mode.pinned = false;
   return true;
 }

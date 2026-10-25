@@ -7,6 +7,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { S, save } from './state.js';
 import { dayKey } from './quiz.js';
+import * as ledger from './ledger.js';
 
 export const COLORS = [
   ['sky', '天空藍', '#7cc7ff'], ['navy', '海軍藍', '#5a6fb0'], ['coral', '珊瑚橘', '#ff8a6a'], ['rose', '玫瑰粉', '#ff9fc0'], ['lemon', '檸檬黃', '#ffd84a'],
@@ -60,7 +61,7 @@ export function openShop(v, ch, paint) {
     body.appendChild(grid);
     const go = ui.el('button', 'btn gold', '打開衣櫃換裝'); go.type = 'button'; go.onclick = () => { ui.closePanel(); openCloset(ch); }; body.appendChild(go);
   };
-  const buy = (price, give, name) => { if (s.bells < price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return; } s.bells -= price; give(); save(); Audio.sfx('coin'); paint && paint(); ui.toast(`買了${name}！到衣櫃換上吧`); draw(); };
+  const buy = (price, give, name) => { if (s.bells < price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return; } ledger.mark('shop'); s.bells -= price; give(); save(); Audio.sfx('coin'); paint && paint(); ui.toast(`買了${name}！到衣櫃換上吧`); draw(); };
   draw(); ui.panel(`${v.name}的服裝櫃台`, body, { cls: 'shop-p' });
 }
 /* ---------- 衣櫃 ---------- */

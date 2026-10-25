@@ -11,6 +11,7 @@ import { I, S, save } from './state.js';
 import { pick, dayKey } from './quiz.js';
 import * as G from './genetics.js';
 import * as miles from './miles.js';
+import * as ledger from './ledger.js';
 
 export const SEEDS = [
   { sp: 'pea', g: 'PPTT', name: '紫花高莖豌豆種子', price: 240 },
@@ -202,7 +203,7 @@ export function openSeedShop(v, paint) {
       b.onclick = () => {
         if (s.bells < it.price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return; }
         if (data().bag.length + 3 > BAG_MAX) { ui.toast('種子袋快滿了'); Audio.sfx('deny'); return; }
-        s.bells -= it.price; for (let i = 0; i < 3; i++) data().bag.push({ sp: it.sp, g: it.g, known: true }); save(); Audio.sfx('coin'); paint && paint();
+        ledger.mark('shop'); s.bells -= it.price; for (let i = 0; i < 3; i++) data().bag.push({ sp: it.sp, g: it.g, known: true }); save(); Audio.sfx('coin'); paint && paint();
         ui.toast(s.gardenTip ? `買了${it.name} ×3` : '買好了！拿鏟子（3）對著草地按 E 種下，再用澆水壺（4）澆水'); s.gardenTip = true; draw();
       };
       grid.appendChild(b);

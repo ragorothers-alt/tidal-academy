@@ -7,6 +7,7 @@ import * as Audio from './audio.js';
 import { S, save } from './state.js';
 import { dayKey } from './quiz.js';
 import { drill, picker } from './drill.js';
+import * as ledger from './ledger.js';
 
 const TA = window.TA, L = TA.L;
 export function daysLeft(d) { const exam = new Date((TA.S.profile && TA.S.profile.examDate) || '2027-01-22'); const a = new Date(dayKey()); return Math.round((exam - a) / 864e5); }
@@ -40,7 +41,7 @@ export function open(paint) {
       ui.closePanel(); const ids = picks(); if (!ids.length) { ui.toast('目前沒有可以出的題目'); return; }
       const sp = { name: '考前衝刺', color: '#ef6f5e', voice: 300 };
       const res = await drill(sp, picker({ mode: 'ids', ids }), ids.length, {});
-      const T = data(), full = res.n >= 5, first = full && !T.done; if (full) T.done = true; const s = S(); if (first) { s.bells += 800; s.stats = s.stats || {}; s.stats.cram = (s.stats.cram || 0) + 1; } save();
+      const T = data(), full = res.n >= 5, first = full && !T.done; if (full) T.done = true; const s = S(); if (first) { ledger.mark('cram'); s.bells += 800; s.stats = s.stats || {}; s.stats.cram = (s.stats.cram || 0) + 1; } save();
       await ui.say(sp, `答對 ${res.ok} / ${res.n} 題。${first ? '今天的精選完成，+800 鈴錢。' : full ? '' : '這一輪沒有做完五題，還不算完成。'}答錯的題目已加入複習，之後會優先安排。`); ui.closeDialog(); paint && paint();
     };
     body.appendChild(go);

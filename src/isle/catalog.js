@@ -1,12 +1,15 @@
 /* 潮汐小島 · 收藏目錄：家具（拿到過就登錄，送人、賣掉也不會消失）、壁紙與地板、服裝，以及圖鑑與博物館的收集進度。
    收齊一種圖鑑、捐齊一個展區、家具目錄達到 50／100／150 種時，史遙或阿潮會寄信送獎勵（打開信就收到）。
-   存檔：S().catalog = { 家具 id: 第一次拿到的時間 }（room.addStorage 記錄）、S().collect = { 已寄出的獎勵: 時間 }。 */
+   存檔：S().catalog = { 家具 id: 第一次拿到的時間 }（room.addStorage 記錄）、S().collect = { 已寄出的獎勵: 時間 }。
+   v7.1：願望清單（S().wish，最多 3 件）顯示還差多少、今天的貨架有沒有；拿到過的一般家具可以訂購複本（每天 2 件，送到倉庫）。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save, list, icon } from './state.js';
 import * as room from './room.js';
 import { COLORS, HAIRS, HATS, owns } from './wardrobe.js';
 import { CATS, KINDS, how, inCatalog, FURN_GOALS, full } from './catalogq.js';
+import * as ledger from './ledger.js';
+import { dayKey } from './state.js';
 
 const tutor = sid => ((I.VILLAGERS || []).find(v => v.sid === sid) || {}).name || '島民';
 const furnList = () => (I.FURNITURE || []).filter(inCatalog);
@@ -28,6 +31,31 @@ const furnCount = () => { const c = catalog(); return furnList().filter(f => c[f
 const papers = () => (I.WALLPAPER || []).map(p => [p, '壁紙']).concat((I.FLOORING || []).map(p => [p, '地板']));
 const ownPaper = p => (S().papers || []).includes(p.id) || (S().room || {}).wall === p.id || (S().room || {}).floor === p.id;
 const HAT_HOW = { shop: '阿潮商店的服裝櫃台', halloween: '潮汐夜祭', miles: '潮汐里程兌換' };
+
+/* ---------- 願望清單與訂購（v7.1） ---------- */
+export const WISH_MAX = 3, ORDER_MAX = 2;
+export const wishes = () => { const s = S(); s.wish = Array.isArray(s.wish) ? s.wish.filter(id => room.furn(id)).slice(0, WISH_MAX) : []; return s.wish; };
+const orders = () => { const s = S(), d = dayKey(); if (!s.orders || s.orders.d !== d) s.orders = { d, n: 0 }; return s.orders; };
+/** 可以訂購：拿到過的一般商店家具（有標價） */
+export const orderable = f => !!f && f.src === 'shop' && f.price > 0 && !!catalog()[f.id];
+export function toggleWish(id) { const w = wishes(), i = w.indexOf(id); if (i >= 0) w.splice(i, 1); else { if (w.length >= WISH_MAX) return false; w.push(id); } save(); return true; }
+export function order(f) {
+  const s = S(), o = orders();
+  if (!orderable(f)) return '還沒拿到過的家具不能訂購，先在阿潮的貨架上找找';
+  if (o.n >= ORDER_MAX) return `今天已經訂了 ${ORDER_MAX} 件，明天再來`;
+  if (s.bells < f.price) return `鈴錢不夠（還差 ${(f.price - s.bells).toLocaleString()}）`;
+  ledger.mark('order'); s.bells -= f.price; o.n++; room.addStorage(f.id); save(); return '';
+}
+/** 願望清單的一段說明（收藏目錄上方、今日學習用）：[{ f, text, ready }] */
+export function wishInfo(stock) {
+  const s = S(), inStock = new Set(((stock || {}).furn || []).map(f => f.id));
+  return wishes().map(id => {
+    const f = room.furn(id), own = !!catalog()[id];
+    if (orderable(f)) { const gap = f.price - s.bells; return { f, ready: gap <= 0, text: gap <= 0 ? `可以訂購了（${f.price.toLocaleString()} 鈴錢）` : `訂購還差 ${gap.toLocaleString()} 鈴錢（約 ${Math.ceil(gap / 800)} 組一起練習或委託）` }; }
+    if (f.src === 'shop' && !own) return { f, ready: inStock.has(id), text: inStock.has(id) ? `今天阿潮的貨架上就有！（${f.price.toLocaleString()} 鈴錢）` : '等阿潮的貨架出現（每天換貨；買過一次之後就能訂購）' };
+    return { f, ready: false, text: own ? '已經拿到過了' : `怎麼拿到：${how(f, tutor) || '特別的機會'}` };
+  });
+}
 
 /* ---------- 收集獎勵（寄信） ---------- */
 function rewards() {
@@ -71,13 +99,19 @@ export function open(hooks) {
     const main = body.querySelector('.ct-main');
     if (tab === 'furn') {
       const shown = F.filter(f => !cat || f.cat === cat);
-      main.innerHTML = `<div class="hm-chips ct-cats">${CATS.map(([id, n]) => `<button type="button" data-cat="${id}" class="${id === cat ? 'on' : ''}">${n}</button>`).join('')}</div><div class="dex-grid ct-grid"></div><div class="dex-info"><small class="muted">家具目錄 ${furnCount()} / ${F.length} 種：拿到過的家具都會登錄（送人、賣掉也不會消失）；灰色的是還沒拿到的，點一下看怎麼拿到。登錄 ${FURN_GOALS.map(g => g[0]).join('／')} 種時，阿潮會寄禮物給你。</small></div>`;
+      const wi = wishInfo(hooks.stock && hooks.stock());
+      main.innerHTML = (wi.length ? `<div class="ct-wish"><b>☆ 願望清單</b>${wi.map(w => `<div class="${w.ready ? 'ok' : ''}"><span>${ui.esc(w.f.name)}</span><small>${ui.esc(w.text)}</small></div>`).join('')}</div>` : '<p class="muted ct-wish0">點一件家具可以「加入願望」（最多 3 件）：這裡會告訴你還差多少、今天的貨架有沒有。</p>') + `<div class="hm-chips ct-cats">${CATS.map(([id, n]) => `<button type="button" data-cat="${id}" class="${id === cat ? 'on' : ''}">${n}</button>`).join('')}</div><div class="dex-grid ct-grid"></div><div class="dex-info"><small class="muted">家具目錄 ${furnCount()} / ${F.length} 種：拿到過的家具都會登錄（送人、賣掉也不會消失）；灰色的是還沒拿到的，點一下看怎麼拿到。登錄 ${FURN_GOALS.map(g => g[0]).join('／')} 種時，阿潮會寄禮物給你。</small></div>`;
       main.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { cat = b.dataset.cat; Audio.sfx('tick'); paint(); });
       const grid = main.querySelector('.ct-grid'), info = main.querySelector('.dex-info'), queue = [];
       shown.forEach(f => {
         const own = !!c[f.id], b = ui.el('button', 'dex-cell' + (own ? '' : ' unknown'), '<img alt="">'); b.type = 'button'; b.title = own ? f.name : '？？？';
         b.onclick = () => { const catN = (CATS.find(x => x[0] === f.cat) || [, ''])[1], [w, d] = f.size || [1, 1], n = (S().storage || {})[f.id] || 0;
-          info.innerHTML = `<div class="pk-sel"><img src="${room.thumb(f.id)}" alt="" class="${own ? '' : 'sil'}"><div><b>${ui.esc(f.name)} <small>${catN} · ${w}×${d} 格${own ? (n ? ` · 倉庫裡有 ${n} 件` : ' · 已登錄') : ' · 還沒拿到'}</small></b><p>${ui.esc(f.desc || '')}</p><small>怎麼拿到：${ui.esc(how(f, tutor) || '特別的機會')}</small></div></div>`; Audio.sfx('pop'); };
+          info.innerHTML = `<div class="pk-sel"><img src="${room.thumb(f.id)}" alt="" class="${own ? '' : 'sil'}"><div><b>${ui.esc(f.name)} <small>${catN} · ${w}×${d} 格${own ? (n ? ` · 倉庫裡有 ${n} 件` : ' · 已登錄') : ' · 還沒拿到'}</small></b><p>${ui.esc(f.desc || '')}</p><small>怎麼拿到：${ui.esc(how(f, tutor) || '特別的機會')}</small></div></div>`; Audio.sfx('pop');
+          const acts = ui.el('div', 'ct-acts'), wb = ui.el('button', 'btn ghost', wishes().includes(f.id) ? '★ 移出願望' : `☆ 加入願望（${wishes().length}/${WISH_MAX}）`); wb.type = 'button';
+          wb.onclick = () => { if (!toggleWish(f.id)) { ui.toast(`願望最多 ${WISH_MAX} 件，先移掉一件`); Audio.sfx('deny'); return; } Audio.sfx('tick'); paint(); };
+          acts.appendChild(wb);
+          if (orderable(f)) { const ob = ui.el('button', 'btn gold', `訂購一件 · ${f.price.toLocaleString()} 鈴錢`); ob.type = 'button'; ob.onclick = () => { const err = order(f); if (err) { ui.toast(err); Audio.sfx('deny'); return; } Audio.sfx('coin'); ui.toast(`📦 ${f.name}送到倉庫了（今天還能訂 ${ORDER_MAX - orders().n} 件）`); hooks.paint && hooks.paint(); paint(); }; acts.appendChild(ob); }
+          info.appendChild(acts); };
         grid.appendChild(b); queue.push([b.querySelector('img'), f.id]);
       });
       const pump = () => { if (my !== gen || !body.isConnected) return; const t = performance.now(); while (queue.length && performance.now() - t < 14) { const [img, id] = queue.shift(); img.src = room.thumb(id); } if (queue.length) setTimeout(pump, 16); };

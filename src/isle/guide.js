@@ -78,6 +78,7 @@ function suggestions(max) {
   if (H.chest && H.chest()) add(`今日路線完成了：${PHONE()} →「今日學習」開寶箱（+60 經驗、+50 潮晶），看收工摘要`, 'today');
   const relax = route.quiet(), exam = TA.L.phase();   // 收工、散步、休息中：不催讀書，只提島上生活；考前 30 天：不介紹新玩法、不推連答紀錄
   if (exam && !relax && H.cramDone && !H.cramDone()) add(`考前衝刺：${PHONE()} →「考前衝刺」做今天的 5 題精選（做完就算完成今天的學習）`, 'cram');
+  { const w = H.wishShelf && H.wishShelf(); if (w) add(`今天阿潮的貨架上有你的願望：「${w}」`); }
   const free = freeSlots(); if (free <= 3) add(free ? `口袋快滿了（剩 ${free} 格）：到阿潮的商店賣東西，或捐給博物館` : '口袋滿了：到阿潮的商店賣東西，或捐給博物館');
   // 2. 現在才有的事（活動、時段、潮汐）
   const ev = events.active();

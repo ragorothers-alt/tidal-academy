@@ -1513,3 +1513,10 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .lab-pick { align-self: center; white-space: nowrap; font-size: 12px; padding: 6px 10px; }
 .rt-week { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, .7); }
 .rt-week small { color: var(--ink-2); font-size: 11px; }
+.ledger .ph-row > div { flex: 1; min-width: 0; } .ledger .ph-row small { display: block; color: var(--ink-2); font-weight: 700; }
+.lg-bar { display: block; flex: 0 0 40%; height: 10px; border-radius: 99px; background: linear-gradient(90deg, var(--c) calc(var(--k) * 100%), rgba(0, 0, 0, .06) 0); }
+/* 願望清單與訂購（catalog.js，v7.1） */
+.ct-wish { display: grid; gap: 4px; padding: 8px 12px; margin-bottom: 8px; border-radius: 14px; background: #fff6e2; }
+.ct-wish > div { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; font-weight: 700; } .ct-wish small { color: var(--ink-2); }
+.ct-wish > div.ok small { color: #2f8f6a; }
+.ct-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

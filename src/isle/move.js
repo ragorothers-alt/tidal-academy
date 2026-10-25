@@ -6,6 +6,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
 import { pick, dayKey } from './quiz.js';
+import * as ledger from './ledger.js';
 
 const COST = 2000;
 const rel = () => { const s = S(); s.relocate = s.relocate || {}; return s.relocate; };
@@ -35,7 +36,7 @@ export async function menu(sp, villagers, paint) {
   const pi = await ui.ask(sp, `${v.name}要搬到哪塊空地？`, free.map(([p], k) => `空地 ${k + 1}（${dir(p.x, p.z) === '中央' ? '島中央' : '島的' + dir(p.x, p.z) + '邊'}）`).concat(['算了']));
   if (pi < 0 || pi >= free.length) return;
   if (s.bells < COST) { await ui.say(sp, '鈴錢不夠呢。'); return; }
-  s.bells -= COST; rel()[v.sid] = { plot: free[pi][1], day: dayKey() }; save(); Audio.sfx('coin'); paint && paint();
+  ledger.mark('shop'); s.bells -= COST; rel()[v.sid] = { plot: free[pi][1], day: dayKey() }; save(); Audio.sfx('coin'); paint && paint();
   const L = (I.LINES2 || {})[v.sid] || {};
   await ui.say({ name: v.name, color: v.color, voice: v.voice }, pick(L.moveAsk || ['新家耶！我好期待。']));
   await ui.say(sp, `申請完成！明天${v.name}就會住進新家。`);

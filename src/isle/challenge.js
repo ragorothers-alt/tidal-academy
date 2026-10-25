@@ -3,7 +3,8 @@
    連續挑戰：答對一題就把獎金放進彩池，可以選「繼續（下一題更難）」或「見好就收」領走全部；答錯只能領回一半。
    連對越多難度越高：前 2 題簡單、第 3–5 題中等、第 6 題起困難、連對 10 題起每題限時（越來越短，但題目長、有閱讀材料或多選時會多給時間）；
    題庫裡的題組（附閱讀材料）與多選題也會出，長題目用大題目面板作答；
-   每題獎金 = 難度 × 100 × 連勝倍率（每多連對一題 +0.25 倍），連對 5、10、15、20…題另外直接送禮物（答錯也不會收回）。
+   每題獎金 = 難度 × 100 × 連勝倍率（每多連對一題 +0.1 倍，最多 1.6 倍；v7.1 起收斂，和一起練習的報酬差不多），
+   連對 5、10、15、20…題另外直接送禮物（答錯也不會收回）；拚高連答的回報主要是紀錄、回憶錄和獎品。
    單場連對數也算進「十連潮湧」「巨浪不止」成就。
    島民主動出題：每隔 3–5 分鐘，附近有空的島民會走過來問「考你一題好不好？」，優先出你的錯題與該複習的題目，答對有隨機獎勵。
    攔路出的題只出輕量的短題（單選、不是題組）；深度題留給玩家自己選的「一起練習」與「連續挑戰」。
@@ -18,6 +19,7 @@ import { I, S, save, icon } from './state.js';
 import { MATS } from './diy.js';
 import * as route from './route.js';
 import * as bond from './bond.js';
+import * as ledger from './ledger.js';
 
 const TA = window.TA, L = TA.L;
 let H = {};   // main.js 的工具：sp、player、tail、hearts、gift、giveFurn
@@ -28,7 +30,7 @@ const DN = ['', '簡單', '中等', '困難'];
 export const levelOf = n => (n < 2 ? 1 : n < 5 ? 2 : 3);
 export const timerOf = n => (n >= 10 ? Math.max(12, 25 - (n - 10)) : 0);
 /** 第 k 連對（k 從 1 起）的獎金 */
-export const prizeOf = (d, k) => Math.round(100 * d * (1 + (k - 1) * 0.25) * cooking.bellsMul());
+export const prizeOf = (d, k) => Math.round(100 * d * (1 + Math.min(k - 1, 6) * 0.1) * cooking.bellsMul());
 const rec = () => { const s = S(); s.streakQ = s.streakQ || { best: 0, by: {} }; return s.streakQ; };
 
 /** 連對 5、10、15…題的禮物（直接入帳） */
@@ -151,7 +153,7 @@ export async function keepGoing(sp, q, opt) {
   // 結束時收起對話框：釣魚、抓蟲、石碑這些不是在對話裡出的題，沒有人會幫忙關（還在對話中的話，下一句會再打開）
   if (await ui.ask(sp, pick(MORE), ['繼續挑戰！', '先這樣'], { keys: true, hl: 1 }) !== 0) { KG.no++; route.hush(20); ui.closeDialog(); return 0; }   // 拒絕一次：全島安靜 20 分鐘
   KG.no = 0;
-  const n = await loop({ sp, pick: pk, n: 1, v: opt.v, mesh: opt.mesh, seen: new Set(q && q.id ? [q.id] : []) });
+  const n = await ledger.run('streak', () => loop({ sp, pick: pk, n: 1, v: opt.v, mesh: opt.mesh, seen: new Set(q && q.id ? [q.id] : []) }));
   ui.closeDialog();
   return n;
 }

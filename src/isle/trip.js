@@ -72,13 +72,17 @@ export function handler() { return atDock() ? depart : null; }
 const CAPTAIN = { name: '船長海鷗', color: '#5ab0c8', voice: 380 };
 async function depart() {
   if (!tickets()) { await ui.say(CAPTAIN, '想去神秘島嗎？要一張潮汐券喔。潮汐券可以用潮汐里程兌換，阿潮的商店也賣。'); return; }
-  const i = await ui.ask(CAPTAIN, `用一張潮汐券（你有 ${tickets()} 張）出發去神秘島嗎？每次會隨機前往一座主題島！`, ['出發！', '下次吧']);
-  if (i !== 0) return;
+  // v7.1：出航前從兩條航線選一座（不同主題、排除上次去過的），船長說明那裡考哪一科、有什麼收穫
   const last = S().lastTrip, pool = THEMES.filter(t => t.id !== last && (t.id === 'fish' ? vocabQ() || pickQ('english', 3) : pickQ(t.sid, 3)));
   if (!pool.length) { await ui.say(CAPTAIN, '今天海象不太好，先不要出航吧。'); return; }
+  const two = pool.slice().sort(() => Math.random() - 0.5).slice(0, 2), subj = t => t.id === 'fish' ? '英文單字' : (window.TA.subject(t.sid) || {}).name + '題';
+  const i = await ui.ask(CAPTAIN, `今天有兩條航線（用一張潮汐券，你有 ${tickets()} 張）：<br>${two.map(t => `・<b>${t.name}</b>：${t.desc}`).join('<br>')}`, two.map(t => `去${t.name}（${subj(t)}）`).concat(['下次吧']), { html: true, keys: true });
+  if (i < 0 || i >= two.length) return;
   const s = S(); s.tickets--; s.stats = s.stats || {}; s.stats.trips = (s.stats.trips || 0) + 1;
-  theme = pick(pool); s.lastTrip = theme.id; save(); ui.closeDialog(); enter();
-  await ui.say(CAPTAIN, `抵達「${theme.name}」！${theme.desc}島上有 8 個地方可以探索，探索完回到船邊就能回家。`);
+  theme = two[i]; s.lastTrip = theme.id; save(); ui.closeDialog(); enter();
+  await ui.say(CAPTAIN, `抵達「${theme.name}」！${theme.desc}島上有 8 個地方可以探索，其中 2 個是寶點（收穫加倍），探索完回到船邊就能回家。`);
+  if (await ui.ask(CAPTAIN, '要先爬上礁岩看一看嗎？會標出 2 個寶點，不過要花一點時間：少探索一個地方。', ['先看一看', '直接開始'], { keys: true }) === 0) survey();
+  ui.closeDialog();
 }
 
 /* ---------- 神秘島場景 ---------- */
@@ -107,6 +111,7 @@ function build() {
     const g = node(theme.node, r); g.position.set(x, fish ? -0.02 : 0.35, z); sc.add(g);
     nodes.push({ x, z, bx: x, bz: z, g, done: false, reach: fish ? 3.6 : 1.4 });
   }
+  nodes.slice().sort(() => r() - 0.5).slice(0, 2).forEach(n => { n.rich = true; });   // 2 個寶點：答對收穫加倍（調查之後才看得到）
   sc.traverse(o => { if (o.isMesh) { o.castShadow = o !== sea; o.receiveShadow = true; o.frustumCulled = false; } });
   tufts(sc, r); dress(sc, r);
   return sc;
@@ -229,7 +234,7 @@ export function tick(dt, t, ix, iz, len, moving, run, locked) {
     P.rotation.y = Math.atan2(ix, iz);
   }
   animate(P, dt, moving && !locked ? (run ? 2 : 1) : 0, t);
-  nodes.forEach((n, i) => { if (n.g.userData.fly) { n.g.userData.fly.position.y = 0.75 + Math.sin(t * 3 + i) * 0.06; n.g.userData.fly.rotation.y = t * 2; } if (theme.node === 'star' && !n.done) n.g.rotation.y = t; if (theme.node === 'fish') { n.x = n.bx + Math.sin(t * 0.7 + i) * 0.5; n.z = n.bz + Math.cos(t * 0.6 + i) * 0.5; n.g.position.x = n.x; n.g.position.z = n.z; } });
+  nodes.forEach((n, i) => { if (n.g.userData.mark) n.g.userData.mark.rotation.y = t * 2.4; if (n.g.userData.fly) { n.g.userData.fly.position.y = 0.75 + Math.sin(t * 3 + i) * 0.06; n.g.userData.fly.rotation.y = t * 2; } if (theme.node === 'star' && !n.done) n.g.rotation.y = t; if (theme.node === 'fish') { n.x = n.bx + Math.sin(t * 0.7 + i) * 0.5; n.z = n.bz + Math.cos(t * 0.6 + i) * 0.5; n.g.position.x = n.x; n.g.position.z = n.z; } });
   const tx = P.position.x * 0.6, tz = P.position.z * 0.6, za = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.8 : 1;
   camPos.lerp(new THREE.Vector3(tx, 14.5 * za, tz + 16 * za), Math.min(1, dt * 3));
   camera.position.copy(camPos); camera.lookAt(tx, 0.4, tz);
@@ -253,6 +258,12 @@ async function home() {
   const i = await ui.ask(CAPTAIN, left ? `還有 ${left} 個地方沒探索，要回潮汐小島了嗎？` : '探索完了！要回潮汐小島了嗎？', ['回家', '再逛逛']);
   if (i !== 0) return; ui.closeDialog(); leave();
 }
+/** 調查：寶點頭上亮起金色的星，另外一個普通地點用掉（花了時間） */
+function survey() {
+  nodes.filter(n => n.rich).forEach(n => { const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), new THREE.MeshBasicMaterial({ color: '#ffd34d' })); m.position.set(0, { tree: 3.1, rock: 1.5, flower: 1.2, star: 1.0, fish: 1.4 }[theme.node] || 1.6, 0); /* 高過樹冠、看得到 */ n.g.add(m); n.g.userData.mark = m; });
+  const plain = nodes.filter(n => !n.rich && !n.done); if (plain.length) { const n = plain[Math.floor(Math.random() * plain.length)]; n.done = true; n.g.visible = false; }
+  Audio.sfx('pop'); ui.toast('⭐ 金色星星的地方是寶點：答對收穫加倍');
+}
 function question() { if (theme.id === 'fish') return vocabQ() || pickQ('english', 3); return pickQ(theme.sid, 3); }
 async function explore(n) {
   const q = question(); if (!q) return;
@@ -267,6 +278,7 @@ async function explore(n) {
     return;
   }
   if (theme.id !== 'fish' && theme.id !== 'bug') Audio.sfx('catch'); await reward(SP);
+  if (n.rich) { await ui.say(SP, '這裡是寶點！還有一份收穫——'); await reward(SP); }
   await challenge.keepGoing(SP, q);
 }
 function rare(k) {
