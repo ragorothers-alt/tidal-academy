@@ -774,7 +774,7 @@ function paintHud() {
   paintLv();
   const fl = feel.level(); $('feel').hidden = !fl; if (fl) $('feel').textContent = `手感 ${feel.stars(fl)}`;
   countUp($('bells'), S().bells);
-  const tk = life.tourney; $('tourney').hidden = !tk; if (tk) $('tourney').innerHTML = `<b>${CUP[tk.kind].name}</b> ⏱ ${Math.floor(tk.left / 60)}:${String(Math.floor(tk.left % 60)).padStart(2, '0')} · ${tk.score} 分 · ${tk.n} 隻`;
+  const tk = life.tourney; $('tourney').hidden = !tk; $('tourney').classList.toggle('warn', !!tk && tk.left < 10); if (tk) $('tourney').innerHTML = `<b>${CUP[tk.kind].name}</b> ⏱ ${Math.floor(tk.left / 60)}:${String(Math.floor(tk.left % 60)).padStart(2, '0')} · ${tk.score} 分 · ${tk.n} 隻`;
   const hw = events.active().includes('halloween');
   villagers.forEach(v => { v.tag && v.tag.classList.toggle('req', !!(!v.shop && social.badge(v))); if (v.mesh.userData.partyHat) v.mesh.userData.partyHat.visible = gifts.isBirthday(v); if (v.costume !== hw) { v.costume = hw; wardrobe.setHat(v.mesh, hw ? 'witch' : null); } });
   planner.check(paintHud);
@@ -833,7 +833,8 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { keys[e.code] = false; });
 let nearV = null, moveTo = null, wasAway = false, pendingMove = false;   // pendingMove：過了午夜，回到島上時套用搬家   // wasAway：上一格在室內或離島（進出時清掉點地面走路的目標）
 function act() {
-  if (talking || life.busy || astro.isOpen() || jump.air) return;   // 空中不能互動（進門、釣魚等）
+  if (jump.air && !talking && !life.busy) { inBuf.act = performance.now(); return; }   // 空中不能互動（進門、釣魚等）：先記著，落地後 0.15 秒內補做
+  if (talking || life.busy || astro.isOpen() || jump.air) return;
   if (sitting) { standUp(); return; }
   if (design.active()) { design.act(); return; }
   if (museum.inside) { const mh = museum.handler(); if (mh) { talking = { name: 'museum' }; Promise.resolve(mh()).finally(() => { talking = null; ui.closeDialog(); }); } return; }
@@ -1488,7 +1489,7 @@ $('lv').onclick = () => { if (!ui.dialogOpen()) openProfile(); };
 const clock = new THREE.Clock();
 const headPos = new THREE.Vector3(), headPos2 = new THREE.Vector3();
 const sunTmp = { f: new THREE.Vector3(), v: new THREE.Vector3(), g: new THREE.Vector3(), p: new THREE.Vector3() };
-const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null;
+const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0; const talkMid = new THREE.Vector3();
 let zoom = 1, puffT = 0, saveT = 0, hudT = 0;
 /** 走路與奔跑的速度（公尺／秒，v6.84.1 起慢一成多）；pace 是現在的速度：起步時幾分之一秒加速到位，搖桿輕推時走得慢 */
 const WALK = 3.0, RUN = 5.2;
@@ -1599,12 +1600,12 @@ function footstep(fast) {
   const k = onPier(p.x, p.z) ? 'st_wood' : onRoad(p.x, p.z) || isBridge(tx, tz) ? 'st_stone' : seasons.snowK() > 0.5 && tl !== 0 ? 'st_snow' : tl === 0 ? 'st_sand' : 'st_grass';
   Audio.sfx(k, { vol: fast ? 1.35 : 1 });
 }
-const jump = { air: false, v: 0, n: 0, flip: 0, squash: 0, safe: null };
+const jump = { air: false, v: 0, n: 0, flip: 0, squash: 0, safe: null }, inBuf = { act: 0, jump: 0 }, lastDir = new THREE.Vector2(0, 1), sink = { t: 0, to: null };
 function doJump() {
   if (sitting) { standUp(); return; }
   if (dreamisle.inside) { if (!talking && !ui.dialogOpen() && !ui.panelOpen()) dreamisle.jump(); return; }
   if (!started || room.inside || elsewhere() || design.active() || life.busy || life.fishing() || talking || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen()) return;
-  if (jump.n >= 3) return;
+  if (jump.n >= 3) { inBuf.jump = performance.now(); return; }   // 三段跳還在空中：落地時補跳
   jump.air = true; jump.n++; jump.v = JUMP_V[jump.n - 1]; if (jump.n === 3) { jump.flip = 0.0001; setExpr(player, 'happy', 1); }
   const p = player.position; for (let i = 0; i < (jump.n === 1 ? 3 : 6); i++) puff(p.x, p.y, p.z);
   Audio.sfx('jump', { pitch: (jump.n - 1) * 4 });   // 一段比一段高
@@ -1626,8 +1627,12 @@ function jumpTick(dt) {
       Audio.sfx('splash'); for (let i = 0; i < 8; i++) puff(p.x, p.y, p.z); setExpr(player, 'surprised', 1.5);
       waves.ripple(p.x, p.z, 0.6); waves.ripple(p.x, p.z, 1.1);
       ui.toast('撲通！掉進水裡了，被浪推回岸邊');
-      const s = jump.safe || [PLAZA[0], PLAZA[1] + 2]; p.set(s[0], ground(s[0], s[1]), s[1]); moveTo = null;
-    } else { for (let i = 0; i < 4; i++) puff(p.x, p.y, p.z); Audio.sfx('land', { vol: 0.5 + imp * 0.6 }); if (imp > 1.05) { shake.kick(0.03 * imp); shake.haptic('tap'); } }
+      sink.t = 0.45; sink.to = jump.safe || [PLAZA[0], PLAZA[1] + 2]; moveTo = null; shake.kick(0.03); shake.haptic('tap');   // 先沉下去一下，再用圓形轉場送回岸邊（以前直接瞬移）
+    } else {
+      for (let i = 0; i < 4; i++) puff(p.x, p.y, p.z); Audio.sfx('land', { vol: 0.5 + imp * 0.6 }); if (imp > 1.05) { shake.kick(0.03 * imp); shake.haptic('tap'); }
+      const nw = performance.now();   // 輸入緩衝：落地前一瞬間按的跳躍、互動不會被吃掉
+      if (nw - inBuf.jump < 150) { inBuf.jump = 0; setTimeout(doJump, 0); } else if (nw - inBuf.act < 150) { inBuf.act = 0; setTimeout(act, 0); }
+    }
     return false;
   }
   return true;
@@ -1638,7 +1643,7 @@ function jumpPose(dt) {
   u.airK = (u.airK || 0) + ((air ? 1 : 0) - (u.airK || 0)) * Math.min(1, dt * (air ? 12 : 9));   // 3D 模型的空中縮腿、揚手（actors.js 的 airPose 下一格套用）
   if (u.gltf) {   // 3D 模型：空翻與落地壓扁套在模型本身（以前改的是隱藏的 Q 版身體，看不到）
     const m = u.gltf.model, H = u.gltf.base, a = air && jump.flip ? jump.flip * Math.PI * 2 : 0, c = 0.55;
-    m.rotation.x = a; m.position.set(H.x, H.y + c - c * Math.cos(a), H.z - c * Math.sin(a));
+    m.rotation.x = a; m.position.set(H.x, H.y + c - c * Math.cos(a) + (air ? 0 : u.gltf.hop || 0), H.z - c * Math.sin(a)); u.isPlayer = true;
     jump.squash = Math.max(0, jump.squash - dt * 2.2);
     const k = Math.sin(jump.squash / 0.35 * Math.PI) * 0.18, S = u.gltf.baseS; m.scale.set(S * (1 + k * 0.6), S * (1 - k), S * (1 + k * 0.6));
     return;
@@ -1656,7 +1661,8 @@ function tick(fixed) {
   post.fx.hold = ui.answering();   // 作答中：背景不重畫（post.render 停在最後一格）
   U.uOccR.value = 0;   // 遮擋鏤空只在島上戶外啟用（下面戶外段落才會設定）
   U.uTime.value = t;
-  const locked = !started || talking || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen() || life.busy || astro.isOpen() || photo.active() || focus.active();
+  if (sink.t > 0) { sink.t -= dt; player.position.y -= dt * 1.6; if (sink.t <= 0) { const s = sink.to; player.position.set(s[0], ground(s[0], s[1]), s[1]); camY = null; ui.iris(560); } }   // 落水：沉下去 → 轉場 → 回到岸邊
+  const locked = !started || talking || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen() || life.busy || astro.isOpen() || photo.active() || focus.active() || sink.t > 0;
   const fpNow = fpView();
   if (fpNow && fpResync) { const a = player.rotation.y + Math.PI; camYaw = Math.atan2(Math.sin(a), Math.cos(a)); fpPitch = -0.05; fpResync = false; }   // 從室內、博物館、神秘島回來：看向角色面對的方向（不是剛走出來的門）
   let ix = (keys.KeyD || (keys.ArrowRight && !fpNow) ? 1 : 0) - (keys.KeyA || (keys.ArrowLeft && !fpNow) ? 1 : 0) + joy.x, iz = (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + joy.y;
@@ -1685,24 +1691,29 @@ function tick(fixed) {
     villagers.forEach(v => { v.tag.style.opacity = 0; });
     document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen());
     $('actBtn').textContent = h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
-    hudT += dt; if (hudT > 2) { hudT = 0; paintHud(); }
+    hudT += dt; if (hudT > (life.tourney ? 0.25 : 2)) { hudT = 0; paintHud(); }
     return;
   }
   if (moving) {
     const want = (run ? RUN : WALK * (0.3 + 0.7 * Math.min(1, len))) * cooking.speedMul();   // 搖桿推多少走多快（鍵盤、點地面 = 一般走路）
     pace = Math.max(pace, want * 0.4); pace += (want - pace) * Math.min(1, dt * 7);   // 起步從四成速度加速上去，不會一按就全速衝出去
     ix /= len; iz /= len;
+    { const d = Math.abs(Math.atan2(Math.sin(Math.atan2(ix, iz) - player.rotation.y), Math.cos(Math.atan2(ix, iz) - player.rotation.y)));   // 急轉彎（超過約 100°）：先減速再轉過去，有重量感
+      if (d > 1.75 && !keys.KeyC && !fpNow) pace *= Math.max(0.35, 1 - dt * 9); }
+    lastDir.set(ix, iz);
     if (!stepChar(player, ix, iz, dt, pace) && moveTo) moveTo = null;
     if (!keys.KeyC) player.rotation.y = angLerp(player.rotation.y, Math.atan2(ix, iz), Math.min(1, dt * 12));   // 按住 C：螃蟹走路（鎖定面向）
     const snowy = seasons.snowK() > 0.5 && tileAt(player.position.x, player.position.z) !== 0;   // 雪地上走路也會踢起細雪
     if ((run || snowy) && (puffT -= dt) < 0) { puffT = run ? 0.12 : 0.26; puff(player.position.x, player.position.y, player.position.z); }
   }
   if (fpNow && !sitting) player.rotation.y = camYaw + Math.PI;   // 第一人稱：身體朝著視線（面前的島民、門、釣魚的方向都以看的地方為準）
-  const inAir = jumpTick(dt);
+  const inAir = sink.t > 0 ? false : jumpTick(dt);   // 落水沉下去的那一下不貼地
   if (moving && !inAir && !sitting) { const fast = run && pace > WALK * 1.15, SL = fast ? 0.9 : 0.62; stepAcc += pace * dt; if (stepAcc > SL) { stepAcc -= SL; footstep(fast); } } else stepAcc = 0.45;   // 腳步聲：每走一步一聲
   { const tv = talking && talking.mesh ? talking : nearV; lookAt(player, tv && tv.mesh ? headPos2.copy(tv.mesh.position).setY(tv.mesh.position.y + 1.1) : null); }
   if (ui.cardOpen()) setExpr(player, 'happy', 0.5);   // 抓到、解鎖成就時開心
-  if (!moving) pace = 0;
+  if (!moving) {   // 放開方向鍵：約 0.1 秒內滑停（走路動作淡出的時候腳不會在原地滑）
+    if (pace > 0.35 && !locked && !inAir && !sitting) { pace *= Math.exp(-dt * 20); stepChar(player, lastDir.x, lastDir.y, dt, pace); } else pace = 0;
+  }
   animate(player, dt, moving && !inAir ? (run && pace > WALK * 1.15 ? 2 : 1) : 0, t, moving ? THREE.MathUtils.clamp(pace / (run && pace > WALK * 1.15 ? RUN : WALK), 0.45, 1.2) : 1); jumpPose(dt);   // 腳步跟著速度：慢走時步伐也慢，腳不會在地上滑
   if (sitting) { const [sx, sz] = slotPos(sitting.seat, sitting.slot); player.position.set(sx, seatY(sitting.seat), sz); player.rotation.y = sitting.seat.ry; jump.air = false; sitTick(dt); }
   // 島民
@@ -1782,6 +1793,10 @@ function tick(fixed) {
     else if (!jump.air) camY += (py - camY) * Math.min(1, dt * 7);
     else camY = THREE.MathUtils.clamp(camY, py - 2.2, py + 0.2);
     look.set(player.position.x, camY + 1.3, player.position.z); }
+  { // 聊天時（第三人稱）：鏡頭拉近一點、看向兩個人的中間，表情與反應看得清楚（v7.0）
+    const tm = talking && talking.mesh && !fpNow && !sitting ? talking.mesh : null; talkK += ((tm ? 1 : 0) - talkK) * Math.min(1, dt * 3);
+    if (tm) talkMid.set((player.position.x + tm.position.x) / 2, (camY + tm.position.y) / 2 + 1.25, (player.position.z + tm.position.z) / 2);
+    if (talkK > 0.001) look.lerp(talkMid, talkK * 0.6); }
   const rk = weather.update(dt, hourOverride ?? nowHour(), night, look, (w, prev) => {
     env.rain = w === 'rain' || w === 'storm'; paintHud(); if (w === 'rain') garden.rain();
     const sn = seasons.winter();
@@ -1803,7 +1818,7 @@ function tick(fixed) {
     // 風景鏡頭（V）：鏡頭放低、視線往前上方抬，看得到更遠的海、天空與遠山
     scenic += ((scenicOn && !photo.active() ? 1 : 0) - scenic) * Math.min(1, dt * 2.2);
     const yawNow = photo.active() ? 0 : camYaw;
-    const off = scTmp.o.copy(photo.active() ? photo.offset(camOff) : viewOffset(camOff)).lerp(SCENIC, scenic).multiplyScalar(za).applyAxisAngle(UPV, yawNow), lt = scTmp.l.copy(look).add(scTmp.d.copy(SCENIC_L).multiplyScalar(scenic).applyAxisAngle(UPV, yawNow));
+    const off = scTmp.o.copy(photo.active() ? photo.offset(camOff) : viewOffset(camOff)).lerp(SCENIC, scenic).multiplyScalar(za * (1 - 0.3 * talkK)).applyAxisAngle(UPV, yawNow), lt = scTmp.l.copy(look).add(scTmp.d.copy(SCENIC_L).multiplyScalar(scenic).applyAxisAngle(UPV, yawNow));
     camPos.lerp(look.clone().add(off), Math.min(1, dt * (photo.active() ? 8 : 4)));
     sitLook.lerp(lt, Math.min(1, dt * 6)); if (sitLook.distanceToSquared(lt) < 0.0004 || photo.active()) sitLook.copy(lt);
   }
@@ -1898,7 +1913,7 @@ function tick(fixed) {
   const dof0 = post.fx.dof; post.fx.dof = dof0 * (1 - fpK * 0.8);   // 第一人稱景深很淡（看海平線時對焦在遠處，近處的海浪、閃光不能糊掉）
   post.render(t); post.fx.dof = dof0; photo.grab(renderer.domElement); memo.grab(renderer.domElement);
   saveT += dt; if (saveT > 10 && !TA.importing) { saveT = 0; S().pos = [Math.round(player.position.x * 10) / 10, Math.round(player.position.z * 10) / 10]; save(); }
-  hudT += dt; if (hudT > 2) { hudT = 0; paintHud(); }
+  hudT += dt; if (hudT > (life.tourney ? 0.25 : 2)) { hudT = 0; paintHud(); }
 }
 function roomTick(dt, t, ix, iz, len, moving, locked) {
   const placing = room.placing();

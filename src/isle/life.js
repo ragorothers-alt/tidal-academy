@@ -86,7 +86,7 @@ async function hook() {
     const s = S(), first = !s.dex.fish[sp.id];
     s.dex.fish[sp.id] = s.dex.fish[sp.id] || Date.now(); s.stats = s.stats || {}; s.stats.fish = (s.stats.fish || 0) + 1;
     const room = addItem({ k: 'fish', id: sp.id }); save(); tourneyScore('fish', sp); miles.add('fish'); cheer({ kind: 'fish', sp, first });
-    await ui.card({ icon: icon(sp.id, 'fish'), title: `我釣到了${sp.name}！`, sub: `${q.vocab.w} ＝ ${q.vocab.zh}`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回水裡。</em>'}` });
+    await ui.card({ rare: sp.rarity >= 4, icon: icon(sp.id, 'fish'), title: `我釣到了${sp.name}！`, sub: `${q.vocab.w} ＝ ${q.vocab.zh}`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回水裡。</em>'}` });
     if (!tourney) await challenge.keepGoing({ name: '釣魚挑戰', color: '#3aa0d8', voice: 520 }, q);
   } else {
     f.st = 'flee'; f.t = 0; Audio.sfx('bad');
@@ -192,7 +192,7 @@ async function netAction() {
   if (ok) {
     bug.st = 'gone'; const s = S(), first = !s.dex.bug[sp.id]; s.dex.bug[sp.id] = s.dex.bug[sp.id] || Date.now();
     const room = addItem({ k: 'bug', id: sp.id }); save(); tourneyScore('bug', sp); miles.add('bug'); cheer({ kind: 'bug', sp, first });
-    await ui.card({ icon: icon(sp.id, 'bug'), title: `我抓到了${sp.name}！`, sub: '國文題答對了！', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
+    await ui.card({ rare: sp.rarity >= 4, icon: icon(sp.id, 'bug'), title: `我抓到了${sp.name}！`, sub: '國文題答對了！', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
     if (!tourney) await challenge.keepGoing({ name: '捕蟲挑戰', color: '#ff8fa3', voice: 600 }, q);
   } else {
     bug.st = 'flee'; bug.t = 0; Audio.sfx('bad');
@@ -231,7 +231,7 @@ async function digAction() {
 /* ================= 對外 ================= */
 let spawnT = 0;
 export function update(dt, t, running) {
-  if (tourney && !busy) { tourney.left -= dt; if (tourney.left <= 0) { const t = tourney; tourney = null; onTourneyEnd && onTourneyEnd(t); } }
+  if (tourney && !busy) { const s0 = Math.ceil(tourney.left); tourney.left -= dt; if (tourney.left < 10 && Math.ceil(tourney.left) !== s0) Audio.sfx('tick'); if (tourney.left <= 0) { const t = tourney; tourney = null; Audio.sfx('whistle'); onTourneyEnd && onTourneyEnd(t); } }   // 最後 10 秒每秒滴答、時間到吹哨
   spawnT -= dt;
   if (spawnT <= 0) {
     const tf = tourney && tourney.kind === 'fish', tb = tourney && tourney.kind === 'bug';

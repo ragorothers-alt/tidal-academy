@@ -1,6 +1,7 @@
 /* 潮汐小島 · 介面：對話（逐字＋動物語）、選項與限時答題、收穫卡片、提示、面板、頭頂標籤。 */
 import { screenOf } from './engine.js';
 import * as Audio from './audio.js';
+import * as shake from './shake.js';
 
 const $ = id => document.getElementById(id);
 /** 截短長文字：盡量停在句號等標點，超過時補上「…」 */
@@ -23,7 +24,7 @@ export const read = { speed: 1, timer: 1 };
 export const dialogOpen = () => D.open;
 /** 正在作答：對話框出了題目（選項題、選填鍵盤），一直到這段對話結束（含答對答錯與解析）；或打開了考場的面板（模擬考、練習、單字燈塔）。
     這段時間背景不必重畫（post.render 停在最後一格，省電） */
-export const answering = () => (D.open && D.quiz) || (!$('panel').hidden && $('panelBox').classList.contains('hall-p'));
+export const answering = () => (D.open && D.quiz && !!(D.choices || D.input)) || (!$('panel').hidden && $('panelBox').classList.contains('hall-p'));   // 只在選項、數字鍵盤出現時停格（省電）；作答後的揭曉、島民的反應與解析照常播放
 /** 對話正在逐字顯示中（角色嘴巴開合用）與目前說話者名稱 */
 export const typing = () => D.typing;
 export const speakerName = () => (D.open ? $('dlgName').textContent : '');
@@ -214,11 +215,12 @@ export function dialogKey(e) {
 let cardRes = null, cardAt = 0;
 let cardChain = Promise.resolve();
 /** 卡片排隊顯示：前一張還沒關閉時，下一張會等它（避免覆蓋掉前一張的完成回呼） */
+/** 獲得卡片。o：icon、title、sub、extra（html）、rare 稀有的金色光芒 */
 export function card(o) { const p = cardChain.then(() => showCard(o)); cardChain = p.catch(() => {}); return p; }
 function showCard(o) {
   const c = $('card'); c.hidden = false;
-  c.innerHTML = `<div class="card-in"><div class="card-icon">${o.icon ? `<img src="${o.icon}" alt="">` : ''}</div><b>${esc(o.title)}</b>${o.sub ? `<p>${rich(keys(o.sub))}</p>` : ''}${o.extra ? `<div class="card-extra">${o.extra}</div>` : ''}<small>${COARSE.matches ? '點一下繼續' : '按 E 繼續'}</small></div>`;
-  Audio.sfx('catch');
+  c.innerHTML = `<div class="card-in${o.rare ? ' rare' : ''}"><div class="card-icon">${o.icon ? `<img src="${o.icon}" alt="">` : ''}</div><b>${esc(o.title)}</b>${o.sub ? `<p>${rich(keys(o.sub))}</p>` : ''}${o.extra ? `<div class="card-extra">${o.extra}</div>` : ''}<small>${COARSE.matches ? '點一下繼續' : '按 E 繼續'}</small></div>`;
+  Audio.sfx(o.rare ? 'rare' : 'catch'); if (o.rare) shake.haptic('rare');   // 稀有（四、五星）：金色旋轉光芒與閃亮的音效
   return new Promise(res => { cardRes = res; cardAt = performance.now(); });
 }
 export const cardOpen = () => !!cardRes;

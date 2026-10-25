@@ -126,7 +126,7 @@ body.talking .quest, body.placing .quest { opacity: .35; }
 .card-in small { color: var(--ink-2); font-weight: 700; }
 @keyframes spin-in { from { transform: scale(0) rotate(-180deg); } }
 /* 提示 */
-#toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; justify-items: center; pointer-events: none; z-index: 4; }
+#toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; justify-items: center; pointer-events: none; z-index: 6; }   /* 在獲得卡片（5）之上：卡片出現時的提示不會被蓋住 */
 .toast { padding: 8px 18px; border-radius: 99px; background: rgba(107,79,58,.85); color: #fff; font-weight: 800; font-size: 14px; animation: dlg-in .3s cubic-bezier(.3,1.6,.5,1); transition: opacity .4s; white-space: nowrap; }
 .toast.out { opacity: 0; }
 .pill.done { background: #fff1b8; color: #b07a10; }
@@ -320,6 +320,13 @@ body.designing .design-btn { background: #c8f0c0; box-shadow: 0 0 0 3px var(--mi
 }
 @media (pointer: coarse) { body.talking .joy, body.talking .hud-bl, body.talking .hud-br { opacity: 0; pointer-events: none; } .joy, .hud-bl, .hud-br { transition: opacity .2s; } }
 .card-icon:empty { display: none; }
+/* 稀有生物（四、五星）：圖示外一圈金邊，背後慢慢旋轉的金色光芒；「新登錄圖鑑！」像蓋章一樣蓋上去 */
+.card-in.rare .card-icon { position: relative; background: radial-gradient(circle, #fff, #ffe08a); box-shadow: 0 0 0 4px #ffd34d, 0 0 44px rgba(255, 196, 60, .75); }
+.card-in.rare .card-icon::before { content: ''; position: absolute; inset: -70px; z-index: -1; border-radius: 50%; background: repeating-conic-gradient(rgba(255, 210, 80, .6) 0 9deg, rgba(255, 210, 80, 0) 9deg 20deg); -webkit-mask: radial-gradient(circle, #000 28%, transparent 70%); mask: radial-gradient(circle, #000 28%, transparent 70%); animation: rare-spin 7s linear infinite; }
+.card-in.rare > b { color: #c07a10; }
+@keyframes rare-spin { to { rotate: 360deg; } }
+.card-extra em { display: inline-block; animation: ac-tag .5s .3s cubic-bezier(.3, 1.8, .5, 1) backwards; }
+@media (prefers-reduced-motion: reduce) { .card-in.rare .card-icon::before { animation: none; } }
 .tourney { position: fixed; top: max(20px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); padding: 8px 18px; border-radius: 99px; background: #ff9a6a; color: #fff; font-weight: 800; box-shadow: 0 5px 0 rgba(107,79,58,.2); z-index: 2; white-space: nowrap; }
 .tourney b { margin-right: 6px; }
 
@@ -822,6 +829,7 @@ body.talking .season-banner { display: none; }
 /* 升級、每日目標達成的慶祝橫幅（沿用季節標題的動畫，字小一點、位置高一點） */
 .lv-banner { top: 30%; animation-duration: 3.4s; }
 .bump { animation: hud-bump .38s cubic-bezier(.3,1.8,.5,1); }
+#tourney.warn { background: #ef6f5e; color: #fff; animation: urgent .5s ease-in-out infinite alternate; }
 /* 咬鉤：「拉起！」的提示與動作鈕閃爍放大 */
 .prompt.urgent, .act-btn.urgent { background: #ef6f5e; color: #fff; animation: urgent .32s ease-in-out infinite alternate; }
 .prompt.urgent kbd { background: #fff; color: #ef6f5e; }

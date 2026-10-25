@@ -14,9 +14,10 @@ export function hit(ok) {
   return { was, now: f.n };
 }
 export const stars = n => '●'.repeat(n) + '○'.repeat(MAX - n);
-/** 等級有變化時提示一下 */
+/** 等級有變化時提示一下：平常只讓 HUD 的手感膠囊更新並彈一下；第一次升上來、滿級、掉級才跳提示（以前每升一級都跳一則長提示） */
 export function note(r) {
   if (!r || r.now === r.was) return;
-  if (r.now > r.was) ui.toast(r.now === MAX ? `手感 ${stars(r.now)} 滿了！稀有的魚和蟲最容易出現` : `手感 ${stars(r.now)}：連續答對，稀有生物更容易出現`);
-  else ui.toast(`手感 ${stars(r.now)}：答錯了，手感掉了一半`);
+  const el = document.getElementById('feel'); if (el) { el.hidden = !r.now; el.textContent = `手感 ${stars(r.now)}`; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  if (r.now > r.was) { if (r.now === MAX) ui.toast(`手感 ${stars(r.now)} 滿了！稀有的魚和蟲最容易出現`); else if (r.was === 0 && !data().told) { data().told = true; save(); ui.toast(`手感 ${stars(r.now)}：採集時連續答對，稀有生物更容易出現`); } }
+  else if (r.was >= 3) ui.toast(`手感 ${stars(r.now)}：答錯了，手感掉了一半`);
 }

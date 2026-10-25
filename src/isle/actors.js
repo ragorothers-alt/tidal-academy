@@ -134,6 +134,16 @@ export function animateModel(ch, dt, moving, rate = 1) {
     gl.lookK = Math.min(1, (gl.lookK || 0) + dt * 4);
     tq.setFromEuler(new THREE.Euler(pitch * gl.lookK, yaw * gl.lookK * 0.6, 0, 'YXZ')); gl.head.quaternion.multiply(tq);
   } else gl.lookK = 0;
+  // 表情反應（v7.0）：3D 模型沒有會動的臉，改用頭與身體表現——說話時點頭、開心時小跳並歪頭、難過低頭、驚訝往後仰
+  if (u.exprT > 0) { u.exprT -= dt; if (u.exprT <= 0) { u.exprT = 0; u.expr = 'neutral'; } }
+  gl.t = (gl.t || 0) + dt;
+  { const ex = u.expr || 'neutral', k = Math.min(1, dt * 8);
+    gl.rp = (gl.rp || 0) + ((ex === 'sad' ? 0.3 : ex === 'surprised' ? -0.2 : ex === 'angry' ? 0.12 : 0) - (gl.rp || 0)) * k;
+    gl.hopK = (gl.hopK || 0) + ((ex === 'happy' && !u.sit && !moving ? 1 : 0) - (gl.hopK || 0)) * Math.min(1, dt * 5);
+    const nod = u.talk ? Math.sin(gl.t * 8.5) * 0.045 + 0.02 : 0, tilt = ex === 'happy' ? Math.sin(gl.t * 5.5) * 0.09 * gl.hopK : 0;
+    if (gl.head && !u.sit) { turn(ch, gl.head, AX, gl.rp + nod); turn(ch, gl.head, AZ, tilt); }
+    gl.hop = Math.abs(Math.sin(gl.t * 7.5)) * 0.055 * gl.hopK;   // 開心：原地輕輕跳（玩家的模型由 main.js 的 jumpPose 加上去）
+    if (!u.isPlayer) gl.model.position.y = gl.base.y + gl.hop; }
   // 使用工具：life.js 等設 swing = 1 表示剛用了一下。第三人稱由這裡播；第一人稱的手（fphand.js）看 swingFP
   if (u.swing > 0) { if (!u.sit) { gl.useT = 0; gl.useKind = u.tool || null; } u.swing = 0; u.swingFP = 1; }
   if (gl.rig && (gl.useT < 1 || u.airK > 0.001)) { toolPose(ch, gl, dt); airPose(ch, gl, u.airK); }
