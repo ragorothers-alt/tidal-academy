@@ -300,6 +300,11 @@
     }),{n:20,cross:3});
     // The fixed race follows +z, the downstream direction of Tidal River beside the mill.
     flowRibbon(water,'raceFlow',t=>({p:[-1.08,.287-.003*t,-1.825+3.575*t],w:1.82-.045*Math.sin(Math.PI*t),h:.006}),{n:30,cross:6,end:.74});
+    // 出水口的石堰：堰頂略低於水面，水漫過堰頂、沿著石面落下（以前這裡是一片垂直的透明水幕，看起來像玻璃盒）。
+    // 前緣不超過原本的 +z 邊界（z 1.9），模型置中與水車位置不變。
+    box(foundation,'stoneShade',1.86,.27,.24,[-1.10,.135,1.76],.02);
+    for(let k=0;k<4;k++)box(foundation,k%2?'stone':'stoneShade',.45,.07,.08,[-1.78+k*.46,.235,1.86],.015);   // 堰頂一排壓頂石，邊緣參差
+    for(const off of[-.62,-.2,.25,.6])flowRibbon(water,'foam',t=>({p:[-1.08+off+.36*(t-.5),.078+.006*Math.sin(t*9+off*7),1.91+.025*Math.sin(t*7+off*5)],w:.075*Math.sin(Math.PI*t),h:.003}),{n:8,cross:2,across:V(0,0,1)});   // 落水處的白沫
     // Retain the former outlet end profile: it defines the original model's +z bound
     // and therefore its automatic centring / the wheel's placement in props.js.
     flowRibbon(water,'raceFlow',t=>({p:[-1.08,.287-.207*t*t,1.75+.15*(2*t-t*t)],w:1.78-.08*t,h:.006*(1-t)}),{
