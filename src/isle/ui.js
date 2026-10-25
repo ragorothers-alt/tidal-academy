@@ -1,5 +1,11 @@
 /* 潮汐小島 · 介面：對話（逐字＋動物語）、選項與限時答題、收穫卡片、提示、面板、頭頂標籤。 */
-import { screenOf } from './engine.js';
+import { screenOf as project, camera } from './engine.js';
+/** 頭上的提示（飄字、泡泡、表情）要放在哪：第一人稱時鏡頭就在頭裡，投影會跑到畫面外，改放畫面中央偏上 */
+const _p = camera.position.clone();
+function screenOf(obj, dy) {
+  if (obj && !obj.isVector3 && obj.getWorldPosition) { const p = obj.getWorldPosition(_p); if (Math.hypot(p.x - camera.position.x, p.z - camera.position.z) < 0.9) return [innerWidth / 2, innerHeight * (0.36 - (dy || 0) * 0.04), true]; }
+  return project(obj, dy);
+}
 import * as Audio from './audio.js';
 import * as shake from './shake.js';
 
