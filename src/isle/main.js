@@ -94,7 +94,7 @@ const elsewhere = () => trip.inside || museum.inside || dreamisle.inside || shop
 import { drill, picker } from './drill.js';
 import { pickQ, pickQU, askQ, record, pick, dayKey } from './quiz.js';
 import * as figs from './figs.js';
-import { env, I, S, save, KINDS, list, find, itemName, itemPrice, itemIcon, icon, removeAt, addItem, newDay, stars, fmtHours, fmtMonths, WHERE, whereName, POCKET_N, available } from './state.js';
+import { env, I, S, save, KINDS, list, find, itemName, itemPrice, itemIcon, icon, removeAt, addItem, newDay, stars, fmtHours, fmtMonths, WHERE, whereName, POCKET_N, available, onConcept } from './state.js';
 
 const TA = window.TA, L = TA.L;
 const $ = id => document.getElementById(id);
@@ -1484,6 +1484,7 @@ function startGame() {
   Audio.start(() => { const h = hourOverride ?? nowHour(), d = new Date(); return { month: d.getMonth() + 1, hour: Math.floor(h), night: skyU.night.value > 0.5, rain: weather.raining(), festival: events.active().some(e => e !== 'spring'), holiday: events.active().some(e => HOLIDAY_BGM.has(e)) }; });
   const s = S();
   if (s.tool) setTool(player, s.tool);
+  onConcept((c, r) => { Audio.sfx('ok'); ui.toast(`概念「${c.name}」升格 ${'●'.repeat(r.s)}${'○'.repeat(4 - r.s)}${r.s === 2 ? '：已驗證！' : r.s === 1 ? '：過幾天再做對一輪就驗證了' : ''}`); });   // v7.1 概念應用
   guide.init({   // 左上角的任務欄（新存檔會進入新手引導，之後一直有「現在可以做」）
     openMiles: () => miles.open(id => { wardrobe.own('hats', id); ui.toast('到衣櫃換上新帽子吧！'); }),
     openMail: () => { if (!talking && !ui.dialogOpen()) social.openMail(); },
@@ -1496,6 +1497,7 @@ function startGame() {
     wishShelf: () => { const w = catalog.wishInfo(dailyStock()).find(x => x.ready && !catalog.orderable(x.f)); return w ? w.f.name : ''; },
     week: () => { const w = tutors().some(v => lab.available(v)) && lab.weekLine(tutors()); return w ? (w.done ? `本週計畫 ✔ ${w.v.name}的研究推進了` : w.ready ? `本週計畫：${w.v.name}的研究可以推進了` : `本週計畫：${w.v.name}「${w.title}」第 ${w.stage} 階段`) : ''; },
     openCram: () => { if (!talking && !ui.dialogOpen()) cram.open(paintHud); },
+    openPassport: () => { if (!talking && !ui.dialogOpen()) passport.open(openGame); },
     labReady: () => { const v = lab.firstReady(villagers.filter(x => !x.shop && !x.guest)); return v ? v.name : ''; },
     env: () => ({ hour: hourOverride ?? nowHour(), date: simDate(), raining: weather.raining(), tourney: !!life.tourney }),
   });

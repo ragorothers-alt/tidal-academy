@@ -7,7 +7,7 @@ import { C, T, groundAt, isBridge } from './terrain.js';
 import { blocked, SITES, homes } from './props.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
-import { I, S, save } from './state.js';
+import { I, S, save, concept } from './state.js';
 import { pick, dayKey } from './quiz.js';
 import * as G from './genetics.js';
 import * as miles from './miles.js';
@@ -236,6 +236,7 @@ export async function consult(sp) {
     const spc = rnd() < 0.6 ? 'pea' : 'mira', all = spc === 'pea' ? ['PPTT', 'PPTt', 'PpTT', 'PpTt', 'PPtt', 'Pptt', 'ppTT', 'ppTt', 'pptt'] : ['RR', 'RW', 'WW'];
     const self = spc === 'pea' && rnd() < 0.3, a = pick(all), b = self ? a : pick(all), c = G.breed(spc, a, b, rnd), q = G.question(spc, a, b, c, pick(['pheno', 'pheno', 'geno', 'ratio']), rnd, self);
     const j = await ui.ask(sp, q.q, q.o, { answer: q.a, keys: true, quiz: true });
+    if (j >= 0) concept('bio-mendel', j === q.a ? 1 : 0, 1);   // 概念應用（v7.1）；按掉不算
     if (j === q.a) { Audio.sfx('ok'); const gain = s.genePractice.n < 5 ? 100 : 0; s.genePractice.n++; s.bells += gain; save(); hooks.paint && hooks.paint(); await ui.say(sp, '答對了！' + (gain ? '這是 100 鈴錢。' : '')); }
     else { Audio.sfx('bad'); await ui.say(sp, `正確答案是「${q.o[q.a]}」。`); }
     await ui.say(sp, q.e);
@@ -243,6 +244,7 @@ export async function consult(sp) {
   }
   const [k, p] = unk[i], kind = pick(['pheno', 'ratio']), q = G.question(p.sp, p.pa, p.pb || p.pa, p.g, kind, rnd, !!p.self);
   const j = await ui.ask(sp, q.q, q.o, { answer: q.a, keys: true, quiz: true });
+  if (j >= 0) concept('bio-mendel', j === q.a ? 1 : 0, 1);
   if (j !== q.a) { Audio.sfx('bad'); await ui.say(sp, `正確答案是「${q.o[q.a]}」。`); await ui.say(sp, q.e); await ui.say(sp, '沒關係，想通了再來找我檢測。'); return; }
   Audio.sfx('ok'); await ui.say(sp, '答對了！' + q.e);
   p.known = true; s.bells += 200; save(); hooks.paint && hooks.paint();

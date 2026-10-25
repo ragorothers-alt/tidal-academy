@@ -122,7 +122,38 @@
   function dayRec(key) { key = key || U.dayKey(); return TA.S.days[key] = TA.S.days[key] || { q: 0, c: 0, voc: 0, min: 0, xp: 0 }; }
   L.dayRec = dayRec;
   /** 一天的有效學習量（題）：選擇題作答數＋非選題折算的題數（每日目標與連續學習都用這個） */
-  L.effort = d => (d.q || 0) + (d.wq || 0);
+  L.effort = d => (d.q || 0) + (d.wq || 0) + (d.cq || 0);   // cq：概念應用玩法的題數（v7.1）
+  /* ---------- 概念應用（v7.1）：拋射、選制、期望值、遺傳……這些玩法用知識做決定，紀錄在 TA.S.concepts，和固定題的熟練分開 ----------
+     一輪的表現（答對比例）就是一次證據：八成以上、而且是不同天到期後再做對（每輪都是新的數字與情境）才升一格，最高 4 格；
+     不到五成退一格（一輪少於 3 題時不退）、明天再練。每題都算進當天的有效學習（d.cq），但不會讓題庫裡的題目變熟練。 */
+  L.CONCEPTS = {
+    'phy-projectile': { name: '拋體運動', sid: 'physics', game: 'throw' }, 'civ-electoral': { name: '選舉制度', sid: 'civics', game: 'council' },
+    'math-expect': { name: '期望值', sid: 'math', game: 'market' }, 'math-function': { name: '函數圖形', sid: 'math', game: 'plot' },
+    'es-moonphase': { name: '月相', sid: 'earth', game: 'moon' }, 'chem-periodic': { name: '元素週期表', sid: 'chemistry', game: 'periodic' },
+    'his-chrono': { name: '年代與先後', sid: 'history', game: 'chrono' }, 'en-listening': { name: '英文聽力', sid: 'english', game: 'radio' },
+    'zh-idiom': { name: '成語運用', sid: 'chinese', game: 'idiom' }, 'bio-mendel': { name: '孟德爾遺傳', sid: 'biology', game: 'garden' },
+  };
+  const C_GAP = [1, 2, 4, 8, 16];
+  L.conceptOf = game => Object.keys(L.CONCEPTS).find(id => L.CONCEPTS[id].game === game) || null;
+  L.concept = id => (TA.S.concepts || {})[id] || null;
+  /** 記一輪概念應用：right / total（total 題都算進今天的有效學習） */
+  L.recordConcept = function (id, right, total) {
+    if (!L.CONCEPTS[id] || !(total > 0)) return null;
+    const S = TA.S, t = today(); S.concepts = S.concepts || {};
+    const r = S.concepts[id] = S.concepts[id] || { n: 0, c: 0, s: 0, due: t, ok: '', last: 0 };
+    const k = right / total, day = U.dayKey();
+    r.n += total; r.c += right; r.last = Date.now();
+    if (k >= 0.8) { if (r.ok !== day && (r.s === 0 || t >= r.due)) { r.s = Math.min(4, r.s + 1); r.ok = day; r.due = t + C_GAP[r.s]; } }   // 還沒到期就再玩：記題數，不升格也不延後
+    else if (k < 0.5) { if (total >= 3) r.s = Math.max(0, r.s - 1); r.due = t + 1; }   // 只答一題（花園遺傳）答錯不退格，明天再練
+    const d = dayRec(); d.cq = (d.cq || 0) + total;
+    L.touchStreak(); L.checkAch(); TA.Store.save();
+    return r;
+  };
+  /** 到期該再練一次的概念 */
+  L.conceptDue = () => Object.keys(L.CONCEPTS).filter(id => { const r = L.concept(id); return r && r.due <= today(); });
+  /** 已驗證：至少在兩個不同的到期日都做對（第 2 格以上） */
+  L.conceptVerified = id => ((L.concept(id) || {}).s || 0) >= 2;
+
   /** 學習分鐘（v7.1，今日路線與連續學習共用）：一題（含看解析）約 1 分、單字卡 4 張約 1 分、專注 1 分鐘算 1 分 */
   L.studyMin = d => L.effort(d) + Math.floor((d.voc || 0) / 4) + (d.min || 0);
 

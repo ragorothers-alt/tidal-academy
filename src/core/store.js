@@ -32,7 +32,8 @@
       ach: {},      // id → 解鎖時間
       shop: { owned: ['dusk'], theme: 'dusk' },
       focus: { min: 0, sessions: 0, preset: 25 },
-      written: {}   // 非選題 id → {n,best,sc,s,due,last}（v7.0；舊存檔沒有就是空的）
+      written: {},   // 非選題 id → {n,best,sc,s,due,last}（v7.0；舊存檔沒有就是空的）
+      concepts: {}   // 概念應用 id → {n,c,s,due,ok,last}（v7.1，練習遊戲；和題庫熟練分開）
     };
   }
 
@@ -61,6 +62,7 @@
     if (!isObj(s.profile.targets)) s.profile.targets = {}; for (const g in s.profile.targets) { const v = Math.round(n(s.profile.targets[g], 0)); if (v >= 1 && v <= 15) s.profile.targets[g] = v; else delete s.profile.targets[g]; }
     { const GR = TA.GROUPS || ['國文', '英文', '數學', '社會', '自然'], t = isObj(s.profile.track) ? s.profile.track : {}, ok = a => (Array.isArray(a) ? a : []).filter((x, i, A) => GR.includes(x) && A.indexOf(x) === i);   // 備考航線（v7.1，可選）
       s.profile.track = { groups: ok(t.groups), main: ok(t.main).slice(0, 2) }; }
+    if (!isObj(s.concepts)) s.concepts = {}; for (const id in s.concepts) { const r = s.concepts[id]; if (!isObj(r)) { delete s.concepts[id]; continue; } r.n = n(r.n, 0); r.c = Math.min(r.n, n(r.c, 0)); r.s = Math.max(0, Math.min(4, n(r.s, 0))); r.due = n(r.due, 0); r.ok = typeof r.ok === 'string' ? r.ok : ''; r.last = n(r.last, 0); }   // 概念應用（v7.1，可選）
     if (!Array.isArray(s.exams)) s.exams = []; s.exams = s.exams.slice(-60);
     for (const id in s.written) { const r = s.written[id]; if (!isObj(r)) { delete s.written[id]; continue; } r.n = n(r.n, 0); r.best = Math.max(0, Math.min(1, n(r.best, 0))); r.sc = Math.max(0, Math.min(1, n(r.sc, 0))); r.s = Math.max(0, Math.min(4, n(r.s, 0))); r.due = n(r.due, 0); r.last = n(r.last, 0); }
     if (!s.shop.owned.includes('dusk')) s.shop.owned.push('dusk');

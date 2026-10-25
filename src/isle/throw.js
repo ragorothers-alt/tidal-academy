@@ -9,7 +9,7 @@ import * as miles from './miles.js';
 const G = 9.8, TOL = 1.2;
 export const range = (v, deg) => v * v * Math.sin(2 * deg * Math.PI / 180) / G;
 export function open(paint) {
-  const body = ui.el('div', 'throw'); let round = 0, hits = 0, target = 0, ang = 45, spd = 15, anim = 0, tries = 0, wait = false;
+  const body = ui.el('div', 'throw'); let round = 0, hits = 0, clean = 0, target = 0, ang = 45, spd = 15, anim = 0, tries = 0, wait = false;
   const newTarget = () => { target = Math.round((8 + Math.random() * 30) * 2) / 2; tries = 0; };
   body.innerHTML = `<p class="muted">把椰子丟進籃子！忽略空氣阻力、從同一高度出手：射程 R = v² · sin 2θ ÷ g（g = 9.8 m/s²）。每個目標可以丟 3 次。</p>
     <canvas class="th-cv" width="640" height="260"></canvas>
@@ -40,16 +40,16 @@ export function open(paint) {
       const t = Math.min(T, (now - t0) / 1000 * 1.6), x = vx * t, y = vy * t - 0.5 * G * t * t; path.push([SX + x * SCALE, SY - 22 - y * SCALE]); scene(path);
       if (t < T) { anim = requestAnimationFrame(step); return; }
       anim = 0; scene(path, R); const hit = Math.abs(R - target) <= TOL;
-      if (hit) { hits++; Audio.sfx('catch'); msg.innerHTML = `<b>進籃了！</b> R = ${V}² × sin ${2 * A}° ÷ 9.8 ≈ ${R.toFixed(1)} m`; }
+      if (hit) { hits++; if (tries === 1) clean++; Audio.sfx('catch'); msg.innerHTML = `<b>進籃了！</b> R = ${V}² × sin ${2 * A}° ÷ 9.8 ≈ ${R.toFixed(1)} m`; }
       else { Audio.sfx('bad'); msg.innerHTML = `差了 ${(R - target).toFixed(1)} m。R = v² · sin 2θ ÷ g ≈ ${R.toFixed(1)} m${tries >= 3 ? '　（換下一個目標）' : ''}`; }
       if (hit || tries >= 3) { round++; if (round >= 3) return finish(); wait = true; setTimeout(() => { wait = false; newTarget(); scene(); }, 1200); }
     };
     anim = requestAnimationFrame(step);
   };
   const finish = () => {
-    const s = S(), d = dayKey(), first = s.throwDay !== d && hits > 0, b = first ? hits * 800 : 0; if (first) s.throwDay = d; s.bells += b; s.stats = s.stats || {}; s.stats.throwHits = (s.stats.throwHits || 0) + hits; practiced('throw', hits, 3); save(); if (hits) miles.add('puzzle');
+    const s = S(), d = dayKey(), first = s.throwDay !== d && hits > 0, b = first ? hits * 800 : 0; if (first) s.throwDay = d; s.bells += b; s.stats = s.stats || {}; s.stats.throwHits = (s.stats.throwHits || 0) + hits; practiced('throw', hits, 3, { right: clean, total: 3 }); save();   /* 概念證據只算第一發就進籃的：用公式先算好，而不是靠試射調整 */ if (hits) miles.add('puzzle');
     msg.innerHTML = `這一輪命中 ${hits} / 3 個籃子。${first ? `今日練習獎勵：${b} 鈴錢。` : ''}提示：同樣的初速，仰角 45° 射程最遠；互餘的仰角（兩角和為 90°，例如 30° 與 60°）射程相同。`;
-    const again = ui.el('button', 'btn', '再玩一輪'); again.type = 'button'; again.onclick = () => { round = 0; hits = 0; newTarget(); msg.textContent = ''; again.remove(); scene(); }; body.querySelector('.th-row').appendChild(again);
+    const again = ui.el('button', 'btn', '再玩一輪'); again.type = 'button'; again.onclick = () => { round = 0; hits = 0; clean = 0; newTarget(); msg.textContent = ''; again.remove(); scene(); }; body.querySelector('.th-row').appendChild(again);
     paint && paint();
   };
   newTarget();

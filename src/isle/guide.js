@@ -79,6 +79,7 @@ function suggestions(max) {
   const relax = route.quiet(), exam = TA.L.phase();   // 收工、散步、休息中：不催讀書，只提島上生活；考前 30 天：不介紹新玩法、不推連答紀錄
   if (exam && !relax && H.cramDone && !H.cramDone()) add(`考前衝刺：${PHONE()} →「考前衝刺」做今天的 5 題精選（做完就算完成今天的學習）`, 'cram');
   { const w = H.wishShelf && H.wishShelf(); if (w) add(`今天阿潮的貨架上有你的願望：「${w}」`); }
+  if (!relax && exam !== 'final') { const due = TA.L.conceptDue().map(id => TA.L.CONCEPTS[id]).filter(c => TA.L.inTrack(c.sid)); if (due.length) add(`概念複習：「${due[0].name}」到了再驗證的日子。${PHONE()} →「練習護照」玩一輪，八成以上就升格`, 'passport'); }
   const free = freeSlots(); if (free <= 3) add(free ? `口袋快滿了（剩 ${free} 格）：到阿潮的商店賣東西，或捐給博物館` : '口袋滿了：到阿潮的商店賣東西，或捐給博物館');
   // 2. 現在才有的事（活動、時段、潮汐）
   const ev = events.active();
@@ -119,7 +120,7 @@ export function init(hooks) {
   el.addEventListener('click', e => {
     if (e.target.closest('.q-toggle')) { open = !open; paint(); return; }
     const a = e.target.closest('[data-act]');
-    if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday, cram: H.openCram }[a.dataset.act]; if (f) { f(); return; } }
+    if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday, cram: H.openCram, passport: H.openPassport }[a.dataset.act]; if (f) { f(); return; } }
     if (data().fin && H.openToday) H.openToday();   // 點今日路線：打開手機的今日學習（改時長、開寶箱、收工）
   });
   miles.listen(onEvent);

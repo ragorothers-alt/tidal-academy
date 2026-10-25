@@ -645,3 +645,22 @@ test('備考航線與考前階段：每日潮汐只排要考的考科，考前�
   setNow(t0 + day + 3600e3); assert.equal(L.pickDaily().length, 8, '考前一週每日潮汐 8 題');
   TA.S.profile.examDate = TA.U.dayKey(new Date(t0 - 3 * day)); assert.equal(L.phase(), '', '考完了');
 });
+
+test('概念應用：一輪八成以上且不同天到期才升格，算進有效學習，不改題庫熟練', () => {
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L;
+  const qBefore = JSON.stringify(TA.S.q);
+  assert.equal(L.conceptOf('throw'), 'phy-projectile'); assert.equal(L.recordConcept('nope', 3, 3), null);
+  let r = L.recordConcept('phy-projectile', 3, 3); assert.equal(r.s, 1); assert.equal(r.due, TA.U.dayNum() + 2);
+  L.recordConcept('phy-projectile', 3, 3); assert.equal(r.s, 1, '同一天再做對不升格');
+  assert.equal(L.dayRec().cq, 6); assert.equal(L.effort(L.dayRec()), 6, '概念題算進有效學習');
+  setNow(t0 + day); L.recordConcept('phy-projectile', 3, 3); assert.equal(r.s, 1, '還沒到期不升格');
+  assert.equal(L.conceptVerified('phy-projectile'), false);
+  setNow(t0 + 2 * day); assert.deepEqual([...L.conceptDue()], ['phy-projectile']);
+  L.recordConcept('phy-projectile', 4, 5); assert.equal(r.s, 2, '到期再做對升格'); assert.ok(L.conceptVerified('phy-projectile'));
+  setNow(t0 + 6 * day); L.recordConcept('phy-projectile', 2, 3); assert.equal(r.s, 2, '五到八成不升不降');
+  L.recordConcept('phy-projectile', 1, 3); assert.equal(r.s, 1, '不到五成退一格'); assert.equal(r.due, TA.U.dayNum() + 1);
+  L.recordConcept('bio-mendel', 0, 1); assert.equal(L.concept('bio-mendel').s, 0); L.recordConcept('bio-mendel', 1, 1); assert.equal(L.concept('bio-mendel').s, 1, '單題答錯不退格，答對照樣記');
+  assert.equal(JSON.stringify(TA.S.q), qBefore, '題庫熟練不受影響');
+  TA.S.concepts.bad = 5; TA.S.concepts['phy-projectile'].s = 9; TA.Store.importJSON(JSON.stringify(TA.S));
+  assert.equal(TA.S.concepts.bad, undefined); assert.equal(TA.S.concepts['phy-projectile'].s, 4);
+});

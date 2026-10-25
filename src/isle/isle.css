@@ -568,6 +568,8 @@ body.in-yue-home #labels .bubble { display: block; max-width: min(320px, 82vw); 
 .passport .pp-st.on { border-style: solid; border-color: #9ad0a0; } .passport .pp-st.on i { filter: none; opacity: 1; background: #d8f0d8; box-shadow: 0 0 0 3px #9ad0a0; }
 .passport .pp-st.gold { border-color: var(--gold); } .passport .pp-st.gold i { background: #fff0b8; box-shadow: 0 0 0 3px var(--gold), 0 0 14px rgba(255,200,60,.6); }
 .passport .pp-st small { color: var(--ink-2); font-size: 11px; } .passport .pp-st span { font-size: 11px; color: var(--ink-2); text-align: center; }
+.passport .pp-c { font-style: normal; font-size: 11px; color: #4f7f9f; text-align: center; letter-spacing: .02em; }   /* v7.1 概念應用 */
+.passport .pp-gene { margin: 10px 0 0; padding: 8px 12px; border-radius: 12px; background: #eef6e4; font-size: 13px; }
 
 /* 選項很多時（導師選單）限制高度可捲動，避免超出小螢幕 */
 .choices { max-height: calc(100vh - 220px); overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
@@ -1157,6 +1159,9 @@ body.has-passage #dlg.big { max-height: calc(62vh - 60px); }
 .hst-subj > div { display: grid; grid-template-columns: 64px 1fr 1fr 70px; align-items: center; gap: 10px; font-size: 13px; }
 .hst-subj .bar { display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 6px; color: var(--ac-ink2); }
 .hst-subj b { text-align: right; }
+.hst-cpt { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px; }   /* v7.1 概念應用 */
+.hst-cpt > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; padding: 6px 10px; border-radius: 10px; background: rgba(79,127,159,.08); font-size: 13px; }
+.hst-cpt > div > small { grid-column: 2 / -1; color: var(--ink-2); font-size: 11px; }
 .hst-weak { display: grid; gap: 6px; }
 .hst-weak > div { display: grid; grid-template-columns: auto minmax(0, 1fr) 46px auto auto; align-items: center; gap: 8px; font-size: 14px; }
 .hst-weak b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

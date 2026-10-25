@@ -48,10 +48,21 @@ export function S() {
 }
 export const save = () => TA.Store.save();
 /** 練習遊戲的紀錄（練習護照用）：輪數、答對／題數、練習天數 */
-export function practiced(id, right, total) {
+let conceptHook = null;
+/** main.js 設定：概念升格時的提示 */
+export const onConcept = f => { conceptHook = f; };
+/** 記一輪概念應用（v7.1，L.recordConcept）；升格時呼叫 onConcept 設定的提示 */
+export function concept(cid, right, total) {
+  const L = TA.L, s0 = (L.concept(cid) || {}).s || 0, r = L.recordConcept(cid, right, total);
+  if (r && r.s > s0 && conceptHook) conceptHook(L.CONCEPTS[cid], r);
+  return r;
+}
+/** v7.1：同時記一輪概念應用（concept）；ev = { right, total } 是能當作理解證據的部分（例如拋射只算第一次就丟進的籃子，靠試射調出來的不算） */
+export function practiced(id, right, total, ev) {
   const s = S(); s.practice = s.practice || {};
   const p = s.practice[id] = s.practice[id] || { n: 0, ok: 0, tot: 0, days: 0, last: '' };
   p.n++; p.ok += right; p.tot += total; const d = dayKey(); if (p.last !== d) { p.last = d; p.days++; }
+  const cid = TA.L.conceptOf(id); if (cid) concept(cid, ev ? ev.right : right, ev ? ev.total : total);
 }
 
 /* ---------- 物種 ---------- */
