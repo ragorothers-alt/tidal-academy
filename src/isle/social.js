@@ -24,13 +24,14 @@ function todayPool(k) {
 }
 export function newDay() {
   const s = S();
-  // 已經接下、包裹還在口袋裡的送貨委託留到送達為止（跨過午夜送到也拿得到謝禮）
-  const keep = (s.reqs || []).filter(r => r.type === 'deliver' && r.accepted && !r.done && s.pockets.some(x => x && x.k === 'pkg' && x.from === r.sid && x.to === r.target));
+  // 已經接下的委託留到完成為止：送貨要包裹還在口袋裡（跨過午夜送到也拿得到謝禮），釣魚／捉蟲要目標這個月還會出現
+  const m = new Date().getMonth() + 1, still = r => { const sp = find(r.type, r.target); return !!sp && (!sp.months || sp.months.includes(m)); };
+  const keep = (s.reqs || []).filter(r => r.accepted && !r.done && (r.type === 'deliver' ? s.pockets.some(x => x && x.k === 'pkg' && x.from === r.sid && x.to === r.target) : r.type === 'fish' || r.type === 'bug' ? still(r) : r.type === 'fossil'));
   s.reqs = keep.slice();
   // 第一個委託來自學習弱點：正確率最低（或還沒碰過）的單元，由該科導師提出
-  const weak = L.weakUnits(12).find(w => vOf(w.subject.id) && (L.BY_UNIT[w.id] || []).length >= 4);
+  const weak = L.weakUnits(12).find(w => vOf(w.subject.id) && !keep.some(r => r.sid === w.subject.id) && (L.BY_UNIT[w.id] || []).length >= 4);
   if (weak) s.reqs.push({ sid: weak.subject.id, type: 'weak', target: weak.id, accepted: false, done: false, acc: weak.st.attempts ? Math.round(weak.st.acc * 100) : null });
-  const who = VS.filter(v => (!weak || v.sid !== weak.subject.id) && !keep.some(r => r.sid === v.sid)).sort(() => Math.random() - 0.5).slice(0, weak ? 2 : 3);
+  const who = VS.filter(v => (!weak || v.sid !== weak.subject.id) && !keep.some(r => r.sid === v.sid)).sort(() => Math.random() - 0.5).slice(0, Math.max(1, 3 - s.reqs.length));   // 一天約 3 個（留下來的也算），至少有 1 個新的
   who.forEach(v => {
     let type = rollType(), target = null;
     if (type === 'fish' || type === 'bug') { const pool = todayPool(type); if (pool.length) target = pick(pool).id; else type = 'quiz'; }

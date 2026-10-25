@@ -21,7 +21,7 @@ function fromPool(ids, maxD, opt) {
   if (!all.length) return null;
   const ready = all.filter(id => !L.cooling(id)), pool = ready.length ? ready : all;   // 剛答過的題目先冷卻（真的沒別的題目才出）
   const review = pool.filter(id => L.isDue(id) || L.isMistake(id));
-  if (review.length && Math.random() < 0.55) return L.view(L.Q[pick(review)]);
+  if (review.length && Math.random() < (review.length >= 12 ? 0.8 : 0.55)) return L.view(L.Q[pick(review)]);   // 這科積了很多複習時，少出新題
   const fresh = pool.filter(id => !L.rec(id));
   if (fresh.length) return L.view(L.Q[pick(fresh)]);
   return L.view(L.Q[pool.slice().sort((a, b) => L.mastery(a) - L.mastery(b))[Math.floor(Math.random() * Math.min(8, pool.length))]]);
