@@ -117,16 +117,20 @@ export function openMock() {
   let group = TA.GROUPS.includes('社會') ? '社會' : TA.GROUPS[0], n = 20;
   const body = ui.el('div', 'hall hs');
   const paint = () => {
-    const hist = TA.S.exams.slice(-8).reverse();
+    const cfg = L.MOCK[group], sizes = cfg.subjects.includes('math') ? [6, 12] : group === '國文' ? [10, 20] : [10, 20, 30];
+    const short = sizes.filter(k => k < cfg.realN);
+    if (n !== 'full' && !short.includes(n)) n = short[short.length - 1];
+    const hist = TA.S.exams.slice(-8).reverse(), full = n === 'full';
     body.innerHTML = `<div class="hall-scroll">
-      <p class="hs-lead">依學測各科的時間比例計時。作答時不顯示對錯，可以前後翻題、標記；交卷後看分數、單元表現與逐題詳解。多選題依學測方式部分給分（錯 1 個選項得 0.6、錯 2 個得 0.2）。</p>
-      <div class="hs-label">考科</div><div class="hs-grid g5">${TA.GROUPS.map(g => { const subs = L.MOCK[g].subjects, tot = subs.reduce((a, s) => a + (L.BY_SUBJECT[s] || []).length, 0); return `<button type="button" class="hs-pick${g === group ? ' on' : ''}" data-g="${g}" style="--c:${subj(subs[0]).color}"><b>${g}</b><small>${tot} 題題庫</small></button>`; }).join('')}</div>
-      <div class="hs-label">題數</div><div class="hs-grid g3">${[[10, '小考'], [20, '半卷'], [30, '大考']].map(([k, t]) => `<button type="button" class="hs-pick${k === n ? ' on' : ''}" data-n="${k}"><b>${k} 題</b><small>${t}</small></button>`).join('')}</div>
-      <p class="hs-info">限時 <b>${fmtT(L.mockSeconds(group, n))}</b>（依學測${group} ${L.MOCK[group].realMin} 分鐘、約 ${L.MOCK[group].realN} 題換算）</p>
-      ${hist.length ? `<div class="hs-label">最近成績</div><div class="hs-hist">${hist.map(e => `<div><span>${new Date(e.at).toLocaleDateString('zh-TW')}</span><b>${e.group}</b><span>${e.n} 題</span><i style="--k:${(e.pts / e.n).toFixed(3)}"></i><b>${Math.round(e.pts / e.n * 100)} 分</b></div>`).join('')}</div>` : ''}
+      <p class="hs-lead">作答時不顯示對錯，可以前後翻題、標記；交卷後看分數、單元表現與逐題詳解。多選題依學測方式部分給分（錯 1 個選項得 0.6、錯 2 個得 0.2；空白 0 分）。</p>
+      <div class="hs-label">考科</div><div class="hs-grid g3">${L.MOCK_GROUPS.map(g => { const subs = L.MOCK[g].subjects, tot = subs.reduce((a, s) => a + (L.BY_SUBJECT[s] || []).filter(id => L.mockEligible(g, L.Q[id])).length, 0); return `<button type="button" class="hs-pick${g === group ? ' on' : ''}" data-g="${g}" style="--c:${subj(subs[0]).color}"><b>${g}</b><small>${tot} 題題庫</small></button>`; }).join('')}</div>
+      <div class="hs-label">題數</div><div class="hs-grid g3">${[...short.map((k, i) => [k, ['短版小考', '短版練習', '短版大考'][i]]), ['full', '整卷']].map(([k, t]) => `<button type="button" class="hs-pick${k === n ? ' on' : ''}" data-n="${k}"><b>${k === 'full' ? `整卷 · ${cfg.realN} 題` : k + ' 題'}</b><small>${t}</small></button>`).join('')}</div>
+      <p class="hs-info">限時 <b>${fmtT(L.mockSeconds(group, n))}</b>（${full ? `整卷採學測${group}正式節次 ${cfg.realMin} 分鐘` : `短版按純選擇作答時間估算，約每題 ${(cfg.choiceMin / cfg.realN).toFixed(1)} 分鐘`}）</p>
+      <p class="muted">短版提供 ${short.join('／')} 題；整卷題數依 115 學測選擇（填）題，包含混合題中的選擇題；不出題庫尚未提供的非選題、翻譯與作文。完整題組一起抽取，短版題數若無法整組湊齊會略少；這是原創練習卷，題型配分與難度不等同正式試卷。</p>
+      ${hist.length ? `<div class="hs-label">最近成績</div><div class="hs-hist">${hist.map(e => { const rate = (e.pts != null ? e.pts : e.c) / e.n; return `<div><span>${new Date(e.at).toLocaleDateString('zh-TW')}</span><b>${e.group}</b><span>${e.n} 題</span><i style="--k:${rate.toFixed(3)}"></i><b>${Math.round(rate * 100)} 分</b></div>`; }).join('')}</div>` : ''}
     </div><div class="hx-foot"><span class="muted">準備好再開始，開始後就會計時。</span><button type="button" class="btn go">開始作答</button></div>`;
     body.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { group = b.dataset.g; Audio.sfx('tick'); paint(); });
-    body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = +b.dataset.n; Audio.sfx('tick'); paint(); });
+    body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = b.dataset.n === 'full' ? 'full' : +b.dataset.n; Audio.sfx('tick'); paint(); });
     body.querySelector('.go').onclick = () => runMock(group, n);
   };
   paint();
@@ -137,7 +141,7 @@ export function openMock() {
 function runMock(group, n) {
   const ids = L.pickMock(group, n), views = ids.map(id => L.view(L.Q[id]));
   if (!ids.length) { ui.toast('這一科的題目還沒準備好'); return; }
-  const limit = L.mockSeconds(group, n), t0 = Date.now(), answers = {}, flags = {};
+  const limit = L.mockSeconds(group, n === 'full' ? n : ids.length), t0 = Date.now(), answers = {}, flags = {};
   let i = 0, done = false, clock = 0;
   const body = ui.el('div', 'hall hx');
   body.innerHTML = `<div class="hx-bar"><b class="hx-title">${group} 模擬考 · ${ids.length} 題</b><span class="hx-timer"></span></div><div class="hall-scroll hx-main"></div>
@@ -167,16 +171,16 @@ function runMock(group, n) {
     let xp = 0, correct = 0;
     const log = ids.map((id, k) => {
       const q = views[k], a = answers[id], has = answered(a), ok = has && L.check(q, a), score = has ? L.multiScore(q, a) : 0;
-      if (has) xp += L.record(q, ok, { silent: true }).xp;
+      xp += L.record(q, ok, { silent: true, blank: !has }).xp;
       if (ok) correct++;
       return { id, v: q, ans: has ? a : null, ok, score };
     });
     const pts = log.reduce((s, x) => s + x.score, 0), pct = Math.round(pts / ids.length * 100), secs = Math.round((Date.now() - t0) / 1000);
     const units = {}; log.forEach(x => { const u = L.Q[x.id].unit; units[u] = units[u] || [0, 0]; units[u][1]++; if (x.ok) units[u][0]++; });
     TA.S.exams.push({ at: Date.now(), group, n: ids.length, c: correct, pts, secs, units });
-    xp += L.gain(ids.length * 3, 0).xp; const gems = Math.round(pct / 5); if (gems) L.gain(0, gems);
+    xp += L.gain(log.filter(x => x.ans !== null).length * 3, 0).xp; const gems = Math.round(pct / 5); if (gems) L.gain(0, gems);
     L.checkAch(); TA.Store.save();
-    showResult({ mode: 'mock', title: `${group} 模擬考`, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, ids.length) });
+    showResult({ mode: 'mock', title: `${group} 模擬考`, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, n) });
   };
   body.querySelector('.prev').onclick = () => go(i - 1);
   body.querySelector('.next').onclick = () => go(i + 1);
@@ -196,10 +200,14 @@ function runMock(group, n) {
 
 /* ---------- 練習組：一題一題作答、答完看解析 ---------- */
 /** 依序作答一組題目（錯題複習、弱點單元、重練錯題、單元試煉、每日潮汐）。
-    opt：{ again 再練一次, mode 結果頁類型, from 從第幾題開始（每日潮汐續做）, onAnswer(i, ok) 每答一題, finish(r) 結算前調整結果（星等、潮晶…） } */
+    opt：{ review 嚴格排除冷卻題, again 再練一次, mode 結果頁類型, from 從第幾題開始（每日潮汐續做）, onAnswer(i, ok) 每答一題, finish(r) 結算前調整結果（星等、潮晶…） } */
 export function runSet(title, ids, opt) {
   opt = opt || {};
   ids = (ids || []).filter(id => L.Q[id]);
+  if (opt.review && ids.length) {
+    ids = ids.filter(id => !L.cooling(id));
+    if (!ids.length) { ui.toast(`錯題與到期題都在 ${L.COOL_MIN} 分鐘冷卻中，請稍後再複習。`); return; }
+  }
   if (!ids.length) { ui.toast('目前沒有可以練習的題目'); return; }
   const t0 = Date.now(), log = [];
   let i = Math.max(0, Math.min(opt.from || 0, ids.length - 1)), combo = 0, xp = 0, correct = 0, locked = false, cur = null, sel = [], fillV = '';
@@ -292,10 +300,19 @@ export function showResult(r) {
   (r.onlyWrong ? wrong : r.log).forEach(x => { const d = reviewItem(x, body); if (d) list.appendChild(d); });
   const firstBad = list.querySelector('.hrv.bad'); if (firstBad) firstBad.open = true;
   body.querySelectorAll('[data-u]').forEach(b => b.onclick = () => notesIn(body, L.UNITS[b.dataset.u]));
-  if (wrongIds.length) body.querySelector('.retry').onclick = () => runSet('重練錯題', wrongIds);
+  let retryClock = 0;
+  if (wrongIds.length) {
+    const retry = body.querySelector('.retry'), refresh = () => {
+      const ready = wrongIds.some(id => !L.cooling(id));
+      const wait = Math.max(1, Math.ceil((Math.min(...wrongIds.map(L.coolUntil)) - Date.now()) / 60000));
+      retry.disabled = !ready; retry.textContent = ready ? `重練錯題 ${wrongIds.length}` : `重練錯題 · 還要等 ${wait} 分鐘`;
+    };
+    refresh(); retryClock = setInterval(refresh, 1000);
+    retry.onclick = () => runSet('重練錯題', wrongIds, { review: true });
+  }
   if (r.again) body.querySelector('.again').onclick = () => r.again();
   body.querySelector('.done').onclick = () => ui.closePanel();
-  open(r.mode === 'mock' ? '潮汐考場 · 成績' : r.title + ' · 結果', body);
+  open(r.mode === 'mock' ? '潮汐考場 · 成績' : r.title + ' · 結果', body, { onClose: () => clearInterval(retryClock) });
   if ((r.mode === 'mock' && r.pct >= 80) || (r.mode === 'set' && r.correct === r.total && r.total >= 5)) Audio.sfx('catch'); else Audio.sfx('coin');
 }
 
@@ -304,20 +321,20 @@ export function openMistakes(sid) {
   let filter = sid || '';
   const body = ui.el('div', 'hall hm');
   const paint = () => {
-    const counts = {}; TA.SUBJECTS.forEach(s => { counts[s.id] = L.pickReview(9999, s.id).length; });
-    const total = Object.values(counts).reduce((a, b) => a + b, 0), ids = L.pickReview(9999, filter || null), today = U.dayNum();
+    const counts = {}, dues = {}; TA.SUBJECTS.forEach(s => { counts[s.id] = L.mistakes(s.id).length; dues[s.id] = L.dueList(s.id).filter(id => !L.isMistake(id)).length; });
+    const total = L.mistakes().length, due = Object.values(dues).reduce((a, b) => a + b, 0), ids = L.pickReview(9999, filter || null), today = U.dayNum();
     const fixed = Object.values(TA.S.q).filter(r => r.wr > 0 && r.s >= 3).length;
     body.innerHTML = `<div class="hall-scroll">
-      <div class="hm-hero"><div><b>${total}</b><small>待複習</small></div><div><b>${fixed}</b><small>已修復</small></div><div><b>${L.dueList().length}</b><small>今天到期</small></div></div>
-      <p class="muted hm-rule">答錯的題目會回到第 0 格；之後每次「到期時」答對升一格，間隔 1→2→4→8→16→35 天，升到第 3 格就算修復。同一天重複答對只算一次，剛答過的題目 20 分鐘內不會再出。</p>
-      <div class="hm-chips"><button type="button" data-s="" class="${filter ? '' : 'on'}">全部 <b>${total}</b></button>${TA.SUBJECTS.filter(s => counts[s.id]).map(s => `<button type="button" data-s="${s.id}" class="${filter === s.id ? 'on' : ''}" style="--c:${s.color}">${s.name} <b>${counts[s.id]}</b></button>`).join('')}</div>
+      <div class="hm-hero"><div><b>${total}</b><small>真正錯題</small></div><div><b>${due}</b><small>到期複習（不含錯題）</small></div><div><b>${fixed}</b><small>已修復</small></div></div>
+      <p class="muted hm-rule">答錯的題目會回到第 0 格；須跨日且距最後答錯至少 8 小時，到期答對才升一格，間隔 1→2→4→8→16→35 天，升到第 3 格算修復。當天答錯後再答對會記次數與正確數，不升格。錯題複習與重練錯題排除 ${L.COOL_MIN} 分鐘內剛答過的題目；全部冷卻時請稍後再來。</p>
+      <div class="hm-chips"><button type="button" data-s="" class="${filter ? '' : 'on'}">全部 <b>錯 ${total} · 到期 ${due}</b></button>${TA.SUBJECTS.filter(s => counts[s.id] || dues[s.id]).map(s => `<button type="button" data-s="${s.id}" class="${filter === s.id ? 'on' : ''}" style="--c:${s.color}">${s.name} <b>錯 ${counts[s.id]} · 到期 ${dues[s.id]}</b></button>`).join('')}</div>
       <div class="hr-list"></div></div>
       <div class="hx-foot"><span class="muted">${ids.length > 80 ? `先列出最需要複習的 80 題` : ''}</span><span class="spacer"></span><button type="button" class="btn go"${ids.length ? '' : ' disabled'}>開始複習（最多 15 題）</button></div>`;
     const list = body.querySelector('.hr-list');
-    if (!ids.length) list.innerHTML = '<p class="muted hm-empty">這片海域很乾淨，沒有待複習的錯題。</p>';
-    ids.slice(0, 80).forEach(id => { const r = L.rec(id); const d = reviewItem({ id, ok: false, ans: null }, body, `答錯 ${r.wr} 次 · ${r.due <= today ? '今天到期' : `${r.due - today} 天後到期`}`); if (d) list.appendChild(d); });
+    if (!ids.length) list.innerHTML = '<p class="muted hm-empty">這片海域很乾淨，沒有錯題或到期複習。</p>';
+    ids.slice(0, 80).forEach(id => { const r = L.rec(id); const d = reviewItem({ id, ok: !L.isMistake(id), ans: null }, body, `${L.isMistake(id) ? `真正錯題 · 答錯 ${r.wr} 次` : '到期複習'} · ${r.due <= today ? '今天到期' : `${r.due - today} 天後到期`}${L.cooling(id) ? ' · 冷卻中' : ''}`); if (d) list.appendChild(d); });
     body.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { filter = b.dataset.s; Audio.sfx('tick'); paint(); });
-    body.querySelector('.go').onclick = () => { const pick = L.pickReview(15, filter || null); runSet(filter ? `${subj(filter).name}錯題複習` : '錯題複習', pick, { again: () => openMistakes(filter) }); };
+    body.querySelector('.go').onclick = () => { const pick = L.pickReview(15, filter || null); runSet(filter ? `${subj(filter).name}錯題複習` : '錯題複習', pick, { review: true, again: () => openMistakes(filter) }); };
   };
   paint();
   open('錯題本', body);
@@ -343,12 +360,18 @@ export function openStats() {
   const R = 80, cx = 110, cy = 100, G = TA.GROUPS, val = g => { const ss = TA.SUBJECTS.filter(s => s.group === g).map(s => L.subjectStats(s.id).mastery); return ss.length ? ss.reduce((a, b) => a + b, 0) / ss.length : 0; };
   const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / G.length; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const radar = `<svg viewBox="0 0 220 210" class="hst-radar">${[0.25, 0.5, 0.75, 1].map(k => `<polygon points="${G.map((_, i) => pt(i, R * k).join(',')).join(' ')}" class="rd-ring"/>`).join('')}${G.map((_, i) => `<line x1="${cx}" y1="${cy}" x2="${pt(i, R)[0]}" y2="${pt(i, R)[1]}" class="rd-ax"/>`).join('')}<polygon points="${G.map((g, i) => pt(i, R * Math.max(0.04, val(g))).join(',')).join(' ')}" class="rd-shape"/>${G.map((g, i) => { const [x, y] = pt(i, R + 15); return `<text x="${x}" y="${y + 4}" text-anchor="middle" class="rd-l">${g} ${Math.round(val(g) * 100)}%</text>`; }).join('')}</svg>`;
-  const weak = L.weakUnits(8).filter(w => w.st.attempts);
-  const ex = S.exams.slice(-12);
+  const weak = L.weakUnits(8).filter(w => w.weak);
+  const ex = S.exams.slice(-12).map(e => ({ ...e, group: e.group === '數學' ? '數學A' : e.group }));
   let trend = '';
   if (ex.length >= 2) {
-    const W = 520, H = 150, ys = e => H - 18 - (e.pts / e.n) * (H - 36), xs = i => 20 + i * (W - 40) / (ex.length - 1);
-    trend = `<svg viewBox="0 0 ${W} ${H}" class="hst-trend"><line x1="20" x2="${W - 20}" y1="${H - 18 - 0.8 * (H - 36)}" y2="${H - 18 - 0.8 * (H - 36)}" class="tl-80"/><text x="${W - 20}" y="${H - 22 - 0.8 * (H - 36)}" text-anchor="end" class="tl-t">80 分</text><polyline points="${ex.map((e, i) => xs(i) + ',' + ys(e)).join(' ')}" class="tl-line"/>${ex.map((e, i) => `<circle cx="${xs(i)}" cy="${ys(e)}" r="4" class="tl-dot"><title>${new Date(e.at).toLocaleDateString('zh-TW')} ${e.group} ${Math.round(e.pts / e.n * 100)} 分</title></circle>`).join('')}</svg>`;
+    // 沿用 quizcup 的分科折線：橫軸保留全體考試時序，同科才連線，避免跨科分數誤連。
+    const W = 520, H = 150, rate = e => Math.min(1, (e.pts != null ? e.pts : e.c) / e.n), ys = e => H - 18 - rate(e) * (H - 36), xs = i => 20 + i * (W - 40) / (ex.length - 1);
+    const groups = [...new Set(ex.map(e => e.group))], colors = ['#ff8a6a', '#7cc7ff', '#b9a2ff', '#5fbf6a', '#ffb84a', '#ff9fc0'];
+    const lines = groups.map((g, gi) => {
+      const points = ex.map((e, i) => [i, e]).filter(([, e]) => e.group === g), color = colors[gi % colors.length];
+      return `<polyline fill="none" stroke="${color}" stroke-width="2.5" points="${points.map(([i, e]) => xs(i) + ',' + ys(e)).join(' ')}"/>${points.map(([i, e]) => `<circle cx="${xs(i)}" cy="${ys(e)}" r="4" fill="${color}"><title>${new Date(e.at).toLocaleDateString('zh-TW')} ${e.group} ${Math.round(rate(e) * 100)} 分</title></circle>`).join('')}`;
+    }).join('');
+    trend = `<svg viewBox="0 0 ${W} ${H}" class="hst-trend"><line x1="20" x2="${W - 20}" y1="${H - 18 - 0.8 * (H - 36)}" y2="${H - 18 - 0.8 * (H - 36)}" class="tl-80"/><text x="${W - 20}" y="${H - 22 - 0.8 * (H - 36)}" text-anchor="end" class="tl-t">80 分</text>${lines}</svg><div class="hst-legend">${groups.map((g, i) => `<span style="color:${colors[i % colors.length]}">${g}</span>`).join('')}</div>`;
   }
   const tile = (v, l, c) => `<div class="hst-tile" style="--c:${c}"><b>${v}</b><small>${l}</small></div>`;
   body.innerHTML = `<div class="hall-scroll">
@@ -358,7 +381,7 @@ export function openStats() {
     <div class="hst-two"><div><div class="hs-label">最近七天（共 ${week.reduce((a, w) => a + w.q, 0)} 題）</div><div class="hst-week">${week.map(w => `<div><small>${w.q || ''}</small><div class="col"><i style="height:${w.q / mx * 100}%"><i class="ok" style="height:${w.q ? w.c / w.q * 100 : 0}%"></i></i></div><small>${'日一二三四五六'[new Date(w.n * 86400000).getUTCDay()]}</small></div>`).join('')}</div><div class="hst-legend"><i class="a"></i><small>作答</small><i class="b"></i><small>答對</small></div></div>
       <div><div class="hs-label">五大考科精熟度</div>${radar}</div></div>
     <div class="hs-label">各科</div><div class="hst-subj">${TA.SUBJECTS.map(s => { const st = L.subjectStats(s.id); return `<div><span class="hq-sub" style="--c:${s.color}">${s.name}</span><span class="bar"><small>精熟</small><i style="--k:${st.mastery.toFixed(3)};--c:${s.color}"></i></span><span class="bar"><small>正確率</small><i style="--k:${st.acc.toFixed(3)};--c:${s.color}"></i></span><b>${st.seen}/${st.total}</b></div>`; }).join('')}</div>
-    <div class="hs-label">弱點單元（依正確率與精熟度排序）</div><div class="hst-weak">${weak.length ? weak.map(w => `<div><span class="hq-sub" style="--c:${w.subject.color}">${w.subject.name}</span><b>${ui.esc(w.unit.name)}</b><span>${Math.round(w.st.acc * 100)}%</span><button type="button" class="btn ghost sm" data-n="${w.id}">筆記</button><button type="button" class="btn sm" data-p="${w.id}">練 10 題</button></div>`).join('') : '<p class="muted">多作答幾題，這裡會列出最需要補強的單元。</p>'}</div>
+    <div class="hs-label">弱點單元（至少 5 次；綜合最近表現、錯題與正確率評估）</div><div class="hst-weak">${weak.length ? weak.map(w => `<div><span class="hq-sub" style="--c:${w.subject.color}">${w.subject.name}</span><b>${ui.esc(w.unit.name)}</b><span>${Math.round(w.st.acc * 100)}%</span><button type="button" class="btn ghost sm" data-n="${w.id}">筆記</button><button type="button" class="btn sm" data-p="${w.id}">練 10 題</button></div>`).join('') : '<p class="muted">目前沒有已確認的弱點單元；持續作答後會更新。</p>'}</div>
     ${trend ? `<div class="hs-label">模考趨勢（最近 ${ex.length} 次）</div>${trend}` : '<p class="muted">考過兩次以上模擬考，這裡會畫出分數趨勢。</p>'}
   </div>`;
   body.querySelector('.hst-date').onchange = e => { if (e.target.value) { S.profile.examDate = e.target.value; TA.Store.save(); openStats(); } };

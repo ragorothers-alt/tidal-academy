@@ -15,6 +15,7 @@
   L.Q = {}; L.UNITS = {}; L.BY_SUBJECT = {}; L.BY_UNIT = {};
   L.index = function () {
     L.Q = {}; L.UNITS = {}; L.BY_SUBJECT = {}; L.BY_UNIT = {};
+    Object.keys(fixedCache).forEach(id => delete fixedCache[id]);
     if (TA.mergeExtra) TA.mergeExtra().forEach(uid => console.warn('addQuestions 找不到單元', uid));
     TA.SUBJECTS.forEach(s => {
       L.BY_SUBJECT[s.id] = [];
@@ -44,22 +45,37 @@
   L.isDue = id => { const r = rec(id); return !!r && r.n > 0 && r.due <= today(); };   // 最高格（熟練）的題目也每 35 天抽查一次，不會永遠退休
   /** 剛答過（20 分鐘內）的題目先冷卻：剛看完解析就重考，答對只是短期記憶 */
   L.COOL_MIN = 20;
-  L.cooling = id => { const r = rec(id); return !!r && !!r.last && Date.now() - r.last < L.COOL_MIN * 60000; };
+  // last 只記實際作答；空白記錯也從 lastWrong 起算冷卻。缺少時間的舊紀錄視為已就緒。
+  L.coolUntil = id => { const r = rec(id), at = r ? Math.max(r.last || 0, r.lastWrong || 0) : 0; return at ? at + L.COOL_MIN * 60000 : 0; };
+  L.cooling = id => L.coolUntil(id) > Date.now();
   /** 冷卻中的題目排到最後（不刪掉：題目真的不夠時還是可以出） */
   L.readyFirst = ids => ids.filter(id => !L.cooling(id)).concat(ids.filter(L.cooling));
+  // 答錯後必須跨本地日期且至少隔 8 小時才可升格，防止 23:59 → 00:01 的短期記憶升格。
+  const canAdvance = (r, t, now) => r.due <= t && (!r.lastWrong || (U.dayNum(new Date(r.lastWrong)) < t && now - r.lastWrong >= 8 * 3600000));
 
   /* ---------- 出題時打亂選項 ----------
      每次出題都打亂選項順序，學生不能靠記住「答案是 B」通過重考；解析裡的 (A)(B) 代號跟著換。
-     保守起見維持原順序：解析裡有不帶括號的代號（例如「B、D 正確」，基因型 A、鹼基 A 這類也一併算進來）、
+     保守起見維持原順序：解析裡有不帶括號的選項指稱（例如「B、D 正確」），
      題幹或選項提到其他選項、同一題組的題目共用同一組選項（篇章結構）、閱讀材料裡標了 (A)(B)。 */
   const LET = 'ABCDEFGHIJ';
   const PAREN_G = /([（(])\s*([A-J])\s*([)）])/g;
-  const BARE = /(^|[^A-Za-z])[A-J](?=[^A-Za-z]|$)/;
+  // 必須有「選項／應選／正誤判斷」語境；點 A、B、元素 C、H、英文 I 與 A of B 不算選項。
+  const OPTION_REF = /(?:選項|應選|故選|不是|答案(?:為|是)?|不能(?:由此)?(?:保證|推論|推得|判定|說)|無法(?:判定|支持))\s*[A-J](?![A-Za-z])|(?:^|[^A-Za-z])[A-J]\s*選項|(?:^|[^A-Za-z])[A-J](?:\s*[、,，與和及]\s*[A-J])*\s*(?:均|皆|都|為|是)?\s*(?:正確|錯誤|錯|不正確|不對|不是|描述|不成立|成立|忽略|顛倒|混淆|混同|誤認|誤解|誤把|誤用|說反|漏算|漏扣|不符|不能|無法|把|將|只|則|也不|所稱|所列|強調|側重|否定|排除|抹除|的(?:推理|指數|機制|說法|結論|推論|解釋))(?![A-Za-z])/;
+  // 「是」另檢查有效選項字母，且排除 A of B 等英文片語中的占位符。
+  const OPTION_IS = /(?:^|[^A-Za-z\s]\s*)([A-J])\s*是(?![A-Za-z])/g;
+  const OPTION_LIST = /(?:^|[^A-Za-z])[A-J](?:\s*[、,，與和及]\s*[A-J])+\s*(?:均|皆|都|也不|不適用|需要|所列|描[述寫]|把|漏|側重|可能加深)/;
   const fixedCache = {};
   function fixedOrder(q) {
     if (q.id && q.id in fixedCache) return fixedCache[q.id];
     const e = U.plain(q.e || '').replace(PAREN_G, ' '), st = U.plain(q.q), o = q.o.map(U.plain).join('｜');
-    let fixed = BARE.test(e) || /[（(]\s*[A-J]\s*[)）]|選項\s*[A-J]/.test(st) || /以上|前述|上述|皆是|皆非|[（(][A-J][)）]/.test(o);
+    let fixed = [e, st, o].some(s => OPTION_REF.test(s) || OPTION_LIST.test(s)) || /[（(]\s*[A-J]\s*[)）]/.test(st) || /以上|前述|上述|皆是|皆非|[（(][A-J][)）]/.test(o);
+    if (!fixed) fixed = [e, st, o].some(s => [...s.matchAll(OPTION_IS)].some(m => LET.indexOf(m[1]) < q.o.length));
+    // 各科的「A 是…；B的…」逐項解釋都須保護，字母後不一定有空白。
+    // 只有題幹／材料未定義該字母時才當選項，避免把題內已定義的點名等符號當選項。
+    if (!fixed) {
+      const context = st + ' ' + U.plain(q.passage || '');
+      fixed = [...e.matchAll(/(?:^|[。；;，,：:）)]|所以|因此|而|故|則)\s*([A-E])(?:\s*[、與和及]\s*[A-E])*\s*(?=[\u4e00-\u9fff])/g)].some(m => !new RegExp('(^|[^A-Za-z])' + m[1] + '(?![A-Za-z])').test(context));
+    }
     if (!fixed && q.pid) {
       const key = q.o.join('｜');
       fixed = (L.BY_UNIT[q.unit] || []).some(id => id !== q.id && L.Q[id] && L.Q[id].pid === q.pid && L.Q[id].o.join('｜') === key) || /[（(]\s*[A-J]\s*[)）]/.test(U.plain(q.passage || ''));
@@ -98,6 +114,7 @@
   /** 學測多選給分（5 選項錯 k 個：0→1, 1→0.6, 2→0.2, ≥3→0） */
   L.multiScore = function (q, ans) {
     if (q.type !== 'multi') return L.check(q, ans) ? 1 : 0;
+    if (!Array.isArray(ans) || !ans.length) return 0;
     let wrong = 0; for (let i = 0; i < 5; i++) if ((ans || []).includes(i) !== q.a.includes(i)) wrong++;
     return [1, 0.6, 0.2][wrong] || 0;
   };
@@ -105,21 +122,28 @@
   function dayRec(key) { key = key || U.dayKey(); return TA.S.days[key] = TA.S.days[key] || { q: 0, c: 0, voc: 0, min: 0, xp: 0 }; }
   L.dayRec = dayRec;
 
-  /** 記錄一次作答。opts: {combo, mode, silent} 回傳獎勵摘要 */
+  /** 記錄一次作答。opts: {combo, mode, silent, blank}；空白只記錯，不算學習進度或獎勵。 */
   L.record = function (q, correct, opts) {
     opts = opts || {};
-    const S = TA.S, t = today();
+    if (opts.blank) correct = false;
+    const S = TA.S, t = today(), now = Date.now();
     const r = S.q[q.id] = S.q[q.id] || { n: 0, c: 0, s: 0, due: t, wr: 0 };
     const firstTime = r.n === 0;
-    r.n++; r.last = Date.now();
+    // 舊存檔第 0 格沒有 lastWrong：以尚未覆寫的最後作答時間保守推定，保留既有進度。
+    if (!r.lastWrong && r.s === 0 && r.wr > 0 && r.last) r.lastWrong = r.last;
+    r.n++; if (!opts.blank) r.last = now;
     if (correct) {
       r.c++;
       // 還沒到期就又答對（同一天重複、剛看完解析）不升格：錯題要在不同天答對才算修好，間隔才有意義
-      const early = !firstTime && r.due > t;
+      const early = !firstTime && !canAdvance(r, t, now);
       if (!early) { r.s = Math.min(6, firstTime ? 2 : r.s + 1); r.due = t + INT[r.s]; }
     } else {
-      r.wr++; r.s = 0; r.due = t;
+      r.wr++; r.s = 0; r.due = t; r.lastWrong = now;
     }
+    const uid = q.unit || (L.Q[q.id] || {}).unit;
+    if (uid) { const recent = S.unitRecent[uid] = S.unitRecent[uid] || []; recent.push(correct ? 1 : 0); S.unitRecent[uid] = recent.slice(-20); }
+    // 讀書計畫／週報用 last 判定實際練過；空白保留 last，靠 lastWrong 保存記錯時間。
+    if (opts.blank) { TA.Store.save(); return { xp: 0, gems: 0, levelUp: 0 }; }
     const d = dayRec(); d.q++; if (correct) d.c++;
     let xp = correct ? 10 + (q.d - 1) * 3 : 2;
     if (correct && opts.combo > 1) xp += Math.min(10, opts.combo - 1);
@@ -131,12 +155,13 @@
   };
 
   L.recordVocab = function (w, known) {
-    const S = TA.S, t = today();
+    const S = TA.S, t = today(), now = Date.now();
     const r = S.voc[w] = S.voc[w] || { n: 0, c: 0, s: 0, due: t };
-    r.n++; r.last = Date.now();
+    const advance = r.n === 0 || canAdvance(r, t, now);
+    r.n++; r.last = now;
     if (known === 'soft') { r.due = t + 1; }
-    else if (known) { r.c++; r.s = Math.min(6, r.s + 1); r.due = t + INT[r.s]; }
-    else { r.s = Math.max(0, r.s - 2); r.due = t; }
+    else if (known) { r.c++; if (advance) { r.s = Math.min(6, r.s + 1); r.due = t + INT[r.s]; } }
+    else { r.s = Math.max(0, r.s - 2); r.due = t; r.lastWrong = now; }
     dayRec().voc++;
     L.gain(known ? 4 : 1, 0);
     TA.Store.save();
@@ -211,7 +236,7 @@
   L.dueList = subject => L.ALL.filter(id => (!subject || L.Q[id].subject === subject) && L.isDue(id))
     .sort((a, b) => rec(a).due - rec(b).due || rec(b).wr - rec(a).wr);
   L.mistakes = subject => L.ALL.filter(id => (!subject || L.Q[id].subject === subject) && L.isMistake(id))
-    .sort((a, b) => rec(b).wr - rec(a).wr || rec(b).last - rec(a).last);
+    .sort((a, b) => rec(b).wr - rec(a).wr || L.coolUntil(b) - L.coolUntil(a));
 
   L.pickUnit = function (unitId, n) {
     const ids = L.BY_UNIT[unitId] || [];
@@ -260,32 +285,66 @@
       const id = bag.pop(); used.add(id); return id;
     };
   };
+  // 題數依大考中心 115 學測答案表，包含混合題內的選擇題與數學選填，略過標「／」的非選題。
+  // https://www.ceec.edu.tw/xmfile?xsmsid=0J052424829869345634
+  // 整卷保留正式節次時間；短版估計純選擇作答預算：國英 65、數 85、社自 85 分鐘。
+  // 這是閱讀／計算所需時間的練習估值，扣掉寫作、翻譯、開放作答時間，並非官方逐題限時。
   L.MOCK = {
-    '國文': { subjects: ['chinese'], realMin: 90, realN: 39 },
-    '英文': { subjects: ['english'], realMin: 100, realN: 50 },
-    '數學': { subjects: ['math'], realMin: 100, realN: 20 },
-    '社會': { subjects: ['history', 'geography', 'civics'], realMin: 110, realN: 60 },
-    '自然': { subjects: ['physics', 'chemistry', 'biology', 'earth'], realMin: 110, realN: 50 }
+    '國文': { subjects: ['chinese'], realMin: 90, realN: 33, choiceMin: 65 },
+    '英文': { subjects: ['english'], realMin: 100, realN: 47, choiceMin: 65 },
+    '數學A': { subjects: ['math'], realMin: 100, realN: 18, choiceMin: 85 },
+    '數學B': { subjects: ['math'], realMin: 100, realN: 18, choiceMin: 85 },
+    '社會': { subjects: ['history', 'geography', 'civics'], realMin: 110, realN: 54, choiceMin: 85 },
+    '自然': { subjects: ['physics', 'chemistry', 'biology', 'earth'], realMin: 110, realN: 48, choiceMin: 85 }
   };
+  L.MOCK_GROUPS = Object.keys(L.MOCK);
+  L.MOCK['數學'] = L.MOCK['數學A'];   // 舊呼叫端與存檔的名稱繼續有效
+  // ma2-space 混有少量共通坐標題，但整個單元以數A空間向量／平面直線為主，數B不抽此單元。
+  // 其餘三個混合單元以已核對的共通題白名單保留數B內容；新加入而未分類的題先不納入數B。
+  // 數A專屬：和差角／倍角／疊合、向量行列式面積／柯西、線性變換／轉移矩陣。
+  const MATH_B_SHARED = {
+    'ma2-trig': '01 02 03 04 05 06 11 12 13 14 f001 f002 f003 f005 f008 f009 f010 g01 g02 g03 h001 x001 x002 x003 x004 x005 x008 x010 x011 x012 z001 z002 z003 z004 z007 z008 z011',
+    'ma2-vec': '01 02 03 04 05 06 08 09 10 f001 f002 f003 f004 f006 f007 f010 g01 g02 g03 x001 x002 x003 x004 x005 x006 x007 x008 x009 x010 z001 z002 z003 z004 z005 z007 z008 z009 z011',
+    'ma2-matrix': '01 02 03 04 05 06 13 f001 f004 f008 h002 x001 x004 x005 x010 z001 z002 z004 z006 z008'
+  };
+  Object.keys(MATH_B_SHARED).forEach(uid => { MATH_B_SHARED[uid] = new Set(MATH_B_SHARED[uid].split(' ').map(s => uid + '-' + s)); });
+  L.mockEligible = (group, q) => !!q && !!L.MOCK[group] && L.MOCK[group].subjects.includes(q.subject) && (group !== '數學B' || (q.unit !== 'ma2-space' && (!MATH_B_SHARED[q.unit] || MATH_B_SHARED[q.unit].has(q.id))));
+  function mockPacks(group, sid) {
+    const units = U.shuffle((TA.DATA.units[sid] || []).map(u => {
+      const packs = new Map();
+      (L.BY_UNIT[u.id] || []).forEach(id => { const q = L.Q[id], key = q.pid || id; if (!packs.has(key)) packs.set(key, []); packs.get(key).push(id); });
+      return U.shuffle([...packs.values()].filter(pack => pack.every(id => L.mockEligible(group, L.Q[id]))));
+    }));
+    const packs = balancedTake(units, units.reduce((n, u) => n + u.length, 0));
+    return packs.filter(p => p.every(id => !seen(id))).concat(packs.filter(p => p.some(seen)));
+  }
+  function takePacks(packs, n) {
+    // 子集合和：整組選取且盡量湊滿題數，絕不把十格文意選填截成零散幾格。
+    const dp = Array(n + 1); dp[0] = [];
+    for (const pack of packs) {
+      for (let k = n; k >= pack.length; k--) if (!dp[k] && dp[k - pack.length]) dp[k] = dp[k - pack.length].concat([pack]);
+      if (dp[n]) break;
+    }
+    for (let k = n; k >= 0; k--) if (dp[k]) return dp[k];
+    return [];
+  }
   L.pickMock = function (group, n) {
-    const cfg = L.MOCK[group]; const per = Math.ceil(n / cfg.subjects.length);
-    const parts = cfg.subjects.map(sid => {
-      // 單元順序打亂（短的模擬考也會輪到後面的單元）；同單元先出沒做過的題目，成績才反映真實程度
-      const units = U.shuffle((TA.DATA.units[sid] || []).map(u => { const ids = L.BY_UNIT[u.id] || []; return U.shuffle(ids.filter(id => !seen(id))).concat(U.shuffle(ids.filter(seen))); }));
-      return balancedTake(units, per);
-    });
-    // 依難度排序（先易後難，像真的考卷），同難度保持科目交錯
-    const take = balancedTake(parts, n).sort((a, b) => L.Q[a].d - L.Q[b].d);
-    return L.groupPassages(take);
+    const cfg = L.MOCK[group]; if (!cfg) return [];
+    n = n === 'full' ? cfg.realN : Math.max(0, Math.floor(Number(n) || 0));
+    const parts = cfg.subjects.map((sid, i) => takePacks(mockPacks(group, sid), Math.floor(n / cfg.subjects.length) + (i < n % cfg.subjects.length ? 1 : 0)));
+    const packs = balancedTake(parts, parts.reduce((sum, p) => sum + p.length, 0));
+    return packs.sort((a, b) => L.Q[a[0]].d - L.Q[b[0]].d).flat();
   };
-  L.mockSeconds = (group, n) => Math.round(L.MOCK[group].realMin * 60 / L.MOCK[group].realN * n);
+  L.mockSeconds = (group, n) => n === 'full' ? L.MOCK[group].realMin * 60 : Math.round(L.MOCK[group].choiceMin * 60 / L.MOCK[group].realN * n);
 
   /* ---------- 統計 ---------- */
   L.unitStats = function (uid) {
     const ids = L.BY_UNIT[uid] || [];
-    let n = 0, c = 0, m = 0, seenN = 0;
-    ids.forEach(id => { const r = rec(id); if (r) { seenN++; n += r.n; c += r.c; m += r.s / 6; } });
-    return { total: ids.length, seen: seenN, acc: n ? c / n : 0, attempts: n, mastery: ids.length ? m / ids.length : 0 };
+    let n = 0, c = 0, m = 0, seenN = 0, mistakes = 0;
+    ids.forEach(id => { const r = rec(id); if (r) { seenN++; n += r.n; c += r.c; m += r.s / 6; if (L.isMistake(id)) mistakes++; } });
+    const recent = TA.S.unitRecent[uid] || [], smoothedAcc = (c + 1) / (n + 2);
+    return { total: ids.length, seen: seenN, acc: n ? c / n : 0, attempts: n, mastery: ids.length ? m / ids.length : 0,
+      smoothedAcc, mistakeRate: seenN ? mistakes / seenN : 0, recentAcc: (U.sum(recent) + 4 * smoothedAcc) / (recent.length + 4), recentN: recent.length };
   };
   L.subjectStats = function (sid) {
     const ids = L.BY_SUBJECT[sid] || [];
@@ -297,11 +356,14 @@
     const list = [];
     TA.SUBJECTS.forEach(s => (TA.DATA.units[s.id] || []).forEach(u => {
       const st = L.unitStats(u.id);
-      // 有作答但正確率低者優先，其次是完全沒碰過的單元
-      const score = st.attempts ? st.acc * 0.6 + st.mastery * 0.4 : 0.55 + (U.hash(u.id + U.dayKey()) % 100) / 1000;
-      list.push({ id: u.id, unit: u, subject: s, score, st });
+      // 至少五次且綜合分數低於 0.8 才是確認弱點。近期四次等效樣本向自己的長期表現平滑。
+      // 最近二十次占 50%、目前未修復錯題比例占 30%、平滑累積正確率占 20%。
+      const sampled = st.attempts >= 5, score = sampled ? st.smoothedAcc * 0.2 + st.recentAcc * 0.5 + (1 - st.mistakeRate) * 0.3 : 0.75 + (U.hash(u.id + U.dayKey()) % 100) / 2000;
+      const weak = sampled && score < 0.8;
+      // 呼叫端共用此候選集：確認弱點優先、樣本不足可探索；確認強項不再派弱點任務。
+      if (!sampled || weak) list.push({ id: u.id, unit: u, subject: s, score, st, sampled, weak });
     }));
-    return list.sort((a, b) => a.score - b.score).slice(0, k || 5);
+    return list.sort((a, b) => Number(b.weak) - Number(a.weak) || a.score - b.score).slice(0, k || 5);
   };
   L.overall = function () {
     let n = 0, c = 0, seenN = 0, mastered = 0;
@@ -311,7 +373,7 @@
   };
   L.vocabDue = function () {
     const t = today();
-    return L.VOCAB.filter(v => { const r = TA.S.voc[v.w]; return r && r.due <= t && r.s < 6; });
+    return L.VOCAB.filter(v => { const r = TA.S.voc[v.w]; return r && r.due <= t; });
   };
   L.vocabNew = function (lv) { return L.VOCAB.filter(v => !TA.S.voc[v.w] && (!lv || v.lv === lv)); };
 
@@ -338,7 +400,7 @@
     A('rush1k', '激流千分', '衝刺模式單場 1000 分', 'bolt', 40, () => TA.S.rush.best >= 1000),
     A('rush3k', '逆流而上', '衝刺模式單場 3000 分', 'bolt', 100, () => TA.S.rush.best >= 3000),
     A('mock1', '第一次模考', '完成一次模擬考', 'exam', 30, () => TA.S.exams.length >= 1),
-    A('mock80', '頂標航線', '模擬考 30 題以上得分率達 80%', 'target', 100, () => TA.S.exams.some(e => e.n >= 30 && e.c / e.n >= 0.8)),
+    A('mock80', '頂標航線', '模擬考 30 題以上得分率達 80%', 'target', 100, () => TA.S.exams.some(e => e.n >= 30 && (e.pts != null ? e.pts : e.c) / e.n >= 0.8)),
     A('star10', '十座燈塔', '10 個單元取得三星', 'star', 60, () => starsCount(3) >= 10),
     A('star30', '群島長明', '30 個單元取得三星', 'star', 150, () => starsCount(3) >= 30),
     A('allsub', '五科全航', '五大考科都至少作答 20 題', 'compass', 50, () => TA.GROUPS.every(g => TA.SUBJECTS.filter(s => s.group === g).reduce((a, s) => a + L.subjectStats(s.id).seen, 0) >= 20)),

@@ -111,11 +111,11 @@ export function flash(lv, n) {
 }
 
 /* ---------- 單字測驗 ---------- */
-/** 15 題：已經學過 12 個字以上就考學過的字，否則考整個級數 */
+/** 最多 15 題：到期字優先，再補新字；未到期的字不重考，避免反覆短期記憶。 */
 export function quiz(kind, lv) {
-  const pool = L.VOCAB.filter(v => !lv || v.lv === lv), learned = pool.filter(v => TA.S.voc[v.w]);
-  const items = buildQuiz(kind, learned.length >= 12 ? learned : pool, QN, L.VOCAB, Math.random);
-  if (!items.length) { ui.toast('這個級數沒有單字'); return; }
+  const words = deck(lv || 0, QN, L.vocabDue(), L.vocabNew(lv || null), Math.random, U.rng(U.dayKey() + 'voc'));
+  const items = buildQuiz(kind, words, QN, L.VOCAB, Math.random);
+  if (!items.length) { ui.toast('這個級數今天的單字都複習完了，沒有到期字或新字；換個級數或明天再來。'); return; }
   run(items, `${KINDS[kind] || '單字測驗'} · ${lvName(lv)}`, () => quiz(kind, lv));
 }
 function run(items, title, again) {

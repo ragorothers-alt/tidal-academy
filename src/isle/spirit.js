@@ -95,7 +95,7 @@ async function talk() {
 async function frag(o) {
   const q0 = L.Q[o.f.qid];
   if (!q0) { o.f.got = true; save(); sync(); return; }
-  if (L.cooling(q0.id)) { const r = L.rec(q0.id), m = Math.max(1, Math.ceil(L.COOL_MIN - (Date.now() - r.last) / 60000)); await ui.say(SP, `這片碎片還在晃動……剛答過的題目要隔一段時間再試，記憶才會牢。大約 ${m} 分鐘後再來撿吧。`); ui.closeDialog(); return; }
+  if (L.cooling(q0.id)) { const m = Math.max(1, Math.ceil((L.coolUntil(q0.id) - Date.now()) / 60000)); /* 依真正的冷卻結束時間（空白題沒有 last，只有 lastWrong） */ await ui.say(SP, `這片碎片還在晃動……剛答過的題目要隔一段時間再試，記憶才會牢。大約 ${m} 分鐘後再來撿吧。`); ui.closeDialog(); return; }
   const q = L.view(q0), sub = q.subject ? (TA.subject(q.subject) || {}).name : '';
   const { ok: good } = await askQ(SP, q, `記憶碎片浮現出一題${sub ? sub + '的' : ''}錯題：`);
   record(q, good);

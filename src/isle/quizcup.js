@@ -41,7 +41,7 @@ export async function play(host, villagers) {
 
 /* ---------- 模考成績走勢 ---------- */
 export function openTrend() {
-  const ex = (TA.S.exams || []).slice(-20), body = ui.el('div', 'report');
+  const ex = (TA.S.exams || []).slice(-20).map(e => ({ ...e, group: e.group === '數學' ? '數學A' : e.group })), body = ui.el('div', 'report');
   if (!ex.length) { body.innerHTML = '<p class="muted">還沒有模擬考紀錄。到潮汐考場選「模擬考」，交卷後這裡就會出現成績走勢。</p>'; ui.panel('模考成績走勢', body, { cls: 'phone' }); return; }
   const groups = [...new Set(ex.map(e => e.group))], COL = ['#ff8a6a', '#7cc7ff', '#b9a2ff', '#5fbf6a', '#ffb84a', '#ff9fc0'];
   const rate = e => Math.min(1, (e.pts != null ? e.pts : e.c) / e.n);

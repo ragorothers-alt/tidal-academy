@@ -15,8 +15,9 @@
       isle: null,   // 潮汐小島存檔
       xp: 0,
       gems: 0,
-      q: {},        // 題目紀錄 id → {n,c,s,due,last,wr,fav}
-      voc: {},      // 單字紀錄 word → {n,c,s,due,last}
+      q: {},        // 題目紀錄 id → {n,c,s,due,last,lastWrong,wr,fav}
+      voc: {},      // 單字紀錄 word → {n,c,s,due,last,lastWrong}
+      unitRecent: {}, // 單元 id → 最近二十次作答的 0／1；舊檔缺此欄位時用空字典
       units: {},    // 單元 id → {stars,best,notes}
       days: {},     // 'YYYY-MM-DD' → {q,c,voc,min,xp}
       streak: { cur: 0, best: 0, last: '', shields: 1 },
@@ -51,8 +52,9 @@
   function sanitize(s) {
     const n = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
     s.xp = Math.max(0, n(s.xp, 0)); s.gems = Math.max(0, n(s.gems, 0));
-    for (const id in s.q) { const r = s.q[id]; if (!isObj(r)) { delete s.q[id]; continue; } r.n = n(r.n, 0); r.c = n(r.c, 0); r.s = Math.max(0, Math.min(6, n(r.s, 0))); r.due = n(r.due, 0); r.wr = n(r.wr, 0); }
-    for (const w in s.voc) { const r = s.voc[w]; if (!isObj(r)) { delete s.voc[w]; continue; } r.s = Math.max(0, Math.min(6, n(r.s, 0))); r.due = n(r.due, 0); r.n = n(r.n, 0); r.c = n(r.c, 0); }
+    for (const id in s.q) { const r = s.q[id]; if (!isObj(r)) { delete s.q[id]; continue; } r.n = n(r.n, 0); r.c = n(r.c, 0); r.s = Math.max(0, Math.min(6, n(r.s, 0))); r.due = n(r.due, 0); r.wr = n(r.wr, 0); if (!(n(r.lastWrong, 0) > 0)) delete r.lastWrong; }
+    for (const w in s.voc) { const r = s.voc[w]; if (!isObj(r)) { delete s.voc[w]; continue; } r.s = Math.max(0, Math.min(6, n(r.s, 0))); r.due = n(r.due, 0); r.n = n(r.n, 0); r.c = n(r.c, 0); if (!(n(r.lastWrong, 0) > 0)) delete r.lastWrong; }
+    for (const uid in s.unitRecent) { const r = s.unitRecent[uid]; if (!Array.isArray(r)) { delete s.unitRecent[uid]; continue; } s.unitRecent[uid] = r.filter(v => v === 0 || v === 1).slice(-20); }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.profile.examDate)) s.profile.examDate = '2027-01-22';
     s.profile.dailyGoal = Math.max(10, Math.min(200, n(s.profile.dailyGoal, 30)));
     if (!Array.isArray(s.exams)) s.exams = []; s.exams = s.exams.slice(-60);
