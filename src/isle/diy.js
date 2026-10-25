@@ -132,11 +132,11 @@ async function openBottle() {
   if (!left.length) { ui.toast('瓶子是空的'); return; }
   await ui.say(BOT, '瓶子裡有一封被海水泡過的英文信，有幾個字暈開了……');
   const q = pickQ('english', 2) || pickQ('english', 3); if (!q) return;
-  const i = await ui.ask(BOT, `先把暈開的地方讀懂：${q.q}`, q.o, { abc: true, keys: true, html: true });
+  const i = await ui.ask(BOT, `先把暈開的地方讀懂：${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true });
   const ok = i === q.a; record(q, ok);
-  if (!ok) { Audio.sfx('bad'); await ui.say(BOT, `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); await ui.say(BOT, '信還讀不太懂……再試一次吧（瓶子還在這裡）。'); return; }
+  if (!ok) { Audio.sfx('bad'); await ui.explain(BOT, q); await ui.say(BOT, '信還讀不太懂……再試一次吧（瓶子還在這裡）。'); return; }
   const f = left[0]; known().push(f.id); D.bottle.got = true; save();
-  group.remove(bottle.g); bottle = null; Audio.sfx('catch');
+  group.remove(bottle.g); bottle = null;
   const need = Object.entries(f.recipe).map(([m, n]) => `${MATS[m]} ×${n}`).join('、');
   await ui.card({ icon: icon('recipe', 'recipe'), title: `學會了配方：${f.name}`, sub: `材料：${need}<br>回家門口的 DIY 工作台就能製作。` });
   await challenge.keepGoing(BOT, q);
@@ -203,7 +203,7 @@ export function openBench(atBench) {
   const craft = (f, n0) => {
     if (busy) return;
     if (!atBench) { ui.toast('到家門口的 DIY 工作台才能製作'); return; }
-    if (!canMake(f)) { ui.toast('材料不夠'); Audio.sfx('bad'); return; }
+    if (!canMake(f)) { ui.toast('材料不夠'); Audio.sfx('deny'); return; }
     busy = true; const k = Math.max(1, Math.min(n0 || 1, maxMake(f)));
     Object.entries(f.recipe).forEach(([m, n]) => take(m, n * k)); const s = S(); s.stats = s.stats || {}; s.stats.diy = (s.stats.diy || 0) + k; for (let i = 0; i < k; i++) miles.add('craft');
     s.crafted = s.crafted || {}; s.crafted[f.id] = (s.crafted[f.id] || 0) + k;

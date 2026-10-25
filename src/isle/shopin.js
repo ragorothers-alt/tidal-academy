@@ -491,7 +491,7 @@ function openPaper(sp) {
       + `<div class="pk-sel"><img src="${img}" alt=""><div><b>${ui.esc(p.name)}</b><small>${p.price.toLocaleString()} 鈴錢${owned ? ' · 已經有了' : ''}</small><p>${ui.esc(ui.keys(sp.wall ? '回家按 F 裝潢，就能換上這款壁紙。' : '回家按 F 裝潢，就能鋪上這款地板。'))}</p></div></div>`;
     const cf = ui.el('div', 'nk-confirm', `<span>${owned ? '你已經有這一款了' : ok ? `要買「${ui.esc(p.name)}」嗎？<b>${p.price.toLocaleString()} 鈴錢</b>` : `鈴錢還差 ${(p.price - s.bells).toLocaleString()}……`}</span>`);
     const yes = ui.el('button', 'btn' + (ok ? ' gold' : ' off'), owned ? '已經有了' : ok ? '買！' : '鈴錢不夠'), no = ui.el('button', 'btn', '再想想'); yes.type = no.type = 'button';
-    yes.onclick = () => { if (!ok || !H.buy(p)) { Audio.sfx('bad'); return; } sp.tag.redraw(H.bought()[p.id] || 0); ui.toast(`買了${p.name}！回家按 F 裝潢`); draw(); };
+    yes.onclick = () => { if (!ok || !H.buy(p)) { Audio.sfx('deny'); return; } sp.tag.redraw(H.bought()[p.id] || 0); ui.toast(`買了${p.name}！回家按 F 裝潢`); draw(); };
     no.onclick = () => ui.closePanel(); cf.append(yes, no); body.appendChild(cf);
   };
   draw(); ui.panel(p.name, body, { cls: 'nook-p' });
@@ -506,7 +506,7 @@ function openItem(sp) {
     const cf = ui.el('div', 'nk-confirm', `<span>${ok ? `要買「${ui.esc(f.name)}」嗎？<b>${f.price.toLocaleString()} 鈴錢</b>` : `鈴錢還差 ${(f.price - s.bells).toLocaleString()}……`}</span>`);
     const yes = ui.el('button', 'btn' + (ok ? ' gold' : ' off'), ok ? '買！' : '鈴錢不夠'), no = ui.el('button', 'btn', '再想想'); yes.type = no.type = 'button';
     yes.onclick = () => {
-      if (!H.buy(f)) { Audio.sfx('bad'); return; }
+      if (!H.buy(f)) { Audio.sfx('deny'); return; }
       sp.tag.redraw(H.bought()[f.id] || 0);
       ui.toast(`買了${f.name}！回家按 F 裝潢`);
       draw();

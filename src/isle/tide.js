@@ -80,13 +80,13 @@ async function catchIn(p) {
   const c = p.cr[0], sp = c.sp; busy = true;
   try {
     const q = pickQU(['es-ocean'], 3) || pickQ('earth', 3); if (!q) return;
-    const i = await ui.ask(POOL, `${sp.where === 'rock' ? '潮池邊的岩石上' : sp.where === 'mud' ? '泥灘上' : '潮池裡'}有東西！${q.q}`, q.o, { abc: true, keys: true, html: true, timer: fairSec(25, q) });
+    const i = await ui.ask(POOL, `${sp.where === 'rock' ? '潮池邊的岩石上' : sp.where === 'mud' ? '泥灘上' : '潮池裡'}有東西！${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true, timer: fairSec(25, q) });
     const ok = i === q.a; record(q, ok); ui.closeDialog(); feel.note(feel.hit(ok));
     const D = S().tidePools; D.got[p.i] = (D.got[p.i] || 0) + 1; p.g.remove(c.s); p.cr.shift(); save();
-    if (!ok) { Audio.sfx('bad'); await ui.say(null, `這次沒有完成${sp.name}的觀察紀錄……正確答案是 ${ui.ansOf(q)}。`, { html: true }); await ui.say(null, q.e, { html: true }); return; }
+    if (!ok) { Audio.sfx('bad'); await ui.explain(null, q, `這次沒有完成${sp.name}的觀察紀錄……`); return; }
     miles.add('sea'); const s = S(), first = !s.dex.sea[sp.id]; s.dex.sea[sp.id] = s.dex.sea[sp.id] || Date.now();
     if (!sp.price) s.museum.sea[sp.id] = s.museum.sea[sp.id] || Date.now();   // 保育類只拍照、不採集（不會進口袋）：照片直接送進博物館展示
-    const room = sp.price > 0 ? addItem({ k: 'sea', id: sp.id }) : true; save(); Audio.sfx('catch');
+    const room = sp.price > 0 ? addItem({ k: 'sea', id: sp.id }) : true; save();
     await ui.card({ icon: icon(sp.id, 'sea'), title: `找到了${sp.name}！`, sub: sp.price > 0 ? '海洋題答對了！' : '海洋題答對了！已在原位拍照記錄，讓珊瑚繼續留在原處，不觸碰、不採集。照片已經送到博物館的潮池展區。', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回去。</em>'}` });
     await challenge.keepGoing(POOL, q);
   } finally { busy = false; }

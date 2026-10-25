@@ -162,7 +162,7 @@ export async function weeklyMock(sp, giveFurn) {
   let ok = 0, n = 0;
   for (const g of GROUPS) for (let k = 0; k < 2; k++) {
     const q = pickQ(pick(g)); if (!q) continue; n++;
-    const i = await ui.ask(sp, `第 ${n} 題（${TA.subject(q.subject).name}）：` + q.q, q.o, { abc: true, html: true, keys: true });
+    const i = await ui.ask(sp, `第 ${n} 題（${TA.subject(q.subject).name}）：` + q.q, q.o, { answer: q.a, abc: true, html: true, keys: true });
     const good = i === q.a; record(q, good); Audio.sfx(good ? 'ok' : 'bad'); if (good) ok++;
     if (!good) await ui.explain(sp, q);
   }

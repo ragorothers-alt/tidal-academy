@@ -177,7 +177,7 @@
   const STAGE=7,root=new THREE.Group();root.name='tidal-banner';const PI=Math.PI,TAU=2*PI,buckets=new Map(),cache=new Map();
   const material=(c,o={},kind)=>{const k=JSON.stringify([c,o,kind]);if(!cache.has(k))cache.set(k,kit.mat(c,o,kind));return cache.get(k);};
   const neutral=STAGE<3?material('#a8a292',{roughness:.84}):null;
-  const M={stone:neutral||material('#f0dec1',{roughness:.89},'stone'),stoneShade:neutral||material('#d8c7a9',{roughness:.92},'stone'),navy:neutral||material('#263754',{roughness:.55,metalness:.33}),cloth:neutral||material('#283b69',{roughness:.88}),gold:neutral||material('#d2a24e',{roughness:.38,metalness:.72}),goldShade:neutral||material('#997135',{roughness:.49,metalness:.62})};
+  const M={stone:neutral||material('#f0dec1',{roughness:.89},'stone'),stoneShade:neutral||material('#d8c7a9',{roughness:.92},'stone'),navy:neutral||material('#263754',{roughness:.55,metalness:.33}),cloth:neutral||material('#283b69',{roughness:.88},'cloth'),goldCloth:neutral||material('#d2a24e',{roughness:.38,metalness:.72},'cloth'),gold:neutral||material('#d2a24e',{roughness:.38,metalness:.72}),goldShade:neutral||material('#997135',{roughness:.49,metalness:.62})};
   function add(g,m,part){if(g.index){const a=g.toNonIndexed();g.dispose();g=a;}if(STAGE>=7)part=m===M.gold?'brass':m===M.goldShade?'brass-shade':m===M.navy?'navy':m===M.cloth?'fabric':m===M.stone?'ivory':'ivory-shade';const k=part+'|'+m.uuid;if(!buckets.has(k))buckets.set(k,{m,part,list:[]});buckets.get(k).list.push(g);}
   function put(g,m,part,pos=[0,0,0],rot=[0,0,0]){g.rotateX(rot[0]);g.rotateY(rot[1]);g.rotateZ(rot[2]);g.translate(...pos);add(g,m,part);}
   function cyl(rt,rb,h,y,m,part,n=16){put(new THREE.CylinderGeometry(rt,rb,h,n,1),m,part,[0,y,0]);}
@@ -197,12 +197,12 @@
   if(STAGE>=2){
     // Geometry-only gold hem lies on both faces, following the same fold field.
     for(const side of [-1,1]){
-      const line=(points)=>{for(let k=0;k<points.length-1;k++){const a=points[k],b=points[k+1],steps=10;for(let i=0;i<steps;i++){const u=i/steps,v=(i+1)/steps,pa=[a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u],pb=[a[0]+(b[0]-a[0])*v,a[1]+(b[1]-a[1])*v],dx=pb[0]-pa[0],dy=pb[1]-pa[1],len=Math.hypot(dx,dy),ox=-dy/len*.0085,oy=dx/len*.0085,points=[[pa[0]+ox,pa[1]+oy],[pa[0]-ox,pa[1]-oy],[pb[0]-ox,pb[1]-oy],[pb[0]+ox,pb[1]+oy]],g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(points.flatMap(v=>[v[0],v[1],fold(...v)+side*.018]),3));g.setIndex(side>0?[0,1,2,0,2,3]:[0,2,1,0,3,2]);g.computeVertexNormals();add(g,M.gold,'hem');}}};
+      const line=(points)=>{for(let k=0;k<points.length-1;k++){const a=points[k],b=points[k+1],steps=10;for(let i=0;i<steps;i++){const u=i/steps,v=(i+1)/steps,pa=[a[0]+(b[0]-a[0])*u,a[1]+(b[1]-a[1])*u],pb=[a[0]+(b[0]-a[0])*v,a[1]+(b[1]-a[1])*v],dx=pb[0]-pa[0],dy=pb[1]-pa[1],len=Math.hypot(dx,dy),ox=-dy/len*.0085,oy=dx/len*.0085,points=[[pa[0]+ox,pa[1]+oy],[pa[0]-ox,pa[1]-oy],[pb[0]-ox,pb[1]-oy],[pb[0]+ox,pb[1]+oy]],g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(points.flatMap(v=>[v[0],v[1],fold(...v)+side*.018]),3));g.setIndex(side>0?[0,1,2,0,2,3]:[0,2,1,0,3,2]);g.computeVertexNormals();add(g,M.goldCloth,'hem');}}};
       line([[.187,2.68],[.187,1.27],[.55,.956],[.913,1.27],[.913,2.68]]);
       // Crescent opens toward positive x, four-point star nested within it.
       const cres=[];for(let i=0;i<=28;i++){const a=(55+250*i/28)*PI/180;cres.push([Math.cos(a)*.255,Math.sin(a)*.255]);}for(let i=28;i>=0;i--){const a=(55+250*i/28)*PI/180;cres.push([.070+Math.cos(a)*.218,.012+Math.sin(a)*.218]);}
-      poly(cres,.012,M.gold,'emblem',[.51,1.89,side*.05],side<0);
-      const star=[[0,.16],[.038,.044],[.125,0],[.038,-.034],[0,-.16],[-.038,-.034],[-.125,0],[-.038,.044]];poly(star,.013,M.gold,'emblem',[.62,1.91,side*.052],side<0);
+      poly(cres,.012,M.goldCloth,'emblem',[.51,1.89,side*.05],side<0);
+      const star=[[0,.16],[.038,.044],[.125,0],[.038,-.034],[0,-.16],[-.038,-.034],[-.125,0],[-.038,.044]];poly(star,.013,M.goldCloth,'emblem',[.62,1.91,side*.052],side<0);
     }
     cyl(.05,.072,.055,2.955,M.gold,'finial',12);cyl(.001,.06,.15,3.055,M.gold,'finial',8);
     put(new THREE.SphereGeometry(.047,10,6),M.gold,'rod',[1.035,2.8,0]);

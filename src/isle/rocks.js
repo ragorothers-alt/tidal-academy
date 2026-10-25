@@ -24,10 +24,10 @@ export async function appraise(sp) {
   for (let i = 0; i < s.pockets.length; i++) {
     const it = s.pockets[i]; if (!it || it.k !== 'ore') continue;
     const q = pickQU(['es-rock', 'es-solid'], 3) || pickQ('earth', 3); if (!q) return;
-    const a = await ui.ask(sp, `來鑑定這塊礦石吧。先回答：${q.q}`, q.o, { abc: true, keys: true, html: true }), ok = a === q.a; record(q, ok);
-    if (!ok) { Audio.sfx('bad'); await ui.say(sp, `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); await ui.say(sp, '這塊先留著，下次再一起鑑定。'); return; }
+    const a = await ui.ask(sp, `來鑑定這塊礦石吧。先回答：${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = a === q.a; record(q, ok);
+    if (!ok) { Audio.sfx('bad'); await ui.explain(sp, q); await ui.say(sp, '這塊先留著，下次再一起鑑定。'); return; }
     const m = roll(), first = !s.dex.mineral[m.id]; s.dex.mineral[m.id] = s.dex.mineral[m.id] || Date.now();
-    s.pockets[i] = { k: 'mineral', id: m.id }; save(); Audio.sfx('catch');
+    s.pockets[i] = { k: 'mineral', id: m.id }; save();
     await ui.card({ icon: icon(m.id, 'mineral'), title: `鑑定結果：${m.name}`, sub: `莫氏硬度 ${m.mohs}`, extra: `<span class="stars">${stars(m.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}` });
     await ui.say(sp, m.desc); lastQ = q;
   }

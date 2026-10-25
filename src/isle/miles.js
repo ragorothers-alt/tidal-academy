@@ -66,7 +66,7 @@ export function open(onHat) {
       `<p class="muted">${m.bonus ? '今天全部完成了，辛苦了！' : '五項全部完成再加 500 點。'}</p><h4>兌換獎勵</h4>`;
     const grid = ui.el('div', 'fs-grid');
     REWARDS.forEach(rw => { const got = rw.once && m.got[rw.id], b = ui.el('button', 'fs-item' + (got ? ' own' : ''), `<b>${rw.name}</b><small>${got ? '已兌換' : rw.cost.toLocaleString() + ' 點'}</small>`); b.type = 'button';
-      b.onclick = () => { if (got) return; if (m.pts < rw.cost) { ui.toast('里程點數不夠'); Audio.sfx('bad'); return; } m.pts -= rw.cost; if (rw.once) m.got[rw.id] = true; if (rw.give) rw.give(s); if (rw.hat && onHat) onHat(rw.hat); save(); Audio.sfx('coin'); ui.toast(`兌換了${rw.name}！`); draw(); };
+      b.onclick = () => { if (got) return; if (m.pts < rw.cost) { ui.toast('里程點數不夠'); Audio.sfx('deny'); return; } m.pts -= rw.cost; if (rw.once) m.got[rw.id] = true; if (rw.give) rw.give(s); if (rw.hat && onHat) onHat(rw.hat); save(); Audio.sfx('coin'); ui.toast(`兌換了${rw.name}！`); draw(); };
       grid.appendChild(b); });
     body.appendChild(grid);
   };

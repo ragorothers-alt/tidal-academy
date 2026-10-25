@@ -255,10 +255,10 @@ function question() { if (theme.id === 'fish') return vocabQ() || pickQ('english
 async function explore(n) {
   const q = question(); if (!q) return;
   const SP = { name: theme.name, color: '#5ab0c8', voice: 520 };
-  const i = await ui.ask(SP, q.q, q.o, { abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
+  const i = await ui.ask(SP, q.q, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
   n.done = true; n.g.visible = false;
-  if (!ok) { Audio.sfx('bad'); await ui.say(SP, `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); await ui.say(SP, '這裡的寶物溜走了……換個地方試試吧。'); return; }
-  Audio.sfx('catch'); await reward(SP);
+  if (!ok) { Audio.sfx('bad'); await ui.explain(SP, q); await ui.say(SP, '這裡的寶物溜走了……換個地方試試吧。'); return; }
+  if (theme.id !== 'fish' && theme.id !== 'bug') Audio.sfx('catch'); await reward(SP);
   await challenge.keepGoing(SP, q);
 }
 function rare(k) {

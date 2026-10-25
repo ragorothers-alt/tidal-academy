@@ -200,8 +200,8 @@ export function openSeedShop(v, paint) {
     SEEDS.forEach(it => {
       const ph = G.pheno(G.phenoOf(it.sp, it.g)), si = (I.ICONS || {})['seed_' + it.sp], b = ui.el('button', 'fs-item', `${si ? `<img src="${si}" alt="" style="image-rendering:pixelated">` : `<i class="sw" style="background:radial-gradient(circle at 50% 45%, ${ph.color} 0 32%, #6fbf52 34% 100%)"></i>`}<b>${it.name}</b><small>${it.g} · ${it.price} 鈴錢</small>`); b.type = 'button';
       b.onclick = () => {
-        if (s.bells < it.price) { ui.toast('鈴錢不夠了'); Audio.sfx('bad'); return; }
-        if (data().bag.length + 3 > BAG_MAX) { ui.toast('種子袋快滿了'); Audio.sfx('bad'); return; }
+        if (s.bells < it.price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return; }
+        if (data().bag.length + 3 > BAG_MAX) { ui.toast('種子袋快滿了'); Audio.sfx('deny'); return; }
         s.bells -= it.price; for (let i = 0; i < 3; i++) data().bag.push({ sp: it.sp, g: it.g, known: true }); save(); Audio.sfx('coin'); paint && paint();
         ui.toast(s.gardenTip ? `買了${it.name} ×3` : '買好了！拿鏟子（3）對著草地按 E 種下，再用澆水壺（4）澆水'); s.gardenTip = true; draw();
       };
@@ -234,14 +234,14 @@ export async function consult(sp) {
     const d = dayKey(); s.genePractice = s.genePractice && s.genePractice.d === d ? s.genePractice : { d, n: 0 };
     const spc = rnd() < 0.6 ? 'pea' : 'mira', all = spc === 'pea' ? ['PPTT', 'PPTt', 'PpTT', 'PpTt', 'PPtt', 'Pptt', 'ppTT', 'ppTt', 'pptt'] : ['RR', 'RW', 'WW'];
     const self = spc === 'pea' && rnd() < 0.3, a = pick(all), b = self ? a : pick(all), c = G.breed(spc, a, b, rnd), q = G.question(spc, a, b, c, pick(['pheno', 'pheno', 'geno', 'ratio']), rnd, self);
-    const j = await ui.ask(sp, q.q, q.o, { keys: true, quiz: true });
+    const j = await ui.ask(sp, q.q, q.o, { answer: q.a, keys: true, quiz: true });
     if (j === q.a) { Audio.sfx('ok'); const gain = s.genePractice.n < 5 ? 100 : 0; s.genePractice.n++; s.bells += gain; save(); hooks.paint && hooks.paint(); await ui.say(sp, '答對了！' + (gain ? '這是 100 鈴錢。' : '')); }
     else { Audio.sfx('bad'); await ui.say(sp, `正確答案是「${q.o[q.a]}」。`); }
     await ui.say(sp, q.e);
     return;
   }
   const [k, p] = unk[i], kind = pick(['pheno', 'ratio']), q = G.question(p.sp, p.pa, p.pb || p.pa, p.g, kind, rnd, !!p.self);
-  const j = await ui.ask(sp, q.q, q.o, { keys: true, quiz: true });
+  const j = await ui.ask(sp, q.q, q.o, { answer: q.a, keys: true, quiz: true });
   if (j !== q.a) { Audio.sfx('bad'); await ui.say(sp, `正確答案是「${q.o[q.a]}」。`); await ui.say(sp, q.e); await ui.say(sp, '沒關係，想通了再來找我檢測。'); return; }
   Audio.sfx('ok'); await ui.say(sp, '答對了！' + q.e);
   p.known = true; s.bells += 200; save(); hooks.paint && hooks.paint();

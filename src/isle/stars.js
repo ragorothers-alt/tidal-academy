@@ -107,10 +107,10 @@ async function observe(o) {
   const q = pickQU(['es-cosmos', 'es-motion'], 3) || pickQ('earth', 3); if (!q) return;
   st.busy = true;
   try {
-    const i = await ui.ask(host, `觀測到一個星座！先回答一題地科題，答對就能登錄：${q.q}`, q.o, { abc: true, keys: true, html: true });
+    const i = await ui.ask(host, `觀測到一個星座！先回答一題地科題，答對就能登錄：${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true });
     const ok = i === q.a; record(q, ok); ui.closeDialog();
-    if (!ok) { Audio.sfx('bad'); await ui.say(host, `可惜，正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); await ui.say(host, '再點一次這個星座，換一題試試看。'); ui.closeDialog(); return; }
-    Audio.sfx('catch'); d.book[c.id] = dayKey(); S().bells += 400; save(); st && st.paint && st.paint();
+    if (!ok) { Audio.sfx('bad'); await ui.explain(host, q, '可惜，'); await ui.say(host, '再點一次這個星座，換一題試試看。'); ui.closeDialog(); return; }
+    d.book[c.id] = dayKey(); S().bells += 400; save(); st && st.paint && st.paint();
     await info(c, true);
     await challenge.keepGoing(host, q);
   } finally { st && (st.busy = false, st.sel = null); }

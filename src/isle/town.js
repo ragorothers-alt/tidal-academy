@@ -107,7 +107,6 @@ export async function playBond(v, sp) {
   const lv = pendingBond(v); if (!lv) return;
   const s = S(), b = lv === 5 ? (I.BONDS5 || {})[v.sid] : ((I.BONDS || {})[v.sid] || {})[lv];
   s.bond = s.bond || {}; s.bond[v.sid] = lv; save();
-  Audio.sfx('catch');
   await ui.card({ icon: ctx.icon('heart', 'heart'), title: `♥ 好感度事件 · ${b ? b.title : v.name + '的心事'}`, sub: `和${v.name}的關係更近了（${lv} / ${BOND_AT.length}）` });
   for (const line of (b ? b.lines : ['謝謝你常常來找我聊天。'])) await ui.say(sp, line);
   const gifts = (I.FURNITURE || []).filter(f => f.src === 'gift:' + v.sid);
@@ -122,9 +121,9 @@ export async function studyClub(v, sp) {
   await ui.say(sp, '讀書會開始！我們一起做 5 題，答對的鈴錢加倍。');
   for (let k = 0; k < 5; k++) {
     const q = pickQ(v.sid); if (!q) break;
-    const i = await ui.ask(sp, `第 ${k + 1} 題：` + q.q, q.o, { abc: true, html: true, keys: true });
+    const i = await ui.ask(sp, `第 ${k + 1} 題：` + q.q, q.o, { answer: q.a, abc: true, html: true, keys: true });
     const good = i === q.a; record(q, good); Audio.sfx(good ? 'ok' : 'bad'); if (good) ok++;
-    if (!good) await ui.say(sp, `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true });
+    if (!good) await ui.explain(sp, q);
   }
   const gain = ok * 300; s.bells += gain; save();
   await ui.say(sp, `答對 ${ok} / 5 題，拿到 ${gain} 鈴錢！下次再一起讀吧。`);

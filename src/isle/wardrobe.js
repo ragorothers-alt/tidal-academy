@@ -60,7 +60,7 @@ export function openShop(v, ch, paint) {
     body.appendChild(grid);
     const go = ui.el('button', 'btn gold', '打開衣櫃換裝'); go.type = 'button'; go.onclick = () => { ui.closePanel(); openCloset(ch); }; body.appendChild(go);
   };
-  const buy = (price, give, name) => { if (s.bells < price) { ui.toast('鈴錢不夠了'); Audio.sfx('bad'); return; } s.bells -= price; give(); save(); Audio.sfx('coin'); paint && paint(); ui.toast(`買了${name}！到衣櫃換上吧`); draw(); };
+  const buy = (price, give, name) => { if (s.bells < price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return; } s.bells -= price; give(); save(); Audio.sfx('coin'); paint && paint(); ui.toast(`買了${name}！到衣櫃換上吧`); draw(); };
   draw(); ui.panel(`${v.name}的服裝櫃台`, body, { cls: 'shop-p' });
 }
 /* ---------- 衣櫃 ---------- */

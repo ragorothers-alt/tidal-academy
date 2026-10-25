@@ -101,9 +101,9 @@ async function doQuiz(v, sp, r) {
   let ok = 0;
   for (let k = 0; k < 3; k++) {
     const q = pickQ(v.sid); if (!q) break;
-    const i = await ui.ask(sp, `第 ${k + 1} 題：` + q.q, q.o, { abc: true, html: true, keys: true });
+    const i = await ui.ask(sp, `第 ${k + 1} 題：` + q.q, q.o, { answer: q.a, abc: true, html: true, keys: true });
     const good = i === q.a; record(q, good); Audio.sfx(good ? 'ok' : 'bad'); if (good) ok++;
-    if (!good) await ui.say(sp, `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true });
+    if (!good) await ui.explain(sp, q);
   }
   if (ok >= 2) await complete(v, sp, r, -1);
   else await ui.say(sp, `答對 ${ok} 題，差一點點！讀一下筆記，等等再來挑戰。`);
@@ -115,7 +115,6 @@ async function complete(v, sp, r, slot, remote, bonus) {
   r.done = true;
   const bells = bonus || 800 + Math.floor(Math.random() * 8) * 100; s.bells += bells;
   s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + 2); s.stats = s.stats || {}; s.stats.reqs = (s.stats.reqs || 0) + 1; save();
-  Audio.sfx('catch');
   if (!remote) await ui.say(sp, pick((lines(v.sid).req || {}).thanks || ['謝謝你！']));
   else hooks.toast && hooks.toast(`${v.name}的委託完成了！`);
   await ui.card({ icon: icon('bells', 'bells'), title: `委託完成：${bells} 鈴錢`, sub: `${v.name}的好感度提升了` });

@@ -80,7 +80,7 @@ export async function talk(v) {
       const pi = freePlot();
       if (pi < 0) { await ui.say(sp, '島上好像沒有空地了呢……謝謝你的心意！'); continue; }
       for (const l of (L1.movein || ['我很樂意搬來！'])) await ui.say(sp, l);
-      G.moved[id] = { plot: pi, day: dayKey() }; save(); Audio.sfx('catch');
+      G.moved[id] = { plot: pi, day: dayKey() }; save();
       await ui.card({ icon: icon('ticket', 'pkg'), title: `${v.name}決定搬來潮汐小島！`, sub: '明天就會在空地上蓋好房子。' });
       return;
     }

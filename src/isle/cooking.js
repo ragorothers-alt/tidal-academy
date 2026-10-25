@@ -45,9 +45,9 @@ export async function lesson(sp) {
   if (s.lessonDay === d) { await ui.say(sp, '今天的料理教室已經上完了，明天再來學新的食譜吧！'); return; }
   await ui.say(sp, '料理其實是一連串的化學反應喔！先答一題化學，答對就教你一道新菜。');
   const q = pickQ('chemistry', 3); if (!q) return;
-  const i = await ui.ask(sp, q.q, q.o, { abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
-  if (!ok) { Audio.sfx('bad'); await ui.say(sp, `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); await ui.say(sp, '沒關係，明天再來挑戰！'); s.lessonDay = d; save(); return; }
-  const f = left[0]; known().push(f.id); s.lessonDay = d; save(); Audio.sfx('catch');
+  const i = await ui.ask(sp, q.q, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
+  if (!ok) { Audio.sfx('bad'); await ui.explain(sp, q); await ui.say(sp, '沒關係，明天再來挑戰！'); s.lessonDay = d; save(); return; }
+  const f = left[0]; known().push(f.id); s.lessonDay = d; save();
   await ui.card({ icon: icon(f.id, 'food'), title: `學會了食譜：${f.name}`, sub: `食材：${needText(f)}<br>效果：${EFFECT[f.effect][1]}<br><br>🧪 ${ui.esc(f.fact)}` });
   await challenge.keepGoing(sp, q);
 }
@@ -64,9 +64,9 @@ export function openKitchen(paint) {
       const ok = Object.entries(f.need).every(([k, n]) => have(k) >= n), need = Object.entries(f.need).map(([k, n]) => `<i class="${have(k) >= n ? '' : 'lack'}">${ING[k]} ${have(k)}/${n}</i>`).join(' ');
       const b = ui.el('button', 'fs-item' + (ok ? '' : ' own'), `<img src="${icon(f.id, 'food')}" alt="" style="image-rendering:pixelated;width:64px;height:64px"><b>${ui.esc(f.name)}</b><small>${need}<br>${EFFECT[f.effect][0]} ${EFFECT[f.effect][1]}</small>`); b.type = 'button'; b.title = f.desc || '';
       b.onclick = () => {
-        if (!ok) { ui.toast('食材不夠'); Audio.sfx('bad'); return; }
+        if (!ok) { ui.toast('食材不夠'); Audio.sfx('deny'); return; }
         const freed = (f.need.fish || 0) + (f.need.shellfish || 0) + (f.need.oyster || 0);
-        if (!freed && !S().pockets.some(x => !x)) { ui.toast('口袋滿了'); Audio.sfx('bad'); return; }
+        if (!freed && !S().pockets.some(x => !x)) { ui.toast('口袋滿了'); Audio.sfx('deny'); return; }
         Object.entries(f.need).forEach(([k, n]) => take(k, n)); addItem({ k: 'food', id: f.id }); const s = S(); s.stats = s.stats || {}; s.stats.cook = (s.stats.cook || 0) + 1; save();
         Audio.sfx('place'); ui.toast(`做好了「${f.name}」！在口袋裡可以吃或送人`); paint && paint(); draw();
       };

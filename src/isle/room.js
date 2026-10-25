@@ -347,7 +347,7 @@ function moveGhost(dx, dz) {
 }
 function place() {
   const f = furn(mode.id);
-  if (!fits(f, mode.x, mode.z, mode.r)) { ui.toast('這裡放不下'); Audio.sfx('bad'); return; }
+  if (!fits(f, mode.x, mode.z, mode.r)) { ui.toast('這裡放不下'); Audio.sfx('deny'); return; }
   const s = S(); if (!cur.edit) { s.storage[mode.id]--; if (s.storage[mode.id] <= 0) delete s.storage[mode.id]; }
   data().items.push({ id: mode.id, x: mode.x, z: mode.z, r: mode.r }); save(); rebuild(); Audio.sfx('ok');
   cancelPlace(); cur.onChange && cur.onChange();

@@ -468,17 +468,17 @@ const facingDir = () => { const a = P.rotation.y, sx = Math.sin(a), cz = Math.co
 const itemsOn = (x, z) => (D.items || []).filter(o => cellsOf(o).includes(x + ',' + z));
 function terraform(op) {
   const [x, z] = front(), key = x + ',' + z, c = cellAt(x, z), R = SIZES[D.size].R;
-  if (Math.hypot(x, z) > R - 0.6) { ui.toast('海邊不能改地形'); Audio.sfx('bad'); return; }
+  if (Math.hypot(x, z) > R - 0.6) { ui.toast('海邊不能改地形'); Audio.sfx('deny'); return; }
   const on = itemsOn(x, z), solidOn = on.filter(solid);
   const set = v => { if (v === 0) delete D.ter[key]; else D.ter[key] = v; };
   if (op === 'river') {
     if (c.t === 'w') { ui.toast('這裡已經是水了'); return; }
-    if (c.t !== 'g') { ui.toast('斜坡上不能挖河，先把它填平'); Audio.sfx('bad'); return; }
-    if (on.length) { ui.toast('先把這格上的東西拆掉，才能挖河'); Audio.sfx('bad'); return; }
+    if (c.t !== 'g') { ui.toast('斜坡上不能挖河，先把它填平'); Audio.sfx('deny'); return; }
+    if (on.length) { ui.toast('先把這格上的東西拆掉，才能挖河'); Audio.sfx('deny'); return; }
     set('w' + c.lv); if (D.paint) delete D.paint[key]; Audio.sfx('dig');
   } else if (op === 'cliff') {
-    if (c.t !== 'g') { ui.toast(c.t === 'w' ? '水上不能蓋懸崖，先填平' : '斜坡不能再加高'); Audio.sfx('bad'); return; }
-    if (c.lv >= TOP) { ui.toast(`懸崖最多 ${TOP} 層`); Audio.sfx('bad'); return; }
+    if (c.t !== 'g') { ui.toast(c.t === 'w' ? '水上不能蓋懸崖，先填平' : '斜坡不能再加高'); Audio.sfx('deny'); return; }
+    if (c.lv >= TOP) { ui.toast(`懸崖最多 ${TOP} 層`); Audio.sfx('deny'); return; }
     if (Math.hypot(x - P.position.x, z - P.position.z) < 0.6) { ui.toast('站在上面不能加高'); return; }
     set(c.lv + 1); Audio.sfx('dig');
   } else if (op === 'lower') {
@@ -488,19 +488,19 @@ function terraform(op) {
     Audio.sfx('swish');
   } else if (op === 'ramp') {
     const dir = facingDir(), [dx, dz] = DIRS[dir], nb = cellAt(x + dx, z + dz), far = cellAt(x + dx * 2, z + dz * 2);
-    if (c.t !== 'g' || c.lv >= TOP) { ui.toast('斜坡要蓋在最高層以下的草地上'); Audio.sfx('bad'); return; }
-    if (solidOn.length) { ui.toast('先把這格上的東西拆掉'); Audio.sfx('bad'); return; }
+    if (c.t !== 'g' || c.lv >= TOP) { ui.toast('斜坡要蓋在最高層以下的草地上'); Audio.sfx('deny'); return; }
+    if (solidOn.length) { ui.toast('先把這格上的東西拆掉'); Audio.sfx('deny'); return; }
     if (nb.t === 'g' && nb.lv === c.lv + 1) { set('r' + dir + c.lv); Audio.sfx('dig'); }
     else if (nb.t === 'g' && nb.lv === c.lv + 2) {
       // 高兩層：把懸崖切出一道缺口，做成兩格長、一格升一層的斜坡
       const nk = (x + dx) + ',' + (z + dz);
-      if (!(far.t === 'g' && far.lv === c.lv + 2)) { ui.toast('高兩層的斜坡會切進懸崖一格，懸崖要再往裡多一格同高的地面'); Audio.sfx('bad'); return; }
-      if (Math.hypot(x + dx, z + dz) > R - 0.6) { ui.toast('海邊不能改地形'); Audio.sfx('bad'); return; }
+      if (!(far.t === 'g' && far.lv === c.lv + 2)) { ui.toast('高兩層的斜坡會切進懸崖一格，懸崖要再往裡多一格同高的地面'); Audio.sfx('deny'); return; }
+      if (Math.hypot(x + dx, z + dz) > R - 0.6) { ui.toast('海邊不能改地形'); Audio.sfx('deny'); return; }
       const onN = itemsOn(x + dx, z + dz);
-      if (onN.some(solid)) { ui.toast('懸崖上的那一格有東西，先拆掉'); Audio.sfx('bad'); return; }
+      if (onN.some(solid)) { ui.toast('懸崖上的那一格有東西，先拆掉'); Audio.sfx('deny'); return; }
       onN.forEach(o => { D.items.splice(D.items.indexOf(o), 1); if (meshOf.has(o)) { objs.remove(meshOf.get(o)); meshOf.delete(o); } });
       set('r' + dir + c.lv); D.ter[nk] = 'r' + dir + (c.lv + 1); Audio.sfx('dig'); ui.toast('切出了兩格長的斜坡');
-    } else { ui.toast('斜坡的另一端要接到高一層或高兩層的懸崖（面向懸崖使用）'); Audio.sfx('bad'); return; }
+    } else { ui.toast('斜坡的另一端要接到高一層或高兩層的懸崖（面向懸崖使用）'); Audio.sfx('deny'); return; }
   }
   // 格子上的花或地墊跟著新的高度；不能留在水裡或斜坡上的就收掉
   on.forEach(o => { const t = cellAt(x, z); if (t.t !== 'g') { D.items.splice(D.items.indexOf(o), 1); if (meshOf.has(o)) { objs.remove(meshOf.get(o)); meshOf.delete(o); } } else if (meshOf.has(o)) meshOf.get(o).position.y = topOf(o.x, o.z); });
@@ -508,7 +508,7 @@ function terraform(op) {
 }
 function paintCell(x, z, quiet) {
   const c = cellAt(x, z), k = x + ',' + z; D.paint = D.paint || {};
-  if (c.t !== 'g') { if (!quiet) { ui.toast('小路要鋪在草地上'); Audio.sfx('bad'); } return; }
+  if (c.t !== 'g') { if (!quiet) { ui.toast('小路要鋪在草地上'); Audio.sfx('deny'); } return; }
   if (sel.id === 'erase') { if (!D.paint[k]) { if (!quiet) ui.toast('這裡沒有小路'); return; } delete D.paint[k]; }
   else { if (D.paint[k] === sel.id) return; D.paint[k] = sel.id; }
   buildTerrain(); save(); Audio.sfx(quiet ? 'step' : 'dig');
@@ -516,7 +516,7 @@ function paintCell(x, z, quiet) {
 const paintFront = () => { const [x, z] = front(); paintCell(x, z, false); };
 function placeSel() {
   const [x, z] = front(), it = Object.assign({}, sel, { x, z, r: rot }); delete it.name;
-  if (!free(it)) { ui.toast('這裡放不下'); Audio.sfx('bad'); return; }
+  if (!free(it)) { ui.toast('這裡放不下'); Audio.sfx('deny'); return; }
   if ((D.items || []).length >= 400) { ui.toast('夢境島已經放滿了（最多 400 件）'); return; }
   D.items.push(it); addMesh(it); buildGrass(); save(); Audio.sfx('pop');
 }
@@ -570,7 +570,7 @@ export function openTools() {
   ui.panel(`${D.name || SIZES[D.size].name + '夢境島'}・造島工具`, body, { cls: 'dream-p' });
 }
 function unlock(f) {
-  if (shards() < f.shard) { ui.toast(`還需要 ${f.shard - shards()} 個夢之碎片（每天在夢境島上撿、或對流星許願）`); Audio.sfx('bad'); return; }
+  if (shards() < f.shard) { ui.toast(`還需要 ${f.shard - shards()} 個夢之碎片（每天在夢境島上撿、或對流星許願）`); Audio.sfx('deny'); return; }
   if (!confirm(`用 ${f.shard} 個夢之碎片解鎖「${f.name}」嗎？\n解鎖後在夢裡可以無限擺放，也會送一件到家裡的收納。`)) return;
   const s = S(); s.dreamShard -= f.shard; s.dreamUnlock = (s.dreamUnlock || []).concat(f.id); ctx.addStorage && ctx.addStorage(f.id, 1); save(); hudPaint();
   Audio.sfx('catch'); ui.toast(`解鎖了「${f.name}」！家裡的收納也多了一件`);

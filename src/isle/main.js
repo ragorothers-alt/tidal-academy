@@ -426,7 +426,7 @@ async function appraise(v) {
     const fresh = fs.filter(f => !s.dex.fossil[f.id]), fo = pick(fresh.length && Math.random() < 0.75 ? fresh : fs);
     const q = pickQ(fo.sid) || pickQ('earth');
     await ui.say(sp(v), `呼呼……這塊化石，要先答對一題${TA.subject(fo.sid).name}才能判斷。`);
-    const a = await ui.ask(sp(v), q.q, q.o, { abc: true, html: true, keys: true });
+    const a = await ui.ask(sp(v), q.q, q.o, { answer: q.a, abc: true, html: true, keys: true });
     const ok = a === q.a; record(q, ok);
     if (ok) {
       s.pockets[i] = { k: 'fossil', id: fo.id }; const first = !s.dex.fossil[fo.id]; s.dex.fossil[fo.id] = s.dex.fossil[fo.id] || Date.now(); save();
@@ -549,13 +549,13 @@ function openFurnShop(v) {
     if (pend) {
       const ok = s.bells >= pend.price, cf = ui.el('div', 'nk-confirm', `<span>${ok ? `要買「${ui.esc(pend.name)}」嗎？<b>${pend.price.toLocaleString()} 鈴錢</b>` : `「${ui.esc(pend.name)}」要 ${pend.price.toLocaleString()} 鈴錢，還差 ${(pend.price - s.bells).toLocaleString()}……`}</span>`);
       const yes = ui.el('button', 'btn' + (ok ? ' gold' : ' off'), ok ? '買！' : '鈴錢不夠'), no = ui.el('button', 'btn', '再想想'); yes.type = no.type = 'button';
-      yes.onclick = () => { const f = pend; if (!ok) { Audio.sfx('bad'); return; } pend = null; buy(f); };
+      yes.onclick = () => { const f = pend; if (!ok) { Audio.sfx('deny'); return; } pend = null; buy(f); };
       no.onclick = () => { pend = null; paint(); };
       cf.append(yes, no); body.appendChild(cf); setTimeout(() => yes.focus({ preventScroll: true }), 0);
     } else body.appendChild(ui.el('p', 'nk-hint', `${ui.esc(v.name)}：「慢慢看喔！點商品就能買。」`));
   };
   const buy = f => {
-    if (!buyShopItem(f)) { Audio.sfx('bad'); return; }
+    if (!buyShopItem(f)) { Audio.sfx('deny'); return; }
     ui.toast(`買了${f.name}！回家按 F 裝潢`); paint();
     const el = body.querySelectorAll('.nk-item'); el.forEach(e => { if (e.textContent.includes(f.name)) e.classList.add('pop'); });
   };
@@ -1323,9 +1323,9 @@ async function trickOrTreat(v) {
   const s = S(), d = dayKey(); s.tot = s.tot && s.tot[d] ? { [d]: s.tot[d] } : { [d]: {} }; s.tot[d][v.sid] = true; save();
   await ui.say(sp(v), L4(v.sid, 'trick', ['哎呀，被你抓到了！先回答我一題吧。']));
   const q = pickQ(v.sid, 3); if (!q) return;
-  const i = await ui.ask(sp(v), q.q, q.o, { abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
+  const i = await ui.ask(sp(v), q.q, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
   if (ok) { s.candy = (s.candy || 0) + 2; save(); Audio.sfx('catch'); ui.emote(v.mesh, '🍬', '#ff9a3a'); await ui.say(sp(v), L4(v.sid, 'treat', ['答對了！這兩顆糖果給你。'])); await ui.say(null, `得到 2 顆糖果（共 ${s.candy} 顆）。到阿潮的商店可以換夜祭限定家具。`); await challenge.keepGoing(sp(v), q, { v }); }
-  else { Audio.sfx('bad'); ui.emote(player, '🎃', '#ff9a3a'); await ui.say(sp(v), L4(v.sid, 'prank', ['嘿嘿，搗蛋成功！'])); await ui.say(sp(v), `正確答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); }
+  else { Audio.sfx('bad'); ui.emote(player, '🎃', '#ff9a3a'); await ui.say(sp(v), L4(v.sid, 'prank', ['嘿嘿，搗蛋成功！'])); await ui.explain(sp(v), q); }
 }
 async function candyShop(v) {
   const s = S(), items = (I.FURNITURE || []).filter(f => f.src === 'event:halloween'), hasHat = wardrobe.owns('hats', 'witch');

@@ -184,7 +184,6 @@ async function celebrate(i) {
   if (ctx.busy && ctx.busy()) return;
   ctx.lock(true);
   try {
-    Audio.sfx('catch');
     await ui.say(MGR, `太棒了！我用相機拍下了「${th.name}」的定裝照，這張會掛在大廳當客房導覽圖唄。`);
     await ui.card({ icon: '', title: `${i + 1} 號房・${th.name} 完成！`, sub: `得到 200 張飯店優惠券 ${COUPON}（共 ${h.coupons} 張）<br>觀光客「${G.name}」入住了，白天會在飯店附近散步。` });
     memo.add(`佈置好飯店的${th.name}`, `${G.name}住進了 ${i + 1} 號房`, { key: 'hotel:' + i, icon: th.icon });
@@ -240,7 +239,7 @@ async function guestTalk(gi, roomI) {
   await ui.say(sp, pick(lines));
   if (tk.who[gi]) return;
   const sid = pick(TA.SUBJECTS).id, q = pickQ(sid, 2) || pickQ(sid, 3); if (!q) return;
-  const i = await ui.ask(sp, `我在讀這一題，你會嗎？${q.q}`, q.o, { abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok); tk.who[gi] = 1;
+  const i = await ui.ask(sp, `我在讀這一題，你會嗎？${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok); tk.who[gi] = 1;
   if (ok) { h.coupons += 60; save(); Audio.sfx('catch'); await ui.say(sp, `好厲害！謝謝你教我。這 60 張優惠券送你（共 ${h.coupons} 張）。`); await challenge.keepGoing(sp, q); }
   else { save(); Audio.sfx('bad'); await ui.say(sp, `答案是 ${ui.ansOf(q)}呢。${q.e}`, { html: true }); }
 }
@@ -276,7 +275,7 @@ function shop() {
       b.onclick = () => {
         if (own) return; const s2 = today(h, 'shop');
         if (!sale && s2.n >= 5) { ui.toast('今天的目錄訂購額度用完了（每天 5 件），明天再來唄'); return; }
-        if (h.coupons < cost) { ui.toast(`優惠券不夠（還差 ${cost - h.coupons} 張）`); Audio.sfx('bad'); return; }
+        if (h.coupons < cost) { ui.toast(`優惠券不夠（還差 ${cost - h.coupons} 張）`); Audio.sfx('deny'); return; }
         h.coupons -= cost; if (!sale) s2.n++;
         if (isP) { S().papers = S().papers || []; S().papers.push(f.id); } else ctx.addStorage(f.id);
         save(); Audio.sfx('coin'); ui.toast(`換到了「${f.name}」！${isP ? '回家裝潢就能用' : '已放進倉庫'}`); paint();

@@ -42,7 +42,7 @@ export function open(paint) {
     else if (k === 'enter') {
       if (W.d !== dayKey()) { ui.toast('日期換了，題目也換成今天的了'); ui.closePanel(); open(paint); return; }
       if (cur.length < LEN) { ui.toast(`要輸入 ${LEN} 個字母`); return; }
-      if (!words.has(cur)) { ui.toast('這個字不在單字表裡，換一個試試'); Audio.sfx('bad'); return; }
+      if (!words.has(cur)) { ui.toast('這個字不在單字表裡，換一個試試'); Audio.sfx('deny'); return; }
       W.guesses.push(cur); cur = '';
       if (W.guesses[W.guesses.length - 1] === A.w || W.guesses.length >= TRIES) finish(W, A, paint);
       save();

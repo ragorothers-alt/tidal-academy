@@ -1,6 +1,5 @@
 /* 潮汐小島 · 島嶼評價：學習、博物館、島民、房間、圖鑑五個面向，算出 1–5 星並給建議。學習佔最重。 */
 import * as ui from './ui.js';
-import * as Audio from './audio.js';
 import { I, S, save, list, icon } from './state.js';
 
 const TA = window.TA, L = TA.L;
@@ -31,7 +30,7 @@ const ADVICE = {
 export async function check() {
   const s = S(), r = score(); s.rating = s.rating || { best: 1 };
   if (r.stars > s.rating.best) {
-    const gain = 1000 * r.stars; s.rating.best = r.stars; s.bells += gain; save(); Audio.sfx('catch');
+    const gain = 1000 * r.stars; s.rating.best = r.stars; s.bells += gain; save();
     await ui.card({ icon: icon('bells', 'bells'), title: `島嶼評價升到 ${'★'.repeat(r.stars)}！`, sub: `獲得 ${gain} 鈴錢${r.stars === 5 ? '。五星小島：每天晚上都會放煙火慶祝！' : ''}` });
   }
   return r;

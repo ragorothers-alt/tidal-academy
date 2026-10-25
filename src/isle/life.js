@@ -79,7 +79,7 @@ async function hook() {
   // 越稀有的魚考越難的單字：三星考 4 級以上、四星以上考 5 級以上
   const big = sp.rarity >= 3, q = vocabQ(sp.rarity >= 4 ? { minLv: 5 } : big ? { minLv: 4 } : { maxLv: 4 }) || vocabQ();
   const lim = (tourney && tourney.kind === 'fish' ? 8 : 10) + (big ? 2 : 0);
-  const i = await ui.ask({ name: big ? '……是大魚！' : '……有東西上鉤了！', color: '#3aa0d8', voice: 520 }, `${big ? '大魚的題目比較難：' : ''}${q.q}（${lim} 秒內作答）`, q.o, { abc: true, timer: lim, keys: true });
+  const i = await ui.ask({ name: big ? '……是大魚！' : '……有東西上鉤了！', color: '#3aa0d8', voice: 520 }, `${big ? '大魚的題目比較難：' : ''}${q.q}（${lim} 秒內作答）`, q.o, { answer: q.a, abc: true, timer: lim, keys: true });
   const ok = i === q.a; record(q, ok); ui.closeDialog(); feel.note(feel.hit(ok));
   if (ok) {
     removeShadow(f);
@@ -187,7 +187,7 @@ async function netAction() {
   // 越稀有的蟲考越難的國文題：三星中等以上、四星以上困難
   const q = (sp.rarity >= 4 ? pickQ('chinese', 3, { minD: 3 }) : sp.rarity >= 3 ? pickQ('chinese', 3, { minD: 2 }) : pickQ('chinese', 2)) || pickQ('chinese', 3);
   const lim = fairSec(tourney && tourney.kind === 'bug' ? 15 : 20, q);
-  const i = await ui.ask({ name: '網子裡的' + sp.name + '在掙扎！', color: '#ff8fa3', voice: 600 }, `${q.q}（${lim} 秒）`, q.o, { abc: true, timer: lim, keys: true, html: true });
+  const i = await ui.ask({ name: '網子裡的' + sp.name + '在掙扎！', color: '#ff8fa3', voice: 600 }, `${q.q}（${lim} 秒）`, q.o, { answer: q.a, abc: true, timer: lim, keys: true, html: true });
   const ok = i === q.a; record(q, ok); ui.closeDialog(); feel.note(feel.hit(ok));
   if (ok) {
     bug.st = 'gone'; const s = S(), first = !s.dex.bug[sp.id]; s.dex.bug[sp.id] = s.dex.bug[sp.id] || Date.now();
@@ -196,7 +196,7 @@ async function netAction() {
     if (!tourney) await challenge.keepGoing({ name: '捕蟲挑戰', color: '#ff8fa3', voice: 600 }, q);
   } else {
     bug.st = 'flee'; bug.t = 0; Audio.sfx('bad');
-    await ui.say(null, `${sp.name}溜走了……正確答案是 ${ui.ansOf(q)}。`, { html: true }); await ui.say(null, q.e, { html: true }); ui.closeDialog();
+    await ui.explain(null, q, `${sp.name}溜走了……`); ui.closeDialog();
   }
   busy = false;
 }

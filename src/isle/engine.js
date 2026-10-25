@@ -357,6 +357,18 @@ export function bend(mat, kind) {
         float fl = sin(uTime * 7.3 + dot(position, vec3(13.1, 7.7, 11.3))) * (0.0035 + 0.006 * gu) * uWind * smoothstep(0.0, 1.2, sw);   // 葉片細顫（約 1.2 Hz 的十倍頻率、很小）
         transformed += (wdO * (lean + osc) + pdO * sin(uTime * 0.9 + ph * 1.7) * 0.007 * uWind) * sw + vec3(fl, fl * 0.6, -fl * 0.8);
       }`);
+    if (kind === 'cloth') v = v.replace(wn, `${wn}
+      { // v7.0 旗幟布料：上緣綁在橫桿上不動，越往下擺得越多；陣風經過時整片被吹鼓、布面有往下傳的波紋（物件座標：布在 xy 平面、z 是布面法線）
+        vec3 wp0 = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #ifdef USE_INSTANCING
+          wp0 = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        #endif
+        float hang = clamp((2.71 - position.y) / 1.7, 0.0, 1.0), w = pow(hang, 1.25), gu = taGust(wp0.xz), ph = wp0.x * 0.7 + wp0.z * 0.37;
+        float wave = sin(uTime * (2.4 + 0.6 * gu) - position.y * 3.4 + position.x * 2.2 + ph) * (0.028 + 0.05 * gu) + sin(uTime * 4.1 - position.y * 6.0 + ph * 1.3) * 0.009;
+        transformed.z += (wave + (0.03 + 0.07 * gu) * (uWind * 0.8)) * w * uWind;
+        transformed.x += sin(uTime * 1.7 + ph) * 0.02 * w * uWind;
+        vGust = gu * w;
+      }`);
     if (kind === 'water') v = v.replace(wn, `${wn}
       #ifdef TA_SEA
         vSeaDepth = aDepth;

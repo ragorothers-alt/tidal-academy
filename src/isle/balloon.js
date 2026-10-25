@@ -43,8 +43,8 @@ const GIFT = { name: '熱氣球', color: '#ff7a7a', voice: 640 };
 async function shoot() {
   const cur = b; if (!cur) return;
   const sid = pick(TA.SUBJECTS).id, q = pickQ(sid, 2) || pickQ(sid, 3); if (!q) return;
-  const i = await ui.ask(GIFT, `瞄準熱氣球！${q.q}`, q.o, { abc: true, keys: true, html: true, timer: fairSec(20, q) }), ok = i === q.a; record(q, ok);
-  if (!ok) { Audio.sfx('bad'); await ui.say(null, `${L5('miss', ['熱氣球飄走了……'])}正確答案是 ${ui.ansOf(q)}。`, { html: true }); await ui.say(null, q.e, { html: true }); cur.missed = true; if (b === cur) { cur.vx *= 2.5; cur.vz *= 2.5; } return; }
+  const i = await ui.ask(GIFT, `瞄準熱氣球！${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true, timer: fairSec(20, q) }), ok = i === q.a; record(q, ok);
+  if (!ok) { Audio.sfx('bad'); await ui.explain(null, q, L5('miss', ['熱氣球飄走了……'])); cur.missed = true; if (b === cur) { cur.vx *= 2.5; cur.vz *= 2.5; } return; }
   Audio.sfx('catch'); if (b === cur) { scene.remove(cur.g); b = null; }
   await ui.say(null, L5('win', ['禮物落下來了！']));
   await reward();

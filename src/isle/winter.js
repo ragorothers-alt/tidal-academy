@@ -124,10 +124,10 @@ async function talk(m) {
   if (d.done[key]) { await ui.say(SNOWM, pick(CHAT)); return; }
   await ui.say(SNOWM, m.big ? '嗨！我是雪寶，是島民們一起堆的雪人。冬天每天都會出一題考考你喔！' : '我是雪寶的弟弟！哥哥出題，我也要出題！');
   const sid = pick(TA.SUBJECTS).id, q = pickQ(sid, 2) || pickQ(sid, 3); if (!q) return;
-  const i = await ui.ask(SNOWM, q.q, q.o, { abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
+  const i = await ui.ask(SNOWM, q.q, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
   d.done[key] = true;
-  if (!ok) { Audio.sfx('bad'); save(); await ui.say(SNOWM, `答案是 ${ui.ansOf(q)}。${q.e}`, { html: true }); await ui.say(SNOWM, '明天再來，我再出一題！'); return; }
-  const b = m.big ? 800 : 500; s.bells += b; save(); Audio.sfx('catch');
+  if (!ok) { Audio.sfx('bad'); save(); await ui.explain(SNOWM, q); await ui.say(SNOWM, '明天再來，我再出一題！'); return; }
+  const b = m.big ? 800 : 500; s.bells += b; save();
   memo.add('答對了雪寶出的題目', '雪人兄弟今年也站在廣場旁邊', { key: 'snowman:' + new Date().getFullYear(), icon: '⛄' });
   await ui.card({ icon: '', title: `雪寶的謝禮：${b} 鈴錢`, sub: '雪人每天各出一題，冬天限定。' });
   await challenge.keepGoing(SNOWM, q);

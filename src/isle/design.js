@@ -155,8 +155,8 @@ export function act() {
     const it = item(d[k]); s.bells += Math.floor((it ? it.price : 0) / 2); delete d[k]; unbuild(k); save(); Audio.sfx('dig'); onChange && onChange(); return true;
   }
   const it = item(mode.id), why = canPlace(mode.tx, mode.tz, it);
-  if (why) { ui.toast(why); Audio.sfx('bad'); return true; }
-  if (s.bells < it.price) { ui.toast('鈴錢不夠了'); Audio.sfx('bad'); return true; }
+  if (why) { ui.toast(why); Audio.sfx('deny'); return true; }
+  if (s.bells < it.price) { ui.toast('鈴錢不夠了'); Audio.sfx('deny'); return true; }
   if (d[k]) { const old = item(d[k]); s.bells += Math.floor((old ? old.price : 0) / 2); unbuild(k); }
   s.bells -= it.price; d[k] = it.id; build(k, it.id); save(); Audio.sfx('place'); onChange && onChange();
   mode.pinned = false;

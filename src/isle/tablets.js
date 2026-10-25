@@ -57,14 +57,14 @@ async function read(st) {
   const D = data(), q = window.TA.L.view(dailyQ(D.d, st.k));   // 選項順序每次打亂
   if (!q) { await ui.say(TAB, '石碑上的字跡模糊，看不清楚……'); return; }
   if (D.done[st.k]) { await ui.say(TAB, D.done[st.k] === 'ok' ? '今天的題目已經解開了。明天石碑會浮現新的題目。' : '今天這塊石碑已經作答過了（答錯）。三塊都答對才有加碼，明天再挑戰吧。'); return; }
-  const i = await ui.ask(TAB, `石碑上刻著：${q.q}`, q.o, { abc: true, keys: true, html: true }), ok = i === q.a;
+  const i = await ui.ask(TAB, `石碑上刻著：${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a;
   if (dayKey() !== D.d) { ui.toast('日期換了，石碑上的題目也換成今天的了'); return; }
   // 先把獎勵與紀錄一次結算存檔，再顯示解析（避免中途重新整理漏發）
   record(q, ok);   // 同一份作答紀錄（答錯會記進錯題）
   const s = S(); D.done[st.k] = ok ? 'ok' : 'no'; let bonus = false;
   if (ok) { s.bells += 600; if (stones.every(t => D.done[t.k] === 'ok') && !D.bonus) { D.bonus = true; bonus = true; s.bells += 1000; s.stats = s.stats || {}; s.stats.tablets = (s.stats.tablets || 0) + 1; } }
   save();
-  if (!ok) { Audio.sfx('bad'); await ui.say(TAB, `正確答案是 ${ui.ansOf(q)}。`, { html: true }); await ui.say(TAB, q.e, { html: true }); return; }
+  if (!ok) { Audio.sfx('bad'); await ui.explain(TAB, q); return; }
   Audio.sfx('catch'); miles.add('puzzle');
   await ui.say(TAB, '石碑發出微光——答對了！得到 600 鈴錢。'); await ui.say(TAB, q.e, { html: true });
   if (bonus) await ui.card({ icon: '', title: '三塊石碑全部解開！', sub: '額外獎勵 1,000 鈴錢。明天會有新的題目。' });
