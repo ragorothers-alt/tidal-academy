@@ -61,9 +61,57 @@ export async function dress(ch, key) {
   if (head && u.hatSlot) { head.add(u.hatSlot); u.hatSlot.position.set(0, 0.075, 0.01); u.hatSlot.scale.setScalar(0.42 / HEIGHT); }
   if (head && u.partyHat) { head.add(u.partyHat); u.partyHat.position.set(0.02, 0.12, 0); u.partyHat.scale.setScalar(0.42 / HEIGHT); }
   if (hand && u.hand) { hand.add(u.hand); u.hand.position.set(0, 0.03, 0); u.hand.scale.setScalar(0.8 / HEIGHT); }
-  u.gltf = { mixer, acts, cur: null, model, head };
+  // 疊加在骨架動作上的程式姿勢（使用工具、空中縮腿）要用到的骨頭；找不到的就略過
+  const B = n => findBone(model, n);
+  const rig = { rArm: B(['RightArm', 'R_UpperArm']), rFore: B(['RightForeArm', 'R_Forearm']), rHand: hand, lArm: B(['LeftArm', 'L_UpperArm']), lFore: B(['LeftForeArm', 'L_Forearm']),
+    spine: B(['Spine1', 'Spine']), lUp: B(['LeftUpLeg', 'L_Thigh']), lLeg: B(['LeftLeg', 'L_Calf']), rUp: B(['RightUpLeg', 'R_Thigh']), rLeg: B(['RightLeg', 'R_Calf']) };
+  u.gltf = { mixer, acts, cur: null, model, head, rig, useT: 1, useKind: null, base: model.position.clone(), baseS: HEIGHT };
   play(u.gltf, 'idle');
   return true;
+}
+/* ---------- 疊加姿勢：在骨架動作之上，以角色自己的座標軸旋轉骨頭（v7.0） ----------
+   角色座標：+Z 前、+Y 上、+X 左。flex：繞 X 軸往前抬（手臂、大腿）；負值往後。 */
+const AX = new THREE.Vector3(1, 0, 0), AY = new THREE.Vector3(0, 1, 0), AZ = new THREE.Vector3(0, 0, 1);
+const oq = new THREE.Quaternion(), pq = new THREE.Quaternion(), rq = new THREE.Quaternion(), wa = new THREE.Vector3();
+function turn(ch, bone, axis, ang) {
+  if (!bone || !ang) return;
+  ch.getWorldQuaternion(oq); wa.copy(axis).applyQuaternion(oq);   // 角色的軸 → 世界
+  bone.parent.getWorldQuaternion(pq); rq.setFromAxisAngle(wa, ang);
+  bone.quaternion.premultiply(pq.clone().invert().multiply(rq).multiply(pq));   // L' = P⁻¹ · R · P · L
+  bone.updateMatrixWorld(true);
+}
+const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const USE_LEN = { rod: 0.75, net: 0.6, shovel: 0.7, can: 1.0 };   // 第三人稱使用工具的動作長度（秒）
+/** 使用工具：拋竿（往後舉過頭再甩出去）、揮網（橫掃）、挖掘（舉起往下鏟、身體前彎）、澆水（手伸出去、手腕傾斜）；沒拿工具時是伸手 */
+function toolPose(ch, gl, dt) {
+  if (gl.useT >= 1) return;
+  const k = gl.useKind, len = USE_LEN[k] || 0.45; gl.useT = Math.min(1, gl.useT + dt / len);
+  const s = gl.useT, R = gl.rig, env = Math.sin(Math.PI * Math.min(1, s * 1.15));
+  if (k === 'rod') {
+    const up = ss(0, 0.35, s), fw = ss(0.35, 0.6, s), back = ss(0.8, 1, s);
+    turn(ch, R.spine, AX, (-0.14 * up + 0.32 * fw) * (1 - back));
+    turn(ch, R.rArm, AX, -(2.5 * up - 1.6 * fw) * (1 - back));
+    turn(ch, R.rFore, AX, -0.5 * up * (1 - fw));
+  } else if (k === 'net') {
+    const sw = ss(0.12, 0.7, s);
+    turn(ch, R.spine, AY, (-0.35 + 0.8 * sw) * env);
+    turn(ch, R.rArm, AX, -1.35 * env);
+    turn(ch, R.rArm, AY, (-0.9 + 1.9 * sw) * env);
+  } else if (k === 'shovel') {
+    const up = ss(0, 0.35, s), dn = ss(0.35, 0.6, s), back = ss(0.75, 1, s);
+    turn(ch, R.spine, AX, (0.5 * dn - 0.08 * up) * (1 - back));
+    turn(ch, R.rArm, AX, -(1.7 * up - 1.2 * dn) * (1 - back)); turn(ch, R.lArm, AX, -(1.3 * up - 0.9 * dn) * (1 - back));
+    turn(ch, R.rFore, AX, -0.4 * up * (1 - back)); turn(ch, R.lFore, AX, -0.4 * up * (1 - back));
+  } else if (k === 'can') {
+    const h = ss(0, 0.2, s) * (1 - ss(0.8, 1, s));
+    turn(ch, R.rArm, AX, -1.05 * h); turn(ch, R.rHand, AZ, -0.8 * h * ss(0.15, 0.35, s)); turn(ch, R.spine, AX, 0.12 * h);
+  } else { turn(ch, R.rArm, AX, -0.95 * env); turn(ch, R.spine, AX, 0.15 * env); }
+}
+/** 空中：雙腿縮起、手臂往上揚（u.airK 0–1 由 main.js 的 jumpPose 設定；第三跳另外整個身體前空翻） */
+function airPose(ch, gl, k) {
+  if (!(k > 0.001)) return; const R = gl.rig;
+  turn(ch, R.lUp, AX, -0.75 * k); turn(ch, R.rUp, AX, -0.55 * k); turn(ch, R.lLeg, AX, 1.15 * k); turn(ch, R.rLeg, AX, 0.9 * k);
+  turn(ch, R.lArm, AZ, -0.9 * k); turn(ch, R.rArm, AZ, 0.9 * k); turn(ch, R.lArm, AX, -0.5 * k); turn(ch, R.rArm, AX, -0.5 * k);
 }
 function play(gl, name) {
   if (gl.cur === name) return; const a = gl.acts[name]; if (!a) return;
@@ -86,4 +134,7 @@ export function animateModel(ch, dt, moving, rate = 1) {
     gl.lookK = Math.min(1, (gl.lookK || 0) + dt * 4);
     tq.setFromEuler(new THREE.Euler(pitch * gl.lookK, yaw * gl.lookK * 0.6, 0, 'YXZ')); gl.head.quaternion.multiply(tq);
   } else gl.lookK = 0;
+  // 使用工具：life.js 等設 swing = 1 表示剛用了一下。第三人稱由這裡播；第一人稱的手（fphand.js）看 swingFP
+  if (u.swing > 0) { if (!u.sit) { gl.useT = 0; gl.useKind = u.tool || null; } u.swing = 0; u.swingFP = 1; }
+  if (gl.rig && (gl.useT < 1 || u.airK > 0.001)) { toolPose(ch, gl, dt); airPose(ch, gl, u.airK); }
 }

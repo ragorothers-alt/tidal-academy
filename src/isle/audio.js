@@ -5,7 +5,9 @@ let ctx = null, master = null, musicOn = true;
 export const ready = () => !!ctx;
 export function start(getMood) {
   if (ctx) return; ctx = new (window.AudioContext || window.webkitAudioContext)();
-  master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
+  master = ctx.createGain(); master.gain.value = 0.5;
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;   // 音效疊在一起（連答、升級、煙火）時不爆音
+  master.connect(comp); comp.connect(ctx.destination);
   const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
   noiseBuf = buf;
   const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500; const wg = ctx.createGain(); wg.gain.value = 0.05;
@@ -106,6 +108,12 @@ function note(m, t, dur, vol, type, dest) {
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g); g.connect(dest || master); o.start(t); o.stop(t + dur + 0.05);
 }
+/** 滑音：頻率從 f0 滑到 f1（跳躍、彈起來） */
+function sweep(f0, f1, t, dur, vol, type) {
+  const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type || 'triangle'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
 function noise(t, dur, f0, f1, vol, q) {
   const s = ctx.createBufferSource(); s.buffer = noiseBuf; const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q || 1; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
   const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
@@ -118,10 +126,11 @@ export function blip(pitch) {
   g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.05, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
   o.connect(f); f.connect(g); g.connect(master); o.start(t); o.stop(t + 0.08);
 }
-export function sfx(name) {
-  if (!ctx) return; const t = ctx.currentTime;
+/** 音效。opt.pitch：升幾個半音（連答越答越高）；opt.vol：音量倍數（腳步聲依速度） */
+export function sfx(name, opt) {
+  if (!ctx) return; const t = ctx.currentTime, P = (opt && opt.pitch) || 0, V = (opt && opt.vol) || 1;
   switch (name) {
-    case 'ok': [72, 76, 79, 84].forEach((n, i) => note(n, t + i * 0.09, 0.5, 0.12, 'triangle')); break;
+    case 'ok': [72, 76, 79, 84].forEach((n, i) => note(n + P, t + i * 0.09, 0.5, 0.12, 'triangle')); if (P >= 5 && P % 5 === 0) note(96, t + 0.36, 0.6, 0.05, 'sine'); break;   // 每連對五題多一聲鈴
     case 'bad': [64, 60].forEach((n, i) => note(n, t + i * 0.12, 0.5, 0.1, 'triangle')); break;
     case 'catch': [67, 72, 76, 79, 84, 88].forEach((n, i) => note(n, t + i * 0.07, 0.7, 0.1, 'triangle')); note(48, t, 1.2, 0.08, 'sine'); break;
     case 'cast': noise(t, 0.35, 600, 2600, 0.06, 0.7); break;
@@ -136,6 +145,22 @@ export function sfx(name) {
     case 'tick': note(96, t, 0.03, 0.04, 'square'); break;
     case 'clap': for (let i = 0; i < 7; i++) noise(t + i * 0.14 + Math.random() * 0.03, 0.05, 2400, 1600, 0.07, 1.4); break;
     case 'step': noise(t, 0.06, 500, 250, 0.03, 1); break;
+    // v7.0 新增：以前 'place' 不存在（手作、造島擺放、做菜都沒聲音）；升級、稀有、跳躍、拒絕各有自己的聲音，不再全部借用 'catch'
+    case 'place': noise(t, 0.06, 900, 500, 0.22, 3); note(55, t, 0.08, 0.08, 'sine'); noise(t + 0.09, 0.05, 1100, 650, 0.14, 3); break;   // 木頭敲擊
+    case 'jump': sweep(330 * Math.pow(2, P / 12), 660 * Math.pow(2, P / 12), t, 0.16, 0.06, 'triangle'); noise(t, 0.12, 700, 2200, 0.03, 0.8); break;   // 依段數升調
+    case 'land': noise(t, 0.09, 400, 160, 0.1 * V, 0.9); break;
+    case 'levelup': [60, 64, 67, 72].forEach((n, i) => note(n, t + i * 0.07, 0.3, 0.09, 'triangle')); [72, 76, 79, 84].forEach(n => note(n, t + 0.3, 1.3, 0.06, 'triangle')); note(48, t + 0.3, 1.4, 0.09, 'sine');
+      [96, 100, 103, 108].forEach((n, i) => note(n, t + 0.45 + i * 0.08, 0.25, 0.025, 'sine')); break;   // 小號角：琶音 → 長和弦 → 星星閃
+    case 'rare': [84, 88, 91, 96, 100, 103].forEach((n, i) => note(n, t + i * 0.05, 0.45, 0.05, 'sine')); note(60, t, 1.6, 0.07, 'triangle'); note(67, t, 1.6, 0.05, 'triangle'); noise(t, 1.0, 6000, 9000, 0.02, 4); break;   // 閃閃發亮
+    case 'deny': note(57, t, 0.11, 0.06, 'triangle'); note(53, t + 0.1, 0.16, 0.06, 'triangle'); break;   // 不行喔（不是答錯）
+    case 'splash': noise(t, 0.45, 2200, 400, 0.2, 0.7); noise(t + 0.05, 0.32, 900, 200, 0.14, 1); note(64, t, 0.08, 0.03, 'sine'); break;
+    case 'whistle': sweep(1800, 2100, t, 0.5, 0.05, 'sine'); break;
+    // 腳步聲：依地面換音色（沙、木板、石板、草、雪）
+    case 'st_sand': noise(t, 0.08, 700, 300, 0.035 * V, 0.8); break;
+    case 'st_wood': noise(t, 0.05, 1300, 800, 0.05 * V, 3); note(50, t, 0.05, 0.03 * V, 'sine'); break;
+    case 'st_stone': noise(t, 0.04, 2600, 1500, 0.035 * V, 2); noise(t + 0.01, 0.05, 600, 300, 0.025 * V, 1); break;
+    case 'st_grass': noise(t, 0.09, 3200, 1800, 0.022 * V, 0.6); break;
+    case 'st_snow': noise(t, 0.11, 1600, 700, 0.04 * V, 0.9); noise(t + 0.03, 0.06, 3000, 2000, 0.015 * V, 1); break;
   }
 }
 

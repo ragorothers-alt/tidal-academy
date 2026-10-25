@@ -75,7 +75,8 @@ const BIG_TEXT = 110, BIG_OPT = 30;
 const passageOn = () => { const p = $('passage'); return !!p && !p.hidden; };
 function fit(big, long) { const d = $('dlg'); d.classList.toggle('big', !!big); d.classList.toggle('long-opts', !!long); document.body.classList.toggle('dlg-big', !!big); }
 /** 說話並給選項；opt.timer 秒數到了回傳 -1。
-    opt：html 允許 b/u/i/sup/sub/br、keys 標上按鍵（abc 時標 A–E，學測的選項代號；數字鍵 1–5 一樣能選）、multi 多選、big 強制大面板 */
+    opt：html 允許 b/u/i/sup/sub/br、keys 標上按鍵（abc 時標 A–E，學測的選項代號；數字鍵 1–5 一樣能選）、multi 多選、big 強制大面板、
+    answer 正確選項（數字或陣列；有的話作答後先揭曉對錯再回傳） */
 export async function ask(sp, text, options, opt) {
   opt = opt || {};
   speaker(sp); $('choices').innerHTML = ''; clearTimer();
@@ -97,7 +98,21 @@ export async function ask(sp, text, options, opt) {
       if (!D.choices) return;
       if (multi && i >= 0 && i < options.length) { picked.has(i) ? picked.delete(i) : picked.add(i); box.children[i].classList.toggle('on', picked.has(i)); Audio.sfx('tick'); return; }
       if (multi && i === options.length && !picked.size) { Audio.sfx('bad'); return; }
-      D.choices = null; D.multi = false; box.innerHTML = ''; clearTimer(); lastMs = performance.now() - tAsk; res(multi && i >= 0 ? [...picked].sort((a, b) => a - b) : i);
+      D.choices = null; D.multi = false; clearTimer(); lastMs = performance.now() - tAsk;
+      const out = multi && i >= 0 ? [...picked].sort((a, b) => a - b) : i;
+      if (opt.answer != null) {   // 對錯揭曉（v7.0）：正解變綠打勾、選錯的變紅並抖一下，沒選到的正解框出來；停一下再繼續，答錯停久一點好對照
+        const A = [].concat(opt.answer), right = multi ? i >= 0 && out.length === A.length && out.every(x => A.includes(x)) : A.includes(i);
+        [...box.children].forEach((b, j) => {
+          b.disabled = true; b.classList.remove('hl'); b.style.animationDelay = '0s';
+          if (j >= options.length) { b.classList.add('dim'); return; }
+          const chosen = multi ? i >= 0 && out.includes(j) : j === i;
+          b.classList.add(A.includes(j) ? (chosen ? 'right' : 'miss') : chosen ? 'wrong' : 'dim');
+        });
+        box.classList.add('reveal');
+        setTimeout(() => { box.innerHTML = ''; box.classList.remove('reveal'); res(out); }, right ? 420 : 820);
+        return;
+      }
+      box.innerHTML = ''; res(out);
     };
     D.submit = () => pick(options.length);
     D.pick = pick;

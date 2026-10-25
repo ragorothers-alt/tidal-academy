@@ -10,6 +10,8 @@ import { pickQ, vocabQ, record, dayKey, fairSec } from './quiz.js';
 import { S, save, roll, addItem, icon, stars, find, freeSlots } from './state.js';
 import * as miles from './miles.js';
 import * as feel from './feel.js';
+import * as waves from './waves.js';
+import * as shake from './shake.js';
 
 const TA = window.TA;
 let P = null;      // 玩家
@@ -60,8 +62,8 @@ function cast() {
   g.position.set(tx, y, tz); scene.add(g);
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), bend(new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })));
   scene.add(line);
-  rod = { bob: g, line, y, t: 0, fish: null, idle: 12 + Math.random() * 6, where: w };
-  P.userData.swing = 1; Audio.sfx('cast'); setTimeout(() => Audio.sfx('plop'), 260);
+  rod = { bob: g, line, y, t: 0, fish: null, idle: 12 + Math.random() * 6, where: w, fly: { t: -0.24, to: g.position.clone(), from: null } };   // 浮標等竿子甩到前面（約 0.24 秒）才飛出去
+  P.userData.swing = 1; Audio.sfx('cast');
 }
 function reel(silent) {
   if (!rod) return; scene.remove(rod.bob); scene.remove(rod.line);
@@ -69,7 +71,11 @@ function reel(silent) {
   rod = null; if (!silent) Audio.sfx('swish');
 }
 async function hook() {
-  const f = rod.fish, sp = f.sp; f.st = 'caught'; reel(true); busy = true;
+  const f = rod.fish, sp = f.sp, bp = rod.bob.position.clone(); f.st = 'caught'; busy = true;
+  // 拉竿的那一下（v7.0）：浮標被扯起來、水花、鏡頭小震、手機震一下；停約 0.3 秒才出題，收竿才有力道
+  rod.yank = 0; P.userData.swing = 1; Audio.sfx('splash'); waves.ripple(bp.x, bp.z, 0.7); waves.ripple(bp.x, bp.z, 0.35); shake.kick(0.05); shake.haptic('hit');
+  await new Promise(r => setTimeout(r, 320));
+  reel(true);
   // 越稀有的魚考越難的單字：三星考 4 級以上、四星以上考 5 級以上
   const big = sp.rarity >= 3, q = vocabQ(sp.rarity >= 4 ? { minLv: 5 } : big ? { minLv: 4 } : { maxLv: 4 }) || vocabQ();
   const lim = (tourney && tourney.kind === 'fish' ? 8 : 10) + (big ? 2 : 0);
@@ -94,6 +100,18 @@ function updateRod(dt, t) {
   const tip = new THREE.Vector3();
   if (P.userData.fpTip) P.userData.fpTip.getWorldPosition(tip);   // 第一人稱：從鏡頭前那支竿子的竿尖拉線
   else { P.userData.hand.getWorldPosition(tip); const d = fwd(); tip.addScaledVector(d, 0.9); tip.y += 0.75; }
+  if (rod.fly) {   // 浮標飛出去：從竿尖沿拋物線落到水面
+    const F = rod.fly; F.t += dt;
+    if (F.t < 0) { rod.bob.position.copy(tip); }
+    else {
+      if (!F.from) F.from = tip.clone();
+      const s = Math.min(1, F.t / 0.3); rod.bob.position.lerpVectors(F.from, F.to, s); rod.bob.position.y += Math.sin(s * Math.PI) * 1.1;
+      if (s >= 1) { rod.fly = null; rod.bob.position.copy(F.to); Audio.sfx('plop'); waves.ripple(F.to.x, F.to.z, 0.4); }
+    }
+    rod.line.geometry.setFromPoints([tip, rod.bob.position.clone().setY(rod.bob.position.y + 0.05)]);
+    return;
+  }
+  if (rod.yank != null) { rod.yank += dt; rod.bob.position.y = rod.y + Math.min(0.9, rod.yank * 4); }   // 拉竿：浮標被扯出水面
   rod.t += dt;
   let dip = 0;
   const f = rod.fish;
@@ -113,12 +131,12 @@ function updateRod(dt, t) {
     f.m.rotation.z = Math.atan2(dx, dz) + Math.PI; f.m.position.x += dx / dd * dt * 0.9; f.m.position.z += dz / dd * dt * 0.9;
     if (dd < 0.45) { f.st = 'nibble'; f.n = 1 + Math.floor(Math.random() * 3); f.t = 0; }
   } else if (f.st === 'nibble') {
-    f.t += dt; if (f.t > 0.9 + Math.random() * 0.02) { f.t = 0; f.n--; Audio.sfx('nibble'); rod.dipT = 0.2; if (f.n <= 0) { f.st = 'bite'; f.t = 0; Audio.sfx('bite'); rod.dipT = 1.2; ui.emote(P, '！', '#ef6f5e'); } }
+    f.t += dt; if (f.t > 0.9 + Math.random() * 0.02) { f.t = 0; f.n--; Audio.sfx('nibble'); rod.dipT = 0.2; waves.ripple(rod.bob.position.x, rod.bob.position.z, 0.22); if (f.n <= 0) { f.st = 'bite'; f.t = 0; Audio.sfx('bite'); rod.dipT = 1.2; ui.emote(P, '！', '#ef6f5e'); waves.ripple(rod.bob.position.x, rod.bob.position.z, 0.55); shake.kick(0.02); shake.haptic('bite'); } }
   } else if (f.st === 'bite') {
     f.t += dt; if (f.t > 1.3) { f.st = 'flee'; f.t = 0; ui.toast('太慢了，魚跑掉了'); rod.fish = null; rod.idle = 6; }
   }
   if (rod.dipT > 0) { rod.dipT -= dt; dip = f && f.st === 'bite' ? 0.22 : Math.max(0, rod.dipT) * 0.6; }
-  rod.bob.position.y = rod.y + Math.sin(t * 2.4) * 0.025 - dip;
+  if (rod.yank == null) rod.bob.position.y = rod.y + Math.sin(t * 2.4) * 0.025 - dip;
   const pts = []; for (let k = 0; k <= 10; k++) { const s = k / 10; pts.push(new THREE.Vector3(tip.x + (rod.bob.position.x - tip.x) * s, tip.y + (rod.bob.position.y + 0.05 - tip.y) * s - Math.sin(s * Math.PI) * 0.35, tip.z + (rod.bob.position.z - tip.z) * s)); }
   rod.line.geometry.setFromPoints(pts);
 }
@@ -241,6 +259,10 @@ export function action(tool) {
   return false;
 }
 export const fishing = () => !!rod;
+/** 除錯：目前的釣竿與魚影 */
+export const dbg = () => ({ rod, shadows });
+/** 釣魚的狀態（按鍵提示用）：'wait' 等魚、'nibble' 輕咬（還不能拉）、'bite' 咬鉤（快拉！） */
+export const rodState = () => !rod ? null : rod.fish && (rod.fish.st === 'nibble' || rod.fish.st === 'bite') ? rod.fish.st : 'wait';
 /** 面前有沒有化石裂縫（鏟子優先挖化石） */
 export function spotAhead() { if (!P) return false; const d = fwd(), x = P.position.x + d.x * 0.9, z = P.position.z + d.z * 0.9; return spotMeshes.some(m => Math.hypot(m.position.x - x, m.position.z - z) < 0.9); }
 export function cancel() { reel(true); }

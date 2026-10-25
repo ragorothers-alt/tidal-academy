@@ -115,13 +115,15 @@ export function update(dt, night, at) {
     if (b.t > 1.8) { scene.remove(b.pts); b.pts.geometry.dispose(); bursts.splice(i, 1); }
   }
 }
-function launch() {
-  const n = 140, x = focus.x + (Math.random() - 0.5) * 28, z = focus.z - 15 - Math.random() * 7, y = 6 + Math.random() * 3.5;
-  const pts = new THREE.Points(pGeo(n), bend(new THREE.PointsMaterial({ color: pick(['#ff7a9a', '#ffd23f', '#7cf5e1', '#b38bff', '#ffffff']), size: 1.4, map: dot(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
+function launch() { burst(focus.x + (Math.random() - 0.5) * 28, 6 + Math.random() * 3.5, focus.z - 15 - Math.random() * 7); }
+/** 在 (x, y, z) 放一朵煙火（夜祭、升級、稀有生物都用）。opt：n 粒子數、size、speed、color、quiet 不出聲 */
+export function burst(x, y, z, opt) {
+  opt = opt || {}; const n = opt.n || 140, sp0 = opt.speed || 5;
+  const pts = new THREE.Points(pGeo(n), bend(new THREE.PointsMaterial({ color: opt.color || pick(['#ff7a9a', '#ffd23f', '#7cf5e1', '#b38bff', '#ffffff']), size: opt.size || 1.4, map: dot(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })));
   const pos = pts.geometry.attributes.position, v = new Float32Array(n * 3);
-  for (let k = 0; k < n; k++) { pos.array[k * 3] = x; pos.array[k * 3 + 1] = y; pos.array[k * 3 + 2] = z; const a = Math.random() * 6.283, e = Math.acos(Math.random() * 2 - 1), sp = 5 + Math.random() * 2; v[k * 3] = Math.sin(e) * Math.cos(a) * sp; v[k * 3 + 1] = Math.cos(e) * sp; v[k * 3 + 2] = Math.sin(e) * Math.sin(a) * sp; }
+  for (let k = 0; k < n; k++) { pos.array[k * 3] = x; pos.array[k * 3 + 1] = y; pos.array[k * 3 + 2] = z; const a = Math.random() * 6.283, e = Math.acos(Math.random() * 2 - 1), sp = sp0 + Math.random() * sp0 * 0.4; v[k * 3] = Math.sin(e) * Math.cos(a) * sp; v[k * 3 + 1] = Math.cos(e) * sp; v[k * 3 + 2] = Math.sin(e) * Math.sin(a) * sp; }
   pts.renderOrder = 3; pts.frustumCulled = false; scene.add(pts); bursts.push({ pts, v, n, t: 0 });
-  Audio.sfx('pop'); setTimeout(() => Audio.sfx('bite'), 120);
+  if (!opt.quiet) { Audio.sfx('pop'); setTimeout(() => Audio.sfx('bite'), 120); }
 }
 
 /* ---------- 島民台詞 ---------- */

@@ -81,8 +81,8 @@ export function createHand(player, scene) {
     const ready = built === true;
     const want = o.tool || (o.umbrella ? 'umbrella' : 'none');
     if (ready && want !== kind) setKind(want);
-    // 使用工具：life.js 等設 swing = 1 表示剛用了一下（模型角色本來不看這個值，這裡接手並歸零）
-    if (u.gltf && u.swing > 0) { if (o.active && o.show && USE[kind]) { useT = 0; useKind = kind; } u.swing = 0; }
+    // 使用工具：life.js 等設 swing = 1，actors.js 播第三人稱動作後轉成 swingFP = 1，這裡接手並歸零
+    if (u.gltf && u.swingFP > 0) { if (o.active && o.show && USE[kind]) { useT = 0; useKind = kind; } u.swingFP = 0; }
     low = o.active ? low + ((o.show && ready ? 0 : 1) - low) * Math.min(1, dt * 7) : 1;
     root.visible = ready && o.active && low < 0.97;
     u.fpTip = root.visible && kind === 'rod' ? tip : null;

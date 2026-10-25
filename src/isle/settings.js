@@ -7,11 +7,12 @@ import { fx } from './post.js';
 import { setPool } from './glow.js';
 import * as seasons from './seasons.js';
 import * as mind from './mind.js';
+import * as shake from './shake.js';
 
 const TA = window.TA;
 export const VERSION = '6.93.0';
 export const hooks = {};   // main.js 掛上來的開關（第一人稱視角）
-const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, fs: 1, speed: 1, timer: 1 };
+const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, fs: 1, speed: 1, timer: 1, shake: true, haptic: true };
 /** 設定值：原地補上預設值（不換掉物件——設定面板拿著同一個物件改，換掉的話後面的修改就存不進去） */
 const cfg = () => { const s = S(); if (!s.settings || typeof s.settings !== 'object') s.settings = {}; for (const k in DEF) if (!(k in s.settings)) s.settings[k] = DEF[k]; return s.settings; };
 /** 閱讀設定：文字大小（CSS 變數 --fs，只放大文字區塊）、打字速度、作答時間 */
@@ -21,7 +22,7 @@ export function applyEarly() {
   const c = cfg();
   if (c.lowPerf) { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; sun.shadow.mapSize.set(2048, 2048); setPool(6); }   // 省電：每一格最多照 6 盞燈
   if (c.lowPerf && c.ultra) { renderer.setPixelRatio(0.75); setPool(3); }   // 極省電（手機、平板）：解析度再降一級、夜晚每格最多 3 盞燈；其餘見 perf.js
-  Audio.setMusic(c.music);
+  Audio.setMusic(c.music); shake.opts.shake = c.shake; shake.opts.haptic = c.haptic;
   fx.on = c.fx && !c.lowPerf;
   { let last = 0; TA.Store.onFail = () => { if (Date.now() - last < 60000) return; last = Date.now(); ui.toast('存檔失敗：這台裝置的空間可能不足（或是無痕模式）。請到「設定」匯出存檔備份', 'bad'); }; }   // 存檔寫不進去：一分鐘最多提醒一次
   if (TA.Store.broken) setTimeout(() => ui.toast('上次的存檔讀不出來，已經另外保留一份；如果有匯出的備份，可以到「設定」匯入', 'bad'), 3000);
@@ -43,6 +44,8 @@ export function open() {
     cyc('文字速度', '島民說話時逐字出現的速度；說話中也可以按一下直接顯示整句', 'speed', [[1, '標準'], [2.5, '快'], [0, '立即顯示'], [0.5, '慢']]);
     cyc('作答時間', '釣魚、捉蟲、潮池、島民出題、連續挑戰等對話裡的限時題。模擬考、激流衝刺、首領戰本身是計時挑戰，不受影響', 'timer', [[1, '標準'], [1.5, '寬鬆（×1.5）'], [0, '不限時']]);
     body.appendChild(row('配樂', '白天、夜晚、雨天、節日各有自己的曲子', toggle(c.music, () => { c.music = !c.music; Audio.setMusic(c.music); save(); draw(); })));
+    body.appendChild(row('畫面震動', '咬鉤、從高處落地、敲石頭時鏡頭輕輕震一下（系統開了「減少動態效果」時不震）', toggle(c.shake, () => { c.shake = !c.shake; shake.opts.shake = c.shake; save(); draw(); })));
+    body.appendChild(row('觸控震動', '手機咬鉤、答對、抓到稀有生物時震一下（只有 Android 支援）', toggle(c.haptic, () => { c.haptic = !c.haptic; shake.opts.haptic = c.haptic; save(); draw(); if (c.haptic) shake.haptic('ok'); })));
     body.appendChild(row('光影特效', '泛光、逆光光束、黃昏的金色光暈與暖色調（省電模式下自動關閉）', toggle(c.fx, () => { c.fx = !c.fx; fx.on = c.fx && !c.lowPerf; save(); draw(); })));
     if (hooks.fp) body.appendChild(row('第一人稱視角', '從角色的眼睛看出去（在島上）：拖曳畫面轉頭，搖桿或 WASD 照視線方向走。也可以按 F，或把鏡頭拉到最近再繼續拉近', toggle(hooks.fp.get(), () => { hooks.fp.set(!hooks.fp.get()); draw(); })));
     body.appendChild(row('島民主動出題', '每隔 3–5 分鐘，附近的島民會走過來考你一題（優先出錯題），答對有隨機獎勵', toggle(c.popQuiz, () => { c.popQuiz = !c.popQuiz; save(); draw(); })));

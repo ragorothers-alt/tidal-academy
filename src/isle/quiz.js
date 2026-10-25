@@ -34,7 +34,7 @@ export async function askQ(sp, q, head, opt) {
     return { ok: ans !== -1 && L.check(q, ans), ans };
   }
   const multi = q.type === 'multi';
-  const ans = await ui.ask(sp, (head || '') + (multi && !/多選/.test(q.q) ? '（多選題：選出所有正確的選項再送出）' : '') + q.q, q.o, Object.assign({ html: true, keys: true, abc: true, multi }, opt));
+  const ans = await ui.ask(sp, (head || '') + (multi && !/多選/.test(q.q) ? '（多選題：選出所有正確的選項再送出）' : '') + q.q, q.o, Object.assign({ html: true, keys: true, abc: true, multi, answer: q.a }, opt));
   return { ok: multi ? Array.isArray(ans) && L.check(q, ans) : ans === q.a, ans };
 }
 /** 限時題依閱讀量加時間（秒）：長題目、題組的閱讀材料、多選題不會因為字多而來不及 */
