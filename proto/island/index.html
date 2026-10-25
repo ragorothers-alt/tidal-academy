@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>潮汐小島 · 預覽</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="island.css">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="labels"></div>
+
+<header class="hud-top">
+  <div class="clock"><b id="hm">12:00</b><small id="date">10月14日（二）</small><i id="wx">☀</i></div>
+  <div class="tops">
+    <span class="pill" id="exam">學測 D-100</span>
+    <span class="pill" id="goal">今日 0 / 30</span>
+  </div>
+</header>
+<div class="hud-br">
+  <button class="phone-btn" id="phoneBtn" type="button" title="潮汐手機 (Tab)"><span>📱</span></button>
+  <div class="bells"><i class="bell"></i><b id="bells">1,200</b></div>
+</div>
+<div class="hint" id="hint">WASD／方向鍵移動 · Shift 奔跑 · 空白鍵交談 · 點擊地面也能移動</div>
+
+<div class="dlg" id="dlg" hidden>
+  <div class="dlg-bubble">
+    <span class="dlg-name" id="dlgName">Lexi</span>
+    <div class="dlg-text" id="dlgText"></div>
+    <i class="dlg-next" id="dlgNext">▼</i>
+  </div>
+  <div class="choices" id="choices"></div>
+</div>
+
+<div class="phone" id="phone" hidden>
+  <div class="ph-screen">
+    <div class="ph-top"><b>潮汐手機</b><button type="button" id="phClose">✕</button></div>
+    <div class="ph-body" id="phBody"></div>
+  </div>
+</div>
+
+<div class="splash" id="splash">
+  <div class="logo"><span>潮汐</span><b>小島</b></div>
+  <p>動森風玩法預覽 · 和島民聊天就是複習</p>
+  <button type="button" id="start">點一下開始</button>
+  <small>預覽版：一座小島、三位島民、現實時間的日夜</small>
+</div>
+
+<script src="../../src/core/registry.js"></script>
+<script src="../../src/data/english.js"></script>
+<script src="../../src/data/chinese.js"></script>
+<script src="../../src/data/history.js"></script>
+<script type="module" src="island.js"></script>
+</body>
+</html>

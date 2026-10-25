@@ -1,0 +1,4760 @@
+{
+ "schemaVersion": "1.0",
+ "title": "Tidal Isle — Starward Academy Plan",
+ "units": "m",
+ "unitMetadata": {
+  "horizontal": "m",
+  "vertical": "m",
+  "cell": 1,
+  "axis": {
+   "x": "east",
+   "z": "south",
+   "north": "-z"
+  },
+  "coordinateSpace": "unwarped-world",
+  "footprints": "center-based axis-aligned rectangles; face controls entrance side"
+ },
+ "bounds": [
+  -48,
+  48
+ ],
+ "gridMetadata": {
+  "x": [
+   -48,
+   48
+  ],
+  "z": [
+   -48,
+   48
+  ],
+  "grid": [
+   96,
+   96
+  ]
+ },
+ "levels": {
+  "sea": -1.1,
+  "sand": 0.35,
+  "grass": 1,
+  "river": 0.2,
+  "plateau": 3,
+  "summit": 5,
+  "highpond": 2.25
+ },
+ "waterSurfaces": {
+  "river": 0.9,
+  "highpond": 2.75,
+  "sea": 0
+ },
+ "coast": [
+  [
+   -18,
+   -43
+  ],
+  [
+   0,
+   -44
+  ],
+  [
+   20,
+   -40
+  ],
+  [
+   32,
+   -33
+  ],
+  [
+   39,
+   -23
+  ],
+  [
+   44,
+   -10
+  ],
+  [
+   43,
+   5
+  ],
+  [
+   39,
+   20
+  ],
+  [
+   32,
+   33
+  ],
+  [
+   18,
+   41
+  ],
+  [
+   2,
+   41
+  ],
+  [
+   -15,
+   40.5
+  ],
+  [
+   -29,
+   35
+  ],
+  [
+   -39,
+   24
+  ],
+  [
+   -44,
+   9
+  ],
+  [
+   -43,
+   -8
+  ],
+  [
+   -40,
+   -23
+  ],
+  [
+   -33,
+   -36
+  ]
+ ],
+ "coastWinding": "clockwise when north is up and +z points down",
+ "sandWidth": 4.2,
+ "sandZones": [
+  {
+   "name": "Harbour beach apron",
+   "poly": [
+    [
+     -8,
+     37
+    ],
+    [
+     0,
+     37
+    ],
+    [
+     0,
+     41
+    ],
+    [
+     -8,
+     41
+    ]
+   ]
+  },
+  {
+   "name": "Camp beach",
+   "poly": [
+    [
+     -24,
+     34
+    ],
+    [
+     -15,
+     34
+    ],
+    [
+     -15,
+     40
+    ],
+    [
+     -24,
+     40
+    ]
+   ]
+  }
+ ],
+ "plateaus": [
+  {
+   "name": "West Highland",
+   "level": "plateau",
+   "poly": [
+    [
+     -34,
+     -31
+    ],
+    [
+     -20,
+     -31
+    ],
+    [
+     -17,
+     -26
+    ],
+    [
+     -17,
+     -9
+    ],
+    [
+     -32,
+     -9
+    ],
+    [
+     -35,
+     -15
+    ],
+    [
+     -35,
+     -25
+    ]
+   ]
+  },
+  {
+   "name": "Academy Terrace",
+   "level": "plateau",
+   "poly": [
+    [
+     -4,
+     -36
+    ],
+    [
+     23,
+     -36
+    ],
+    [
+     23,
+     -15
+    ],
+    [
+     -4,
+     -15
+    ]
+   ]
+  },
+  {
+   "name": "Shrine Summit",
+   "level": "summit",
+   "poly": [
+    [
+     -32,
+     -30
+    ],
+    [
+     -22,
+     -30
+    ],
+    [
+     -22,
+     -20
+    ],
+    [
+     -32,
+     -20
+    ]
+   ]
+  }
+ ],
+ "rivers": [
+  {
+   "name": "Tidal River",
+   "width": 2,
+   "level": "river",
+   "path": [
+    [
+     -16,
+     -13
+    ],
+    [
+     -20,
+     -5
+    ],
+    [
+     -19,
+     9
+    ],
+    [
+     -12,
+     20
+    ],
+    [
+     2,
+     26
+    ],
+    [
+     18,
+     29
+    ],
+    [
+     30,
+     34
+    ],
+    [
+     38,
+     40
+    ]
+   ]
+  }
+ ],
+ "streams": [
+  {
+   "name": "Plaza Creek",
+   "width": 1.2,
+   "level": "river",
+   "path": [
+    [
+     -10,
+     15
+    ],
+    [
+     -3,
+     16
+    ],
+    [
+     4,
+     16
+    ],
+    [
+     9,
+     18
+    ],
+    [
+     12,
+     27.9
+    ]
+   ]
+  }
+ ],
+ "ponds": [
+  {
+   "name": "Highland Spring",
+   "level": "highpond",
+   "poly": [
+    [
+     -24,
+     -15.5
+    ],
+    [
+     -17,
+     -15.5
+    ],
+    [
+     -17,
+     -11
+    ],
+    [
+     -22.5,
+     -10.5
+    ],
+    [
+     -25,
+     -12
+    ]
+   ]
+  },
+  {
+   "name": "Willow Pond",
+   "level": "river",
+   "poly": [
+    [
+     -13,
+     -22
+    ],
+    [
+     -8,
+     -23
+    ],
+    [
+     -5,
+     -20
+    ],
+    [
+     -7,
+     -17
+    ],
+    [
+     -12,
+     -17
+    ],
+    [
+     -14,
+     -19
+    ]
+   ]
+  }
+ ],
+ "waterfalls": [
+  {
+   "name": "Springfall",
+   "x": -17,
+   "z": -13,
+   "from": "highpond",
+   "to": "river",
+   "fromWaterY": 2.75,
+   "toWaterY": 0.9,
+   "facing": "east",
+   "width": 2,
+   "start": [
+    -17,
+    -13
+   ],
+   "end": [
+    -16,
+    -13
+   ]
+  }
+ ],
+ "stairs": [
+  {
+   "name": "Academy Main Stair",
+   "x": 7,
+   "z": -15,
+   "dir": "N",
+   "width": 2,
+   "from": "grass",
+   "to": "plateau",
+   "start": [
+    7,
+    -12
+   ],
+   "end": [
+    7,
+    -18
+   ],
+   "path": [
+    [
+     7,
+     -12
+    ],
+    [
+     7,
+     -18
+    ]
+   ],
+   "length": 6
+  },
+  {
+   "name": "West Highland Stair",
+   "x": -29,
+   "z": -9,
+   "dir": "N",
+   "width": 2,
+   "from": "grass",
+   "to": "plateau",
+   "start": [
+    -29,
+    -6
+   ],
+   "end": [
+    -29,
+    -12
+   ],
+   "path": [
+    [
+     -29,
+     -6
+    ],
+    [
+     -29,
+     -12
+    ]
+   ],
+   "length": 6
+  },
+  {
+   "name": "Shrine Stair",
+   "x": -26,
+   "z": -20,
+   "dir": "N",
+   "width": 2,
+   "from": "plateau",
+   "to": "summit",
+   "start": [
+    -26,
+    -17
+   ],
+   "end": [
+    -26,
+    -23
+   ],
+   "path": [
+    [
+     -26,
+     -17
+    ],
+    [
+     -26,
+     -23
+    ]
+   ],
+   "length": 6
+  },
+  {
+   "name": "Academy East Stair",
+   "x": 23.5,
+   "z": -25,
+   "dir": "W",
+   "width": 2,
+   "from": "grass",
+   "to": "plateau",
+   "start": [
+    26,
+    -25
+   ],
+   "end": [
+    21,
+    -25
+   ],
+   "path": [
+    [
+     26,
+     -25
+    ],
+    [
+     21,
+     -25
+    ]
+   ],
+   "length": 5
+  }
+ ],
+ "roads": [
+  {
+   "name": "Starward Main Street",
+   "kind": "stone",
+   "width": 3,
+   "path": [
+    [
+     -4,
+     39
+    ],
+    [
+     -2.4,
+     31
+    ],
+    [
+     0,
+     22
+    ],
+    [
+     1,
+     18
+    ],
+    [
+     1.5,
+     14
+    ],
+    [
+     1.64,
+     8
+    ],
+    [
+     3,
+     -1
+    ],
+    [
+     5,
+     -10
+    ],
+    [
+     7,
+     -12
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Academy Promenade",
+   "kind": "stone",
+   "width": 2.5,
+   "path": [
+    [
+     7,
+     -18
+    ],
+    [
+     7,
+     -23
+    ],
+    [
+     7,
+     -24.75
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Academy West Court",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     7,
+     -18
+    ],
+    [
+     3,
+     -17.4
+    ],
+    [
+     -0.5,
+     -17.4
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Academy East Court",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     7,
+     -20
+    ],
+    [
+     12,
+     -20
+    ],
+    [
+     17,
+     -20.4
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Observatory Walk",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     17,
+     -20.4
+    ],
+    [
+     21,
+     -20.4
+    ],
+    [
+     21,
+     -25
+    ],
+    [
+     21,
+     -27
+    ],
+    [
+     17,
+     -27
+    ],
+    [
+     17,
+     -27.5
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "East Stair Approach",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     21,
+     -25
+    ],
+    [
+     26,
+     -25
+    ],
+    [
+     29,
+     -25
+    ],
+    [
+     29,
+     -16
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "North Housing Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -9,
+     -6
+    ],
+    [
+     0,
+     -5
+    ],
+    [
+     7,
+     -3
+    ],
+    [
+     15,
+     -3
+    ],
+    [
+     25,
+     -3
+    ],
+    [
+     29,
+     -3
+    ],
+    [
+     32,
+     -12
+    ],
+    [
+     29,
+     -16
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "West Town Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -9,
+     -6
+    ],
+    [
+     -12,
+     0
+    ],
+    [
+     -12,
+     6
+    ],
+    [
+     -9,
+     12
+    ],
+    [
+     -6,
+     12
+    ],
+    [
+     1.5,
+     14
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "East Residential Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     25,
+     -3
+    ],
+    [
+     28,
+     -3
+    ],
+    [
+     28,
+     7
+    ],
+    [
+     28,
+     16
+    ],
+    [
+     34,
+     16
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "East Garden Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     3,
+     3
+    ],
+    [
+     9,
+     7
+    ],
+    [
+     14,
+     7
+    ],
+    [
+     24,
+     7
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "East South Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     6,
+     18
+    ],
+    [
+     15,
+     17
+    ],
+    [
+     24,
+     16
+    ],
+    [
+     34,
+     16
+    ],
+    [
+     34,
+     26
+    ],
+    [
+     28,
+     26
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Lighthouse Walk",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     29,
+     -16
+    ],
+    [
+     33,
+     -12
+    ],
+    [
+     34,
+     -4
+    ],
+    [
+     37,
+     -4
+    ],
+    [
+     37,
+     -4.8
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "West Bridge Approach",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     1.64,
+     8
+    ],
+    [
+     -5,
+     6
+    ],
+    [
+     -12,
+     6
+    ],
+    [
+     -16,
+     6
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "West Stone Bridge",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -16,
+     6
+    ],
+    [
+     -22,
+     6
+    ]
+   ],
+   "deckLevel": 1,
+   "subtype": "bridge"
+  },
+  {
+   "name": "West Woodland Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -22,
+     6
+    ],
+    [
+     -24,
+     10
+    ],
+    [
+     -33,
+     10
+    ],
+    [
+     -33,
+     -4
+    ],
+    [
+     -29,
+     -6
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "West Residential Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -33,
+     10
+    ],
+    [
+     -33,
+     22
+    ],
+    [
+     -31,
+     30
+    ],
+    [
+     -26,
+     32
+    ],
+    [
+     -22,
+     33
+    ],
+    [
+     -18,
+     33
+    ],
+    [
+     -17,
+     34
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "South Meadow Walk",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -17,
+     34
+    ],
+    [
+     -14,
+     28
+    ],
+    [
+     -8,
+     29
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "South Commons Lane",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -11,
+     27.6
+    ],
+    [
+     -8,
+     29
+    ],
+    [
+     -6,
+     31
+    ],
+    [
+     -2.4,
+     31
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Highland Path",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -29,
+     -12
+    ],
+    [
+     -29,
+     -16
+    ],
+    [
+     -26,
+     -17
+    ]
+   ],
+   "subtype": "earth"
+  },
+  {
+   "name": "Spring Walk",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -29,
+     -16
+    ],
+    [
+     -27,
+     -18
+    ],
+    [
+     -20,
+     -18
+    ]
+   ],
+   "subtype": "earth"
+  },
+  {
+   "name": "Summit Walk",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -26,
+     -23
+    ],
+    [
+     -27,
+     -22.5
+    ]
+   ],
+   "subtype": "stone"
+  },
+  {
+   "name": "Camp Beach Walk",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -2.4,
+     31
+    ],
+    [
+     -9,
+     34
+    ],
+    [
+     -15,
+     38.5
+    ],
+    [
+     -20,
+     38.5
+    ]
+   ],
+   "subtype": "sand"
+  },
+  {
+   "name": "Plaza Stepping Stones",
+   "kind": "stone",
+   "width": 3.4,
+   "path": [
+    [
+     1.2,
+     13
+    ],
+    [
+     1.2,
+     18.5
+    ]
+   ],
+   "deckLevel": 1,
+   "subtype": "stepping-stones"
+  },
+  {
+   "name": "South Arrival Bridge",
+   "kind": "stone",
+   "width": 3,
+   "path": [
+    [
+     -1.6,
+     28
+    ],
+    [
+     0,
+     22
+    ]
+   ],
+   "deckLevel": 1,
+   "subtype": "bridge"
+  },
+  {
+   "name": "East Creek Bridge",
+   "kind": "stone",
+   "width": 2.4,
+   "path": [
+    [
+     5,
+     18.11
+    ],
+    [
+     11,
+     17.44
+    ]
+   ],
+   "deckLevel": 1,
+   "subtype": "bridge"
+  },
+  {
+   "name": "player_home Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -8,
+     4
+    ],
+    [
+     -12,
+     6
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "shop Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     7,
+     23.5
+    ],
+    [
+     4,
+     23.5
+    ],
+    [
+     4,
+     19
+    ],
+    [
+     6,
+     18
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "museum Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     7,
+     -25.75
+    ],
+    [
+     7,
+     -24.75
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "exam Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -0.5,
+     -17.4
+    ],
+    [
+     -0.5,
+     -17.4
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "library Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     17,
+     -20.4
+    ],
+    [
+     17,
+     -20.4
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "telescope Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     17,
+     -27.5
+    ],
+    [
+     17,
+     -27.5
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "lighthouse Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     37,
+     -5.8
+    ],
+    [
+     37,
+     -4.8
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "hotel Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     28,
+     24
+    ],
+    [
+     28,
+     26
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "camp Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -20,
+     37.5
+    ],
+    [
+     -20,
+     38.5
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "diy Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -11,
+     26.6
+    ],
+    [
+     -11,
+     27.6
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "board Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -5,
+     10.3
+    ],
+    [
+     -6,
+     12
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "shrine Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -27,
+     -23.5
+    ],
+    [
+     -27,
+     -22.5
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "market_1 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -6,
+     19.55
+    ],
+    [
+     -6,
+     20
+    ],
+    [
+     -3,
+     20.7
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "market_2 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -3,
+     20.35
+    ],
+    [
+     -3,
+     21
+    ],
+    [
+     0,
+     21
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_01 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -9,
+     -7
+    ],
+    [
+     -9,
+     -6
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_02 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     15,
+     -4
+    ],
+    [
+     15,
+     -3
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_03 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     25,
+     -4
+    ],
+    [
+     25,
+     -3
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_04 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     14,
+     6
+    ],
+    [
+     14,
+     7
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_05 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     24,
+     6
+    ],
+    [
+     24,
+     7
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_06 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     15,
+     16
+    ],
+    [
+     15,
+     17
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_07 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     24,
+     16
+    ],
+    [
+     24,
+     16
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_08 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -29,
+     9
+    ],
+    [
+     -33,
+     10
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_09 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -29,
+     19
+    ],
+    [
+     -33,
+     22
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "home_10 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -19,
+     32
+    ],
+    [
+     -18,
+     33
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "plot_01 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     7,
+     -4
+    ],
+    [
+     7,
+     -3
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "plot_02 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -9,
+     11
+    ],
+    [
+     -9,
+     12
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "plot_03 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     29,
+     -17
+    ],
+    [
+     29,
+     -16
+    ]
+   ],
+   "subtype": "address"
+  },
+  {
+   "name": "plot_04 Entrance",
+   "kind": "stone",
+   "width": 2,
+   "path": [
+    [
+     -25,
+     29
+    ],
+    [
+     -26,
+     32
+    ]
+   ],
+   "subtype": "address"
+  }
+ ],
+ "sites": {
+  "player_home": {
+   "x": -8,
+   "z": 1,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "owner": "player",
+   "yard": {
+    "poly": [
+     [
+      -11,
+      -2
+     ],
+     [
+      -5,
+      -2
+     ],
+     [
+      -5,
+      6
+     ],
+     [
+      -11,
+      6
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -5,
+       -2
+      ],
+      [
+       -9.881966011250103,
+       -2
+      ],
+      [
+       -11,
+       0.2360679774997912
+      ],
+      [
+       -11,
+       4.381966011250105
+      ],
+      [
+       -10,
+       3.881966011250105
+      ],
+      [
+       -10,
+       3
+      ],
+      [
+       -10,
+       -1
+      ],
+      [
+       -6,
+       -1
+      ],
+      [
+       -6,
+       3
+      ],
+      [
+       -6,
+       5
+      ],
+      [
+       -5.36,
+       5
+      ],
+      [
+       -5.36,
+       3
+      ],
+      [
+       -5,
+       3
+      ],
+      [
+       -5,
+       -2
+      ]
+     ]
+    ],
+    "plantableArea": 14.97
+   },
+   "door": [
+    -8,
+    3
+   ],
+   "approach": [
+    -8,
+    4
+   ],
+   "displayName": "Player Home"
+  },
+  "shop": {
+   "x": 7,
+   "z": 21,
+   "w": 3.6,
+   "d": 3,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "door": [
+    7,
+    22.5
+   ],
+   "approach": [
+    7,
+    23.5
+   ],
+   "displayName": "Shop"
+  },
+  "museum": {
+   "x": 7,
+   "z": -29,
+   "w": 7,
+   "d": 4.5,
+   "face": "S",
+   "level": "plateau",
+   "kind": "building",
+   "clearance": 2,
+   "door": [
+    7,
+    -26.75
+   ],
+   "approach": [
+    7,
+    -25.75
+   ],
+   "displayName": "Museum"
+  },
+  "exam": {
+   "x": -0.5,
+   "z": -20,
+   "w": 4,
+   "d": 3.2,
+   "face": "S",
+   "level": "plateau",
+   "kind": "building",
+   "clearance": 2,
+   "door": [
+    -0.5,
+    -18.4
+   ],
+   "approach": [
+    -0.5,
+    -17.4
+   ],
+   "displayName": "Exam"
+  },
+  "library": {
+   "x": 17,
+   "z": -23,
+   "w": 4,
+   "d": 3.2,
+   "face": "S",
+   "level": "plateau",
+   "kind": "building",
+   "clearance": 2,
+   "door": [
+    17,
+    -21.4
+   ],
+   "approach": [
+    17,
+    -20.4
+   ],
+   "displayName": "Library"
+  },
+  "telescope": {
+   "x": 17,
+   "z": -31,
+   "w": 5,
+   "d": 5,
+   "face": "S",
+   "level": "plateau",
+   "kind": "platform",
+   "clearance": 2,
+   "door": [
+    17,
+    -28.5
+   ],
+   "approach": [
+    17,
+    -27.5
+   ],
+   "displayName": "Telescope"
+  },
+  "lighthouse": {
+   "x": 37,
+   "z": -8,
+   "w": 2.4,
+   "d": 2.4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "radius": 1.2,
+   "door": [
+    37,
+    -6.8
+   ],
+   "approach": [
+    37,
+    -5.8
+   ],
+   "displayName": "Lighthouse"
+  },
+  "hotel": {
+   "x": 28,
+   "z": 20,
+   "w": 7,
+   "d": 6,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "door": [
+    28,
+    23
+   ],
+   "approach": [
+    28,
+    24
+   ],
+   "displayName": "Hotel"
+  },
+  "camp": {
+   "x": -20,
+   "z": 35.5,
+   "w": 3,
+   "d": 2,
+   "face": "S",
+   "level": "sand",
+   "kind": "tent",
+   "clearance": 2,
+   "door": [
+    -20,
+    36.5
+   ],
+   "approach": [
+    -20,
+    37.5
+   ],
+   "displayName": "Camp"
+  },
+  "diy": {
+   "x": -11,
+   "z": 25,
+   "w": 2,
+   "d": 1.2,
+   "face": "S",
+   "level": "grass",
+   "kind": "workbench",
+   "clearance": 2,
+   "door": [
+    -11,
+    25.6
+   ],
+   "approach": [
+    -11,
+    26.6
+   ],
+   "displayName": "Diy"
+  },
+  "board": {
+   "x": -5,
+   "z": 9,
+   "w": 1.8,
+   "d": 0.6,
+   "face": "S",
+   "level": "grass",
+   "kind": "board",
+   "clearance": 2,
+   "door": [
+    -5,
+    9.3
+   ],
+   "approach": [
+    -5,
+    10.3
+   ],
+   "displayName": "Board"
+  },
+  "plaza": {
+   "x": 1.64,
+   "z": 8,
+   "w": 14,
+   "d": 10,
+   "face": "S",
+   "level": "grass",
+   "kind": "open-space",
+   "clearance": 2,
+   "blocking": false,
+   "displayName": "Plaza"
+  },
+  "gate": {
+   "x": -2.4,
+   "z": 31,
+   "w": 6,
+   "d": 2,
+   "face": "S",
+   "level": "grass",
+   "kind": "portal",
+   "clearance": 2,
+   "blocking": false,
+   "displayName": "Gate"
+  },
+  "pier": {
+   "x": -4,
+   "z": 44,
+   "w": 3,
+   "d": 8,
+   "face": "N",
+   "level": "sand",
+   "kind": "pier",
+   "clearance": 2,
+   "blocking": false,
+   "landAnchor": [
+    -4,
+    39
+   ],
+   "displayName": "Pier"
+  },
+  "shrine": {
+   "x": -27,
+   "z": -26,
+   "w": 4,
+   "d": 3,
+   "face": "S",
+   "level": "summit",
+   "kind": "shrine",
+   "clearance": 2,
+   "door": [
+    -27,
+    -24.5
+   ],
+   "approach": [
+    -27,
+    -23.5
+   ],
+   "displayName": "Shrine"
+  },
+  "market_1": {
+   "x": -6,
+   "z": 17.8,
+   "w": 2.5,
+   "d": 1.5,
+   "face": "S",
+   "level": "grass",
+   "kind": "stall",
+   "clearance": 2,
+   "door": [
+    -6,
+    18.55
+   ],
+   "approach": [
+    -6,
+    19.55
+   ],
+   "displayName": "Market 1"
+  },
+  "market_2": {
+   "x": -3,
+   "z": 18.6,
+   "w": 2.5,
+   "d": 1.5,
+   "face": "S",
+   "level": "grass",
+   "kind": "stall",
+   "clearance": 2,
+   "door": [
+    -3,
+    19.35
+   ],
+   "approach": [
+    -3,
+    20.35
+   ],
+   "displayName": "Market 2"
+  }
+ },
+ "homes": [
+  {
+   "id": "home_01",
+   "name": "Moyan",
+   "x": -9,
+   "z": -10,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      -12,
+      -13
+     ],
+     [
+      -6,
+      -13
+     ],
+     [
+      -6,
+      -5
+     ],
+     [
+      -12,
+      -5
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -10.618033988749895,
+       -5
+      ],
+      [
+       -10.118033988749895,
+       -6
+      ],
+      [
+       -11,
+       -6
+      ],
+      [
+       -11,
+       -8
+      ],
+      [
+       -11,
+       -12
+      ],
+      [
+       -7,
+       -12
+      ],
+      [
+       -7,
+       -8
+      ],
+      [
+       -7,
+       -6.783931682015269
+      ],
+      [
+       -6,
+       -6.672820570904158
+      ],
+      [
+       -6,
+       -13
+      ],
+      [
+       -12,
+       -13
+      ],
+      [
+       -12,
+       -5
+      ],
+      [
+       -10.618033988749895,
+       -5
+      ]
+     ]
+    ],
+    "plantableArea": 18.71
+   },
+   "door": [
+    -9,
+    -8
+   ],
+   "approach": [
+    -9,
+    -7
+   ]
+  },
+  {
+   "id": "home_02",
+   "name": "Lexi",
+   "x": 15,
+   "z": -7,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      12,
+      -10
+     ],
+     [
+      18,
+      -10
+     ],
+     [
+      18,
+      -2
+     ],
+     [
+      12,
+      -2
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       18,
+       -10
+      ],
+      [
+       12,
+       -10
+      ],
+      [
+       12,
+       -4
+      ],
+      [
+       13,
+       -4
+      ],
+      [
+       13,
+       -5
+      ],
+      [
+       13,
+       -9
+      ],
+      [
+       17,
+       -9
+      ],
+      [
+       17,
+       -5
+      ],
+      [
+       17,
+       -4
+      ],
+      [
+       18,
+       -4
+      ],
+      [
+       18,
+       -10
+      ]
+     ]
+    ],
+    "plantableArea": 15.8
+   },
+   "door": [
+    15,
+    -5
+   ],
+   "approach": [
+    15,
+    -4
+   ]
+  },
+  {
+   "id": "home_03",
+   "name": "Xian",
+   "x": 25,
+   "z": -7,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      22,
+      -10
+     ],
+     [
+      28,
+      -10
+     ],
+     [
+      28,
+      -2
+     ],
+     [
+      22,
+      -2
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       28,
+       -10
+      ],
+      [
+       22,
+       -10
+      ],
+      [
+       22,
+       -4
+      ],
+      [
+       23,
+       -4
+      ],
+      [
+       23,
+       -5
+      ],
+      [
+       23,
+       -9
+      ],
+      [
+       27,
+       -9
+      ],
+      [
+       27,
+       -5
+      ],
+      [
+       27,
+       -4
+      ],
+      [
+       28,
+       -4
+      ],
+      [
+       28,
+       -10
+      ]
+     ]
+    ],
+    "plantableArea": 15.8
+   },
+   "door": [
+    25,
+    -5
+   ],
+   "approach": [
+    25,
+    -4
+   ]
+  },
+  {
+   "id": "home_04",
+   "name": "Shiyao",
+   "x": 14,
+   "z": 3,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      11,
+      0
+     ],
+     [
+      17,
+      0
+     ],
+     [
+      17,
+      8
+     ],
+     [
+      11,
+      8
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       17,
+       0
+      ],
+      [
+       11,
+       0
+      ],
+      [
+       11,
+       6
+      ],
+      [
+       12,
+       6
+      ],
+      [
+       12,
+       5
+      ],
+      [
+       12,
+       1
+      ],
+      [
+       16,
+       1
+      ],
+      [
+       16,
+       5
+      ],
+      [
+       16,
+       6
+      ],
+      [
+       17,
+       6
+      ],
+      [
+       17,
+       0
+      ]
+     ]
+    ],
+    "plantableArea": 15.8
+   },
+   "door": [
+    14,
+    5
+   ],
+   "approach": [
+    14,
+    6
+   ]
+  },
+  {
+   "id": "home_05",
+   "name": "Lan",
+   "x": 24,
+   "z": 3,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      21,
+      0
+     ],
+     [
+      27,
+      0
+     ],
+     [
+      27,
+      8
+     ],
+     [
+      21,
+      8
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       27,
+       8
+      ],
+      [
+       27,
+       0
+      ],
+      [
+       21,
+       0
+      ],
+      [
+       21,
+       6
+      ],
+      [
+       22,
+       6
+      ],
+      [
+       22,
+       5
+      ],
+      [
+       22,
+       1
+      ],
+      [
+       26,
+       1
+      ],
+      [
+       26,
+       5
+      ],
+      [
+       26,
+       7
+      ],
+      [
+       25,
+       7
+      ],
+      [
+       24,
+       7
+      ],
+      [
+       24,
+       8
+      ],
+      [
+       27,
+       8
+      ]
+     ]
+    ],
+    "plantableArea": 19.8
+   },
+   "door": [
+    24,
+    5
+   ],
+   "approach": [
+    24,
+    6
+   ]
+  },
+  {
+   "id": "home_06",
+   "name": "Heng",
+   "x": 15,
+   "z": 13,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      12,
+      10
+     ],
+     [
+      18,
+      10
+     ],
+     [
+      18,
+      18
+     ],
+     [
+      12,
+      18
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       18,
+       18
+      ],
+      [
+       18,
+       17.672820570904157
+      ],
+      [
+       15.055385138137417,
+       18
+      ],
+      [
+       18,
+       18
+      ]
+     ],
+     [
+      [
+       18,
+       10
+      ],
+      [
+       12,
+       10
+      ],
+      [
+       12,
+       16.327179429095843
+      ],
+      [
+       13,
+       16.216068317984732
+      ],
+      [
+       13,
+       15
+      ],
+      [
+       13,
+       11
+      ],
+      [
+       17,
+       11
+      ],
+      [
+       17,
+       15
+      ],
+      [
+       17,
+       15.771623873540287
+      ],
+      [
+       18,
+       15.660512762429176
+      ],
+      [
+       18,
+       10
+      ]
+     ]
+    ],
+    "plantableArea": 16.27
+   },
+   "door": [
+    15,
+    15
+   ],
+   "approach": [
+    15,
+    16
+   ]
+  },
+  {
+   "id": "home_07",
+   "name": "Rayne",
+   "x": 24,
+   "z": 13,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      21,
+      10
+     ],
+     [
+      27,
+      10
+     ],
+     [
+      27,
+      18
+     ],
+     [
+      21,
+      18
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       24.5,
+       18
+      ],
+      [
+       24.5,
+       17
+      ],
+      [
+       24.055385138137428,
+       17
+      ],
+      [
+       21,
+       17.339487237570825
+      ],
+      [
+       21,
+       18
+      ],
+      [
+       24.5,
+       18
+      ]
+     ],
+     [
+      [
+       27,
+       10
+      ],
+      [
+       21,
+       10
+      ],
+      [
+       21,
+       15.327179429095843
+      ],
+      [
+       22,
+       15.216068317984732
+      ],
+      [
+       22,
+       15
+      ],
+      [
+       22,
+       11
+      ],
+      [
+       26,
+       11
+      ],
+      [
+       26,
+       15
+      ],
+      [
+       27,
+       15
+      ],
+      [
+       27,
+       10
+      ]
+     ]
+    ],
+    "plantableArea": 17.06
+   },
+   "door": [
+    24,
+    15
+   ],
+   "approach": [
+    24,
+    16
+   ]
+  },
+  {
+   "id": "home_08",
+   "name": "Jingjing",
+   "x": -29,
+   "z": 6,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      -32,
+      3
+     ],
+     [
+      -26,
+      3
+     ],
+     [
+      -26,
+      11
+     ],
+     [
+      -32,
+      11
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -26,
+       3
+      ],
+      [
+       -32,
+       3
+      ],
+      [
+       -32,
+       8.719223593595585
+      ],
+      [
+       -31,
+       8.469223593595585
+      ],
+      [
+       -31,
+       8
+      ],
+      [
+       -31,
+       4
+      ],
+      [
+       -27,
+       4
+      ],
+      [
+       -27,
+       8
+      ],
+      [
+       -27,
+       9
+      ],
+      [
+       -26,
+       9
+      ],
+      [
+       -26,
+       3
+      ]
+     ]
+    ],
+    "plantableArea": 15.4
+   },
+   "door": [
+    -29,
+    8
+   ],
+   "approach": [
+    -29,
+    9
+   ]
+  },
+  {
+   "id": "home_09",
+   "name": "Sen",
+   "x": -29,
+   "z": 16,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      -32,
+      13
+     ],
+     [
+      -26,
+      13
+     ],
+     [
+      -26,
+      21
+     ],
+     [
+      -32,
+      21
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -26,
+       21
+      ],
+      [
+       -26,
+       13
+      ],
+      [
+       -32,
+       13
+      ],
+      [
+       -32,
+       20
+      ],
+      [
+       -31,
+       19.25
+      ],
+      [
+       -31,
+       18
+      ],
+      [
+       -31,
+       14
+      ],
+      [
+       -27,
+       14
+      ],
+      [
+       -27,
+       18
+      ],
+      [
+       -27,
+       20
+      ],
+      [
+       -28.666666666666664,
+       20
+      ],
+      [
+       -29.999999999999996,
+       21
+      ],
+      [
+       -26,
+       21
+      ]
+     ]
+    ],
+    "plantableArea": 20.76
+   },
+   "door": [
+    -29,
+    18
+   ],
+   "approach": [
+    -29,
+    19
+   ]
+  },
+  {
+   "id": "home_10",
+   "name": "Yue",
+   "x": -19,
+   "z": 29,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "building",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      -22,
+      26
+     ],
+     [
+      -16,
+      26
+     ],
+     [
+      -16,
+      34
+     ],
+     [
+      -22,
+      34
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -22,
+       26
+      ],
+      [
+       -22,
+       31.969223593595586
+      ],
+      [
+       -21.876894374382353,
+       32
+      ],
+      [
+       -21,
+       32
+      ],
+      [
+       -21,
+       31
+      ],
+      [
+       -21,
+       27
+      ],
+      [
+       -17,
+       27
+      ],
+      [
+       -17,
+       31
+      ],
+      [
+       -17,
+       31.763932022500207
+      ],
+      [
+       -16,
+       29.763932022500207
+      ],
+      [
+       -16,
+       26
+      ],
+      [
+       -22,
+       26
+      ]
+     ]
+    ],
+    "plantableArea": 14.57
+   },
+   "door": [
+    -19,
+    31
+   ],
+   "approach": [
+    -19,
+    32
+   ]
+  }
+ ],
+ "plots": [
+  {
+   "id": "plot_01",
+   "name": "Future home 1",
+   "x": 7,
+   "z": -7,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "plot",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      4,
+      -10
+     ],
+     [
+      10,
+      -10
+     ],
+     [
+      10,
+      -2
+     ],
+     [
+      4,
+      -2
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       6.85994505535974,
+       -2
+      ],
+      [
+       4.88425368691066,
+       -2.564483248128308
+      ],
+      [
+       4.75881296510437,
+       -2
+      ],
+      [
+       6.85994505535974,
+       -2
+      ]
+     ],
+     [
+      [
+       10,
+       -9.78
+      ],
+      [
+       9.978436229127496,
+       -9.781059360132117
+      ],
+      [
+       9.957080129156452,
+       -9.784227238311288
+      ],
+      [
+       9.936137371004019,
+       -9.789473126138914
+      ],
+      [
+       9.91580964487968,
+       -9.796746502847517
+      ],
+      [
+       9.89629271789828,
+       -9.805977321843361
+      ],
+      [
+       9.877774548735687,
+       -9.81707668529344
+      ],
+      [
+       9.860433477483998,
+       -9.829937700260198
+      ],
+      [
+       9.84443650813896,
+       -9.84443650813896
+      ],
+      [
+       9.829937700260198,
+       -9.860433477483998
+      ],
+      [
+       9.81707668529344,
+       -9.877774548735687
+      ],
+      [
+       9.805977321843361,
+       -9.89629271789828
+      ],
+      [
+       9.796746502847517,
+       -9.91580964487968
+      ],
+      [
+       9.789473126138914,
+       -9.936137371004019
+      ],
+      [
+       9.784227238311288,
+       -9.957080129156452
+      ],
+      [
+       9.781059360132117,
+       -9.978436229127496
+      ],
+      [
+       9.78,
+       -10
+      ],
+      [
+       7.121320343559642,
+       -10
+      ],
+      [
+       6.369525142688579,
+       -9.248204799128937
+      ],
+      [
+       6.314368520659926,
+       -9
+      ],
+      [
+       9,
+       -9
+      ],
+      [
+       9,
+       -5
+      ],
+      [
+       9,
+       -4
+      ],
+      [
+       10,
+       -4
+      ],
+      [
+       10,
+       -9.78
+      ]
+     ]
+    ],
+    "plantableArea": 8.91
+   },
+   "door": [
+    7,
+    -5
+   ],
+   "approach": [
+    7,
+    -4
+   ]
+  },
+  {
+   "id": "plot_02",
+   "name": "Future home 2",
+   "x": -9,
+   "z": 8,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "plot",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      -12,
+      5
+     ],
+     [
+      -6,
+      5
+     ],
+     [
+      -6,
+      13
+     ],
+     [
+      -12,
+      13
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -9.618033988749897,
+       13
+      ],
+      [
+       -10.118033988749897,
+       12
+      ],
+      [
+       -11,
+       12
+      ],
+      [
+       -11,
+       10.236067977499793
+      ],
+      [
+       -12,
+       8.236067977499793
+      ],
+      [
+       -12,
+       13
+      ],
+      [
+       -9.618033988749897,
+       13
+      ]
+     ],
+     [
+      [
+       -6,
+       7
+      ],
+      [
+       -7,
+       7
+      ],
+      [
+       -7,
+       10
+      ],
+      [
+       -7,
+       11
+      ],
+      [
+       -6.571946054312707,
+       11
+      ],
+      [
+       -6,
+       10.0276917076684
+      ],
+      [
+       -6,
+       7
+      ]
+     ]
+    ],
+    "plantableArea": 8.62
+   },
+   "door": [
+    -9,
+    10
+   ],
+   "approach": [
+    -9,
+    11
+   ]
+  },
+  {
+   "id": "plot_03",
+   "name": "Future home 3",
+   "x": 29,
+   "z": -20,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "plot",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      26,
+      -23
+     ],
+     [
+      32,
+      -23
+     ],
+     [
+      32,
+      -15
+     ],
+     [
+      26,
+      -15
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       28.5,
+       -15
+      ],
+      [
+       28.2,
+       -15.4
+      ],
+      [
+       29,
+       -16
+      ],
+      [
+       28,
+       -16
+      ],
+      [
+       27,
+       -16
+      ],
+      [
+       27,
+       -18
+      ],
+      [
+       27,
+       -22
+      ],
+      [
+       28,
+       -22
+      ],
+      [
+       28,
+       -23
+      ],
+      [
+       26,
+       -23
+      ],
+      [
+       26,
+       -15
+      ],
+      [
+       28.5,
+       -15
+      ]
+     ],
+     [
+      [
+       32,
+       -15
+      ],
+      [
+       32,
+       -23
+      ],
+      [
+       30,
+       -23
+      ],
+      [
+       30,
+       -22
+      ],
+      [
+       31,
+       -22
+      ],
+      [
+       31,
+       -18
+      ],
+      [
+       31,
+       -16
+      ],
+      [
+       30.414213562373092,
+       -16
+      ],
+      [
+       31.414213562373092,
+       -15
+      ],
+      [
+       32,
+       -15
+      ]
+     ]
+    ],
+    "plantableArea": 19.59
+   },
+   "door": [
+    29,
+    -18
+   ],
+   "approach": [
+    29,
+    -17
+   ]
+  },
+  {
+   "id": "plot_04",
+   "name": "Future home 4",
+   "x": -25,
+   "z": 26,
+   "w": 4,
+   "d": 4,
+   "face": "S",
+   "level": "grass",
+   "kind": "plot",
+   "clearance": 2,
+   "yard": {
+    "poly": [
+     [
+      -28,
+      23
+     ],
+     [
+      -22,
+      23
+     ],
+     [
+      -22,
+      31
+     ],
+     [
+      -28,
+      31
+     ]
+    ],
+    "plantableMinArea": 8,
+    "reservation": "grass outside footprint, south approach and roads",
+    "plantablePolys": [
+     [
+      [
+       -22,
+       23
+      ],
+      [
+       -28,
+       23
+      ],
+      [
+       -28,
+       29.856251126126228
+      ],
+      [
+       -27.618977267933037,
+       30.275376131399888
+      ],
+      [
+       -26.61330726433573,
+       30.67764413283881
+      ],
+      [
+       -26.387425886722795,
+       30
+      ],
+      [
+       -27,
+       30
+      ],
+      [
+       -27,
+       28
+      ],
+      [
+       -27,
+       24
+      ],
+      [
+       -23,
+       24
+      ],
+      [
+       -23,
+       28
+      ],
+      [
+       -23,
+       30
+      ],
+      [
+       -24.279240779943873,
+       30
+      ],
+      [
+       -24.61257411327721,
+       31
+      ],
+      [
+       -22,
+       31
+      ],
+      [
+       -22,
+       23
+      ]
+     ]
+    ],
+    "plantableArea": 21.03
+   },
+   "door": [
+    -25,
+    28
+   ],
+   "approach": [
+    -25,
+    29
+   ]
+  }
+ ],
+ "landmarks": [
+  {
+   "kind": "great-tree",
+   "x": -1,
+   "z": 5,
+   "rot": 0,
+   "size": [
+    3.5,
+    3.5,
+    7
+   ],
+   "level": "grass",
+   "name": "Great Tree",
+   "priority": "high"
+  },
+  {
+   "kind": "fountain",
+   "x": 5,
+   "z": 8,
+   "rot": 0,
+   "size": [
+    2.4,
+    2.4,
+    1.6
+   ],
+   "level": "grass",
+   "name": "Fountain",
+   "priority": "medium"
+  },
+  {
+   "kind": "aqueduct",
+   "x": -12.5,
+   "z": -29,
+   "rot": 0,
+   "size": [
+    17,
+    1,
+    4.1
+   ],
+   "level": "plateau",
+   "start": [
+    -21,
+    -29
+   ],
+   "end": [
+    -4,
+    -29
+   ],
+   "arches": 4,
+   "pillars": [
+    {
+     "x": -21,
+     "z": -29,
+     "radius": 0.4
+    },
+    {
+     "x": -16.75,
+     "z": -29,
+     "radius": 0.4
+    },
+    {
+     "x": -12.5,
+     "z": -29,
+     "radius": 0.4
+    },
+    {
+     "x": -8.25,
+     "z": -29,
+     "radius": 0.4
+    },
+    {
+     "x": -4,
+     "z": -29,
+     "radius": 0.4
+    }
+   ],
+   "walkable": false,
+   "waterChannelWidth": 0.55,
+   "deckY": 4.1,
+   "waterSupply": "Decorative recirculating celestial trough; concealed magical lift, not connected to the gravity-fed natural spring.",
+   "notes": "Decorative elevated water trough; no footpath. Pedestrian route is via grass and the two stairs.",
+   "name": "Aqueduct",
+   "priority": "medium"
+  },
+  {
+   "kind": "distant-castle",
+   "x": 30.73,
+   "z": -157,
+   "rot": 0,
+   "size": [
+    28,
+    24,
+    40
+   ],
+   "sceneryOnly": true,
+   "name": "Distant Castle",
+   "priority": "high"
+  },
+  {
+   "kind": "celestial-ring",
+   "x": 30.73,
+   "z": -157,
+   "rot": 0,
+   "size": [
+    65,
+    4,
+    65
+   ],
+   "sceneryOnly": true,
+   "name": "Celestial Ring",
+   "priority": "high"
+  },
+  {
+   "kind": "seaplane",
+   "x": 0.2,
+   "z": 46,
+   "rot": 0,
+   "size": [
+    5,
+    3,
+    2
+   ],
+   "sceneryOnly": false,
+   "mooring": true,
+   "name": "Seaplane",
+   "priority": "medium"
+  },
+  {
+   "kind": "market",
+   "x": -6,
+   "z": 17.8,
+   "rot": 0,
+   "size": [
+    2.5,
+    1.5,
+    2.3
+   ],
+   "siteRef": "market_1",
+   "name": "Market",
+   "priority": "medium"
+  },
+  {
+   "kind": "market",
+   "x": -3,
+   "z": 18.6,
+   "rot": 0,
+   "size": [
+    2.5,
+    1.5,
+    2.3
+   ],
+   "siteRef": "market_2",
+   "name": "Market",
+   "priority": "medium"
+  }
+ ],
+ "props": {
+  "lamps": [
+   [
+    -5.299,
+    34.75
+   ],
+   [
+    2,
+    24
+   ],
+   [
+    -1.5,
+    18
+   ],
+   [
+    6,
+    12
+   ],
+   [
+    -5,
+    4
+   ],
+   [
+    8,
+    3
+   ],
+   [
+    10,
+    -10
+   ],
+   [
+    4.5,
+    -16.134
+   ],
+   [
+    12,
+    -18
+   ],
+   [
+    22.5,
+    -27
+   ],
+   [
+    -25,
+    8.5
+   ],
+   [
+    -31,
+    23
+   ],
+   [
+    32.5,
+    -4.134
+   ],
+   [
+    25,
+    27
+   ]
+  ],
+  "banners": [
+   [
+    -3.25,
+    10.701
+   ],
+   [
+    8,
+    12
+   ],
+   [
+    -5,
+    29
+   ],
+   [
+    0.5,
+    29
+   ],
+   [
+    4,
+    -12
+   ],
+   [
+    10,
+    -12
+   ]
+  ],
+  "benches": [
+   [
+    -3,
+    4,
+    90
+   ],
+   [
+    -2,
+    10,
+    90
+   ],
+   [
+    9,
+    4.268,
+    -90
+   ],
+   [
+    8,
+    10,
+    -90
+   ],
+   [
+    34.433,
+    -1.75,
+    0
+   ],
+   [
+    26.299,
+    27.75,
+    0
+   ]
+  ],
+  "planters": [
+   [
+    -4.5,
+    3
+   ],
+   [
+    7.5,
+    3.866
+   ],
+   [
+    -4.5,
+    14.5
+   ],
+   [
+    9,
+    12
+   ],
+   [
+    11,
+    -17
+   ],
+   [
+    19,
+    -18
+   ]
+  ],
+  "trees": [
+   {
+    "x": -34.3,
+    "z": -23.3,
+    "kind": "pine",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -34.3,
+    "z": -20.8,
+    "kind": "pine",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -34.3,
+    "z": -18.3,
+    "kind": "pine",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -34.3,
+    "z": -15.8,
+    "kind": "pine",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -20.8,
+    "z": -24.3,
+    "kind": "bamboo",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 0.8,
+    "height": 3.2
+   },
+   {
+    "x": -20.8,
+    "z": -22.3,
+    "kind": "bamboo",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 0.8,
+    "height": 3.2
+   },
+   {
+    "x": -20.8,
+    "z": -20.3,
+    "kind": "bamboo",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 0.8,
+    "height": 3.2
+   },
+   {
+    "x": -18.8,
+    "z": -24.3,
+    "kind": "bamboo",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 0.8,
+    "height": 3.2
+   },
+   {
+    "x": -18.8,
+    "z": -22.3,
+    "kind": "bamboo",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 0.8,
+    "height": 3.2
+   },
+   {
+    "x": -18.8,
+    "z": -20.3,
+    "kind": "bamboo",
+    "level": "plateau",
+    "collisionRadius": 0.24,
+    "canopyRadius": 0.8,
+    "height": 3.2
+   },
+   {
+    "x": -35.3,
+    "z": 12.7,
+    "kind": "orange",
+    "level": "grass",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -35.3,
+    "z": 15.2,
+    "kind": "orange",
+    "level": "grass",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -35.3,
+    "z": 17.7,
+    "kind": "orange",
+    "level": "grass",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   },
+   {
+    "x": -35.3,
+    "z": 20.2,
+    "kind": "orange",
+    "level": "grass",
+    "collisionRadius": 0.24,
+    "canopyRadius": 1.1,
+    "height": 4
+   }
+  ],
+  "forests": [
+   {
+    "name": "Pine Grove",
+    "species": "pine",
+    "poly": [
+     [
+      -35,
+      -24
+     ],
+     [
+      -32,
+      -24
+     ],
+     [
+      -32,
+      -13
+     ],
+     [
+      -35,
+      -13
+     ]
+    ],
+    "density": 0.23,
+    "level": "plateau",
+    "kind": "pine"
+   },
+   {
+    "name": "Bamboo Grove",
+    "species": "bamboo",
+    "poly": [
+     [
+      -21.5,
+      -25
+     ],
+     [
+      -18,
+      -25
+     ],
+     [
+      -18,
+      -19
+     ],
+     [
+      -21.5,
+      -19
+     ]
+    ],
+    "density": 0.3,
+    "level": "plateau",
+    "kind": "bamboo"
+   },
+   {
+    "name": "West Orchard",
+    "species": "orange",
+    "poly": [
+     [
+      -36,
+      12
+     ],
+     [
+      -32,
+      12
+     ],
+     [
+      -32,
+      24
+     ],
+     [
+      -36,
+      24
+     ]
+    ],
+    "density": 0.15,
+    "level": "grass",
+    "kind": "orange"
+   }
+  ],
+  "flowerFields": [
+   {
+    "name": "Academy Flowers",
+    "poly": [
+     [
+      -2,
+      -34
+     ],
+     [
+      2,
+      -34
+     ],
+     [
+      2,
+      -29
+     ],
+     [
+      -2,
+      -29
+     ]
+    ],
+    "level": "plateau",
+    "kind": "flowers"
+   },
+   {
+    "name": "Community Vegetables",
+    "poly": [
+     [
+      -14,
+      -6
+     ],
+     [
+      -10,
+      -6
+     ],
+     [
+      -10,
+      -2
+     ],
+     [
+      -14,
+      -2
+     ]
+    ],
+    "level": "grass",
+    "kind": "vegetables"
+   },
+   {
+    "name": "East Garden",
+    "poly": [
+     [
+      28,
+      -1
+     ],
+     [
+      33,
+      -1
+     ],
+     [
+      33,
+      7
+     ],
+     [
+      28,
+      7
+     ]
+    ],
+    "level": "grass",
+    "kind": "flowers"
+   },
+   {
+    "name": "South Meadow",
+    "poly": [
+     [
+      5,
+      31
+     ],
+     [
+      13,
+      31
+     ],
+     [
+      13,
+      35
+     ],
+     [
+      5,
+      35
+     ]
+    ],
+    "level": "grass",
+    "kind": "flowers"
+   }
+  ],
+  "mailboxes": [
+   {
+    "x": -5.3,
+    "z": 2.2,
+    "kind": "mailbox",
+    "houseId": "player_home",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": -6.3,
+    "z": -8.8,
+    "kind": "mailbox",
+    "houseId": "home_01",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 17.7,
+    "z": -5.8,
+    "kind": "mailbox",
+    "houseId": "home_02",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 27.7,
+    "z": -5.8,
+    "kind": "mailbox",
+    "houseId": "home_03",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 16.7,
+    "z": 4.2,
+    "kind": "mailbox",
+    "houseId": "home_04",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 26.45,
+    "z": 4.633,
+    "kind": "mailbox",
+    "houseId": "home_05",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 17.7,
+    "z": 14.2,
+    "kind": "mailbox",
+    "houseId": "home_06",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 26.267,
+    "z": 14.45,
+    "kind": "mailbox",
+    "houseId": "home_07",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": -26.3,
+    "z": 7.2,
+    "kind": "mailbox",
+    "houseId": "home_08",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": -26.3,
+    "z": 17.2,
+    "kind": "mailbox",
+    "houseId": "home_09",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   },
+   {
+    "x": -16.733,
+    "z": 29.95,
+    "kind": "mailbox",
+    "houseId": "home_10",
+    "operable": true,
+    "size": [
+     0.45,
+     0.4,
+     1.1
+    ],
+    "collisionRadius": 0.25
+   }
+  ]
+ },
+ "style": {
+  "walls": "#f3efe6",
+  "roof": "#3e5a8c",
+  "roofLight": "#5b7fbf",
+  "brass": "#d8b45a",
+  "wood": "#8f6040",
+  "water": "#70bdc9",
+  "tree": "#aab95f",
+  "language": "Japanese fantasy; ivory stone, blue roofs, restrained brass; soft readable 3D forms"
+ },
+ "notes": [
+  "Do not apply terrain warp to source coordinates. Apply the same engine warp once at rendering/collision integration.",
+  "Road and stair widths are clear pedestrian widths, not decorative outer widths.",
+  "Sand/grass transition is a walkable graded shore; all >=2m land cliffs require the declared stairs.",
+  "Aqueduct is decorative, carries a narrow water channel, has no pedestrian deck and is excluded from reachability.",
+  "Distant castle and celestial ring are scenery outside the 96m playable bounds."
+ ],
+ "sightline": {
+  "name": "Starward axis",
+  "bearingDegreesEastOfNorth": 10,
+  "start": [
+   -4,
+   40
+  ],
+  "target": [
+   30.73,
+   -157
+  ],
+  "clearCorridorWidth": 3,
+  "notes": "Gate, main street and academy arrival read toward the distant castle. Tree is offset west; fountain east."
+ },
+ "zones": [
+  {
+   "name": "Harbour",
+   "poly": [
+    [
+     -10,
+     29
+    ],
+    [
+     8,
+     29
+    ],
+    [
+     8,
+     48
+    ],
+    [
+     -10,
+     48
+    ]
+   ],
+   "level": "sand",
+   "atmosphere": "Warm arrival, open sandy shoreline",
+   "objects": [
+    "pier",
+    "gate",
+    "seaplane"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "Living Town",
+   "poly": [
+    [
+     -35,
+     -13
+    ],
+    [
+     34,
+     -13
+    ],
+    [
+     34,
+     33
+    ],
+    [
+     -35,
+     33
+    ]
+   ],
+   "level": "grass",
+   "atmosphere": "Cozy south-facing blue-roof homes, lawns and garden lanes",
+   "objects": [
+    "player_home",
+    "shop",
+    "homes",
+    "plot_01",
+    "plot_02",
+    "plot_04",
+    "plaza",
+    "market_1",
+    "market_2"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "Academy",
+   "poly": [
+    [
+     -4,
+     -36
+    ],
+    [
+     23,
+     -36
+    ],
+    [
+     23,
+     -15
+    ],
+    [
+     -4,
+     -15
+    ]
+   ],
+   "level": "plateau",
+   "atmosphere": "Ivory civic buildings and blue domes around a planted court",
+   "objects": [
+    "museum",
+    "exam",
+    "library",
+    "telescope"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "West Highland",
+   "poly": [
+    [
+     -34,
+     -31
+    ],
+    [
+     -20,
+     -31
+    ],
+    [
+     -17,
+     -26
+    ],
+    [
+     -17,
+     -9
+    ],
+    [
+     -32,
+     -9
+    ],
+    [
+     -35,
+     -15
+    ],
+    [
+     -35,
+     -25
+    ]
+   ],
+   "level": "plateau",
+   "atmosphere": "Quiet pine and bamboo walks, spring and decorative aqueduct",
+   "objects": [
+    "shrine",
+    "Highland Spring"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "East Cape",
+   "poly": [
+    [
+     31,
+     -17
+    ],
+    [
+     42,
+     -17
+    ],
+    [
+     42,
+     0
+    ],
+    [
+     31,
+     0
+    ]
+   ],
+   "level": "grass",
+   "atmosphere": "Open sea views and crystal lighthouse",
+   "objects": [
+    "lighthouse"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "Beach Retreat",
+   "poly": [
+    [
+     -25,
+     33
+    ],
+    [
+     -15,
+     33
+    ],
+    [
+     -15,
+     40
+    ],
+    [
+     -25,
+     40
+    ]
+   ],
+   "level": "sand",
+   "atmosphere": "Camping and shells on uninterrupted sand",
+   "objects": [
+    "camp"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "Seaside Hotel",
+   "poly": [
+    [
+     23,
+     16
+    ],
+    [
+     35,
+     16
+    ],
+    [
+     35,
+     28
+    ],
+    [
+     23,
+     28
+    ]
+   ],
+   "level": "grass",
+   "atmosphere": "Blue-roof hotel with southeast ocean outlook",
+   "objects": [
+    "hotel"
+   ],
+   "planningEnvelope": true
+  },
+  {
+   "name": "East Reserve",
+   "poly": [
+    [
+     25,
+     -24
+    ],
+    [
+     33,
+     -24
+    ],
+    [
+     33,
+     -15
+    ],
+    [
+     25,
+     -15
+    ]
+   ],
+   "level": "grass",
+   "atmosphere": "Future home and plantable lawn",
+   "objects": [
+    "plot_03"
+   ],
+   "planningEnvelope": true
+  }
+ ],
+ "propMetadata": {
+  "lamps": [
+   {
+    "x": -5.299,
+    "z": 34.75,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 2,
+    "z": 24,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": -1.5,
+    "z": 18,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 6,
+    "z": 12,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": -5,
+    "z": 4,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 8,
+    "z": 3,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 10,
+    "z": -10,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 4.5,
+    "z": -16.134,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 12,
+    "z": -18,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 22.5,
+    "z": -27,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": -25,
+    "z": 8.5,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": -31,
+    "z": 23,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 32.5,
+    "z": -4.134,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   },
+   {
+    "x": 25,
+    "z": 27,
+    "size": 0.35,
+    "collisionRadius": 0.22
+   }
+  ],
+  "banners": [
+   {
+    "x": -3.25,
+    "z": 10.701,
+    "rot": 0,
+    "size": 0.4,
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 8,
+    "z": 12,
+    "rot": 0,
+    "size": 0.4,
+    "collisionRadius": 0.25
+   },
+   {
+    "x": -5,
+    "z": 29,
+    "rot": 0,
+    "size": 0.4,
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 0.5,
+    "z": 29,
+    "rot": 0,
+    "size": 0.4,
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 4,
+    "z": -12,
+    "rot": 0,
+    "size": 0.4,
+    "collisionRadius": 0.25
+   },
+   {
+    "x": 10,
+    "z": -12,
+    "rot": 0,
+    "size": 0.4,
+    "collisionRadius": 0.25
+   }
+  ],
+  "planters": [
+   {
+    "x": -4.5,
+    "z": 3,
+    "size": 0.7,
+    "collisionRadius": 0.4
+   },
+   {
+    "x": 7.5,
+    "z": 3.866,
+    "size": 0.7,
+    "collisionRadius": 0.4
+   },
+   {
+    "x": -4.5,
+    "z": 14.5,
+    "size": 0.7,
+    "collisionRadius": 0.4
+   },
+   {
+    "x": 9,
+    "z": 12,
+    "size": 0.7,
+    "collisionRadius": 0.4
+   },
+   {
+    "x": 11,
+    "z": -17,
+    "size": 0.7,
+    "collisionRadius": 0.4
+   },
+   {
+    "x": 19,
+    "z": -18,
+    "size": 0.7,
+    "collisionRadius": 0.4
+   }
+  ],
+  "benches": [
+   {
+    "x": -3,
+    "z": 4,
+    "rot": 90,
+    "size": [
+     1.6,
+     0.7,
+     0.6
+    ],
+    "collisionRadius": 0.9
+   },
+   {
+    "x": -2,
+    "z": 10,
+    "rot": 90,
+    "size": [
+     1.6,
+     0.7,
+     0.6
+    ],
+    "collisionRadius": 0.9
+   },
+   {
+    "x": 9,
+    "z": 4.268,
+    "rot": -90,
+    "size": [
+     1.6,
+     0.7,
+     0.6
+    ],
+    "collisionRadius": 0.9
+   },
+   {
+    "x": 8,
+    "z": 10,
+    "rot": -90,
+    "size": [
+     1.6,
+     0.7,
+     0.6
+    ],
+    "collisionRadius": 0.9
+   },
+   {
+    "x": 34.433,
+    "z": -1.75,
+    "rot": 0,
+    "size": [
+     1.6,
+     0.7,
+     0.6
+    ],
+    "collisionRadius": 0.9
+   },
+   {
+    "x": 26.299,
+    "z": 27.75,
+    "rot": 0,
+    "size": [
+     1.6,
+     0.7,
+     0.6
+    ],
+    "collisionRadius": 0.9
+   }
+  ]
+ }
+}

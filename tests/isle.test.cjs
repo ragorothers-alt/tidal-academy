@@ -1,0 +1,512 @@
+/* 潮汐小島資料測試：node --test tests/isle.test.cjs */
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+
+const ROOT = path.resolve(__dirname, '..');
+const ctx = { console, Math, Date, JSON };
+ctx.window = ctx; ctx.globalThis = ctx; vm.createContext(ctx);
+const load = f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), ctx, { filename: f });
+['src/core/registry.js', 'src/isle/data/creatures.js', 'src/isle/data/villagers.js', 'src/isle/data/furniture.js', 'src/isle/data/lines.js'].forEach(load);
+if (fs.existsSync(path.join(ROOT, 'src/isle/data/icons.js'))) load('src/isle/data/icons.js');
+if (fs.existsSync(path.join(ROOT, 'src/isle/data/homes.js'))) load('src/isle/data/homes.js');
+if (fs.existsSync(path.join(ROOT, 'src/isle/data/guests.js'))) load('src/isle/data/guests.js');
+if (fs.existsSync(path.join(ROOT, 'src/isle/data/bday.js'))) load('src/isle/data/bday.js');
+if (fs.existsSync(path.join(ROOT, 'src/isle/data/lines2.js'))) load('src/isle/data/lines2.js');
+['stars', 'lines3', 'sealife', 'lines4', 'foods', 'minerals', 'lines5', 'lines6', 'timeline', 'elements', 'idioms'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });
+['researchfurn', 'research', 'collectfurn'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });   // 導師研究計畫（家具要在 furniture.js 之後載入）
+const I = ctx.TA.ISLE;
+
+test('圖鑑：魚、蟲、化石欄位合法且 id 唯一', () => {
+  const ids = new Set();
+  const hoursOk = h => Array.isArray(h) && h.every(r => r.length === 2 && r[0] >= 0 && r[1] <= 24 && r[0] < r[1]);
+  [['FISH', ['sea', 'river', 'pond', 'pier']], ['BUGS', ['flower', 'tree', 'ground', 'air', 'rock', 'water', 'beach']]].forEach(([k, wh]) => {
+    assert.ok(I[k].length >= 20, k + ' 數量');
+    I[k].forEach(x => {
+      assert.match(x.id, /^[a-z0-9_]+$/); assert.ok(!ids.has(x.id), '重複 id ' + x.id); ids.add(x.id);
+      assert.ok(x.name && x.desc && x.desc.length >= 20, x.id + ' 名稱與說明');
+      assert.ok(wh.includes(x.where), x.id + ' 出沒地點 ' + x.where);
+      assert.ok(hoursOk(x.hours), x.id + ' 時段');
+      assert.ok(Array.isArray(x.months) && x.months.length && x.months.every(m => m >= 1 && m <= 12), x.id + ' 月份');
+      assert.ok(x.rarity >= 1 && x.rarity <= 5 && x.price > 0, x.id + ' 稀有度與價格');
+    });
+  });
+  const subjects = ctx.TA.SUBJECTS.map(s => s.id);
+  assert.ok(I.FOSSILS.length >= 15);
+  I.FOSSILS.forEach(x => { assert.ok(!ids.has(x.id), '重複 id ' + x.id); ids.add(x.id); assert.ok(subjects.includes(x.sid), x.id + ' 鑑定科目'); assert.ok(x.desc.length >= 30 && x.price > 0); });
+});
+
+test('每個月、每個時段都釣得到魚（海與河），白天都捉得到蟲', () => {
+  for (let m = 1; m <= 12; m++) for (let h = 0; h < 24; h += 1) {
+    const ok = (list, where) => list.some(x => !x.weather && where.includes(x.where) && x.months.includes(m) && x.hours.some(([a, b]) => h >= a && h < b));
+    assert.ok(ok(I.FISH, ['sea', 'pier']), `${m} 月 ${h} 時海裡沒有魚`);
+    assert.ok(ok(I.FISH, ['river', 'pond']), `${m} 月 ${h} 時河裡沒有魚`);
+    if (h >= 8 && h < 17) assert.ok(ok(I.BUGS, ['flower', 'tree', 'ground', 'air', 'rock', 'water', 'beach']), `${m} 月 ${h} 時沒有蟲`);
+  }
+});
+
+test('十位島民與店長資料齊全', () => {
+  const sids = I.VILLAGERS.map(v => v.sid).sort();
+  assert.deepEqual(sids, ctx.TA.SUBJECTS.map(s => s.id).sort());
+  I.VILLAGERS.forEach(v => {
+    ['morning', 'day', 'evening', 'night'].forEach(k => assert.ok(v.greet[k].length >= 1, v.name + ' greet.' + k));
+    ['ask', 'ok', 'bad', 'tips', 'chat'].forEach(k => assert.ok(Array.isArray(v[k]) && v[k].length >= 3, v.name + ' ' + k));
+    assert.match(v.fur, /^#[0-9a-f]{6}$/i);
+  });
+  assert.ok(I.SHOP && I.SHOP.name);
+});
+
+test('每個圖鑑條目與工具都有 32×32 PNG 圖示', { skip: !I.ICONS && '圖示檔尚未產生' }, () => {
+  const need = [...I.FISH, ...I.BUGS, ...I.FOSSILS].map(x => x.id).concat(['rod', 'net', 'shovel', 'fossil_unknown', 'bells']);
+  need.forEach(id => {
+    const u = I.ICONS[id]; assert.ok(u && u.startsWith('data:image/png;base64,'), '缺圖示 ' + id);
+    const b = Buffer.from(u.split(',')[1], 'base64');
+    assert.equal(b.readUInt32BE(16), 32, id + ' 寬'); assert.equal(b.readUInt32BE(20), 32, id + ' 高');
+  });
+});
+
+test('家具：零件合法、不超出佔地、活動獎勵齊全', () => {
+  const ids = new Set(), subjects = ctx.TA.SUBJECTS.map(s => s.id);
+  const EV = ['mock_gold', 'mock_silver', 'mock_bronze', 'd100', 'newyear', 'eve', 'after', 'spring', 'mid_autumn'];
+  assert.ok(I.FURNITURE.length >= 40);
+  I.FURNITURE.forEach(f => {
+    assert.ok(!ids.has(f.id), '重複 ' + f.id); ids.add(f.id);
+    assert.ok(f.name && f.parts.length >= 3 && f.parts.length <= 30, f.id + ' 零件數');
+    const [w, d] = f.size; assert.ok([1, 2].includes(w) && [1, 2].includes(d), f.id + ' 尺寸');
+    assert.ok(/^(shop|diy|gift:\w+|event:\w+|research:\w+)$/.test(f.src), f.id + ' 來源');
+    if (f.src.startsWith('research:')) assert.ok(subjects.includes(f.src.slice(9)) && f.price === 0, f.id + ' 研究家具的科目與售價');
+    if (f.src === 'diy') { assert.ok(f.recipe && Object.keys(f.recipe).length >= 1 && Object.entries(f.recipe).every(([m, n]) => ['branch', 'stone', 'shell', 'fruit', 'iron', 'frag'].includes(m) && Number.isInteger(n) && n > 0 && n <= 12), f.id + ' 配方'); }
+    if (f.src.startsWith('gift:')) assert.ok(subjects.includes(f.src.slice(5)), f.id + ' 送禮科目');
+    f.parts.forEach(p => {
+      assert.ok(['box', 'cyl', 'sph', 'cone', 'tor'].includes(p.t), f.id + ' 零件形狀');
+      assert.match(p.c, /^#[0-9a-f]{6}$/i, f.id + ' 顏色');
+      assert.ok(Math.abs(p.p[0]) <= w / 2 + 0.06 && Math.abs(p.p[2]) <= d / 2 + 0.06 && p.p[1] >= -0.01 && p.p[1] <= 2.5, f.id + ' 零件位置超出佔地');
+    });
+  });
+  EV.forEach(e => assert.ok(I.FURNITURE.some(f => f.src === 'event:' + e), '缺活動獎勵 ' + e));
+  subjects.forEach(sid => assert.ok(I.FURNITURE.some(f => f.src === 'gift:' + sid), sid + ' 沒有好感度禮物'));
+  ['WALLPAPER', 'FLOORING'].forEach(k => { assert.ok(I[k].length >= 5); I[k].forEach(p => { assert.match(p.c1, /^#[0-9a-f]{6}$/i); assert.ok(['plain', 'stripe', 'check', 'dot', 'wood', 'tile'].includes(p.pattern)); }); });
+});
+
+test('委託、來信、活動台詞：十科與店長齊全，placeholder 正確', () => {
+  ctx.TA.SUBJECTS.forEach(s => {
+    const L = I.LINES[s.id]; assert.ok(L, s.id);
+    ['fish', 'bug', 'fossil', 'quiz', 'deliver', 'thanks'].forEach(k => assert.ok(L.req[k].length >= 2, s.id + ' req.' + k));
+    ['fish', 'bug'].forEach(k => L.req[k].forEach(t => assert.ok(t.includes('{item}'), s.id + ' req.' + k + ' 缺 {item}')));
+    L.req.deliver.forEach(t => assert.ok(t.includes('{to}'), s.id + ' deliver 缺 {to}'));
+    L.letter.bridge.forEach(t => assert.ok(t.includes('{unit}'), s.id + ' bridge 缺 {unit}'));
+    ['open', 'bridge', 'close', 'gift'].forEach(k => assert.ok(L.letter[k].length >= 2, s.id + ' letter.' + k));
+    ['weekly', 'd100', 'newyear', 'eve', 'after', 'spring', 'mid_autumn'].forEach(k => assert.ok(L.event[k].length >= 1, s.id + ' event.' + k));
+  });
+  assert.ok(I.LINES.shop && I.LINES.shop.event && I.LINES.shop.event.weekly.length);
+});
+
+test('島民的家：家具存在、不重疊、門口可走進房間中央', { skip: !I.HOMES && '尚未產生' }, () => {
+  const F = id => I.FURNITURE.find(f => f.id === id);
+  Object.entries(I.HOMES).forEach(([sid, h]) => {
+    assert.ok(I.WALLPAPER.some(w => w.id === h.wall) && I.FLOORING.some(f => f.id === h.floor), sid + ' 壁紙地板');
+    const occ = new Set();
+    h.items.forEach(it => {
+      const f = F(it.id); assert.ok(f, sid + ' 家具不存在 ' + it.id); assert.ok(!f.src.startsWith('event:'), sid + ' 不可用活動獎勵');
+      const [w, d] = it.r % 2 ? [f.size[1], f.size[0]] : f.size;
+      assert.ok(it.x >= 0 && it.z >= 0 && it.x + w <= 8 && it.z + d <= 8, sid + ' 超出房間 ' + it.id);
+      if (f.cat === 'rug') return;
+      if (it.z + d >= 8) assert.ok(!(it.x <= 4 && it.x + w > 3), sid + ' 擋住門口 ' + it.id);
+      for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) { const k = (it.x + x) + ',' + (it.z + z); assert.ok(!occ.has(k), sid + ' 家具重疊 ' + it.id); occ.add(k); }
+    });
+    // 從門口（3,7）走到中央（3..4, 3..4）
+    const seen = new Set(['3,7']), q = [[3, 7]]; let ok = false;
+    while (q.length) { const [x, z] = q.shift(); if (x >= 3 && x <= 4 && z >= 3 && z <= 4) { ok = true; break; } [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dz]) => { const X = x + dx, Z = z + dz, k = X + ',' + Z; if (X < 0 || Z < 0 || X > 7 || Z > 7 || seen.has(k) || occ.has(k)) return; seen.add(k); q.push([X, Z]); }); }
+    assert.ok(ok, sid + ' 從門口走不到房間中央');
+  });
+  const sids = ctx.TA.SUBJECTS.map(s => s.id);
+  (I.CHATS || []).forEach(c => { assert.ok(sids.includes(c.a) && sids.includes(c.b) && c.a !== c.b); c.lines.forEach(l => assert.ok([c.a, c.b].includes(l[0]) && l[1])); });
+  sids.forEach(sid => { const b = (I.BONDS || {})[sid]; if (!b) return; [1, 2, 3, 4].forEach(k => assert.ok(b[k] && b[k].title && b[k].lines.length >= 2, sid + ' bond ' + k)); });
+});
+
+function checkRoom(name, h) {
+  const F = id => I.FURNITURE.find(f => f.id === id);
+  assert.ok(I.WALLPAPER.some(w => w.id === h.wall) && I.FLOORING.some(f => f.id === h.floor), name + ' 壁紙地板');
+  const occ = new Set();
+  h.items.forEach(it => {
+    const f = F(it.id); assert.ok(f, name + ' 家具不存在 ' + it.id); assert.ok(!f.src.startsWith('event:'), name + ' 不可用活動獎勵');
+    const [w, d] = it.r % 2 ? [f.size[1], f.size[0]] : f.size;
+    assert.ok(it.x >= 0 && it.z >= 0 && it.x + w <= 8 && it.z + d <= 8, name + ' 超出房間 ' + it.id);
+    if (f.cat === 'rug') return;
+    if (it.z + d >= 8) assert.ok(!(it.x <= 4 && it.x + w > 3), name + ' 擋住門口 ' + it.id);
+    for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) { const k = (it.x + x) + ',' + (it.z + z); assert.ok(!occ.has(k), name + ' 家具重疊 ' + it.id); occ.add(k); }
+  });
+  const seen = new Set(['3,7']), q = [[3, 7]]; let ok = false;
+  while (q.length) { const [x, z] = q.shift(); if (x >= 3 && x <= 4 && z >= 3 && z <= 4) { ok = true; break; } [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dz]) => { const X = x + dx, Z = z + dz, k = X + ',' + Z; if (X < 0 || Z < 0 || X > 7 || Z > 7 || seen.has(k) || occ.has(k)) return; seen.add(k); q.push([X, Z]); }); }
+  assert.ok(ok, name + ' 從門口走不到房間中央');
+}
+test('旅客、館員與圖書館資料', { skip: !I.GUESTS && '尚未產生' }, () => {
+  const KINDS = ['cat', 'bunny', 'owl', 'penguin', 'deer', 'dog', 'fox', 'frog', 'squirrel', 'bear', 'otter', 'sheep', 'hamster', 'panda', 'koala'];
+  const MODES = ['multi', 'group', 'mixed', 'hard', 'vocab', 'subject'], sids = ctx.TA.SUBJECTS.map(s => s.id);
+  assert.ok(I.GUESTS.length >= 8);
+  const ids = new Set();
+  I.GUESTS.forEach(g => {
+    assert.ok(!ids.has(g.id)); ids.add(g.id);
+    assert.ok(KINDS.includes(g.kind), g.id + ' 物種 ' + g.kind);
+    assert.ok(MODES.includes(g.focus.mode) && g.focus.label, g.id + ' 挑戰');
+    if (g.focus.subject) assert.ok(sids.includes(g.focus.subject), g.id + ' 科目');
+    if (g.focus.mode === 'subject') assert.ok(g.focus.subject, g.id + ' subject 模式要指定科目');
+    ['arrive', 'greet', 'challenge', 'pass', 'fail', 'movein', 'settled', 'chat'].forEach(k => assert.ok(g.lines[k] && g.lines[k].length >= 1, g.id + ' lines.' + k));
+    checkRoom(g.id, g.home);
+  });
+  assert.ok(I.LIBRARIAN && KINDS.includes(I.LIBRARIAN.kind));
+  ['greet', 'mistakes', 'due', 'vocab', 'notes', 'praise', 'comfort', 'empty'].forEach(k => assert.ok(I.LIBRARIAN[k].length >= 1, 'librarian ' + k));
+  checkRoom('library', I.LIBRARY);
+  assert.equal(I.RATING.title.length, 5);
+});
+test('雨天限定生物：每個月都有', () => {
+  const rain = [...I.FISH, ...I.BUGS].filter(x => x.weather);
+  if (!rain.length) return;
+  rain.forEach(x => assert.equal(x.weather, 'rain', x.id));
+  for (let m = 1; m <= 12; m++) assert.ok(rain.some(x => x.months.includes(m)), m + ' 月沒有雨天生物');
+});
+
+test('生日與送禮喜好：22 位、日期不重複、喜好物件存在', { skip: !I.BDAY && '尚未產生' }, () => {
+  const keys = ctx.TA.SUBJECTS.map(s => s.id).concat((I.GUESTS || []).map(g => 'guest:' + g.id));
+  const dates = new Set(), ids = new Set([...I.FISH, ...I.BUGS, ...I.FOSSILS, ...I.FURNITURE].map(x => x.id)), cats = new Set(I.FURNITURE.map(f => f.cat));
+  keys.forEach(k => {
+    const b = I.BDAY[k]; assert.ok(b, '缺 ' + k);
+    assert.match(b.date, /^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, k + ' 日期');
+    assert.ok(!['01-22', '01-23', '01-24'].includes(b.date), k + ' 撞學測');
+    assert.ok(!dates.has(b.date), k + ' 生日重複'); dates.add(b.date);
+    (b.likes.items || []).forEach(id => assert.ok(ids.has(id), k + ' 最愛不存在 ' + id));
+    [...(b.likes.cats || []), ...(b.dislikes.cats || [])].forEach(c => assert.ok(cats.has(c), k + ' 家具類別 ' + c));
+    [...(b.likes.kinds || []), ...(b.dislikes.kinds || [])].forEach(x => assert.ok(['fish', 'bug', 'fossil', 'furn'].includes(x), k + ' 類型 ' + x));
+    ['birthday', 'party', 'love', 'like', 'ok', 'meh', 'thanks'].forEach(x => assert.ok(b.lines[x] && b.lines[x].length >= 1, k + ' lines.' + x));
+  });
+  ctx.TA.SUBJECTS.forEach(s => assert.ok(I.PLAYER_BDAY[s.id], 'PLAYER_BDAY ' + s.id));
+});
+
+test('大賽、弱點委託、互贈禮物與搬遷台詞；大賽獎盃', { skip: !I.LINES2 && '尚未產生' }, () => {
+  const L = I.LINES2, ok = (arr, need, ban, label) => { assert.ok(Array.isArray(arr) && arr.length >= 2, label + ' 數量'); arr.forEach(t => { assert.ok(typeof t === 'string' && t.length >= 6 && !/�|[\r\n]/.test(t), label + ' 文字'); need.forEach(k => assert.ok(t.includes('{' + k + '}'), label + ' 缺 {' + k + '}')); (t.match(/\{(\w+)\}/g) || []).forEach(m => assert.ok(need.includes(m.slice(1, -1)), label + ' 多餘 ' + m)); ban.forEach(w => assert.ok(!t.includes(w), label + ' 不應出現「' + w + '」')); }); };
+  ctx.TA.SUBJECTS.forEach(s => {
+    const v = L[s.id]; assert.ok(v, s.id);
+    ok(v.weak, ['unit'], [], s.id + '.weak'); ok(v.weakDone, [], [], s.id + '.weakDone');
+    ok(v.giveTo, ['to', 'item'], ['幫我送', '替我送', '帶給'], s.id + '.giveTo'); ok(v.getFrom, ['from'], ['謝謝你帶', '替'], s.id + '.getFrom');
+    ok(v.moveAsk, [], [], s.id + '.moveAsk'); ok(v.moveDone, [], [], s.id + '.moveDone');
+  });
+  [['fish', 'english'], ['bug', 'biology']].forEach(([k, host]) => {
+    const t = L.tourney[k]; assert.equal(t.host, host);
+    ['intro', 'start', 'end', 'gold', 'silver', 'bronze', 'none'].forEach(f => ok(t[f], [], [], k + '.' + f));
+    ['gold', 'silver'].forEach(m => assert.ok(I.FURNITURE.some(f => f.id === `cup_${k}_${m}` && f.src === 'event:' + k + '_cup' && /^[^?]+$/.test(f.name)), `cup_${k}_${m}`));
+  });
+});
+
+test('花園遺傳：孟德爾比例、出題答案正確、選項不重複', async () => {
+  const G = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/genetics.js')).href);
+  assert.deepEqual(G.ratio('pea', 'PpTt', 'PpTt').nums, [9, 3, 3, 1]);
+  assert.deepEqual(G.ratio('pea', 'PpTt', 'pptt').nums, [1, 1, 1, 1]);
+  assert.deepEqual(G.ratio('mira', 'RW', 'RW').nums, [1, 2, 1]);
+  assert.deepEqual(G.ratio('pea', 'PPTT', 'pptt').ids, ['pea_pt']);
+  assert.equal(G.clean('pea', 'pPtT'), 'PpTt'); assert.equal(G.clean('mira', 'WR'), 'RW');
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const c = {}; for (let i = 0; i < 16000; i++) { const id = G.phenoOf('pea', G.breed('pea', 'PpTt', 'PpTt', rnd)); c[id] = (c[id] || 0) + 1; }
+  assert.ok(Math.abs(c.pea_pt / 16000 - 9 / 16) < 0.02 && Math.abs(c.pea_wd / 16000 - 1 / 16) < 0.01, '隨機子代符合 9:3:3:1');
+  const pea = ['PPTT', 'PPTt', 'PpTT', 'PpTt', 'PPtt', 'Pptt', 'ppTT', 'ppTt', 'pptt'], mira = ['RR', 'RW', 'WW'];
+  const val = f => (f.includes('/') ? f.split('/')[0] / f.split('/')[1] : +f);
+  [['pea', pea], ['mira', mira]].forEach(([sp, all]) => all.forEach(a => all.forEach(b => ['pheno', 'geno', 'ratio'].forEach(kind => {
+    const ch = G.breed(sp, a, b, rnd), q = G.question(sp, a, b, ch, kind, rnd);
+    assert.equal(q.o.length, 4, q.q); assert.equal(new Set(q.o).size, 4, q.q + ' 選項重複');
+    const ans = q.o[q.a];
+    if (/比例/.test(q.q)) assert.equal(ans, G.ratio(sp, a, b).nums.join('：'), q.q);
+    else if (/基因型是/.test(q.q)) { const [n, t] = G.probGenoGivenPheno(sp, a, b, ch); assert.ok(Math.abs(val(ans) - n / t) < 1e-9, q.q); }
+    else { const pn = q.q.match(/「(.+?)」/)[1], id = G.PHENOS.find(p => p.name === pn).id, [n, t] = G.probPheno(sp, a, b, id); assert.ok(Math.abs(val(ans) - n / t) < 1e-9, q.q); }
+  }))));
+});
+
+test('觀星：恆星時與地平座標、星表資料', async () => {
+  const A = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/astro.js')).href);
+  const d = new Date('2026-10-15T13:00:00Z');   // 台灣 21:00
+  const L = A.lst(d); assert.ok(L > 22.4 && L < 22.9, '十月晚上九點的恆星時約 22.7 時：' + L);
+  const [pa, paz] = A.altAz(2.53, 89.26, L); assert.ok(Math.abs(pa - 23.5) < 1.2 && (paz < 3 || paz > 357), '北極星高度約等於緯度');
+  const [va, vaz] = A.altAz(18.62, 38.78, L); assert.ok(va > 20 && va < 50 && vaz > 270 && vaz < 320, '十月晚上織女星在西北方');
+  const [sa] = A.altAz(6.75, -16.7, L); assert.ok(sa < 0, '十月晚上九點天狼星還沒升起');
+  assert.ok(A.activeShower([{ peak: '12-14', days: 2 }], new Date(2026, 11, 13, 22)), '雙子座流星雨期間');
+  assert.ok(!A.activeShower([{ peak: '12-14', days: 2 }], new Date(2026, 11, 20, 22)));
+  if (!I.CONSTELLATIONS) return;
+  assert.ok(I.CONSTELLATIONS.length >= 18);
+  const ids = new Set(), byName = {};
+  I.CONSTELLATIONS.forEach(c => {
+    assert.ok(!ids.has(c.id), c.id); ids.add(c.id);
+    assert.ok(c.name && c.en && '春夏秋冬'.includes(c.season) && c.desc && c.fact && c.bright, c.id + ' 欄位');
+    assert.ok(c.stars.length >= 3 && c.stars.length <= 14, c.id + ' 星數');
+    c.stars.forEach(s => { assert.ok(s.ra >= 0 && s.ra < 24 && s.dec >= -90 && s.dec <= 90 && s.mag > -2 && s.mag < 7, c.id + ' 座標'); if (s.n) byName[s.n] = s; });
+    c.lines.forEach(([a, b]) => assert.ok(c.stars[a] && c.stars[b] && a !== b, c.id + ' 連線'));
+  });
+  [['參宿四', 5.92, 7.4], ['天狼星', 6.75, -16.7], ['織女一', 18.62, 38.8], ['北極星', 2.53, 89.3], ['心宿二', 16.49, -26.4]].forEach(([n, ra, dec]) => {
+    const s = byName[n] || Object.values(byName).find(x => x.n && x.n.includes(n.slice(0, 2))); assert.ok(s, '找不到 ' + n);
+    assert.ok(Math.abs(s.ra - ra) < 0.15 && Math.abs(s.dec - dec) < 1.2, n + ' 座標');
+  });
+  assert.ok((I.METEOR_SHOWERS || []).length >= 6 && I.METEOR_SHOWERS.every(m => /^\d\d-\d\d$/.test(m.peak) && m.name && m.zhr > 0));
+});
+
+test('島民作客台詞：十位、13 種情境、placeholder 正確', { skip: !I.LINES3 && '尚未產生' }, () => {
+  const F = ['arrive', 'love', 'mine', 'r1', 'r2', 'r3', 'r4', 'r5', 'study', 'studyGood', 'studyOk', 'bye', 'invite'];
+  ctx.TA.SUBJECTS.forEach(s => {
+    const v = I.LINES3[s.id]; assert.ok(v, s.id);
+    F.forEach(f => { assert.ok(Array.isArray(v[f]) && v[f].length >= 2, s.id + '.' + f); v[f].forEach(t => { assert.ok(!/�|[\r\n]/.test(t), s.id + '.' + f + ' 文字'); const ph = (t.match(/\{(\w+)\}/g) || []); if (f === 'love' || f === 'mine') assert.deepEqual(ph, ['{item}'], s.id + '.' + f); else assert.equal(ph.length, 0, s.id + '.' + f); }); });
+  });
+});
+
+test('潮汐：月相、大小潮、一天兩次滿潮；潮間帶生物資料', async () => {
+  const A = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/astro.js')).href);
+  assert.ok(A.moonAge(new Date('2026-10-10T16:00:00Z')) < 1 || A.moonAge(new Date('2026-10-10T16:00:00Z')) > 28.5, '2026/10/10 附近是新月');
+  assert.equal(A.moonPhase(14.8), '滿月'); assert.equal(A.moonPhase(7.4), '上弦月');
+  assert.ok(A.tideRange(0) > 0.95 && A.tideRange(7.38) < 0.45, '大潮與小潮');
+  const tab = A.tideTable(new Date('2026-10-15T12:00:00+08:00'));
+  assert.ok(tab.filter(x => x.high).length >= 1 && tab.filter(x => !x.high).length >= 1 && tab.length <= 4, '一天約兩次滿潮兩次乾潮');
+  const hi = tab.filter(x => x.high); if (hi.length >= 2) assert.ok(Math.abs(hi[1].t - hi[0].t - 12.42) < 0.25, '兩次滿潮相隔約 12 時 25 分：' + (hi[1].t - hi[0].t));
+  const t0 = hi[0].t, t1 = A.tideTable(new Date('2026-10-16T12:00:00+08:00')).filter(x => x.high)[0].t, dd = ((t1 - t0) % 12.42 + 12.42) % 12.42; assert.ok(Math.abs(dd - 0.84) < 0.3, '隔天潮時約晚 50 分鐘：' + dd);
+  if (!I.SEALIFE) return;
+  const ids = new Set(); assert.ok(I.SEALIFE.length >= 18);
+  I.SEALIFE.forEach(x => { assert.ok(!ids.has(x.id) && /^[a-z0-9_]+$/.test(x.id), x.id); ids.add(x.id); assert.ok(['pool', 'rock', 'mud'].includes(x.where) && x.rarity >= 1 && x.rarity <= 5 && x.desc && x.desc.length >= 30 && x.name, x.id); assert.ok(!I.ICONS || I.ICONS[x.id], x.id + ' 圖示'); });
+  [1, 6, 12].forEach(m => ['pool', 'rock', 'mud'].forEach(w => assert.ok(I.SEALIFE.some(x => x.where === w && (!x.months || x.months.includes(m))), m + ' 月 ' + w)));
+});
+
+test('潮汐夜祭：十位島民台詞、商店台詞、四件限定家具', { skip: !I.LINES4 && '尚未產生' }, () => {
+  ctx.TA.SUBJECTS.forEach(s => ['trick', 'treat', 'prank', 'costume'].forEach(f => { const a = I.LINES4[s.id] && I.LINES4[s.id][f]; assert.ok(Array.isArray(a) && a.length >= 2, s.id + '.' + f); a.forEach(t => assert.ok(!/\{|�|[\r\n]/.test(t) && t.length >= 8, s.id + '.' + f)); }));
+  ['intro', 'trade'].forEach(f => assert.ok((I.LINES4.shop[f] || []).length >= 2, 'shop.' + f));
+  const hw = I.FURNITURE.filter(f => f.src === 'event:halloween'); assert.ok(hw.length >= 4, '夜祭家具');
+});
+
+test('料理與礦物：食材與效果合法、圖示齊全', { skip: !I.FOODS && '尚未產生' }, () => {
+  const ids = new Set(); assert.ok(I.FOODS.length >= 8);
+  I.FOODS.forEach(f => { assert.ok(!ids.has(f.id), f.id); ids.add(f.id); assert.ok(['bells', 'luck', 'speed'].includes(f.effect) && f.fact && f.fact.length >= 30 && f.price > 0, f.id); Object.entries(f.need).forEach(([k, n]) => assert.ok(['fruit', 'fish', 'shellfish', 'oyster', 'pea', 'branch'].includes(k) && n >= 1 && n <= 4, f.id + ' ' + k)); assert.ok(!I.ICONS || I.ICONS[f.id], f.id + ' 圖示'); });
+  assert.ok(I.MINERALS.length >= 18);
+  I.MINERALS.forEach(m => { assert.ok(!ids.has(m.id), m.id); ids.add(m.id); assert.ok(m.mohs >= 1 && m.mohs <= 10 && m.rarity >= 1 && m.rarity <= 5 && m.desc.length >= 40, m.id); assert.ok(!I.ICONS || I.ICONS[m.id], m.id + ' 圖示'); });
+  const byName = n => I.MINERALS.find(m => m.name.includes(n));
+  [['石英', 7], ['方解石', 3], ['石膏', 2], ['螢石', 4], ['剛玉', 9]].forEach(([n, h]) => assert.equal(byName(n).mohs, h, n + ' 莫氏硬度'));
+  assert.ok(!I.ICONS || I.ICONS.ore_unknown);
+});
+
+test('颱風天與熱氣球台詞', { skip: !I.LINES5 && '尚未產生' }, () => {
+  ctx.TA.SUBJECTS.forEach(s => ['home', 'tip', 'after'].forEach(f => { const a = I.LINES5[s.id] && I.LINES5[s.id][f]; assert.ok(Array.isArray(a) && a.length >= 2, s.id + '.' + f); a.forEach(t => assert.ok(!/\{|\uFFFD|[\r\n]/.test(t) && t.length >= 8, s.id + '.' + f)); }));
+  ['spot', 'win', 'miss'].forEach(f => assert.ok((I.LINES5.balloon[f] || []).length >= 3, 'balloon.' + f));
+});
+
+test('數學謎題石碑：各題型 4 個不重複選項、答案正確', async () => {
+  const M = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/mathgen.js')).href);
+  let seed = 11; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const val = s => (s.includes('/') && !s.includes('√') ? s.split('/')[0] / s.split('/')[1] : +s);
+  M.TYPES.forEach(t => { for (let i = 0; i < 300; i++) {
+    const q = M.make(t, r);
+    assert.equal(q.o.length, 4, t + ' ' + q.q); assert.equal(new Set(q.o).size, 4, t + ' 重複 ' + q.o); assert.ok(q.a >= 0 && q.a < 4, t);
+    assert.ok(!q.o.some(o => o.includes("'")), t + ' 補位選項 ' + q.o);
+    const ans = q.o[q.a];
+    if (t === 'dice') { const s = +q.q.match(/和為 (\d+)/)[1]; let n = 0; for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) if (a + b === s) n++; assert.ok(Math.abs(val(ans) - n / 36) < 1e-9, q.q); }
+    if (t === 'arith') { const [a1, a2] = q.q.match(/-?\d+/g).map(Number), n = +q.q.match(/第 (\d+) 項/)[1]; assert.equal(+ans, a1 + (n - 1) * (a2 - a1)); }
+    if (t === 'log') { const m = q.q.match(/log\S* (\d+)（以 (\d+) 為底）/); assert.ok(m, q.q); assert.equal(Math.round(Math.log(+m[1]) / Math.log(+m[2])), +ans); }
+    if (t === 'comb') { const [n, k] = q.q.match(/\d+/g).map(Number); let c = 1; for (let j = 1; j <= k; j++) c = c * (n - k + j) / j; assert.equal(+ans, Math.round(c)); }
+  } });
+  assert.deepEqual(M.daily('2026-10-15', 0), M.daily('2026-10-15', 0), '同一天同一塊石碑題目固定');
+  for (let d = 1; d <= 60; d++) { const k = `2026-11-${String(d % 28 + 1).padStart(2, '0')}x${d}`, qs = [0, 1, 2].map(i => M.daily(k, i).q); assert.equal(new Set(qs).size, 3, '同一天三塊石碑題目不同 ' + k); }
+});
+
+test('冬季節慶與考前衝刺台詞、三件節慶家具', { skip: !I.LINES6 && '尚未產生' }, () => {
+  ctx.TA.SUBJECTS.forEach(s => ['solstice', 'xmas', 'lantern', 'cram', 'examday'].forEach(f => { const a = I.LINES6[s.id] && I.LINES6[s.id][f]; assert.ok(Array.isArray(a) && a.length >= 2, s.id + '.' + f); a.forEach(t => assert.ok(!/\{|\uFFFD|[\r\n]/.test(t) && t.length >= 8, s.id + '.' + f)); }));
+  ['event:xmas', 'event:solstice', 'event:lantern'].forEach(src => assert.ok(I.FURNITURE.some(f => f.src === src), src));
+});
+
+test('年代排序資料：三區數量、同區不同年、欄位', { skip: !I.TIMELINE && '尚未產生' }, () => {
+  const ids = new Set(), by = {};
+  I.TIMELINE.forEach(e => { assert.ok(!ids.has(e.id), e.id); ids.add(e.id); assert.ok(['tw', 'ea', 'world'].includes(e.area) && Number.isInteger(e.y) && e.label && e.note, e.id); const k = e.area + e.y; assert.ok(!by[k], '同區同年 ' + e.id); by[k] = 1; assert.ok(!/\d{3,4}/.test(e.label), e.id + ' label 不含年份'); });
+  ['tw', 'ea', 'world'].forEach(a => assert.ok(I.TIMELINE.filter(e => e.area === a).length >= 20, a));
+  const y = id => (I.TIMELINE.find(e => e.id === id) || {}).y;
+  const find = re => I.TIMELINE.find(e => re.test(e.label));
+  [[/馬關條約/, 1895], [/二二八/, 1947], [/解嚴/, 1987], [/辛亥革命|武昌起義/, 1911], [/法國大革命/, 1789], [/柏林圍牆/, 1989]].forEach(([re, yy]) => { const e = find(re); if (e) assert.equal(e.y, yy, e.label); });
+});
+
+test('島民議會：計票制度與最大餘數法', async () => {
+  const V = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/vote.js')).href);
+  // 經典例子：A 相對多數勝，但兩輪與排序複選由 B 勝
+  const g = [{ n: 40, order: ['A', 'C', 'D', 'B'] }, { n: 35, order: ['B', 'C', 'D', 'A'] }, { n: 25, order: ['C', 'B', 'D', 'A'] }];
+  assert.equal(V.plurality(g).win, 'A'); assert.equal(V.runoff(g).win, 'B'); assert.equal(V.irv(g).win, 'B');
+  assert.equal(V.runoff([{ n: 60, order: ['D', 'A', 'B', 'C'] }, { n: 40, order: ['A', 'B', 'C', 'D'] }]).t2, null);
+  // 最大餘數法：門檻以下不分配，總席次正確
+  const h = V.hare({ X: 4600, Y: 3300, Z: 1600, W: 400 }, 10, 0.05);
+  assert.deepEqual(h.ok, ['X', 'Y', 'Z']); assert.equal(h.seats.W, 0); assert.equal(h.seats.X + h.seats.Y + h.seats.Z, 10);
+  assert.deepEqual([h.seats.X, h.seats.Y, h.seats.Z], [5, 3, 2]);   // 4.842/3.474/1.684 → 4/3/1，餘數 .842、.684 各加一席
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 300; i++) {
+    const b = V.ballots(rnd); assert.ok(b, '產生選票');
+    assert.ok(new Set([b.p.win, b.r.win, b.v.win]).size >= 2);
+    const N = V.total(b.groups); assert.ok(b.v.rounds[b.v.rounds.length - 1][b.v.win] * 2 > N || b.v.rounds.length === 3);
+    const P = V.partyVote(rnd); assert.ok(P, '產生政黨票');
+    assert.equal(Object.values(P.h.seats).reduce((a, x) => a + x, 0), 34);
+    V.PARTIES.forEach(p => { if (P.votes[p] / P.tot < 0.05) assert.equal(P.h.seats[p], 0, p); });
+  }
+});
+
+test('函數圖形題：正解相符、四個選項圖形互不相同', async () => {
+  const G = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/graphs.js')).href);
+  let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  Object.keys(G.KINDS).forEach(k => {
+    for (let i = 0; i < 400; i++) {
+      const q = G.question(rnd, k); assert.ok(q, k);
+      assert.equal(q.opts.length, 4); assert.equal(new Set(q.opts.map(o => o.tex)).size, 4, k + ' 選項文字重複');
+      assert.equal(q.opts[q.a].p, q.p);
+      for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) assert.ok(G.gap(q.opts[a].f, q.opts[b].f, q.view) >= 0.8, k + ' ' + q.opts[a].tex + ' ~ ' + q.opts[b].tex);
+      assert.ok(!/undefined|NaN/.test(q.opts.map(o => o.tex).join() + q.hint), q.hint);
+    }
+  });
+  // 文字格式
+  assert.equal(G.KINDS.quad.tex({ a: 1, h: 2, k: -3 }), 'y = (x − 2)<sup>2</sup> − 3');
+  assert.equal(G.KINDS.quad.tex({ a: -2, h: -1, k: 0 }), 'y = −2(x + 1)<sup>2</sup>');
+  assert.equal(G.KINDS.exp.tex({ t: 'log', b: 0.5, k: 1 }), 'y = log<sub>½</sub> x + 1');
+  assert.equal(G.KINDS.trig.tex({ fn: 'sin', A: 2, B: 0.5 }), 'y = 2 sin (x/2)');
+  assert.equal(G.KINDS.trig.tex({ fn: 'cos', A: -1, B: 2 }), 'y = −cos 2x');
+});
+
+test('元素資料：族、週期、分類、提示不洩漏答案', { skip: !I.ELEMENTS && '尚未產生' }, () => {
+  const E = I.ELEMENTS, CAT = ['alkali', 'alkaline', 'transition', 'post', 'metalloid', 'nonmetal', 'halogen', 'noble', 'actinide'];
+  assert.equal(E.length, 47); assert.equal(new Set(E.map(e => e.sym)).size, 47);
+  const ends = [2, 10, 18, 36, 54, 86, 118];
+  E.forEach(e => {
+    assert.equal(e.period, ends.findIndex(x => e.z <= x) + 1, e.sym + ' 週期');
+    assert.ok(CAT.includes(e.cat), e.sym); assert.ok(['s', 'l', 'g'].includes(e.state), e.sym); assert.ok((e.mass > 0 || /^\[\d+\]$/.test(e.mass)) && e.fact, e.sym);
+    assert.equal(e.clue.length, 3); e.clue.forEach(c => assert.ok(!c.includes(e.zh) && !c.includes(e.sym) && !c.includes(String(e.z)), e.sym + '：' + c));
+    if (e.z <= 2) assert.equal(e.group, e.z === 1 ? 1 : 18);
+  });
+  const g = s => E.find(e => e.sym === s);
+  [['Na', 1, 'alkali'], ['Ca', 2, 'alkaline'], ['Fe', 8, 'transition'], ['Zn', 12, 'transition'], ['Al', 13, 'post'], ['Si', 14, 'metalloid'], ['Cl', 17, 'halogen'], ['Ar', 18, 'noble'], ['Au', 11, 'transition'], ['Pb', 14, 'post'], ['I', 17, 'halogen'], ['Ba', 2, 'alkaline']].forEach(([s, gr, c]) => { assert.equal(g(s).group, gr, s); assert.equal(g(s).cat, c, s); });
+  assert.equal(g('U').group, null); assert.equal(g('Br').state, 'l'); assert.equal(g('Hg').state, 'l'); assert.equal(g('Ga').state, 's');
+});
+test('成語資料：60 則、例句含成語', { skip: !I.IDIOMS && '尚未產生' }, () => {
+  const D = I.IDIOMS; assert.equal(D.length, 60); assert.equal(new Set(D.map(d => d.w)).size, 60);
+  D.forEach(d => { assert.equal([...d.w].length, 4, d.w); assert.ok(d.ok.includes(d.w) && d.bad.includes(d.w) && d.mean && d.why, d.id); assert.notEqual(d.ok, d.bad); });
+});
+
+test('夜市機率題：期望值與不放回機率', async () => {
+  const V = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/ev.js')).href);
+  assert.equal(V.diceAtLeast(7), 21); assert.equal(V.diceAtLeast(12), 1); assert.equal(V.diceAtLeast(2), 36);
+  assert.equal(V.frac(6, 36), '1/6'); assert.equal(V.frac(4, 2), '2');
+  let seed = 5; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const num = s => Number(s.replace('−', '-').replace('+', ''));
+  for (let i = 0; i < 300; i++) Object.keys(V.BOOTHS).forEach(k => {
+    const q = V.question(rnd, k);
+    assert.equal(q.opts.length, 4, k); assert.equal(new Set(q.opts).size, 4, k + ' 選項重複 ' + q.opts);
+    assert.ok(q.a >= 0, k); assert.ok(!/NaN|undefined|Infinity/.test(q.text + q.why + q.opts.join()), k);
+    if (k !== 'balls') { assert.equal(num(q.opts[q.a]), q.ev, k); assert.ok(Number.isInteger(q.ev)); q.opts.forEach(o => assert.ok(Number.isInteger(num(o)), k + ' ' + o)); }
+  });
+  // 撈球：3 紅 2 白、兩顆都紅 = 3/5 × 2/4 = 3/10
+  let s2 = 0; const fixed = () => [0.3, 0.0, 0.0][s2++ % 3];
+  const r = 2 + Math.floor(0.3 * 4), w = 2;   // 與產生器相同的抽法：r = 3、w = 2、kind = rr
+  const q = V.BOOTHS.balls(fixed); assert.match(q.text, new RegExp(`${r} 顆紅球、${w} 顆白球`)); assert.equal(q.opts[q.a], '3/10');
+});
+
+test('月相觀測題：時刻、方位與答案一致', async () => {
+  const M = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/moonq.js')).href);
+  assert.deepEqual(M.times(4), { rise: 18, transit: 0, set: 6 });   // 滿月：傍晚升起、午夜最高、清晨落下
+  assert.deepEqual(M.times(2), { rise: 12, transit: 18, set: 0 });  // 上弦
+  assert.deepEqual(M.times(6), { rise: 0, transit: 6, set: 12 });   // 下弦
+  assert.equal(M.hh(0), '午夜 12 點'); assert.equal(M.hh(15), '下午 3 點'); assert.equal(M.hh(3), '凌晨 3 點'); assert.equal(M.hh(21), '晚上 9 點');
+  assert.ok(M.lit(M.ageOf(4)) > 0.99 && M.lit(0) < 0.01 && Math.abs(M.lit(M.ageOf(2)) - 0.5) < 0.01);
+  assert.equal(M.side(2), '右（西）'); assert.equal(M.side(6), '左（東）');
+  let seed = 3; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let n = 0; n < 400; n++) Object.keys(M.KINDS).forEach(k => {
+    const q = M.question(rnd, k); assert.equal(q.opts.length, 4, k); assert.equal(new Set(q.opts).size, 4, k); assert.ok(q.a >= 0);
+    assert.ok(!/undefined|NaN|null/.test(q.q + q.why), k + q.q);
+    if (k === 'picture' || k === 'when') assert.equal(q.opts[q.a], M.PHASES[q.i]);
+    if (k === 'when') { const t = M.times(q.i); const h = [t.rise, t.transit, t.set].find(x => q.q.startsWith(M.hh(x))); assert.ok(h != null, q.q); }
+  });
+});
+
+test('夢境島：夢幻家具與島民台詞', () => {
+  const c2 = { console, Math, Date, JSON }; c2.window = c2; c2.globalThis = c2; vm.createContext(c2);
+  ['src/isle/data/furniture.js', 'src/isle/data/hotelfurn.js', 'src/isle/data/dreamfurn.js', 'src/isle/data/dreamlines.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), c2, { filename: f }));
+  const J = c2.TA.ISLE, F = J.FURNITURE.filter(f => f.src === 'dream');
+  assert.ok(F.length >= 12, '夢幻家具數量');
+  assert.equal(new Set(J.FURNITURE.map(f => f.id)).size, J.FURNITURE.length, '家具 id 重複');
+  F.forEach(f => {
+    assert.ok(Number.isInteger(f.shard) && f.shard >= 3 && f.shard <= 15, f.id + ' 碎片數');
+    const [w, d] = f.size; assert.ok([1, 2].includes(w) && [1, 2].includes(d), f.id + ' 尺寸');
+    assert.ok(f.parts.length >= 3 && f.parts.length <= 30, f.id + ' 零件數');
+    f.parts.forEach(p => { assert.ok(['box', 'cyl', 'sph', 'cone', 'tor'].includes(p.t)); assert.match(p.c, /^#[0-9a-f]{6}$/i); assert.ok(Math.abs(p.p[0]) <= w / 2 + 0.06 && Math.abs(p.p[2]) <= d / 2 + 0.06 && p.p[1] >= -0.01 && p.p[1] <= 2.5, f.id + ' 零件位置'); });
+  });
+  const L = J.DREAMLINES, K = ['any', 'night', 'rain', 'snow', 'petal', 'meteor', 'water', 'high', 'flowers', 'sparse', 'rich', 'bench', 'wish', 'jump'];
+  ctx.TA.SUBJECTS.forEach(s => K.forEach(k => { assert.ok(Array.isArray(L[s.id] && L[s.id][k]) && L[s.id][k].length >= 2, `${s.id}.${k}`); L[s.id][k].forEach(t => assert.ok(t.length >= 8 && t.length <= 60 && !/[,.]/.test(t), `${s.id}.${k}: ${t}`)); }));
+});
+
+test('單字燈塔：測驗題的選項、答案與挖空，翻卡排程與級數統計', async () => {
+  ['vocab-34', 'vocab-56', 'vocab-x34', 'vocab-x56'].forEach(n => load(`src/data/${n}.js`));
+  const V = ctx.TA.DATA.vocab; assert.ok(V.length > 1000, '單字數量');
+  const X = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/lexq.js')).href);
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const esc = s => s.replace(/[-/\^$*+?.()|[\]{}]/g, '\$&');
+  for (const kind of ['meaning', 'cloze', 'reverse', 'mix']) {
+    for (let round = 0; round < 8; round++) {
+      const qs = X.buildQuiz(kind, V.slice(round * 250, round * 250 + 250), 15, V, rnd);
+      assert.equal(qs.length, 15);
+      qs.forEach(q => {
+        assert.equal(q.o.length, 4, q.id); assert.equal(new Set(q.o).size, 4, '選項重複 ' + q.id);
+        assert.equal(q.o[q.a], q.kind === 'meaning' ? q.vocab.zh : q.vocab.w, '答案位置 ' + q.id);
+        if (kind !== 'mix') assert.ok(q.kind === kind || (kind === 'cloze' && q.kind === 'meaning'), '題型 ' + q.id);
+        if (q.kind === 'cloze') { const sent = q.q.split('<br>')[0]; assert.ok(sent.includes('＿＿＿＿')); assert.ok(!new RegExp('\b' + esc(q.vocab.w) + '\b', 'i').test(sent), '挖空後還看得到答案 ' + q.id); }
+        assert.ok(!/<(?!\/?(b|i|br)>)/.test(q.q + q.e), '只能用 b、i、br 標籤 ' + q.id);
+        assert.equal(q.subject, 'english'); assert.ok(q.d >= 1 && q.d <= 3);
+      });
+    }
+  }
+  assert.equal(X.blank({ w: 'happy', ex: 'Happy kids make happy parents.' }), '＿＿＿＿ kids make ＿＿＿＿ parents.');
+  assert.equal(X.blank({ w: 'decide', ex: 'She decided to stay.' }), 'She ＿＿＿＿ to stay.');
+  assert.equal(X.blank({ w: 'buy', ex: 'He bought a car.' }), null);   // 不規則變化找不到 → 改考意思
+  assert.equal(X.mark({ w: 'act', ex: 'In fact, they act fast.' }), 'In fact, they <b>act</b> fast.');
+  const due = [{ w: 'a', lv: 4 }, { w: 'b', lv: 3 }], fresh = [{ w: 'c', lv: 6 }, { w: 'd', lv: 3 }, { w: 'e', lv: 4 }];
+  const d = X.deck(0, 4, due, fresh, rnd, rnd);
+  assert.deepEqual(d.slice(0, 2).map(x => x.w).sort(), ['a', 'b'], '到期的字排前面');
+  assert.deepEqual(d.slice(2).map(x => x.lv), [3, 4], '新字由低級數往上');
+  assert.deepEqual(X.deck(3, 5, due, fresh, rnd, rnd).map(x => x.w), ['b', 'd'], '只取選定級數');
+  assert.deepEqual(X.levelStats([{ w: 'a', lv: 3 }, { w: 'b', lv: 3 }, { w: 'c', lv: 4 }, { w: 'f', lv: 3 }], { a: { s: 4 }, b: { s: 1 } }, 3, 4), { total: 3, m: 1, learning: 1, fresh: 1 });
+});
+
+test('導師研究計畫：十位導師各三階段，劇情、家具與第五段心事齊全', { skip: !I.RESEARCH && '研究計畫資料尚未加入' }, () => {
+  const subjects = ctx.TA.SUBJECTS.map(s => s.id);
+  const SIMP = /[这们说时会过还发现进对开关见问题门间应该个学习读书实验岛鱼鸟乐东车长页风]/;   // 常見的簡體字
+  const line = (t, where, max) => {
+    assert.ok(typeof t === 'string' && t.length >= 6 && t.length <= (max || 70), `${where} 長度 ${t && t.length}：${t}`);
+    assert.ok(!SIMP.test(t) && !/\?{3,}|undefined|\$\{/.test(t), `${where} 有簡體字或亂碼：${t}`);
+  };
+  const ids = new Set();
+  subjects.forEach(sid => {
+    const R = I.RESEARCH[sid]; assert.ok(R, sid + ' 研究計畫');
+    assert.ok(typeof R.title === 'string' && R.title.length >= 2 && R.title.length <= 12, sid + ' 計畫名稱');
+    assert.ok(Array.isArray(R.pitch) && R.pitch.length >= 3 && R.pitch.length <= 4, sid + ' pitch 句數'); R.pitch.forEach(t => line(t, sid + ' pitch'));
+    assert.ok(Array.isArray(R.stages) && R.stages.length === 3, sid + ' 三個階段');
+    R.stages.forEach((st, k) => {
+      const w = `${sid} 第 ${k + 1} 階段`;
+      assert.ok(typeof st.title === 'string' && st.title.length >= 2 && st.title.length <= 12, w + ' 標題');
+      line(st.goal, w + ' goal', 40);
+      assert.ok(Array.isArray(st.lines) && st.lines.length >= 5 && st.lines.length <= 8, w + ' 劇情句數'); st.lines.forEach(t => line(t, w));
+      const f = I.FURNITURE.find(x => x.id === st.furn);
+      assert.ok(f && f.src === 'research:' + sid && f.theme === sid, w + ' 家具 ' + st.furn);
+      assert.ok(!ids.has(st.furn), '研究家具重複使用 ' + st.furn); ids.add(st.furn);
+      line(f.desc, w + ' 家具說明', 60);
+    });
+    assert.ok(Array.isArray(R.done) && R.done.length >= 2 && R.done.length <= 3, sid + ' 結語句數'); R.done.forEach(t => line(t, sid + ' done'));
+    const B = (I.BONDS5 || {})[sid]; assert.ok(B && typeof B.title === 'string' && B.title.length >= 2 && B.title.length <= 12, sid + ' 第五段心事');
+    assert.ok(Array.isArray(B.lines) && B.lines.length >= 5 && B.lines.length <= 7, sid + ' 第五段心事句數'); B.lines.forEach(t => line(t, sid + ' 第五段心事'));
+  });
+  assert.equal(I.FURNITURE.filter(f => String(f.src).startsWith('research:')).length, 30, '研究家具共 30 件');
+});
+
+test('收藏目錄：每件拿得到的家具都寫得出怎麼拿到，活動來源都有名稱', async () => {
+  const Q = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/catalogq.js')).href);
+  const c2 = { console, Math, Date, JSON }; c2.window = c2; c2.globalThis = c2; vm.createContext(c2);
+  ['src/core/registry.js', 'src/isle/data/villagers.js', 'src/isle/data/furniture.js', 'src/isle/data/hotelfurn.js', 'src/isle/data/dreamfurn.js', 'src/isle/data/researchfurn.js', 'src/isle/data/collectfurn.js']
+    .filter(f => fs.existsSync(path.join(ROOT, f))).forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), c2, { filename: f }));
+  const J = c2.TA.ISLE, name = sid => (J.VILLAGERS.find(v => v.sid === sid) || {}).name || '';
+  const F = J.FURNITURE.filter(Q.inCatalog);
+  assert.ok(F.length >= 150, '家具數量');
+  F.forEach(f => { const h = Q.how(f, name); assert.ok(h && !/undefined/.test(h) && !h.startsWith('的'), `${f.id}（${f.src}）沒有取得方式`); });
+  [...new Set(F.map(f => f.src).filter(s => s.startsWith('event:')))].forEach(s => assert.ok(Q.EV[s.slice(6)], '活動來源沒有名稱 ' + s));
+  assert.ok(J.FURNITURE.some(f => f.src === 'hotel-fixed') ? J.FURNITURE.filter(f => !Q.inCatalog(f)).every(f => f.src === 'hotel-fixed') : true);
+  assert.equal(Q.full({ a: 1, b: 2 }, ['a', 'b']), true); assert.equal(Q.full({ a: 1 }, ['a', 'b']), false); assert.equal(Q.full({}, []), false);
+});

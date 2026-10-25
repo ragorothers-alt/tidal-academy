@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>潮汐小島</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/isle/isle.css">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="labels"></div>
+<div id="toasts"></div>
+
+<header class="hud-top">
+  <div class="hud-left"><div class="clock"><b id="hm">12:00</b><small id="date"></small><i id="wx">☀</i></div><div class="quest" id="quest" hidden></div></div>
+  <div class="tops"><button class="pill lv" id="lv" type="button" title="我的檔案"></button><span class="pill" id="exam">學測</span><span class="pill" id="goal">今日 0 / 30</span><span class="pill feel" id="feel" hidden title="採集時連續答對，稀有生物更容易出現"></span></div>
+</header>
+<div class="hud-bl" id="tools"></div>
+<div class="tourney" id="tourney" hidden></div>
+<div class="hud-br">
+  <button class="round-btn design-btn" id="designBtn" type="button" title="島嶼設計 (G)">🌷</button>
+  <button class="round-btn decor-btn" id="decorBtn" type="button" title="裝潢 (F)">🛋</button>
+  <button class="round-btn" id="pocketBtn" type="button" title="口袋 (I)">🎒</button>
+  <button class="round-btn" id="phoneBtn" type="button" title="潮汐手機 (Tab)"><svg viewBox="0 0 48 48" width="30" height="30" aria-hidden="true"><rect x="12.5" y="5" width="23" height="38" rx="7" fill="#fffbe9" stroke="#25a58a" stroke-width="3.4"/><rect x="16.5" y="11" width="15" height="21" rx="3.2" fill="#8fe6cf"/><path d="M24 14.5c4.6 1.4 5.6 5.6 3.2 9.3-3.6-1-5.6-4.6-3.2-9.3z" fill="#fff"/><path d="M24.6 23.6l-2.4-5.2" stroke="#8fe6cf" stroke-width="1.2" stroke-linecap="round"/><circle cx="24" cy="37.4" r="2.4" fill="#25a58a"/></svg></button>
+  <div class="bells"><i class="bell"></i><b id="bells">0</b><i class="gem" title="潮晶：答題、單字、專注與成就的獎勵"></i><b id="gems">0</b></div>
+</div>
+<button class="act-btn" id="actBtn" type="button">動作</button>
+<button class="jump-btn" id="jumpBtn" type="button" aria-label="跳躍">跳</button>
+<div class="joy" id="joy"><i id="joyKnob"></i></div>
+<div class="place-bar" id="placeBar"><button type="button" id="pbRotate">↻ 旋轉</button><button type="button" id="pbCancel">✕ 結束</button></div>
+
+<div class="dlg" id="dlg" hidden>
+  <div class="dlg-bubble">
+    <span class="dlg-name" id="dlgName"></span>
+    <div class="dlg-timer" id="dlgTimer" hidden><i></i></div>
+    <div class="dlg-text" id="dlgText"></div>
+    <i class="dlg-next" id="dlgNext">▼</i>
+  </div>
+  <div class="choices" id="choices"></div>
+</div>
+<div class="passage" id="passage" hidden></div>
+<div class="card" id="card" hidden></div>
+<div class="panel" id="panel" hidden><div class="pn-box" id="panelBox"></div></div>
+
+<div class="splash" id="splash">
+  <div class="logo"><span>潮汐</span><b>小島</b></div>
+  <p><span>和島民聊天、釣魚、捉蟲、挖化石——</span><span>每一件事都在複習學測</span></p>
+  <small class="sp-info" id="spInfo"></small>
+  <button type="button" id="start" class="loading" disabled>島嶼載入中…</button>
+  <small class="sp-touch">左半邊按住拖曳移動（隱藏式搖桿：輕推慢走，再往外拖遠一點奔跑） · 右半邊拖曳轉視角（可以同時） · 點地面走過去、點島民聊天 · 「跳」最多三連跳 · 「動作」互動 · 兩指縮放</small>
+  <small class="sp-keys">WASD 移動 · Shift 奔跑 · 空白鍵跳（空中可再跳兩次） · E 互動 · V 風景鏡頭 · 滾輪／右鍵拖曳調視角 · F 第一人稱 · 1–4 工具 · C 螃蟹走路 · Tab 手機 · I 口袋</small>
+</div>
+
+<script src="src/core/registry.js"></script>
+<script src="src/core/util.js"></script>
+<script src="src/core/store.js"></script>
+<script src="src/core/learn.js"></script>
+<script src="src/core/creature.js"></script>
+<!--DATA-->
+<script src="src/data/biology-g.js"></script>
+<script src="src/data/biology-h.js"></script>
+<script src="src/data/biology-x.js"></script>
+<script src="src/data/biology-x3.js"></script>
+<script src="src/data/biology.js"></script>
+<script src="src/data/chemistry-g.js"></script>
+<script src="src/data/chemistry-h.js"></script>
+<script src="src/data/chemistry-x.js"></script>
+<script src="src/data/chemistry-x3.js"></script>
+<script src="src/data/chemistry.js"></script>
+<script src="src/data/chinese-h.js"></script>
+<script src="src/data/chinese-x.js"></script>
+<script src="src/data/chinese-x2.js"></script>
+<script src="src/data/chinese-x3.js"></script>
+<script src="src/data/chinese.js"></script>
+<script src="src/data/civics-g.js"></script>
+<script src="src/data/civics-h.js"></script>
+<script src="src/data/civics-x.js"></script>
+<script src="src/data/civics-x3.js"></script>
+<script src="src/data/civics.js"></script>
+<script src="src/data/earth-g.js"></script>
+<script src="src/data/earth-h.js"></script>
+<script src="src/data/earth-x.js"></script>
+<script src="src/data/earth-x3.js"></script>
+<script src="src/data/earth.js"></script>
+<script src="src/data/english-b.js"></script>
+<script src="src/data/english-h.js"></script>
+<script src="src/data/english-x.js"></script>
+<script src="src/data/english-x2.js"></script>
+<script src="src/data/english-x3.js"></script>
+<script src="src/data/english.js"></script>
+<script src="src/data/geography-g.js"></script>
+<script src="src/data/geography-h.js"></script>
+<script src="src/data/geography-x.js"></script>
+<script src="src/data/geography-x2.js"></script>
+<script src="src/data/geography-x3.js"></script>
+<script src="src/data/geography.js"></script>
+<script src="src/data/history-g.js"></script>
+<script src="src/data/history-h.js"></script>
+<script src="src/data/history-x.js"></script>
+<script src="src/data/history-x3.js"></script>
+<script src="src/data/history.js"></script>
+<script src="src/data/math-1.js"></script>
+<script src="src/data/math-2.js"></script>
+<script src="src/data/math-f.js"></script>
+<script src="src/data/math-g.js"></script>
+<script src="src/data/math-h.js"></script>
+<script src="src/data/math-x.js"></script>
+<script src="src/data/math-x3.js"></script>
+<script src="src/data/notes-biology.js"></script>
+<script src="src/data/notes-chemistry.js"></script>
+<script src="src/data/notes-chinese.js"></script>
+<script src="src/data/notes-civics.js"></script>
+<script src="src/data/notes-earth.js"></script>
+<script src="src/data/notes-english.js"></script>
+<script src="src/data/notes-geography.js"></script>
+<script src="src/data/notes-history.js"></script>
+<script src="src/data/notes-math.js"></script>
+<script src="src/data/notes-physics.js"></script>
+<script src="src/data/physics-g.js"></script>
+<script src="src/data/physics-h.js"></script>
+<script src="src/data/physics-x.js"></script>
+<script src="src/data/physics-x3.js"></script>
+<script src="src/data/physics.js"></script>
+<script src="src/data/vocab-34.js"></script>
+<script src="src/data/vocab-56.js"></script>
+<script src="src/data/vocab-x34.js"></script>
+<script src="src/data/vocab-x56.js"></script>
+<!--/DATA-->
+<script src="src/isle/data/creatures.js"></script>
+<script src="src/isle/data/villagers.js"></script>
+<script src="src/isle/data/icons.js"></script>
+<script src="src/isle/data/furniture.js"></script>
+<script src="src/isle/data/hotelfurn.js"></script>
+<script src="src/isle/data/dreamfurn.js"></script>
+<script src="src/isle/data/dreamlines.js"></script>
+<script src="src/isle/data/researchfurn.js"></script>
+<script src="src/isle/data/research.js"></script>
+<script src="src/isle/data/collectfurn.js"></script>
+<script src="src/isle/data/furnmodels.js"></script>
+<script src="src/isle/data/toolmodels.js"></script>
+<script src="src/isle/data/bldmodels.js"></script>
+<script src="src/isle/data/bldmodels5.js"></script>
+<script src="src/isle/data/bldmodels3.js"></script>
+<script src="src/isle/data/bldmodels4.js"></script>
+<script src="src/isle/data/bldmodels6.js"></script>
+<script src="src/isle/data/bldmodels7.js"></script>
+<script src="src/isle/data/lmmodels1.js"></script>
+<script src="src/isle/data/propmodels1.js"></script>
+<script src="src/isle/data/propmodels2.js"></script>
+<script src="src/isle/data/propmodels3.js"></script>
+<script src="src/isle/data/propmodels4.js"></script>
+<script src="src/isle/data/lmmodels2.js"></script>
+<script src="src/isle/data/lmmodels3.js"></script>
+<script src="src/isle/data/islandplan.js"></script>
+<script src="src/isle/data/lines.js"></script>
+<script src="src/isle/data/homes.js"></script>
+<script src="src/isle/data/homelines.js"></script>
+<script src="src/isle/data/guests.js"></script>
+<script src="src/isle/data/bday.js"></script>
+<script src="src/isle/data/lines2.js"></script>
+<script src="src/isle/data/stars.js"></script>
+<script src="src/isle/data/lines3.js"></script>
+<script src="src/isle/data/sealife.js"></script>
+<script src="src/isle/data/lines4.js"></script>
+<script src="src/isle/data/foods.js"></script>
+<script src="src/isle/data/minerals.js"></script>
+<script src="src/isle/data/lines5.js"></script>
+<script src="src/isle/data/lines6.js"></script>
+<script src="src/isle/data/timeline.js"></script>
+<script src="src/isle/data/elements.js"></script>
+<script src="src/isle/data/idioms.js"></script>
+<script src="src/isle/data/faces.js"></script>
+<script src="src/isle/data/appicons.js"></script>
+<script>TA.Store.load(); TA.L.index();</script>
+<script type="module" src="src/isle/main.js"></script>
+</body>
+</html>
