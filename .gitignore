@@ -3,3 +3,4 @@ node_modules/
 *.log
 .tripo-work/
 dist/
+.playwright-cli/

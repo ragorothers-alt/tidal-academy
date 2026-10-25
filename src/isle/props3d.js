@@ -100,7 +100,7 @@ function buildCanopy(g, model, kind, H) {
   const noleaf = new Map();
   model.traverse(o => { if (o.isMesh && !noleaf.has(o.material)) { const m = o.material.clone(); m.defines = Object.assign({}, m.defines, { TA_MODEL: '', TA_NOLEAF: '' }); noleaf.set(o.material, bend(m, kind)); } });
   // k-means 分團（先用最遠點挑起始中心，團的分布才會散開）
-  const K = 30, cs = [pts[0].clone()];
+  const K = 18, cs = [pts[0].clone()];   // 葉團少一點、大一點：遠看讀得出幾大團樹冠（以前 30 團，整棵是均勻的一片雜訊）
   while (cs.length < K) { let best = null, bd = -1; for (const p of pts) { let d = Infinity; for (const c of cs) d = Math.min(d, p.distanceToSquared(c)); if (d > bd) { bd = d; best = p; } } cs.push(best.clone()); }
   const lab = new Int32Array(pts.length);
   for (let it = 0; it < 8; it++) {
@@ -126,7 +126,7 @@ function buildCanopy(g, model, kind, H) {
   // 不會每一團各自像一顆球（看起來像花椰菜）
   const keepK = cs.map((c, k) => cnt[k] >= 6), C0 = new THREE.Vector3(); let nk = 0;
   cs.forEach((c, k) => { if (keepK[k]) { C0.add(c); nk++; } }); C0.divideScalar(nk); C0.y -= 0.25;
-  const cards = [], cores = [], v = new THREE.Vector3(), nn = new THREE.Vector3();
+  const cards = [], cores = [], v = new THREE.Vector3(), nn = new THREE.Vector3(), w = new THREE.Vector3();
   const place = (geo, c, rot, out, big, thin) => {
     const gg = geo.clone(); gg.rotateY(rot); gg.translate(c.x - C0.x, c.y - C0.y, c.z - C0.z);
     if (thin) { const ix = gg.index.array, keep = []; for (let q = 0; q < ix.length / 12; q++) if (((q * 7 + 3) % 10) / 10 >= thin) for (let j = 0; j < 12; j++) keep.push(ix[q * 12 + j]); gg.setIndex(keep); }   // 拿掉一部分葉片卡（每張卡 12 個索引）
@@ -135,7 +135,9 @@ function buildCanopy(g, model, kind, H) {
       const cx = (P.getX(i) + P.getX(i + 1) + P.getX(i + 2) + P.getX(i + 3)) / 4, cy = (P.getY(i) + P.getY(i + 1) + P.getY(i + 2) + P.getY(i + 3)) / 4, cz = (P.getZ(i) + P.getZ(i + 1) + P.getZ(i + 2) + P.getZ(i + 3)) / 4;
       for (let j = i; j < i + 4; j++) P.setXYZ(j, cx + (P.getX(j) - cx) * big, cy + (P.getY(j) - cy) * big, cz + (P.getZ(j) - cz) * big);
     }
-    for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).normalize(); nn.fromBufferAttribute(Nr, i).multiplyScalar(0.35).addScaledVector(v, 0.65).normalize(); Nr.setXYZ(i, nn.x, nn.y, nn.z); }
+    // 法線：整個樹冠的球面（體積）＋這一團自己的球面（一大團一大團的明暗，v7.0）＋一點卡片本身的方向（細碎）
+    const ox = c.x - C0.x, oy = c.y - C0.y, oz = c.z - C0.z;
+    for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); w.set(v.x - ox, v.y - oy + 0.15, v.z - oz).normalize(); v.normalize(); nn.fromBufferAttribute(Nr, i).multiplyScalar(0.2).addScaledVector(v, 0.48).addScaledVector(w, 0.32).normalize(); Nr.setXYZ(i, nn.x, nn.y, nn.z); }
     out.push(gg);
   };
   // 樹冠要透氣：下層與中心的葉團葉片稀一點、不放暗色內芯，枝椏之間看得到天空；頂端的葉團左右錯開一點，輪廓不會是尖尖的一頂帽子
@@ -143,7 +145,7 @@ function buildCanopy(g, model, kind, H) {
   cs.forEach((c, k) => { if (keepK[k]) { y0 = Math.min(y0, c.y); y1 = Math.max(y1, c.y); rH = Math.max(rH, Math.hypot(c.x - C0.x, c.z - C0.z)); } });
   cs.forEach((c, k) => {
     if (!keepK[k]) return;
-    const r = Math.min(0.85, Math.max(0.4, Math.sqrt(rad[k] / cnt[k]) * 1.15));   // 團和團互相重疊，連成一整片樹冠
+    const r = Math.min(1.05, Math.max(0.45, Math.sqrt(rad[k] / cnt[k]) * 1.15));   // 團和團互相重疊，連成一整片樹冠
     const t = (c.y - y0) / Math.max(y1 - y0, 0.01), inner = Math.hypot(c.x - C0.x, c.z - C0.z) < rH * 0.55, open = t < 0.45 || (inner && t < 0.9);
     const h = Math.abs(Math.sin(k * 12.9898) * 43758.5453) % 1, cc = t > 0.7 ? c.clone().add(new THREE.Vector3((h - 0.5) * 0.45, 0, ((h * 7.3) % 1 - 0.5) * 0.45)) : c;
     if (!open) place(leafGeo(r * 0.42, k), cc, 0, cores);

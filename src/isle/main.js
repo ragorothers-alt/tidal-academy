@@ -1843,6 +1843,7 @@ function tick(fixed) {
   U.uSunV.value.copy(dir).transformDirection(camera.matrixWorldInverse); U.uRimCol.value.copy(sun.color);
   U.uRim.value = (0.28 + golden * 0.4) * fxClear * (1 - night);   // 白天也有側逆光的亮邊
   U.uShade.value = fxClear * (1 - night) * (1 - golden * 0.6);
+  U.uTrans.value = fxClear * (1 - night) * (0.55 + golden * 0.75);   // 葉片透光：晴天有，黃金時段的逆光最明顯
   motes.update(dt, t, look, golden, night, fxClear);
   waves.update(dt, player, { night, rain: rainVis, inAir: jump.air, fish: life.fishShadows && life.fishShadows() });
   spinProps(dt);   // 溪邊的水車

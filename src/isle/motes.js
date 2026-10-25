@@ -1,6 +1,6 @@
 /* 潮汐小島 · 空氣中的光點：白天是一閃一閃的金色與淡青色光粒（日系奇幻的魔法感），黃金時段在逆光裡更亮；夜晚換成慢慢飄的螢火蟲。跟著鏡頭附近重複循環。 */
 import * as THREE from 'three';
-import { scene, bend } from './engine.js';
+import { scene, bend, camera, skyU } from './engine.js';
 
 const N = 220, BOX = { x: 16, y: 5, z: 12 };
 const tex = (() => {
@@ -28,14 +28,18 @@ export function update(dt, t, center, golden, night, clear) {
     a[k + 1] = center.y - 0.5 + (((a[k + 1] - center.y + 0.5) % BOX.y) + BOX.y) % BOX.y;
   }
   geo.attributes.position.needsUpdate = true;
-  // 閃爍：每顆光點各自忽明忽暗，偶爾亮成一個星點
+  // 閃爍：每顆光點各自忽明忽暗，偶爾亮成一個星點。白天只有逆光（朝著太陽看）的光點亮——像陽光裡的浮塵；
+  // 順光與側光的大多看不見，不會在藍天上變成一顆顆白天的星星（v7.0）。夜裡的螢火蟲不管方向
+  const cp = camera.position, sd = skyU.sunDir.value, dayK = 1 - fly;
   for (let i = 0; i < N; i++) {
     const s = seed[i], tw = 0.25 + 0.75 * Math.pow(0.5 + 0.5 * Math.sin(t * (1.3 + (s % 1.7)) + s * 3.1), 3);
-    c1.copy(tint[i] ? MAGIC : DAY).lerp(FLY, fly).multiplyScalar(tw);
+    const dx = a[i * 3] - cp.x, dy = a[i * 3 + 1] - cp.y, dz = a[i * 3 + 2] - cp.z, bl = Math.max(0, (dx * sd.x + dy * sd.y + dz * sd.z) / (Math.hypot(dx, dy, dz) + 1e-4));
+    const lit = (i % 5 < 2 ? 0.12 : 0) + Math.pow(bl, 4) * 1.6;   // 五顆裡兩顆在順光下還看得到一點點
+    c1.copy(tint[i] ? MAGIC : DAY).lerp(FLY, fly).multiplyScalar(tw * (dayK * lit + fly));
     cols[i * 3] = c1.r; cols[i * 3 + 1] = c1.g; cols[i * 3 + 2] = c1.b;
   }
   geo.attributes.color.needsUpdate = true;
-  const day = (0.38 + golden * 0.55) * (1 - night) * clear, flies = fly * clear * (0.55 + Math.sin(t * 2.1) * 0.1);
+  const day = (0.5 + golden * 0.5) * (1 - night) * clear, flies = fly * clear * (0.55 + Math.sin(t * 2.1) * 0.1);
   mat.opacity = Math.max(day, flies);
   mat.size = flies > day ? 0.12 : 0.11 + golden * 0.07;
   pts.visible = mat.opacity > 0.02;

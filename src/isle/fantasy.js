@@ -50,7 +50,7 @@ const CASTLE = { az: 0.18, d: 195, up: 0.4, size: 34, tall: 2.0, fill: 0.3, roof
 /* v6.79 的島大了一倍（玩家可以走到離中心 40 公尺的地方）：浮空島與城堡放遠、放大同一個倍數，從廣場看一樣大，走到島的北端也不會壓到頭頂上 */
 const FAR_K = 1.5;
 [...ISLES, CASTLE].forEach(c => { c.d *= FAR_K; c.size *= FAR_K; });
-const far = [], fills = [], puffs = [];   // far：{ g, az, d, up, half, ph, spin }
+const far = [], fills = [], puffs = [], skirts = [];   // far：{ g, az, d, up, half, ph, spin }；skirts：島底的雲霧（手繪雲貼圖載入後換上）
 /* 雲霧：浮空島與城堡底下圍著幾團軟軟的雲（面向鏡頭的貼圖），受光的上緣白、下緣帶薰衣草紫 */
 const puffTex = (() => {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d');
@@ -92,7 +92,7 @@ function place(model, cfg, dens) {
     const sm = new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: cfg === CASTLE ? 0.4 : 0.85 });
     const sp = new THREE.Sprite(sm), a = i / n * Math.PI * 2 + Math.random() * 0.6, w = cfg.size * (0.55 + Math.random() * 0.35);
     sp.scale.set(w, w * 0.55, 1); sp.position.set(Math.cos(a) * cfg.size * 0.42, -size.y * k * (0.18 + Math.random() * 0.22), Math.sin(a) * cfg.size * 0.42);
-    sp.frustumCulled = false; g.add(sp); puffs.push(sm);
+    sp.frustumCulled = false; g.add(sp); puffs.push(sm); skirts.push({ sp, w, k: i % 2 ? 0 : 3 });
   }
   let fall = null;
   if (cfg.fall) {   // 瀑布不跟著島自轉，每格放在島朝向鏡頭的那一側
@@ -321,6 +321,11 @@ export function build() {
   const isles = READY.has('far_isle') ? loadModel('far_isle', 'none').then(gl => ISLES.forEach(c => place(gl.scene, c, 0.65 / FAR_K))).catch(e => console.warn('浮空島載入失敗：', e)) : Promise.resolve();
   const castle = READY.has('far_castle') ? loadModel('far_castle', 'none').then(gl => { place(gl.scene, CASTLE, 0.32 / FAR_K); return gl; }).catch(e => console.warn('城堡載入失敗：', e)) : Promise.resolve();
   Promise.all([isles, castle]).then(([, gl]) => { if (gl) towers(gl.scene); });
+  // 島底的雲霧換成和積雲同一套手繪貼圖（低矮雲帶、小朵雲交錯）：輪廓清楚、有受光面，近看不再是一團模糊的漸層
+  Promise.all([isles, castle, cumulus.painted()]).then(([, , pt]) => {
+    if (!pt || pt.length < 4) return;
+    skirts.forEach(o => { const t = pt[o.k]; o.sp.material.map = t.tex; o.sp.material.needsUpdate = true; o.sp.scale.set(o.w * 1.15, o.w * 1.15 * t.aspect, 1); });
+  });
   makeBirds();
   cumulus.build();
   buildBg();

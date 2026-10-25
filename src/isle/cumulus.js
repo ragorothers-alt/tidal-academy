@@ -67,6 +67,9 @@ function paint(tall, wide) {
 
 /* 配置：方位角（0 = 北方 -Z，順時針）、距離、寬度（公尺）、雲底在畫面地平線上方多少（NDC）、哪一張貼圖 */
 const sprites = [];
+let paintedP = null;
+/** Codex 畫的雲貼圖（只載一次；浮空島底下的雲霧也用同一套）。失敗時是 null */
+export const painted = () => paintedP || (paintedP = loadPainted());
 function loadPainted() {
   const base = window.__MODEL_BASE || 'src/isle/models/';
   return new Promise(res => {
@@ -93,7 +96,7 @@ export async function build() {
   });
   const apply = () => sprites.forEach(o => { const t = texs[o.cl.k % texs.length]; o.m.map = t.tex; o.m.needsUpdate = true; o.cl.aspect = t.aspect; o.s.center.set(0.5, t.foot); o.s.scale.y = o.cl.w * t.aspect; });   // 錨點在雲底
   apply();
-  const real = await loadPainted();
+  const real = await painted();
   if (real && real.length) { texs.forEach(t => t.tex.dispose()); texs = real; apply(); if (window.TA) delete window.TA.CLOUDS; }
 }
 

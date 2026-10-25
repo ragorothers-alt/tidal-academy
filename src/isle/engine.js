@@ -55,7 +55,8 @@ scene.fog = new THREE.Fog(0xcfeeff, 60, 150);
 export const CURVE = 0.032;
 export const U = { uCurve: { value: CURVE }, uBendF: { value: 15 }, uTime: { value: 0 }, uWind: { value: 1 }, uSunV: { value: new THREE.Vector3(0, 1, 0) }, uRimCol: { value: new THREE.Color('#ffc870') }, uRim: { value: 0 },
   uOccP: { value: new THREE.Vector2(-9999, -9999) }, uOccR: { value: 0 }, uOccD: { value: 0 }, uOccY: { value: 0 }, uPlayer: { value: new THREE.Vector3(0, -99, 0) },
-  uSnow: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 } };   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
+  uSnow: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 },
+  uWindDir: { value: new THREE.Vector2(0.97, 0.24).normalize() }, uTrans: { value: 0 } };   // v7.0：風向（世界座標 xz，陣風順著它推過去）、逆光時葉片透光的強度（main.js 每幀設定）   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
 const BEND = `#include <project_vertex>
   { float bz = max(-mvPosition.z - uBendF, 0.0); mvPosition.y -= bz * bz * uCurve; }
   gl_Position = projectionMatrix * mvPosition;`;
@@ -77,8 +78,17 @@ const OCC_F = `
     float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     if (ign < a) discard;
   }`;
-const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;\nuniform float uWind;\nuniform vec3 uPlayer;\nuniform float uSnow;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\n';
-const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\n';
+const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;\nuniform float uWind;\nuniform vec3 uPlayer;\nuniform float uSnow;\nuniform vec2 uWindDir;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n' + `
+  /* 陣風場（v7.0）：大塊的陣風帶（約 25 公尺）順著風向以每秒約 5 公尺推過整座島，上面疊小一點的亂流——草原上看得到一波波風浪，
+     樹在陣風經過時才明顯擺動。草、花、樹、旗子都查同一個場，風浪會依序經過它們 */
+  float wh_(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float wn_(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(wh_(i), wh_(i + vec2(1.0, 0.0)), f.x), mix(wh_(i + vec2(0.0, 1.0)), wh_(i + vec2(1.0, 1.0)), f.x), f.y); }
+  float taGust(vec2 p){ vec2 d = uWindDir; float a = dot(p, d), c = dot(p, vec2(-d.y, d.x)), t = uTime * (0.75 + 0.35 * uWind);
+    float g = wn_(vec2(a * 0.04 - t * 0.2, c * 0.03)) * 0.65 + wn_(vec2(a * 0.11 - t * 0.62, c * 0.09 + 3.7)) * 0.35;
+    return smoothstep(0.34, 0.86, g); }
+`;
+const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform float uTrans;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
 /* ---------- 寫實細節材質：texgen.js 產生的無縫細節圖與法線圖，用世界座標三平面投影貼上 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
@@ -307,7 +317,7 @@ const LG_GLSL = `
 export function bend(mat, kind) {
   kind = kind || 'plain';
   mat.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, { uCurve: U.uCurve, uBendF: U.uBendF, uTime: U.uTime, uWind: U.uWind, uPlayer: U.uPlayer, uSnow: U.uSnow });
+    Object.assign(sh.uniforms, { uCurve: U.uCurve, uBendF: U.uBendF, uTime: U.uTime, uWind: U.uWind, uPlayer: U.uPlayer, uSnow: U.uSnow, uWindDir: U.uWindDir });
     const std = sh.fragmentShader.includes('#include <lights_fragment_begin>') && sh.fragmentShader.includes('#include <opaque_fragment>');
     const wn = std ? WN : 'vWN = vec3(0.0, 1.0, 0.0);';   // 沒有法線的材質（Basic、Points）
     let v = VTOP + (kind === 'water' ? '#ifdef TA_SEA\nattribute float aDepth;\nvarying float vSeaDepth;\n#endif\n' : '') + sh.vertexShader;
@@ -322,7 +332,8 @@ export function bend(mat, kind) {
         vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;
         vec2 sd0 = modelMatrix[3].xz;
       #endif
-      vSeed = fract(sin(dot(floor(sd0 * 0.55), vec2(12.9898, 78.233))) * 43758.5453);`);
+      vSeed = fract(sin(dot(floor(sd0 * 0.55), vec2(12.9898, 78.233))) * 43758.5453);
+      vGust = 0.0;`);
     if (kind === 'sway' || kind === 'pine' || kind === 'sakura') v = v.replace(wn, `${wn}
       vec3 wp0 = (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
       #ifdef USE_INSTANCING
@@ -332,8 +343,20 @@ export function bend(mat, kind) {
       #ifdef TA_MERGED
         sw = 0.0;   // 合併進建築的小盆栽：物件座標不再是自己的，不跟著風擺
       #endif
-      transformed.x += (sin(uTime * 1.3 * uWind + wp0.x * 0.7 + wp0.z * 0.4) * 0.035 + (uWind - 1.0) * 0.02) * sw * uWind;
-      transformed.z += cos(uTime * 1.1 * uWind + wp0.z * 0.6) * 0.025 * sw * uWind;`);
+      { // v7.0 分層的風：整株順著世界的風向慢慢傾斜（陣風經過時明顯）、來回擺盪帶一點側向的 8 字，枝梢的葉子再細細顫動。
+        // 位移換到物件座標：每棵樹不管怎麼轉，都往同一個風向倒
+        mat3 wm = mat3(modelMatrix);
+        #ifdef USE_INSTANCING
+          wm = mat3(modelMatrix) * mat3(instanceMatrix);
+        #endif
+        float ws = sqrt(max(dot(wm[0], wm[0]), 1e-8));
+        vec3 wdO = transpose(wm) * vec3(uWindDir.x, 0.0, uWindDir.y) / ws, pdO = transpose(wm) * vec3(-uWindDir.y, 0.0, uWindDir.x) / ws;
+        float gu = taGust(wp0.xz), ph = dot(wp0.xz, uWindDir) * 0.25 + wp0.x * 0.31;
+        float lean = (0.008 + 0.022 * gu) * uWind + (uWind - 1.0) * 0.02;
+        float osc = sin(uTime * 1.25 * (0.75 + 0.25 * uWind) + ph) * (0.012 + 0.016 * gu) * uWind + sin(uTime * 2.2 + wp0.z * 0.5) * 0.004;
+        float fl = sin(uTime * 7.3 + dot(position, vec3(13.1, 7.7, 11.3))) * (0.0035 + 0.006 * gu) * uWind * smoothstep(0.0, 1.2, sw);   // 葉片細顫（約 1.2 Hz 的十倍頻率、很小）
+        transformed += (wdO * (lean + osc) + pdO * sin(uTime * 0.9 + ph * 1.7) * 0.007 * uWind) * sw + vec3(fl, fl * 0.6, -fl * 0.8);
+      }`);
     if (kind === 'water') v = v.replace(wn, `${wn}
       #ifdef TA_SEA
         vSeaDepth = aDepth;
@@ -348,8 +371,13 @@ export function bend(mat, kind) {
         #endif
         vec3 base = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
         float k = clamp(position.y / 0.32, 0.0, 1.0); k *= k;
-        float w = sin(uTime * 1.7 * uWind + base.x * 0.9 + base.z * 0.6) * 0.07 + sin(uTime * 3.1 + base.x * 2.3) * 0.02 + (uWind - 1.0) * 0.05;
-        mvPosition.x += w * k * uWind; mvPosition.z += w * 0.6 * k;
+        // v7.0：陣風經過時整片草被壓過去（葉尖變低、露出較亮的葉背，草原上看得到一波波風浪），平常是順著風向的輕擺加一點側向細擺
+        float gu = taGust(base.xz); vGust = gu * k;
+        float osc = sin(uTime * 1.6 * (0.7 + 0.3 * uWind) + dot(base.xz, uWindDir) * 0.45 + base.x * 0.3) * 0.032 + sin(uTime * 3.3 + base.x * 2.3 + base.z * 1.7) * 0.011;
+        float push = (0.014 + gu * 0.062) * uWind + (uWind - 1.0) * 0.045;
+        vec2 wv = uWindDir * (push + osc * (0.6 + gu)) * k;
+        mvPosition.xz += wv + vec2(-uWindDir.y, uWindDir.x) * sin(uTime * 2.3 + base.z * 1.9 + base.x) * 0.009 * k;
+        mvPosition.y -= dot(wv, wv) * 2.4;
         vec2 dp = base.xz - uPlayer.xz; float pd = length(dp);
         if (pd < 0.9 && abs(base.y - uPlayer.y) < 0.8) { mvPosition.xz += dp / max(pd, 0.001) * (0.9 - pd) * 0.45 * k; mvPosition.y -= (0.9 - pd) * 0.18 * k; }
         mvPosition = modelViewMatrix * mvPosition;
@@ -359,7 +387,7 @@ export function bend(mat, kind) {
     else v = v.replace('#include <project_vertex>', BEND);
     sh.vertexShader = v;
     if (!std) return;
-    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
+    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uTrans: U.uTrans, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
     const dk = DETK[kind];
     if (dk) dk.forEach((n, i) => { sh.uniforms['uD' + i] = DET[n].d; sh.uniforms['uN' + i] = DET[n].n; });
     if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
@@ -412,9 +440,9 @@ export function bend(mat, kind) {
         sd += vec3(0.04, 0.035, 0.02) * smoothstep(0.9, 1.0, sp);
         float wet = smoothstep(0.3, 0.0, vWP.y);
         // 風紋：不對稱的沙波（迎風面緩、背風面陡），波峰亮、波谷暗，法線也跟著起伏；越靠近水越平
-        float rp = (p.x * 0.8 + p.y * 1.4 + n_v(p * 0.6) * 3.0 + n_v(p * 2.1) * 0.6) * 5.5, rw = 0.5 + 0.5 * sin(rp - 0.35 * cos(rp));
+        float rp = (p.x * 0.8 + p.y * 1.4 + n_v(p * 0.6) * 3.0 + n_v(p * 2.1) * 0.6) * 8.0, rw = 0.5 + 0.5 * sin(rp - 0.35 * cos(rp));
         float ripK = (1.0 - wet) * (0.55 + 0.45 * smoothstep(0.3, 0.7, n_v(p * 0.35 + 9.0)));
-        sd *= 1.0 + (rw - 0.45) * 0.1 * ripK;
+        sd *= 1.0 + (rw - 0.45) * 0.06 * ripK;   // v7.0：沙波短一點、淡一半（以前像瓦楞紙）
         float ripN = cos(rp) * ripK;
         sd *= mix(vec3(1.0), vec3(1.05, 1.01, 0.93), smoothstep(0.4, 0.75, n_f(p * 0.13 + 3.0)));   // 大片的暖色、冷色沙
         // 小石子與碎貝殼
@@ -457,7 +485,7 @@ export function bend(mat, kind) {
         vec3 det = dG * wG + dS * wS + dR * wR;
         diffuseColor.rgb *= mix(vec3(1.0), det * 2.0, 0.72 - 0.36 * wG);   // 草地底下的紋理收斂，不和草葉搶
         gDetN = (triN(uN0, q, gB) * wG * 0.35 + triN(uN1, q * 1.2, gB) * wS * 0.6 + triN(uN2, vWP * 0.4, gB) * wR * mix(1.2, 0.55, paintK)) * 0.8;   // 草地的凹凸放輕，近看不會像揉皺的紙
-        gDetN -= vec3(0.5, 0.0, 0.87) * ripN * 0.22 * wS * sandy;   // 沙波的起伏
+        gDetN -= vec3(0.5, 0.0, 0.87) * ripN * 0.1 * wS * sandy;   // 沙波的起伏
         // 水底（河床、淺海的沙底）：青綠色調與流動的焦散光紋——水面把陽光聚成一條條晃動的亮網
         {
           float uw = max(smoothstep(0.32, 0.12, vWP.y), smoothstep(0.75, 0.68, vWP.y) * smoothstep(0.5, 0.6, vWP.y) * sandy) * up;   // 河床、淺海，以及小溪的沙底（高度 0.62）
@@ -596,6 +624,21 @@ export function bend(mat, kind) {
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.78, 1.0), wf * 0.3 * shallow); diffuseColor.a = mix(diffuseColor.a, 1.0, wf * 0.35 * shallow);
       }
       if (uLate > 0.5) diffuseColor.rgb = vec3(1.0);   // 第二階段：打光只算水面收到多少光，顏色由 taLateWater 合成`);
+    if (kind === 'flow') f = f.replace('#include <color_fragment>', `#include <color_fragment>
+      #ifdef USE_UV
+      { // 流動的水片（水車的水槽、出水、瀑布；v7.0）：uv.x 橫跨水流、uv.y 沿著水流方向（0 → 1）。
+        // 兩層往下游捲動的長條水紋、尾端與落點的白沫，透明度跟著水紋起伏——水片有厚有薄，不是一條均勻的青色帶子
+        vec2 fu = vUv; float t = uTime;
+        float s1 = n_v(vec2(fu.x * 7.0, fu.y * 2.6 - t * 2.2)), s2 = n_v(vec2(fu.x * 19.0 + 3.1, fu.y * 6.0 - t * 3.4)), s3 = n_v(vec2(fu.x * 41.0 + 7.7, fu.y * 13.0 - t * 5.2));
+        float streak = smoothstep(0.5, 0.92, s1 * 0.55 + s2 * 0.3 + s3 * 0.15);
+        float foamEnd = smoothstep(0.78, 1.0, fu.y) * (0.55 + 0.45 * s2), edge = smoothstep(0.12, 0.0, min(fu.x, 1.0 - fu.x));
+        diffuseColor.rgb = mix(diffuseColor.rgb * (0.85 + 0.3 * s1), vec3(0.9, 0.96, 1.0), clamp(streak * 0.5 + foamEnd * 0.85 + edge * 0.35, 0.0, 1.0));
+        diffuseColor.a = clamp(diffuseColor.a * (0.7 + 0.45 * streak) + foamEnd * 0.5 + edge * 0.2, 0.0, 1.0);
+        gDetN0 = vec2(s2 - 0.5, s1 - 0.5);
+      }
+      #endif`);
+    if (kind === 'flow') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      normal = normalize(normal + vec3(gDetN0 * 0.35, 0.0));   // 水紋的起伏讓反光碎成一條條`).replace('#include <map_fragment>', '#include <map_fragment>\n  vec2 gDetN0 = vec2(0.0);');
     if (kind === 'glass') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
         // 窗玻璃：映出天空與對面的景色（上亮下暗），斜斜一道反光，靠近邊框的地方比較暗
@@ -606,8 +649,20 @@ export function bend(mat, kind) {
         float streak = smoothstep(0.12, 0.0, abs(fract((vWP.x + vWP.z) * 0.8 + vWP.y * 1.1) - 0.5)) * 0.5 + smoothstep(0.04, 0.0, abs(fract((vWP.x + vWP.z) * 0.8 + vWP.y * 1.1 + 0.18) - 0.5)) * 0.35;
         diffuseColor.rgb = mix(vec3(0.12, 0.17, 0.22), refl, 0.45 + fres * 0.4) + vec3(streak * 0.18);
       }`);
+    if (/^(grass|flower|sway|pine|sakura)$/.test(kind)) f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      #if NUM_DIR_LIGHTS > 0
+      { // 葉片透光（v7.0）：逆著太陽看時，薄薄的葉子、草葉透出暖綠的光（只在對著太陽的方向明顯，背光的樹冠內部仍是冷暗部）
+        float tsh = 1.0;
+        #ifdef TA_CASC
+          tsh = taSh;
+        #endif
+        float tv = saturate(dot(-geometryViewDir, directionalLights[0].direction));
+        reflectedLight.directDiffuse += directionalLights[0].color * diffuseColor.rgb * (pow(tv, 5.0) * 0.8 + pow(tv, 1.6) * 0.1) * tsh * uTrans;
+      }
+      #endif`);
     if (kind === 'grass') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       diffuseColor.rgb *= 0.9 + n_v(vWP.xz * 0.22) * 0.25;
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.13, 0.96) + vec3(0.012, 0.016, 0.0), clamp(vGust, 0.0, 1.0) * 0.5);   // 陣風壓過去的草露出較亮的葉背
         { float cS = smoothstep(0.5, 0.68, n_f(vWP.xz * 0.028 + vec2(uTime * 0.011, uTime * 0.004))); diffuseColor.rgb *= 1.0 - cS * 0.26 * uShade; }   // 雲影慢慢掠過地面
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
@@ -644,6 +699,7 @@ export function bend(mat, kind) {
     sh.fragmentShader = f;
   };
   mat.customProgramCacheKey = () => 'bend3-' + kind; mat.userData.kind = kind;
+  if (kind === 'flow') mat.defines = Object.assign({}, mat.defines, { USE_UV: '' });   // 水片沿 uv 流動（沒有貼圖也要有 vUv）
   if ((kind === 'water' || kind === 'glass') && mat.isMeshStandardMaterial) { ENV_MATS.push(mat); applyEnv(mat); }   // 水面、玻璃映出天空
   return mat;
 }
@@ -674,7 +730,9 @@ function seasonGLSL(kind) {
         #endif
         diffuseColor.rgb = mix(bc, fc, leafy * fk * sunny);
         #ifdef TA_LEAFTEX
-          diffuseColor.rgb = mix(bc, goldC * vec3(1.06, 1.05, 1.0), fk * (0.45 + 0.55 * smoothstep(-0.7, 0.3, normalize(vWN).y)) * (0.65 + 0.35 * smoothstep(-1.4, 0.3, vOP.y)));   // 樹冠下層混一點綠葉，帶橄欖綠   // 畫好的葉叢貼圖：秋天換成金黃那張（明暗已經畫在圖上）
+          { float upK = smoothstep(-0.7, 0.45, normalize(vWN).y);   // 畫好的葉叢貼圖：秋天換成金黃那張（明暗已經畫在圖上）
+            vec3 gc = goldC * mix(vec3(0.97, 0.7, 0.42), vec3(1.12, 1.05, 0.88), upK);   // 背光面是深琥珀色、受光面是亮金（v7.0：以前背光面混綠葉，整棵變成橄欖色的泥）
+            diffuseColor.rgb = mix(bc, gc, fk * (0.82 + 0.18 * smoothstep(-1.4, 0.2, vOP.y))); }   // 樹冠最底下留一點點綠
         #endif
       }
       if (uBloom > 0.0 && (${kind === 'sakura' ? 'true' : 'vSeed < 0.42'})) {
@@ -869,7 +927,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       float y = clamp(e / max(span, 0.07), 0.0, 1.0);   // 以畫面上的地平線為準、鋪到畫面上緣（span）：一般鏡頭與第一人稱，畫面上緣都是頭頂的深藍
       vec3 c = y < 0.16 ? mix(bot, mid, smoothstep(0.0, 0.16, y)) : mix(mid, top, smoothstep(0.16, 0.75, y));   // 三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
       c += vec3(0.1, 0.1, 0.08) * exp(-abs(e) * 18.0) * (1.0 - night);   // 地平線的亮帶
-      float s = max(dot(d, sunSky), 0.0) * step(night, 0.6); c += sunCol * (pow(s, 900.0) * 2.4 + pow(s, 48.0) * 0.1) * (1.0 - night);   // 夜裡的「太陽方向」是月光，不畫
+      float s = max(dot(d, sunSky), 0.0) * step(night, 0.6);   // 夜裡的「太陽方向」是月光，不畫（太陽本體在卷雲之後才畫，見下方）
       vec2 ha = normalize(d.xz + 1e-4), sa = normalize(sunDir.xz + 1e-4); c += sunCol * vec3(1.0, 0.82, 0.55) * pow(max(dot(ha, sa), 0.0), 4.0) * smoothstep(0.42, -0.02, e) * glow * 1.5;
       float band = 0.0;
       if (night > 0.0) {
@@ -957,6 +1015,21 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         // 貼著海面的一層薄霧
         c = mix(c, airC + vec3(0.03), smoothstep(0.014, -0.002, e) * step(-0.002, e) * 0.35 * (1.0 - night));
       }
+      // 高空的卷雲（v7.0）：細長的絲狀薄雲，晴天也有一些；靠近太陽的一側發亮、黃昏染成粉金——天空多了一層中景，不再只有一片漸層
+      if (e > 0.0 && night < 0.98) {
+        vec2 cp = d.xz / (d.y + 0.18) * 0.6, rp = vec2(cp.x * 0.8 + cp.y * 0.6, -cp.x * 0.6 + cp.y * 0.8);
+        vec2 wq = rp * vec2(0.55, 1.5) + vec2(time * 0.0035, 0.0);
+        float wp = fbm(wq * 0.6 + 3.0), ci = fbm(wq + vec2(wp * 2.2, wp * 0.6));   // 被扭曲過的雲片：一片片斜斜的羽毛狀
+        float fib = fbm(vec2(wq.x * 0.9 + wp * 1.5, wq.y * 9.0 + wp * 3.0));   // 順著雲片方向的細絲（橫向變化快、縱向變化慢）
+        float field = smoothstep(0.42, 0.62, fbm(wq * 0.22 + 11.0));   // 只有幾片天空有卷雲，其他地方是乾淨的藍
+        float ca = smoothstep(0.5, 0.78, ci) * smoothstep(0.3, 0.72, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
+        ca *= mix(0.42, 0.62, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5);
+        vec3 cc = mix(vec3(1.0, 1.0, 1.03), sunCol * vec3(1.12, 0.84, 0.82), clamp(glow * 1.7, 0.0, 0.92)) + sunCol * pow(s, 10.0) * 0.7;
+        c = mix(c, cc, ca);
+      }
+      // 太陽：熱的亮核（給泛光）＋柔和的日暈（米氏散射）；夜裡不畫
+      { float sv = step(night, 0.6) * (1.0 - night);
+        c += sunCol * (smoothstep(0.99982, 0.99994, s) * 9.0 + pow(s, 260.0) * 0.5 + pow(s, 32.0) * 0.12 + pow(s, 6.0) * 0.05) * sv; }
       // 積雲：在天幕上投影的分形雜訊，上緣受光、下緣帶天空色的陰影，慢慢飄動
       if (d.y > -0.08) {
         vec2 p = d.xz / (d.y + 0.32) * 0.95 + vec2(time * 0.006, time * 0.002);

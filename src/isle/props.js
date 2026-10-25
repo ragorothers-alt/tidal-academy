@@ -96,7 +96,24 @@ export function woodSign(text, w, h, ink) {
 function windowMat() { const m = M('#bfe8ff', { emissive: new THREE.Color('#ffcf7a'), emissiveIntensity: 0, roughness: 0.12, metalness: 0.1 }, 'glass'); if (!nightMats.includes(m)) nightMats.push(m); return m; }
 /** 程式化建築（img2threejs 重建，data/bldmodels.js 的 TA.ISLE.BLDMODELS[key] = (THREE, kit) => Group）：有就換掉原本的外觀。
     keep 裡的物件（招牌在 keep[0]、燈塔的光源）保留；碰撞框、門口位置照舊由各建築函式設定。模型用世界尺寸設計，原本的縮放會換算到保留的物件上 */
-const BKIT = { mat: (c, o, k) => M(c, o, k), win: () => windowMat() };
+// 貼圖以物件身分快取，不交給 M() 的 JSON options 快取（DataTexture 會被序列化）。
+const PROP_CARDS = new WeakMap(), PROP_CARD_DEPTH = new WeakMap();
+const BKIT = {
+  mat: (c, o, k) => M(c, o, k), win: () => windowMat(),
+  card: (color, texture, kind = 'pine') => {
+    let cache = PROP_CARDS.get(texture); if (!cache) PROP_CARDS.set(texture, cache = new Map());
+    const key = color + ':' + kind; if (cache.has(key)) return cache.get(key);
+    const m = new THREE.MeshStandardMaterial({ color, map: texture, vertexColors: true, roughness: 0.94, alphaTest: 0.45, alphaToCoverage: true, side: THREE.FrontSide });
+    // pine 沒有秋色貼圖分支；沿用已繪製葉片的路徑，略過大葉鱗片／細節法線，保留模型的枝團色與外向法線。
+    if (kind === 'pine') m.defines = { TA_LEAFTEX: '' };
+    cache.set(key, bend(m, kind)); return m;
+  },
+  cardDepth: (texture, kind = 'pine') => {
+    let cache = PROP_CARD_DEPTH.get(texture); if (!cache) PROP_CARD_DEPTH.set(texture, cache = new Map());
+    if (!cache.has(kind)) cache.set(kind, bend(new THREE.MeshDepthMaterial({ map: texture, alphaTest: 0.45, depthPacking: THREE.RGBADepthPacking, side: THREE.FrontSide }), kind));
+    return cache.get(kind);   // 與可見材質共用 bend 的風及地平線變形
+  }
+};
 export function altBuilding(key, g, keep, kit) {
   const fac = ((window.TA.ISLE || {}).BLDMODELS || {})[key]; if (!fac) return false;
   try {
@@ -123,6 +140,17 @@ export function tree(x, z, s, kind) {
     for (let i = 0; i < 7; i++) { const lf = mesh(new THREE.SphereGeometry(0.5 * s, 8, 6), M('#55b356', {}, 'pine')); lf.scale.set(1.6, 0.12, 0.38); lf.position.set(Math.cos(i * 0.9) * 0.7 * s, -0.12 * s, Math.sin(i * 0.9) * 0.7 * s); lf.rotation.y = -i * 0.9; lf.rotation.z = -0.35; top.add(lf); }
     for (let i = 0; i < 3; i++) top.add(mesh(new THREE.SphereGeometry(0.12 * s, 8, 6), M('#8a5a2b'), Math.cos(i * 2.1) * 0.15, -0.2 * s, Math.sin(i * 2.1) * 0.15));
   } else if (kind === 'cedar') {
+    const hash = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1, key = ['pine_a', 'pine_b', 'pine_c'][Math.floor(hash * 3)];
+    if (((window.TA.ISLE || {}).PROPMODELS || {})[key]) {
+      const ry = rnd() * 6.28;
+      const batched = instanced('PROPMODELS', key, x, z, ry, s), pm = batched ? null : modelClone('PROPMODELS', key);
+      if (batched || pm) {
+        if (pm) { pm.scale.setScalar(s); g.rotation.y = ry; g.add(pm); }
+        scene.add(g); if (pm) register(g);
+        colliders.push({ x, z, r: 0.35 * s }); trees.push({ x, z, s, kind, g });
+        return g;   // 不登記 prop_pine，避免 props3d 把新松樹換回 Tripo GLB
+      }
+    }
     g.add(mesh(new THREE.CylinderGeometry(0.13 * s, 0.17 * s, 0.8 * s, 10), M('#6e4e36', {}, 'bark'), 0, 0.4 * s, 0));
     roots(g, s, M('#6e4e36', {}, 'bark'), x, z);
     [[1.0, 0.9], [0.8, 1.55], [0.55, 2.15], [0.3, 2.62]].forEach(([r, h], i) => { const c = mesh(new THREE.ConeGeometry(r * s, (i === 3 ? 0.7 : 1.0) * s, 16), M('#3f9a5e', {}, 'pine'), 0, h * s, 0); c.rotation.y = i * 0.6; g.add(c); });   // 常綠：秋天不變色
@@ -490,41 +518,63 @@ export function protoParts(table, key) {
   const m = modelClone(table, key); if (!m) { PARTS.set(id, null); return null; }
   const tmp = new THREE.Group(); tmp.add(m); mergeStatic(tmp); tmp.updateMatrixWorld(true);
   const parts = [];
-  tmp.traverse(o => { if (!o.isMesh) return; const geo = o.isInstancedMesh ? bakeInstanced(o) : o.geometry; if (!geo.boundingSphere) geo.computeBoundingSphere(); parts.push({ geo, mat: o.material, local: o.matrixWorld.clone(), cast: o.castShadow && geo.boundingSphere.radius > 0.3 }); });
+  tmp.traverse(o => { if (!o.isMesh) return; const geo = o.isInstancedMesh ? bakeInstanced(o) : o.geometry; if (!geo.boundingSphere) geo.computeBoundingSphere(); parts.push({ geo, mat: o.material, local: o.matrixWorld.clone(), cast: o.castShadow && geo.boundingSphere.radius > 0.3, depth: o.customDepthMaterial }); });
   PARTS.set(id, parts); return parts;
 }
-function instanced(table, key, x, z, ry) {
-  if (!instOpen) return false;
+// 高地在 props 的初次 flush 之後才建立。松林延到同一個 microtask 批次建立，之後補種也重用這個入口。
+let pineFlushPending = false;
+function queuePines() {
+  if (pineFlushPending) return; pineFlushPending = true;
+  queueMicrotask(() => {
+    pineFlushPending = false;
+    INST.forEach(e => {
+      if (!e.pine || !e.dirty) return; e.dirty = false;
+      if (e.group) { unregister(e.group); scene.remove(e.group); e.group.traverse(o => { if (o.isInstancedMesh) o.dispose(); }); }
+      e.group = instanceGroup(e.parts, e.at); e.group.name = 'instanced-' + e.key;
+      scene.add(e.group); register(e.group);
+    });
+  });
+}
+function instanced(table, key, x, z, ry, scale = 1) {
+  const pine = table === 'PROPMODELS' && /^pine_[abc]$/.test(key);
+  if (!instOpen && !pine) return false;
   const id = table + ':' + key; let e = INST.get(id);
   if (!e) {
     const parts = protoParts(table, key); if (!parts) return false;
-    INST.set(id, e = { parts, at: [] });
+    INST.set(id, e = { parts, at: [], pine, key });
   }
-  e.at.push(new THREE.Matrix4().compose(new THREE.Vector3(x, groundAt(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry || 0), new THREE.Vector3(1, 1, 1)));
+  e.at.push(new THREE.Matrix4().compose(new THREE.Vector3(x, groundAt(x, z), z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry || 0), new THREE.Vector3(scale, scale, scale)));
+  if (pine) { e.dirty = true; queuePines(); }
   return true;
 }
 /** 除錯：每種共用繪製的道具擺了幾個 */
 export const instCounts = () => Object.fromEntries([...INST].map(([k, e]) => [k, e.at.length]));
+function instanceGroup(parts, at, matOf, noCast) {
+  const g = new THREE.Group(), m4 = new THREE.Matrix4();
+  parts.forEach(pt => {
+    const im = new THREE.InstancedMesh(pt.geo, matOf ? matOf(pt.mat) : pt.mat, at.length);
+    at.forEach((a, i) => im.setMatrixAt(i, m4.multiplyMatrices(a, pt.local)));
+    im.instanceMatrix.needsUpdate = true; im.customDepthMaterial = pt.depth;
+    im.castShadow = pt.cast && !noCast; im.receiveShadow = true; im.frustumCulled = false; g.add(im);
+  });
+  return g;
+}
 /** 一批重複擺放的道具（零件 parts、每個擺放的矩陣 at）切成 16 公尺一塊，每塊各自一組 InstancedMesh：
     鏡頭看不到的塊不畫、陰影框外的塊不投影（原本全島的同一種道具一次畫完，連看不到的也畫進陰影貼圖）。walldress.js 也用 */
 export function chunkInstances(parts, at, matOf, noCast) {
-  const cells = new Map(), m4 = new THREE.Matrix4(), v = new THREE.Vector3();
+  const cells = new Map(), v = new THREE.Vector3();
   at.forEach(a => { v.setFromMatrixPosition(a); const k = Math.floor(v.x / 16) + ',' + Math.floor(v.z / 16); let c = cells.get(k); if (!c) cells.set(k, c = { list: [], x: 0, y: 0, z: 0 }); c.list.push(a); c.x += v.x; c.y += v.y; c.z += v.z; });
   cells.forEach(c => {
-    const n = c.list.length, g = new THREE.Group(), sh = [];
+    const n = c.list.length, g = instanceGroup(parts, c.list, matOf, noCast), sh = [];
     let r = 0, y0 = 1e9, y1 = -1e9; c.list.forEach(a => { v.setFromMatrixPosition(a); r = Math.max(r, Math.hypot(v.x - c.x / n, v.z - c.z / n)); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); });
-    parts.forEach(pt => {
-      const im = new THREE.InstancedMesh(pt.geo, matOf ? matOf(pt.mat) : pt.mat, n);
-      c.list.forEach((a, i) => im.setMatrixAt(i, m4.multiplyMatrices(a, pt.local)));
-      im.castShadow = pt.cast && !noCast; im.receiveShadow = true; im.frustumCulled = false; g.add(im); if (im.castShadow) sh.push(im);
-    });
+    g.children.forEach(im => { if (im.castShadow) sh.push(im); });
     scene.add(g); registerAt(g, c.x / n, (y0 + y1) / 2 + 1.5, c.z / n, r + 3, sh, (y1 - y0) / 2 + 2.5);   // 包圍體：這一塊的範圍、高度到道具頂端（路燈約 3 公尺）
   });
 }
 const LOWCAST = /flower_bed|flower_pots|planter|crates|crystal_lamp/;   // 矮的或細碎的道具：影子很小，不畫進陰影貼圖（每個都有幾千個三角形）
 function flushInstances() {
   instOpen = false;
-  INST.forEach((e, id) => chunkInstances(e.parts, e.at, null, LOWCAST.test(id)));
+  INST.forEach((e, id) => { if (!e.pine) chunkInstances(e.parts, e.at, null, LOWCAST.test(id)); });
 }
 /** Codex 重建的地標／道具模型（LMMODELS、BLDMODELS、PROPMODELS）：第一次建立後複製；清掉建模工具留在 userData 的紀錄；失敗就回傳 null（用原本的簡單造型） */
 const MPROTO = {};
@@ -536,7 +586,10 @@ export function modelClone(table, key, kit) {
       const sign = m.userData.sign; m.traverse(o => { o.userData = {}; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); if (sign) m.userData.sign = sign;
       MPROTO[id] = m;
     }
-    const c = MPROTO[id].clone(true); c.userData = Object.assign({}, MPROTO[id].userData); return c;
+    const c = MPROTO[id].clone(true); c.userData = Object.assign({}, MPROTO[id].userData);
+    // r160 的 Object3D.clone 不複製 customDepthMaterial，兩次 prototype clone 都要保留它。
+    const copyDepth = (src, dst) => { if (src.customDepthMaterial) dst.customDepthMaterial = src.customDepthMaterial; src.children.forEach((child, i) => copyDepth(child, dst.children[i])); };
+    copyDepth(MPROTO[id], c); return c;
   } catch (e) { MPROTO[id] = null; console.warn('程式化模型建立失敗，改用簡單造型：' + id, e); return null; }
 }
 /** 共用的小零件 */
