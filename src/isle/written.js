@@ -86,23 +86,41 @@ function practice(w, back) {
 }
 
 /** 對照參考答案、逐項自評 */
+/** 篇幅規則：英文作文至少 120 字（大考中心原則：字數明顯不足扣總分 1 分，這裡未達 120 就扣）；國寫 (一) 80 字內、(二) 400–600 字（只提醒，相關要點從嚴自評） */
+const LEN = { 'en-essay': [{ min: 120, cut: 1 }], 'zh-essay': [{ max: 80 }, { min: 400, max: 600 }] };
+const PART = ['(一)', '(二)', '(三)', '(四)'];
+function lenNotes(w, ans, how) {
+  const rule = LEN[w.kind]; if (!rule) return { notes: [], cut: 0 };
+  const notes = []; let cut = 0;
+  rule.forEach((r, i) => {
+    const a = ans[i]; if (!a) return;
+    const n = countOf(a, how), unit = how === 'words' ? ' 個單字' : ' 字', tag = rule.length > 1 ? PART[i] + ' ' : '';
+    if (r.min && n < r.min) { notes.push(`${tag}寫了 ${n}${unit}，未達 ${r.min}${unit}${r.cut ? `：總分扣 ${r.cut} 分` : '：篇幅不足，結構與深度的要點請從嚴給分'}`); cut += r.cut || 0; }
+    else if (r.max && n > r.max) notes.push(`${tag}寫了 ${n}${unit}，超過 ${r.max}${unit}：正式考試要精簡在限制內`);
+  });
+  return { notes, cut };
+}
 function review(w, ans, secs, back) {
   const T = tabOf(w), parts = w.parts && w.parts.length ? w.parts : null, got = w.keys.map(() => 0), empty = !ans.some(Boolean);
+  const { notes, cut } = lenNotes(w, ans, T.count);
+  // 有小題時，空白小題的要點直接是 0 分（找不到可以評的內容，不給「部分」）
+  const blankKey = k => { const i = PART.findIndex(p => k.t.startsWith(p)); return empty || (parts && i >= 0 && !ans[i]); };
   const refs = [].concat(w.ref || []);
   const body = ui.el('div', 'hall hx wr');
   body.innerHTML = `<div class="hx-bar"><b class="hx-title">${T.icon} ${ui.rich(w.title)} · 自評</b><span class="hx-timer">用了 ${fmtMin(secs)}</span></div>
     <div class="hall-scroll hx-main">
       <div class="hs-label">你的答案</div>
       <div class="wr-mine">${empty ? '<span class="muted">（沒有作答）</span>' : ans.map((a, i) => `${parts ? `<b>${['(一)', '(二)', '(三)', '(四)'][i] || ''}</b> ` : ''}${ui.esc(a || '（空白）')}`).join('<br><br>')}</div>
-      <div class="hs-label">評分要點（對照參考答案，逐項給自己分數）</div>
-      <div class="wr-keys">${w.keys.map((k, i) => `<div class="wr-key" data-k="${i}"><span>${ui.rich(k.t)}</span><span class="wr-sc">${[0, k.p >= 2 ? k.p / 2 : null, k.p].filter(v => v != null).map(v => `<button type="button" data-v="${v}"${empty ? ' disabled' : ''}>${v === 0 ? '沒寫到' : v === k.p ? `寫到 ${k.p}` : `部分 ${v}`}</button>`).join('')}</span></div>`).join('')}</div>
+      ${notes.map(n => `<div class="wr-len">⚠ ${n}</div>`).join('')}
+      <div class="hs-label">評分要點（對照參考答案，逐項給自己分數；答案裡找不到依據就選「沒寫到」）</div>
+      <div class="wr-keys">${w.keys.map((k, i) => `<div class="wr-key" data-k="${i}"><span>${ui.rich(k.t)}</span><span class="wr-sc">${[0, k.p >= 2 ? k.p / 2 : null, k.p].filter(v => v != null).map(v => `<button type="button" data-v="${v}"${blankKey(k) ? ' disabled' : ''}>${v === 0 ? '沒寫到' : v === k.p ? `寫到 ${k.p}` : `部分 ${v}`}</button>`).join('')}</span></div>`).join('')}</div>
       <div class="hs-label">參考答案</div>
       ${refs.map((r, i) => `<div class="wr-ref">${refs.length > 1 ? `<b>參考 ${i + 1}</b><br>` : ''}${ui.rich(r)}</div>`).join('')}
       ${w.tip ? `<div class="wr-tip"><b>常見失分</b><br>${ui.rich(w.tip)}</div>` : ''}
     </div>
     <div class="hx-foot"><span class="wr-total"></span><button type="button" class="btn go">記錄這次的分數</button></div>`;
   const total = body.querySelector('.wr-total');
-  const sum = () => { const s = got.reduce((a, b) => a + b, 0); total.innerHTML = `自評 <b>${+s.toFixed(1)}</b> / ${w.pts} 分`; return s; };
+  const sum = () => { const s = Math.max(0, got.reduce((a, b) => a + b, 0) - cut); total.innerHTML = `自評 <b>${+s.toFixed(1)}</b> / ${w.pts} 分${cut ? `<small>（篇幅扣 ${cut}）</small>` : ''}`; return s; };
   body.querySelectorAll('.wr-key').forEach(row => {
     const i = +row.dataset.k, bs = [...row.querySelectorAll('button')];
     const mark = () => bs.forEach(b => b.classList.toggle('on', +b.dataset.v === got[i]));
