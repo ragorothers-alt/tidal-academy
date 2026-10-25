@@ -341,6 +341,22 @@ export function openMistakes(sid) {
 }
 
 /* ---------- 成績統計（作戰室） ---------- */
+/** 級分估算（v7.0）：每個考科一張卡——估計級分與區間、根據什麼估的、目標級分與差距、該先補的單元 */
+function paintLevels(box) {
+  if (!box) return;
+  const S = TA.S, T = S.profile.targets = S.profile.targets || {}, weakAll = L.weakUnits(30).filter(w => w.weak);
+  box.innerHTML = `<div class="hst-lvg">${L.MOCK_GROUPS.map(g => {
+    const e = L.estimate(g), t = T[g], cfg = L.MOCK[g], col = subj(cfg.subjects[0]).color;
+    const basis = !e || e.lv == null ? `再練 ${Math.max(1, e ? e.need : 40)} 題（或考一次模擬考）就能估算` : e.basis === 'mock' ? `依最近 ${e.exams} 次模考${e.attempts >= 30 ? '與練習' : ''}` : `依練習正確率（還沒考過${g}模擬考）`;
+    const gap = e && e.lv != null && t ? t - e.lv : null, weak = weakAll.filter(w => cfg.subjects.includes(w.subject.id)).slice(0, 2);
+    return `<div class="lv-card" style="--c:${col}"><div class="lv-h"><b>${g}</b><small>${basis}</small></div>
+      <div class="lv-n">${e && e.lv != null ? `<b>${e.lv}</b><span>級</span><small>約 ${e.lo}–${e.hi} 級</small>` : '<b>—</b>'}</div>
+      <div class="lv-t"><span>目標</span><button type="button" data-g="${g}" data-d="-1">−</button><b>${t || '—'}</b><button type="button" data-g="${g}" data-d="1">＋</button>
+        <em>${gap == null ? '' : gap <= 0 ? '已達目標 ✓' : `還差 ${gap} 級`}</em></div>
+      ${gap > 0 ? `<p class="lv-tip">${weak.length ? `先補：${weak.map(w => ui.esc(w.unit.name)).join('、')}` : '多做幾次模擬考，估算會更準，也看得出該補哪裡'}</p>` : ''}</div>`;
+  }).join('')}</div><p class="muted">粗估：以「每 6.5% 約一級」換算正確率（學測級距約為前 1% 考生平均的十五分之一），練習題打九二折；不是官方換算，實際級分依當年考生表現而定。</p>`;
+  box.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { const g = b.dataset.g, e = L.estimate(g); T[g] = Math.max(1, Math.min(15, (T[g] || (e && e.lv ? Math.min(15, e.lv + 1) : 10)) + (T[g] ? +b.dataset.d : 0))); TA.Store.save(); Audio.sfx('tick'); paintLevels(box); });
+}
 export function openStats() {
   const S = TA.S, ov = L.overall(), today = U.dayNum(), body = ui.el('div', 'hall hst');
   const days = U.daysUntil(S.profile.examDate), hours = Math.round((S.focus.min || 0) / 6) / 10;
@@ -377,6 +393,7 @@ export function openStats() {
   body.innerHTML = `<div class="hall-scroll">
     <div class="hst-cd"><div class="hst-days"><b>${Math.max(0, days)}</b><small>天</small></div><div><h2>距離學測</h2><label>考試日期 <input type="date" class="hst-date" value="${S.profile.examDate}"></label><p class="muted">${days > 0 ? `相當於 ${Math.floor(days / 7)} 週又 ${days % 7} 天。每天完成 ${S.profile.dailyGoal} 題，考前還能再練 ${(days * S.profile.dailyGoal).toLocaleString()} 題。` : '祝你考試順利！'}</p></div></div>
     <div class="hst-tiles">${tile(ov.attempts.toLocaleString(), '總作答次數', '#5b8fd6')}${tile(ov.attempts ? Math.round(ov.correct / ov.attempts * 100) + '%' : '—', '總正確率', '#2fb38f')}${tile(`${ov.mastered.toLocaleString()}/${ov.total.toLocaleString()}`, '熟練題目', '#e0a020')}${tile(ov.vocabMastered.toLocaleString(), '熟練單字', '#2fb38f')}${tile(hours, '專注小時', '#9a7ad8')}${tile(S.streak.best, '最長連續天數', '#ff8a4c')}</div>
+    <div class="hs-label">級分估算與目標</div><div class="hst-lv"></div>
     <div class="hs-label">學習航跡（近 12 週 → 學測）</div><div class="hst-heat">${heat}</div><div class="hst-legend"><small>少</small>${[0, 1, 2, 3, 4].map(l => `<i class="l${l}"></i>`).join('')}<small>多</small><i class="fut"></i><small>還沒到</small><i class="fut exam"></i><small>學測</small></div>
     <div class="hst-two"><div><div class="hs-label">最近七天（共 ${week.reduce((a, w) => a + w.q, 0)} 題）</div><div class="hst-week">${week.map(w => `<div><small>${w.q || ''}</small><div class="col"><i style="height:${w.q / mx * 100}%"><i class="ok" style="height:${w.q ? w.c / w.q * 100 : 0}%"></i></i></div><small>${'日一二三四五六'[new Date(w.n * 86400000).getUTCDay()]}</small></div>`).join('')}</div><div class="hst-legend"><i class="a"></i><small>作答</small><i class="b"></i><small>答對</small></div></div>
       <div><div class="hs-label">五大考科精熟度</div>${radar}</div></div>
@@ -385,6 +402,7 @@ export function openStats() {
     ${trend ? `<div class="hs-label">模考趨勢（最近 ${ex.length} 次）</div>${trend}` : '<p class="muted">考過兩次以上模擬考，這裡會畫出分數趨勢。</p>'}
   </div>`;
   body.querySelector('.hst-date').onchange = e => { if (e.target.value) { S.profile.examDate = e.target.value; TA.Store.save(); openStats(); } };
+  paintLevels(body.querySelector('.hst-lv'));
   body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => notesIn(body, L.UNITS[b.dataset.n]));
   body.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { const u = L.UNITS[b.dataset.p]; runSet(`${u.name} · 單元練習`, L.pickUnit(u.id, 10), { again: () => openStats() }); });
   open('成績統計', body);

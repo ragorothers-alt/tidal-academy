@@ -596,3 +596,17 @@ test('非選題：自評記錄、複習排程、折算題數算進每日目標�
   const raw2 = JSON.parse(JSON.stringify(TA.S)); raw2.written = { ok: { n: 2, best: 5, sc: 0.5, s: 9, due: 'x', last: 1 }, bad: 3 };
   const c = boot(raw2, t0); assert.equal(c.TA.S.written.bad, undefined); assert.equal(c.TA.S.written.ok.best, 1); assert.equal(c.TA.S.written.ok.s, 4); assert.equal(c.TA.S.written.ok.due, 0);
 });
+
+test('級分估算：資料不足時不估、練習與模考加權、區間隨樣本縮小、目標級分存檔相容', () => {
+  const t0 = new Date(2026, 9, 26, 10).getTime(), { TA } = boot(null, t0), L = TA.L;
+  assert.equal(L.pctToLevel(0.98), 15); assert.equal(L.pctToLevel(0.5), 8); assert.equal(L.pctToLevel(0.01), 1);
+  const e0 = L.estimate('英文'); assert.equal(e0.lv, null); assert.equal(e0.basis, 'none');
+  const ids = TA.L.BY_SUBJECT.english.slice(0, 60);
+  ids.forEach((id, i) => L.record(L.Q[id], i % 5 !== 0, { silent: true }));   // 八成正確
+  const e1 = L.estimate('英文'); assert.equal(e1.basis, 'practice'); assert.ok(e1.lv >= 9 && e1.lv <= 13, '八成練習（九二折）約 11 級：' + e1.lv); assert.ok(e1.lo < e1.lv && e1.hi > e1.lv);
+  TA.S.exams.push({ at: t0, group: '英文', n: 47, c: 44, pts: 44, secs: 6000 });
+  const e2 = L.estimate('英文'); assert.equal(e2.basis, 'mock'); assert.ok(e2.lv > e1.lv, '整卷高分拉高估計'); assert.ok(e2.hi - e2.lo <= e1.hi - e1.lo, '樣本多了區間不會變寬');
+  assert.equal(L.estimate('數學B').lv, null, '沒練過數學');
+  const raw = JSON.parse(JSON.stringify(TA.S)); delete raw.profile.targets; const b = boot(raw, t0); assert.deepEqual(JSON.parse(JSON.stringify(b.TA.S.profile.targets)), {});
+  raw.profile.targets = { '英文': 14, '國文': 99, '數學A': 'x' }; const c = boot(raw, t0); assert.deepEqual(JSON.parse(JSON.stringify(c.TA.S.profile.targets)), { '英文': 14 });
+});

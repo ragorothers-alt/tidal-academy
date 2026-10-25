@@ -384,6 +384,29 @@
     }));
     return list.sort((a, b) => Number(b.weak) - Number(a.weak) || a.score - b.score).slice(0, k || 5);
   };
+  /* ---------- 級分估算（v7.0）：依最近的模考與練習正確率，粗估學測 15 級分的區間。
+     非官方換算：學測級距約是前 1% 考生平均的十五分之一，這裡用「每 6.5% 約一級」近似；樣本越少、單元覆蓋越低，區間越寬 ---------- */
+  L.LEVEL_STEP = 0.065;
+  L.pctToLevel = p => Math.max(1, Math.min(15, Math.ceil(p / L.LEVEL_STEP - 1e-9)));
+  L.estimate = function (group) {
+    const cfg = L.MOCK[group]; if (!cfg) return null;
+    const now = Date.now(), name = e => (e.group === '數學' ? '數學A' : e.group);
+    const ex = TA.S.exams.filter(e => name(e) === group && e.n > 0 && now - e.at < 120 * 864e5).slice(-5).reverse();
+    let mw = 0, ms = 0, mn = 0;   // 模考：越近的權重越高，整卷再加權
+    ex.forEach((e, i) => { const w = e.n * Math.pow(0.8, i) * (e.n >= cfg.realN ? 1.5 : 1); mw += w; ms += w * Math.min(1, (e.pts != null ? e.pts : e.c) / e.n); mn += e.n; });
+    let pw = 0, ps = 0, pn = 0, seenU = 0, allU = 0;   // 練習：各單元最近表現依作答數加權；練習題會重複出現、比正式考試好答，打九二折
+    cfg.subjects.forEach(sid => (TA.DATA.units[sid] || []).forEach(u => {
+      if (group === '數學B' && u.id === 'ma2-space') return;
+      allU++; const st = L.unitStats(u.id); if (!st.attempts) return;
+      seenU++; const w = Math.min(st.attempts, 40); pw += w; ps += w * st.recentAcc; pn += st.attempts;
+    }));
+    const prac = pw ? ps / pw * 0.92 : 0, cover = allU ? seenU / allU : 0;
+    if (!mn && pn < 40) return { group, lv: null, need: 40 - pn, basis: 'none', attempts: pn, cover };
+    const pct = mn ? (pn >= 30 ? 0.7 * ms / mw + 0.3 * prac : ms / mw) : prac;
+    const nEff = mn * 1.5 + pn * 0.5, half = Math.max(1, Math.min(3, Math.round(2.4 / Math.sqrt(Math.max(1, nEff) / 30) + (1 - cover) * 1.2)));
+    const lv = L.pctToLevel(pct);
+    return { group, lv, lo: Math.max(1, lv - half), hi: Math.min(15, lv + half), pct, basis: mn ? 'mock' : 'practice', exams: ex.length, attempts: pn, cover };
+  };
   L.overall = function () {
     let n = 0, c = 0, seenN = 0, mastered = 0;
     for (const id in TA.S.q) { const r = TA.S.q[id]; if (!L.Q[id]) continue; n += r.n; c += r.c; seenN++; if (r.s >= L.MASTER_BOX) mastered++; }

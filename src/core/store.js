@@ -9,7 +9,7 @@
     return {
       ver: VERSION,
       created: Date.now(),
-      profile: { name: '', examDate: '2027-01-22', target: '', dailyGoal: 30, onboarded: false },
+      profile: { name: '', examDate: '2027-01-22', target: '', dailyGoal: 30, onboarded: false, targets: {} },   // targets：各考科的目標級分（v7.0）
       settings: { sfx: true, music: true, volume: 0.7, motion: 'full', sea: 'high', autoNext: false, timer: true, mouse: 1, view: 140, res: 1, gfx: '', texpack: 'pack' },
       world: null,
       isle: null,   // 潮汐小島存檔
@@ -58,6 +58,7 @@
     for (const uid in s.unitRecent) { const r = s.unitRecent[uid]; if (!Array.isArray(r)) { delete s.unitRecent[uid]; continue; } s.unitRecent[uid] = r.filter(v => v === 0 || v === 1).slice(-20); }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.profile.examDate)) s.profile.examDate = '2027-01-22';
     s.profile.dailyGoal = Math.max(10, Math.min(200, n(s.profile.dailyGoal, 30)));
+    if (!isObj(s.profile.targets)) s.profile.targets = {}; for (const g in s.profile.targets) { const v = Math.round(n(s.profile.targets[g], 0)); if (v >= 1 && v <= 15) s.profile.targets[g] = v; else delete s.profile.targets[g]; }
     if (!Array.isArray(s.exams)) s.exams = []; s.exams = s.exams.slice(-60);
     for (const id in s.written) { const r = s.written[id]; if (!isObj(r)) { delete s.written[id]; continue; } r.n = n(r.n, 0); r.best = Math.max(0, Math.min(1, n(r.best, 0))); r.sc = Math.max(0, Math.min(1, n(r.sc, 0))); r.s = Math.max(0, Math.min(4, n(r.s, 0))); r.due = n(r.due, 0); r.last = n(r.last, 0); }
     if (!s.shop.owned.includes('dusk')) s.shop.owned.push('dusk');

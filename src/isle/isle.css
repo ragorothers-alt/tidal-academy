@@ -1052,6 +1052,13 @@ body.has-passage #dlg.big { max-height: calc(62vh - 60px); }
 .hs-grid.g3 { grid-template-columns: repeat(3, 1fr); }
 .hs-pick { display: grid; gap: 2px; padding: 12px 8px; border: 0; border-radius: 16px; background: var(--ac-cream); color: var(--ac-ink); box-shadow: 0 4px 0 rgba(107, 79, 58, .14), inset 0 -4px 0 color-mix(in srgb, var(--c, #ffd84a) 60%, transparent); font: 800 17px var(--font); cursor: pointer; }
 .hs-pick small { color: var(--ac-ink2); font-size: 12px; font-weight: 700; }
+/* 級分估算（hall.js paintLevels） */
+.hst-lvg { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.lv-card { padding: 10px 12px; border-radius: 16px; background: var(--ac-cream); box-shadow: inset 0 4px 0 color-mix(in srgb, var(--c) 70%, transparent), 0 3px 0 rgba(107, 79, 58, .12); }
+.lv-h { display: grid; gap: 2px; } .lv-h b { font-size: 16px; } .lv-h small { color: var(--ac-ink2); font-size: 11px; font-weight: 700; line-height: 1.4; }
+.lv-n { display: flex; align-items: baseline; gap: 4px; margin: 4px 0; } .lv-n b { font-size: 34px; line-height: 1; color: color-mix(in srgb, var(--c) 70%, #333); } .lv-n span { font-weight: 800; } .lv-n small { margin-left: auto; color: var(--ac-ink2); font-weight: 700; font-size: 12px; }
+.lv-t { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 13px; } .lv-t button { width: 26px; height: 26px; border: 0; border-radius: 8px; background: #efe6d4; font: 900 15px var(--font); cursor: pointer; color: var(--ac-ink); } .lv-t em { font-style: normal; margin-left: auto; color: #d9733f; font-size: 12px; }
+.lv-tip { margin: 6px 0 0; font-size: 12px; font-weight: 700; color: var(--ac-ink2); line-height: 1.5; }
 /* 非選練習（written.js） */
 .wr-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
 .wr-item { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 10px 12px; border: 0; border-radius: 14px; background: var(--ac-cream); color: var(--ac-ink); text-align: left; box-shadow: 0 3px 0 rgba(107, 79, 58, .12); font: 800 15px var(--font); cursor: pointer; }
