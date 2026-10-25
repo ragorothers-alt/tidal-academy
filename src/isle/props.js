@@ -810,13 +810,18 @@ function paveTex(kind) {
         c.fillStyle = g; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
         if (tone < 0.3) { c.fillStyle = `rgba(150,128,96,${0.08 + r() * 0.1})`; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill(); }   // 幾塊顏色深一點、舊一點
         c.strokeStyle = 'rgba(110,88,58,.28)'; c.lineWidth = 1.6; c.beginPath(); c.roundRect(x0 + 0.8, y0 + 0.8, ww - 1.6, hh - 1.6, rad); c.stroke();   // 邊緣磨圓的暗線
-        for (let s = 0; s < 10; s++) { c.fillStyle = `rgba(${110 + r() * 50},${92 + r() * 36},${64 + r() * 20},${0.04 + r() * 0.07})`; c.beginPath(); c.arc(x0 + r() * ww, y0 + r() * hh, 1.5 + r() * 7, 0, 7); c.fill(); }
+        const blob = (g2, bx, by, br, col) => { const rg = g2.createRadialGradient(bx, by, 0, bx, by, br); rg.addColorStop(0, col); rg.addColorStop(1, col.replace(/[\d.]+\)$/, '0)')); g2.fillStyle = rg; g2.fillRect(bx - br, by - br, br * 2, br * 2); };   // 柔邊的斑：不會變成一圈圈的坑
+        c.save(); c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.clip();
+        for (let s = 0; s < 8; s++) blob(c, x0 + r() * ww, y0 + r() * hh, 4 + r() * 12, `rgba(${110 + r() * 50 | 0},${92 + r() * 36 | 0},${64 + r() * 20 | 0},${(0.05 + r() * 0.08).toFixed(3)})`);
+        c.restore();
         for (let s = 0; s < 3; s++) { c.strokeStyle = `rgba(120,98,70,${0.12 + r() * 0.12})`; c.lineWidth = 0.6; c.beginPath(); const sx = x0 + r() * ww, sy = y0 + r() * hh; c.moveTo(sx, sy); c.lineTo(sx + (r() - 0.5) * 18, sy + (r() - 0.5) * 10); c.stroke(); }   // 細裂紋
         // 高度：一圈圈往內縮、越內越高＝圓角倒角；整塊再隨機傾一點，石板不會一樣平
         for (let i = 0; i < 6; i++) { h.fillStyle = gray(110 + i * 22); h.beginPath(); h.roundRect(x0 + i * 1.1, y0 + i * 1.1, ww - i * 2.2, hh - i * 2.2, Math.max(2, rad - i)); h.fill(); }
         const a = r() * 6.28, tg = h.createLinearGradient(x0 + ww / 2 - Math.cos(a) * ww / 2, y0 + hh / 2 - Math.sin(a) * hh / 2, x0 + ww / 2 + Math.cos(a) * ww / 2, y0 + hh / 2 + Math.sin(a) * hh / 2);
         tg.addColorStop(0, gray(0, 0.1)); tg.addColorStop(1, gray(255, 0.1)); h.fillStyle = tg; h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.fill();
-        for (let s = 0; s < 16; s++) { h.fillStyle = gray(r() < 0.5 ? 0 : 255, 0.06 + r() * 0.06); h.beginPath(); h.arc(x0 + 4 + r() * (ww - 8), y0 + 4 + r() * (hh - 8), 1 + r() * 5, 0, 7); h.fill(); }
+        h.save(); h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.clip();
+        for (let s = 0; s < 12; s++) blob(h, x0 + r() * ww, y0 + r() * hh, 4 + r() * 10, gray(r() < 0.5 ? 0 : 255, (0.07 + r() * 0.07).toFixed(3)));   // 表面緩緩起伏
+        h.restore();
         x += w;
       }
     }
