@@ -610,3 +610,15 @@ test('級分估算：資料不足時不估、練習與模考加權、區間隨�
   const raw = JSON.parse(JSON.stringify(TA.S)); delete raw.profile.targets; const b = boot(raw, t0); assert.deepEqual(JSON.parse(JSON.stringify(b.TA.S.profile.targets)), {});
   raw.profile.targets = { '英文': 14, '國文': 99, '數學A': 'x' }; const c = boot(raw, t0); assert.deepEqual(JSON.parse(JSON.stringify(c.TA.S.profile.targets)), { '英文': 14 });
 });
+
+test('題型專練：只抽指定題型、題組完整、不算進級分估算', () => {
+  const t0 = new Date(2026, 9, 26, 10).getTime(), { TA } = boot(null, t0), L = TA.L;
+  const multi = L.pickMock('社會', 10, 'multi'); assert.ok(multi.length > 0); assert.ok(multi.every(id => L.Q[id].type === 'multi'), '只有多選');
+  const fill = L.pickMock('數學A', 6, 'fill'); assert.ok(fill.length > 0); assert.ok(fill.every(id => L.Q[id].type === 'fill'), '只有選填');
+  const pas = L.pickMock('英文', 20, 'passage'); assert.ok(pas.length > 0); assert.ok(pas.every(id => L.Q[id].pid), '都是題組');
+  const pids = new Set(pas.map(id => L.Q[id].pid)); pids.forEach(pid => assert.ok(L.BY_UNIT[L.Q[pas.find(id => L.Q[id].pid === pid)].unit].filter(id => L.Q[id].pid === pid).every(id => pas.includes(id)), '題組整組抽'));
+  assert.ok(L.drillCount('數學A', 'fill') >= 8); assert.equal(L.drillCount('社會', 'fill'), 0, '社會沒有選填');
+  assert.equal(L.pickMock('社會', 10, 'fill').length, 0);
+  TA.S.exams.push({ at: t0, group: '英文', n: 20, c: 20, pts: 20, secs: 600, drill: 'passage' });
+  assert.equal(L.estimate('英文').lv, null, '專練滿分也不拿來估級分');
+});

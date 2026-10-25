@@ -28,7 +28,7 @@
       _night: false, _dawn: false,   // 深夜、清晨學習過（成就）
       boss: {},     // subject → {wins,best}
       rush: { best: 0, runs: 0 },
-      exams: [],    // {at,group,n,c,secs,units:{uid:[c,n]}}
+      exams: [],    // {at,group,n,c,pts,secs,units:{uid:[c,n]},drill?}（drill：題型專練，不算級分）
       ach: {},      // id → 解鎖時間
       shop: { owned: ['dusk'], theme: 'dusk' },
       focus: { min: 0, sessions: 0, preset: 25 },

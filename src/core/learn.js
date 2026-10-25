@@ -347,10 +347,14 @@
     for (let k = n; k >= 0; k--) if (dp[k]) return dp[k];
     return [];
   }
-  L.pickMock = function (group, n) {
+  /** 題型專練（v7.0）：passage 題組／閱讀、multi 多選、fill 選填、bank 文意選填 */
+  L.DRILLS = { passage: { name: '題組閱讀', ok: p => p.length > 1 || !!L.Q[p[0]].pid }, multi: { name: '多選題', ok: p => p.every(id => L.Q[id].type === 'multi') }, fill: { name: '選填題', ok: p => p.every(id => L.Q[id].type === 'fill') }, bank: { name: '文意選填', ok: p => p.some(id => L.Q[id].type === 'bank') } };
+  L.drillCount = (group, type) => { const cfg = L.MOCK[group], D = L.DRILLS[type]; if (!cfg || !D) return 0; return cfg.subjects.reduce((a, sid) => a + mockPacks(group, sid).filter(D.ok).reduce((b, p) => b + p.length, 0), 0); };
+  L.pickMock = function (group, n, type) {
     const cfg = L.MOCK[group]; if (!cfg) return [];
     n = n === 'full' ? cfg.realN : Math.max(0, Math.floor(Number(n) || 0));
-    const parts = cfg.subjects.map((sid, i) => takePacks(mockPacks(group, sid), Math.floor(n / cfg.subjects.length) + (i < n % cfg.subjects.length ? 1 : 0)));
+    const D = L.DRILLS[type], packsOf = sid => (D ? mockPacks(group, sid).filter(D.ok) : mockPacks(group, sid));
+    const parts = cfg.subjects.map((sid, i) => takePacks(packsOf(sid), Math.floor(n / cfg.subjects.length) + (i < n % cfg.subjects.length ? 1 : 0)));
     const packs = balancedTake(parts, parts.reduce((sum, p) => sum + p.length, 0));
     return packs.sort((a, b) => L.Q[a[0]].d - L.Q[b[0]].d).flat();
   };
@@ -391,7 +395,7 @@
   L.estimate = function (group) {
     const cfg = L.MOCK[group]; if (!cfg) return null;
     const now = Date.now(), name = e => (e.group === '數學' ? '數學A' : e.group);
-    const ex = TA.S.exams.filter(e => name(e) === group && e.n > 0 && now - e.at < 120 * 864e5).slice(-5).reverse();
+    const ex = TA.S.exams.filter(e => name(e) === group && e.n > 0 && !e.drill && now - e.at < 120 * 864e5).slice(-5).reverse();   // 題型專練不算（題型分布和正式考試不同）
     let mw = 0, ms = 0, mn = 0;   // 模考：越近的權重越高，整卷再加權
     ex.forEach((e, i) => { const w = e.n * Math.pow(0.8, i) * (e.n >= cfg.realN ? 1.5 : 1); mw += w; ms += w * Math.min(1, (e.pts != null ? e.pts : e.c) / e.n); mn += e.n; });
     let pw = 0, ps = 0, pn = 0, seenU = 0, allU = 0;   // 練習：各單元最近表現依作答數加權；練習題會重複出現、比正式考試好答，打九二折
@@ -442,7 +446,7 @@
     A('rush1k', '激流千分', '衝刺模式單場 1000 分', 'bolt', 40, () => TA.S.rush.best >= 1000),
     A('rush3k', '逆流而上', '衝刺模式單場 3000 分', 'bolt', 100, () => TA.S.rush.best >= 3000),
     A('mock1', '第一次模考', '完成一次模擬考', 'exam', 30, () => TA.S.exams.length >= 1),
-    A('mock80', '頂標航線', '模擬考 30 題以上得分率達 80%', 'target', 100, () => TA.S.exams.some(e => e.n >= 30 && (e.pts != null ? e.pts : e.c) / e.n >= 0.8)),
+    A('mock80', '頂標航線', '模擬考 30 題以上得分率達 80%', 'target', 100, () => TA.S.exams.some(e => e.n >= 30 && !e.drill && (e.pts != null ? e.pts : e.c) / e.n >= 0.8)),
     A('star10', '十座燈塔', '10 個單元取得三星', 'star', 60, () => starsCount(3) >= 10),
     A('star30', '群島長明', '30 個單元取得三星', 'star', 150, () => starsCount(3) >= 30),
     A('allsub', '五科全航', '五大考科都至少作答 20 題', 'compass', 50, () => TA.GROUPS.every(g => TA.SUBJECTS.filter(s => s.group === g).reduce((a, s) => a + L.subjectStats(s.id).seen, 0) >= 20)),

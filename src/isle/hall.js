@@ -114,37 +114,41 @@ export const keyIndex = e => { if (/^(Digit|Numpad)[0-9]$/.test(e.code)) { const
 /* ---------- 模擬考 ---------- */
 /** 模擬考設定：考科、題數、限時、最近成績 */
 export function openMock() {
-  let group = TA.GROUPS.includes('社會') ? '社會' : TA.GROUPS[0], n = 20;
+  let group = TA.GROUPS.includes('社會') ? '社會' : TA.GROUPS[0], n = 20, drill = '';
   const body = ui.el('div', 'hall hs');
   const paint = () => {
     const cfg = L.MOCK[group], sizes = cfg.subjects.includes('math') ? [6, 12] : group === '國文' ? [10, 20] : [10, 20, 30];
     const short = sizes.filter(k => k < cfg.realN);
+    const drills = Object.keys(L.DRILLS).filter(k => L.drillCount(group, k) >= 8); if (drill && !drills.includes(drill)) drill = '';
+    if (drill && n === 'full') n = short[short.length - 1];
     if (n !== 'full' && !short.includes(n)) n = short[short.length - 1];
     const hist = TA.S.exams.slice(-8).reverse(), full = n === 'full';
     body.innerHTML = `<div class="hall-scroll">
       <p class="hs-lead">作答時不顯示對錯，可以前後翻題、標記；交卷後看分數、單元表現與逐題詳解。多選題依學測方式部分給分（錯 1 個選項得 0.6、錯 2 個得 0.2；空白 0 分）。</p>
       <div class="hs-label">考科</div><div class="hs-grid g3">${L.MOCK_GROUPS.map(g => { const subs = L.MOCK[g].subjects, tot = subs.reduce((a, s) => a + (L.BY_SUBJECT[s] || []).filter(id => L.mockEligible(g, L.Q[id])).length, 0); return `<button type="button" class="hs-pick${g === group ? ' on' : ''}" data-g="${g}" style="--c:${subj(subs[0]).color}"><b>${g}</b><small>${tot} 題題庫</small></button>`; }).join('')}</div>
       <div class="hs-label">題數</div><div class="hs-grid g3">${[...short.map((k, i) => [k, ['短版小考', '短版練習', '短版大考'][i]]), ['full', '整卷']].map(([k, t]) => `<button type="button" class="hs-pick${k === n ? ' on' : ''}" data-n="${k}"><b>${k === 'full' ? `整卷 · ${cfg.realN} 題` : k + ' 題'}</b><small>${t}</small></button>`).join('')}</div>
+      <div class="hs-label">題型</div><div class="hs-grid g3">${[['', '各題型都有'], ...drills.map(k => [k, `${L.drillCount(group, k)} 題`])].map(([k, t]) => `<button type="button" class="hs-pick${k === drill ? ' on' : ''}" data-d="${k}"><b>${k ? L.DRILLS[k].name : '完整考卷'}</b><small>${t}</small></button>`).join('')}</div>
       <p class="hs-info">限時 <b>${fmtT(L.mockSeconds(group, n))}</b>（${full ? `整卷採學測${group}正式節次 ${cfg.realMin} 分鐘` : `短版按純選擇作答時間估算，約每題 ${(cfg.choiceMin / cfg.realN).toFixed(1)} 分鐘`}）</p>
       <p class="muted">短版提供 ${short.join('／')} 題；整卷題數依 115 學測選擇（填）題，包含混合題中的選擇題；非選題、翻譯與作文請到「非選練習」（手機），寫完對照參考答案自評。完整題組一起抽取，短版題數若無法整組湊齊會略少；這是原創練習卷，題型配分與難度不等同正式試卷。</p>
-      ${hist.length ? `<div class="hs-label">最近成績</div><div class="hs-hist">${hist.map(e => { const rate = (e.pts != null ? e.pts : e.c) / e.n; return `<div><span>${new Date(e.at).toLocaleDateString('zh-TW')}</span><b>${e.group}</b><span>${e.n} 題</span><i style="--k:${rate.toFixed(3)}"></i><b>${Math.round(rate * 100)} 分</b></div>`; }).join('')}</div>` : ''}
+      ${hist.length ? `<div class="hs-label">最近成績</div><div class="hs-hist">${hist.map(e => { const rate = (e.pts != null ? e.pts : e.c) / e.n; return `<div><span>${new Date(e.at).toLocaleDateString('zh-TW')}</span><b>${e.group}${e.drill && L.DRILLS[e.drill] ? `<small> · ${L.DRILLS[e.drill].name}</small>` : ''}</b><span>${e.n} 題</span><i style="--k:${rate.toFixed(3)}"></i><b>${Math.round(rate * 100)} 分</b></div>`; }).join('')}</div>` : ''}
     </div><div class="hx-foot"><span class="muted">準備好再開始，開始後就會計時。</span><button type="button" class="btn go">開始作答</button></div>`;
     body.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { group = b.dataset.g; Audio.sfx('tick'); paint(); });
-    body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = b.dataset.n === 'full' ? 'full' : +b.dataset.n; Audio.sfx('tick'); paint(); });
-    body.querySelector('.go').onclick = () => runMock(group, n);
+    body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = b.dataset.n === 'full' ? 'full' : +b.dataset.n; if (n === 'full') drill = ''; Audio.sfx('tick'); paint(); });
+    body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { drill = b.dataset.d; Audio.sfx('tick'); paint(); });
+    body.querySelector('.go').onclick = () => runMock(group, n, drill);
   };
   paint();
   open('潮汐考場 · 模擬考', body);
-  keyFn = e => { if (e.code === 'Enter') { runMock(group, n); return true; } return false; };
+  keyFn = e => { if (e.code === 'Enter') { runMock(group, n, drill); return true; } return false; };
 }
 
-function runMock(group, n) {
-  const ids = L.pickMock(group, n), views = ids.map(id => L.view(L.Q[id]));
+function runMock(group, n, drill) {
+  const ids = L.pickMock(group, n, drill), views = ids.map(id => L.view(L.Q[id])), label = `${group} ${drill ? L.DRILLS[drill].name + '專練' : '模擬考'}`;
   if (!ids.length) { ui.toast('這一科的題目還沒準備好'); return; }
   const limit = L.mockSeconds(group, n === 'full' ? n : ids.length), t0 = Date.now(), answers = {}, flags = {};
   let i = 0, done = false, clock = 0;
   const body = ui.el('div', 'hall hx');
-  body.innerHTML = `<div class="hx-bar"><b class="hx-title">${group} 模擬考 · ${ids.length} 題</b><span class="hx-timer"></span></div><div class="hall-scroll hx-main"></div>
+  body.innerHTML = `<div class="hx-bar"><b class="hx-title">${label} · ${ids.length} 題</b><span class="hx-timer"></span></div><div class="hall-scroll hx-main"></div>
     <div class="hx-foot"><button type="button" class="btn ghost prev">← 上一題</button><button type="button" class="btn ghost flag">標記</button><div class="hx-pal"></div><button type="button" class="btn ghost next">下一題 →</button><button type="button" class="btn submit">交卷</button></div>`;
   const main = body.querySelector('.hx-main'), pal = body.querySelector('.hx-pal'), timer = body.querySelector('.hx-timer'), flagBtn = body.querySelector('.flag');
   let view = null;
@@ -177,10 +181,10 @@ function runMock(group, n) {
     });
     const pts = log.reduce((s, x) => s + x.score, 0), pct = Math.round(pts / ids.length * 100), secs = Math.round((Date.now() - t0) / 1000);
     const units = {}; log.forEach(x => { const u = L.Q[x.id].unit; units[u] = units[u] || [0, 0]; units[u][1]++; if (x.ok) units[u][0]++; });
-    TA.S.exams.push({ at: Date.now(), group, n: ids.length, c: correct, pts, secs, units });
+    TA.S.exams.push(Object.assign({ at: Date.now(), group, n: ids.length, c: correct, pts, secs, units }, drill ? { drill } : {}));   // 題型專練另外標記：不算進級分估算
     xp += L.gain(log.filter(x => x.ans !== null).length * 3, 0).xp; const gems = Math.round(pct / 5); if (gems) L.gain(0, gems);
     L.checkAch(); TA.Store.save();
-    showResult({ mode: 'mock', title: `${group} 模擬考`, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, n) });
+    showResult({ mode: 'mock', title: label, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, n, drill) });
   };
   body.querySelector('.prev').onclick = () => go(i - 1);
   body.querySelector('.next').onclick = () => go(i + 1);
@@ -188,7 +192,7 @@ function runMock(group, n) {
   body.querySelector('.submit').onclick = () => submit(false);
   pal.onclick = e => { const b = e.target.closest('[data-k]'); if (b) go(+b.dataset.k); };
   const guard = () => done ? Promise.resolve(true) : confirmIn(body, '離開模擬考？', '這次的作答不會保存，也不會計分。', '離開');
-  open(`潮汐考場 · ${group} 模擬考`, body, { guard, onClose: () => { done = true; clearInterval(clock); } });
+  open(`潮汐考場 · ${label}`, body, { guard, onClose: () => { done = true; clearInterval(clock); } });
   keyFn = e => {
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return false;
     if (e.code === 'ArrowLeft') { go(i - 1); return true; } if (e.code === 'ArrowRight' || e.code === 'Enter') { go(i + 1); return true; }
@@ -377,7 +381,7 @@ export function openStats() {
   const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / G.length; return [cx + Math.cos(a) * r, cy + Math.sin(a) * r]; };
   const radar = `<svg viewBox="0 0 220 210" class="hst-radar">${[0.25, 0.5, 0.75, 1].map(k => `<polygon points="${G.map((_, i) => pt(i, R * k).join(',')).join(' ')}" class="rd-ring"/>`).join('')}${G.map((_, i) => `<line x1="${cx}" y1="${cy}" x2="${pt(i, R)[0]}" y2="${pt(i, R)[1]}" class="rd-ax"/>`).join('')}<polygon points="${G.map((g, i) => pt(i, R * Math.max(0.04, val(g))).join(',')).join(' ')}" class="rd-shape"/>${G.map((g, i) => { const [x, y] = pt(i, R + 15); return `<text x="${x}" y="${y + 4}" text-anchor="middle" class="rd-l">${g} ${Math.round(val(g) * 100)}%</text>`; }).join('')}</svg>`;
   const weak = L.weakUnits(8).filter(w => w.weak);
-  const ex = S.exams.slice(-12).map(e => ({ ...e, group: e.group === '數學' ? '數學A' : e.group }));
+  const ex = S.exams.filter(e => !e.drill).slice(-12).map(e => ({ ...e, group: e.group === '數學' ? '數學A' : e.group }));
   let trend = '';
   if (ex.length >= 2) {
     // 沿用 quizcup 的分科折線：橫軸保留全體考試時序，同科才連線，避免跨科分數誤連。
