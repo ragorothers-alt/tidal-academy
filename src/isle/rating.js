@@ -9,7 +9,7 @@ export const PARTS = [
 ];
 export function score() {
   const s = S(), o = L.overall(), d = L.dayRec(), goal = TA.S.profile.dailyGoal || 30;
-  const study = clamp(o.seen / (o.total * 0.6)) * 0.3 + clamp((o.acc - 0.4) / 0.45) * 0.25 + clamp(L.streakAlive() / 14) * 0.25 + clamp(d.q / goal) * 0.2;
+  const study = clamp(o.seen / (o.total * 0.6)) * 0.3 + clamp((o.acc - 0.4) / 0.45) * 0.25 + clamp(L.streakAlive() / 14) * 0.25 + clamp(L.effort(d) / goal) * 0.2;
   const kinds = ['fish', 'bug', 'fossil', 'sea', 'mineral'], total = kinds.reduce((a, k) => a + list(k).length, 0);
   const donated = kinds.reduce((a, k) => a + Object.keys(s.museum[k] || {}).length, 0), caught = kinds.reduce((a, k) => a + Object.keys(s.dex[k] || {}).length, 0);
   const friends = Object.values(s.fr || {}).reduce((a, v) => a + Math.min(16, v), 0) / (10 * 16);

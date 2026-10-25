@@ -104,8 +104,30 @@ vocab.forEach((v, i) => {
   else if (!new RegExp(key.split(' ')[0].slice(0, Math.max(3, key.length - 3)), 'i').test(v.ex)) warns.push(`${W}: 例句似乎沒有用到該字`);
 });
 
+// 非選題：結構、配分加總、科目與題型對得上
+const WR = TA.DATA.written || [], wIds = new Set(), KINDS = { 'en-trans': ['english'], 'en-essay': ['english'], 'zh-essay': ['chinese'], 'math-open': ['math'], short: ['history', 'geography', 'civics', 'physics', 'chemistry', 'biology', 'earth'] };
+const allUnits = new Set(); Object.values(TA.DATA.units).forEach(us => us.forEach(u => allUnits.add(u.id)));
+WR.forEach((w, i) => {
+  const W = `written #${i} ${w.id}`;
+  if (!w.id || wIds.has(w.id)) errors.push(`${W}: id 缺少或重複`); wIds.add(w.id);
+  if (!KINDS[w.kind]) { errors.push(`${W}: 未知題型 ${w.kind}`); return; }
+  if (!KINDS[w.kind].includes(w.sid)) errors.push(`${W}: 題型 ${w.kind} 不屬於科目 ${w.sid}`);
+  if (w.unit && !allUnits.has(w.unit)) errors.push(`${W}: 找不到單元 ${w.unit}`);
+  if (![1, 2, 3].includes(w.d)) errors.push(`${W}: d 必須為 1–3`);
+  ['title', 'q'].forEach(k => checkMarkup(`${W}.${k}`, w[k]));
+  if (w.material != null) checkMarkup(`${W}.material`, w.material);
+  if (!(w.pts > 0)) errors.push(`${W}: pts 必須大於 0`);
+  if (!Array.isArray(w.keys) || w.keys.length < 2) errors.push(`${W}: keys 至少兩個得分要點`);
+  else { w.keys.forEach((k, j) => { checkMarkup(`${W}.keys[${j}]`, k.t); if (!(k.p > 0)) errors.push(`${W}.keys[${j}]: 分數必須大於 0`); }); const sum = w.keys.reduce((a, k) => a + (k.p || 0), 0); if (Math.abs(sum - w.pts) > 1e-6) errors.push(`${W}: 得分要點合計 ${sum} 不等於 pts ${w.pts}`); }
+  if (w.parts) { if (!Array.isArray(w.parts) || !w.parts.length) errors.push(`${W}: parts 格式錯誤`); else { w.parts.forEach((p, j) => checkMarkup(`${W}.parts[${j}]`, p.q)); const ps = w.parts.reduce((a, p) => a + (p.pts || 0), 0); if (Math.abs(ps - w.pts) > 1e-6) errors.push(`${W}: 小題配分合計 ${ps} 不等於 pts ${w.pts}`); } }
+  [].concat(w.ref || []).forEach((r, j) => checkMarkup(`${W}.ref[${j}]`, r)); if (!w.ref || !String([].concat(w.ref)[0] || '').trim()) errors.push(`${W}: 缺參考答案`);
+  if (w.tip != null) checkMarkup(`${W}.tip`, w.tip);
+});
+if (WR.length) { const by = {}; WR.forEach(w => { by[w.kind] = (by[w.kind] || 0) + 1; }); report.push('非選題 ' + Object.entries(by).map(([k, n]) => `${k} ${n}`).join('、')); }
+
 console.log(report.join('\n'));
-console.log(`總題數 ${total}，單字 ${vocab.length}`);
+console.log(`總題數 ${total}，單字 ${vocab.length}${WR.length ? `，非選題 ${WR.length}` : ''}`);
+
 warns.forEach(w => console.log('⚠ ' + w));
 if (errors.length) { errors.slice(0, 80).forEach(e => console.log('✖ ' + e)); console.log(`共 ${errors.length} 個錯誤`); process.exit(1); }
 console.log('✔ 驗證通過');

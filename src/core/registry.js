@@ -58,4 +58,9 @@
   };
   /** 追加單字：{w,pos,zh,lv,ex,exZh} */
   TA.addVocab = function (list) { list.forEach(v => TA.DATA.vocab.push(v)); };
+  /** 非選題（v7.0）：中譯英、英文作文、國寫、數學非選、社會／自然的混合題非選部分。玩家寫完後對照參考答案與評分要點自評，不自動計分。
+      { id, sid, kind: 'en-trans'|'en-essay'|'zh-essay'|'math-open'|'short', unit?, d: 1–3, title, q, material?, parts?: [{ q, pts }], pts,
+        keys: [{ t: 得分要點, p: 分數 }], ref: 參考答案（字串或陣列）, tip?: 常見失分 } */
+  TA.DATA.written = TA.DATA.written || [];
+  TA.addWritten = function (list) { list.forEach(w => TA.DATA.written.push(w)); };
 })(typeof window !== 'undefined' ? window : globalThis);

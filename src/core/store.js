@@ -31,7 +31,8 @@
       exams: [],    // {at,group,n,c,secs,units:{uid:[c,n]}}
       ach: {},      // id → 解鎖時間
       shop: { owned: ['dusk'], theme: 'dusk' },
-      focus: { min: 0, sessions: 0, preset: 25 }
+      focus: { min: 0, sessions: 0, preset: 25 },
+      written: {}   // 非選題 id → {n,best,sc,s,due,last}（v7.0；舊存檔沒有就是空的）
     };
   }
 
@@ -58,6 +59,7 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.profile.examDate)) s.profile.examDate = '2027-01-22';
     s.profile.dailyGoal = Math.max(10, Math.min(200, n(s.profile.dailyGoal, 30)));
     if (!Array.isArray(s.exams)) s.exams = []; s.exams = s.exams.slice(-60);
+    for (const id in s.written) { const r = s.written[id]; if (!isObj(r)) { delete s.written[id]; continue; } r.n = n(r.n, 0); r.best = Math.max(0, Math.min(1, n(r.best, 0))); r.sc = Math.max(0, Math.min(1, n(r.sc, 0))); r.s = Math.max(0, Math.min(4, n(r.s, 0))); r.due = n(r.due, 0); r.last = n(r.last, 0); }
     if (!s.shop.owned.includes('dusk')) s.shop.owned.push('dusk');
     return s;
   }

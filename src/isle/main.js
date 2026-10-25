@@ -63,6 +63,7 @@ import * as grass from './grass.js';
 import * as waves from './waves.js';
 import * as seasons from './seasons.js';
 import * as shake from './shake.js';
+import * as written from './written.js';
 import * as highland from './highland.js';
 import * as details from './details.js';
 import * as hotel from './hotel.js';
@@ -641,7 +642,7 @@ function phone() {
     ['學習', [
       ...(cram.active() ? [['考前衝刺', '🎯', '#ffc0b8', () => cram.open(paintHud)]] : []),
       ['今日學習', '📚', '#9fe0a0', phoneToday], ['讀書計畫', '📅', '#d0e8ff', () => planner.open(paintHud)], ['專注時光', '⏳', '#ffe0b0', () => { ui.closePanel(); focus.open(paintHud); }],
-      ['夢境複習' + (dream.count() ? `（${dream.count()}）` : ''), '💤', '#e0d8ff', phoneDream], ['學習週報', '📈', '#c8f0d8', () => report.open()], ['每日潮汐' + (TA.S.daily.done ? '' : '（今日）'), '🌅', '#ffe8b0', () => voyage.openDaily()], ['航海圖', '🧭', '#c8f0e8', () => voyage.openChart()], ['單字燈塔' + (vdue ? `（${Math.min(99, vdue)}）` : ''), '🃏', '#c8f0e0', () => lexicon.open()], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()], ['錯題本', '📕', '#ffd0c8', () => hall.openMistakes()], ['成績統計', '📊', '#d8e8ff', () => hall.openStats()], ['激流衝刺', '⚡', '#fff0a8', () => voyage.openRush()], ['成就', '🏆', '#ffe0a0', phoneAch]
+      ['夢境複習' + (dream.count() ? `（${dream.count()}）` : ''), '💤', '#e0d8ff', phoneDream], ['學習週報', '📈', '#c8f0d8', () => report.open()], ['每日潮汐' + (TA.S.daily.done ? '' : '（今日）'), '🌅', '#ffe8b0', () => voyage.openDaily()], ['航海圖', '🧭', '#c8f0e8', () => voyage.openChart()], ['單字燈塔' + (vdue ? `（${Math.min(99, vdue)}）` : ''), '🃏', '#c8f0e0', () => lexicon.open()], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()], ['非選練習', '✍️', '#ffe8d8', () => written.open()], ['錯題本', '📕', '#ffd0c8', () => hall.openMistakes()], ['成績統計', '📊', '#d8e8ff', () => hall.openStats()], ['激流衝刺', '⚡', '#fff0a8', () => voyage.openRush()], ['成就', '🏆', '#ffe0a0', phoneAch]
     ]],
     ['練習遊戲', [
       ['練習護照', '🛂', '#f0e8c0', () => passport.open(openGame)],
@@ -692,7 +693,7 @@ function todayState() {
   const tasks = [
     ['daily', '🌅', '每日潮汐', '12 題：到期複習＋弱點＋新題', S.daily.done ? 1 : idx / set.length, S.daily.done ? '完成' : `${idx} / ${set.length}`],
     ['vocab', '🃏', '單字 20 張', '單字燈塔翻卡或測驗、釣魚都算', Math.min(1, d.voc / 20), `${Math.min(d.voc, 20)} / 20`],
-    ['goal', '🎯', `答題 ${goal} 題`, '島上任何學科題都算', Math.min(1, d.q / goal), `${Math.min(d.q, goal)} / ${goal}`],
+    ['goal', '🎯', `答題 ${goal} 題`, '島上任何學科題都算（非選題依題型折算）', Math.min(1, L.effort(d) / goal), `${Math.min(L.effort(d), goal)} / ${goal}`],
     ['focus', '⏳', '專注 25 分鐘', '用專注時光讀課本或寫考卷', Math.min(1, d.min / 25), `${Math.min(d.min, 25)} / 25 分`],
   ];
   const doneN = tasks.filter(t => t[4] >= 1).length, claimed = !!S.daily.claimed && S.daily.date === dk;
@@ -768,7 +769,7 @@ function paintHud() {
   $('wx').textContent = weather.icon() || (h >= 6 && h < 18.5 ? '☀' : '🌙');
   const exam = Math.round((new Date(TA.S.profile.examDate || '2027-01-22') - new Date(dayKey())) / 864e5);
   $('exam').textContent = exam > 0 ? `學測 D-${exam}` : exam >= -2 ? '學測加油！' : '學測辛苦了'; $('exam').classList.toggle('cram', exam >= -2 && exam <= 30);
-  const q = L.dayRec().q, goal = TA.S.profile.dailyGoal || 30, sk = L.streakAlive();
+  const q = L.effort(L.dayRec()), goal = TA.S.profile.dailyGoal || 30, sk = L.streakAlive();   // 非選題折算的題數也算
   $('goal').textContent = `今日 ${q} / ${goal}${sk ? ` · 🔥${sk}` : ''}`; $('goal').title = sk ? `連續學習 ${sk} 天` : '今天答滿 10 題（或專注一輪）就開始累積連續天數'; $('goal').classList.toggle('done', q >= goal);
   if (started && q >= goal && S().goalCel !== dayKey()) { S().goalCel = dayKey(); save(); celebrate('今日目標達成', `${q} 題 · 今天辛苦了！`, '#2fa88f', true); Audio.sfx('ok', { pitch: 7 }); bump($('goal')); }   // 每天第一次達標慶祝一下
   paintLv();
@@ -1466,7 +1467,7 @@ function welcomeBack() {
 function deepLink() {
   const q = new URLSearchParams(location.search), go = q.get('go'), sid = q.get('sid'); if (!go) return;
   try { history.replaceState(null, '', location.pathname); } catch (e) { /* file:// 有些瀏覽器不允許 */ }
-  const map = { boss: () => (TA.subject(sid) ? voyage.openBoss(sid) : voyage.openChart()), mock: () => hall.openMock(), chart: () => voyage.openChart(TA.subject(sid) ? sid : undefined), daily: () => voyage.openDaily(), rush: () => voyage.openRush(), review: () => hall.openMistakes(), stats: () => hall.openStats(), vocab: () => lexicon.open(), focus: () => focus.open(paintHud), profile: openProfile, home: phoneToday };
+  const map = { boss: () => (TA.subject(sid) ? voyage.openBoss(sid) : voyage.openChart()), mock: () => hall.openMock(), chart: () => voyage.openChart(TA.subject(sid) ? sid : undefined), daily: () => voyage.openDaily(), rush: () => voyage.openRush(), review: () => hall.openMistakes(), stats: () => hall.openStats(), vocab: () => lexicon.open(), written: () => written.open(), focus: () => focus.open(paintHud), profile: openProfile, home: phoneToday };
   if (map[go]) setTimeout(map[go], 600);
 }
 async function intro() {

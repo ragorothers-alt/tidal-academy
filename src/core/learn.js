@@ -121,6 +121,25 @@
 
   function dayRec(key) { key = key || U.dayKey(); return TA.S.days[key] = TA.S.days[key] || { q: 0, c: 0, voc: 0, min: 0, xp: 0 }; }
   L.dayRec = dayRec;
+  /** 一天的有效學習量（題）：選擇題作答數＋非選題折算的題數（每日目標與連續學習都用這個） */
+  L.effort = d => (d.q || 0) + (d.wq || 0);
+
+  /* ---------- 非選題（v7.0）：寫完對照參考答案自評，分數記在 TA.S.written；自評達八成才往後排，未達五成明天再練 ---------- */
+  const WR_EQ = { 'en-trans': 2, short: 2, 'math-open': 4, 'en-essay': 10, 'zh-essay': 12 }, WR_GAP = [1, 3, 7, 16, 35];   // 一次練習折算幾題；複習間隔（天）
+  L.written = () => TA.DATA.written || [];
+  L.wrRec = id => TA.S.written[id] || null;
+  L.wrDue = w => { const r = TA.S.written[w.id]; return !!r && r.due <= today(); };
+  L.wrEq = w => WR_EQ[w.kind] || 2;
+  /** 記一次非選題練習：got 自評分數（0–w.pts）。回傳 { xp, k 得分率 } */
+  L.recordWritten = function (w, got) {
+    const S = TA.S, r = S.written[w.id] = S.written[w.id] || { n: 0, best: 0, sc: 0, s: 0, due: 0, last: 0 };
+    const k = w.pts > 0 ? Math.max(0, Math.min(1, got / w.pts)) : 0;
+    r.n++; r.sc = Math.round(k * 1000) / 1000; r.best = Math.max(r.best, r.sc); r.last = Date.now();
+    r.s = k >= 0.8 ? Math.min(WR_GAP.length - 1, r.s + 1) : k >= 0.5 ? r.s : 0; r.due = today() + WR_GAP[r.s];
+    const eq = L.wrEq(w), d = dayRec(); d.wq = (d.wq || 0) + eq;
+    const xp = Math.round(eq * 5 * (0.4 + 0.6 * k)); L.gain(xp, 0); L.touchStreak(); L.checkAch(); TA.Store.save();
+    return { xp, k };
+  };
 
   /** 記錄一次作答。opts: {combo, mode, silent, blank}；空白只記錯，不算學習進度或獎勵。 */
   L.record = function (q, correct, opts) {
@@ -190,7 +209,7 @@
   L.touchStreak = function () {
     const S = TA.S, key = U.dayKey(), d = dayRec(key);
     if (S.streak.last === key) return false;
-    if (d.q + Math.floor(d.voc / 4) < L.STREAK_Q && !d.focus) return false;
+    if (L.effort(d) + Math.floor(d.voc / 4) < L.STREAK_Q && !d.focus) return false;
     const gap = S.streak.last ? U.dayNum() - U.keyToNum(S.streak.last) : 99;
     if (gap === 1) S.streak.cur++;
     else if (gap === 2 && S.streak.shields > 0) { S.streak.shields--; S.streak.cur++; TA.emit('toast', { icon: 'shield', text: '潮汐護符替你守住了昨天的連續紀錄' }); }

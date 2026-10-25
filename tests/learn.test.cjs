@@ -576,3 +576,23 @@ test('A7 回歸：模考只對實際作答題給經驗與計畫進度，空白�
   const planner = h.load('planner', { S: () => ({}), save() {}, dayKey: TA.U.dayKey }); assert.equal(planner.countToday(q.subject), 1);
   assert.equal(TA.S.exams.at(-1).c, 1); assert.equal(TA.S.exams.at(-1).pts, 1);
 });
+
+test('非選題：自評記錄、複習排程、折算題數算進每日目標與連續學習，舊存檔相容', () => {
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime();
+  const { TA, store, setNow } = boot(null, t0), L = TA.L;
+  const w = { id: 'wt-1', sid: 'english', kind: 'en-essay', d: 2, title: 't', q: 'q', pts: 20, keys: [{ t: 'a', p: 10 }, { t: 'b', p: 10 }], ref: 'r' };
+  assert.equal(L.effort(L.dayRec()), 0);
+  let r = L.recordWritten(w, 18);   // 九成：往後排
+  assert.equal(r.k, 0.9); assert.equal(L.wrRec('wt-1').s, 1); assert.equal(L.effort(L.dayRec()), 10, '英文作文折算 10 題');
+  assert.ok(r.xp > 0); assert.equal(TA.S.streak.cur, 1, '一篇作文就達到連續學習門檻');
+  assert.ok(!L.wrDue(w)); setNow(t0 + 3 * day + 3600e3); assert.ok(L.wrDue(w), '三天後到期');
+  r = L.recordWritten(w, 6);   // 三成：回到第 0 格，明天再練
+  assert.equal(L.wrRec('wt-1').s, 0); assert.equal(L.wrRec('wt-1').best, 0.9);
+  setNow(t0 + 4 * day + 3600e3); assert.ok(L.wrDue(w), '隔天到期');
+  assert.equal(L.recordWritten(w, 99).k, 1, '分數上限是滿分');
+  // 舊存檔（沒有 written 欄位）讀得進來；壞掉的紀錄被清掉
+  const raw = JSON.parse(JSON.stringify(TA.S)); delete raw.written;
+  const b = boot(raw, t0); assert.deepEqual(JSON.parse(JSON.stringify(b.TA.S.written)), {});
+  const raw2 = JSON.parse(JSON.stringify(TA.S)); raw2.written = { ok: { n: 2, best: 5, sc: 0.5, s: 9, due: 'x', last: 1 }, bad: 3 };
+  const c = boot(raw2, t0); assert.equal(c.TA.S.written.bad, undefined); assert.equal(c.TA.S.written.ok.best, 1); assert.equal(c.TA.S.written.ok.s, 4); assert.equal(c.TA.S.written.ok.due, 0);
+});
