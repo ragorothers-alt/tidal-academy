@@ -769,40 +769,80 @@ const roadKey = (x, z) => Math.round(x * 2) + ',' + Math.round(z * 2);
 export const onRoad = (x, z) => ROAD.has(roadKey(x, z));
 /** 路面貼圖（一張 = 路寬 × 路寬）：u 橫跨路面、v 沿著路。石板路是一排排錯縫的奶油色圓角石板；
     兩側的石板長短不一，外面透明（alphaTest 裁掉），路緣自然地參差，不是一條直線 */
-const PAVE = {};
+const PAVE = {}, PAVEN = {};
+/** 高度圖 → 法線貼圖（Sobel）：石板的倒角、表面起伏與石縫的凹陷靠這張打光，不用多做幾何。
+    貼圖預設 flipY，畫布往下是 -v，所以綠色通道直接用往下的斜率 */
+function normalFrom(hc, k) {
+  const S = hc.width, b = document.createElement('canvas'); b.width = b.height = S;
+  const bc = b.getContext('2d'); bc.filter = 'blur(1.2px)'; bc.drawImage(hc, 0, 0);   // 先糊一點：倒角是圓的，不是一階一階
+  const src = bc.getImageData(0, 0, S, S).data, out = bc.createImageData(S, S), o = out.data;
+  const H = (x, y) => src[(((y + S) % S) * S + ((x + S) % S)) * 4] / 255;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const dx = (H(x + 1, y - 1) + 2 * H(x + 1, y) + H(x + 1, y + 1) - H(x - 1, y - 1) - 2 * H(x - 1, y) - H(x - 1, y + 1)) * k;
+    const dy = (H(x - 1, y + 1) + 2 * H(x, y + 1) + H(x + 1, y + 1) - H(x - 1, y - 1) - 2 * H(x, y - 1) - H(x + 1, y - 1)) * k;
+    const l = Math.hypot(dx, dy, 1), i = (y * S + x) * 4;
+    o[i] = (-dx / l * 0.5 + 0.5) * 255; o[i + 1] = (dy / l * 0.5 + 0.5) * 255; o[i + 2] = (0.5 / l + 0.5) * 255; o[i + 3] = 255;
+  }
+  bc.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(b); t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  return t;
+}
 function paveTex(kind) {
   if (PAVE[kind]) return PAVE[kind];
-  const S2 = 256, cv = document.createElement('canvas'); cv.width = cv.height = S2; const c = cv.getContext('2d');
+  const S2 = 256, cv = document.createElement('canvas'), hc = document.createElement('canvas'); cv.width = cv.height = hc.width = hc.height = S2 * 2;
+  const c = cv.getContext('2d'), h = hc.getContext('2d'); c.scale(2, 2); h.scale(2, 2);   // 512 解析度、座標照舊用 256
+  const gray = (v, a) => `rgba(${v | 0},${v | 0},${v | 0},${a == null ? 1 : a})`;
   let sd = kind.length * 977 + 13; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
   if (kind === 'stone') {
-    const rows = 5, rh = S2 / rows, fills = ['#f1e7d3', '#e9dcc2', '#f6eedd', '#e4d5ba', '#efe2c8'];
+    const rows = 5, rh = S2 / rows, fills = ['#f1e7d3', '#e9dcc2', '#f6eedd', '#e4d5ba', '#efe2c8', '#e8d9bd', '#f3e4cc'];
+    h.fillStyle = gray(70); h.fillRect(0, 0, S2, S2);
     for (let y = 0; y < rows; y++) {
       const L = 8 + r() * 22, R = S2 - 8 - r() * 22;   // 這一排最左、最右的石板伸到哪
-      c.fillStyle = '#b9a687'; c.fillRect(L + 3, y * rh, R - L - 6, rh);   // 石縫（只在石板之間）
-      let x = L, k = 0; const n = 2 + Math.floor(r() * 2), w0 = (R - L) / n;
+      c.fillStyle = '#a8946f'; c.fillRect(L + 3, y * rh, R - L - 6, rh);   // 石縫（只在石板之間）
+      h.fillStyle = gray(40); h.fillRect(L + 3, y * rh, R - L - 6, rh);
+      for (let s = 0; s < 14; s++) { c.fillStyle = `rgba(${96 + r() * 30},${118 + r() * 24},${62 + r() * 20},${0.25 + r() * 0.3})`; c.beginPath(); c.arc(L + r() * (R - L), y * rh + r() * rh, 1 + r() * 2.2, 0, 7); c.fill(); }   // 石縫裡的青苔
+      let x = L; const n = 2 + Math.floor(r() * 2), w0 = (R - L) / n;
       while (x < R - 4) {
-        const w = Math.min(R - x, w0 * (0.7 + r() * 0.6)), x0 = x + 2.5, y0 = y * rh + 2.5, ww = w - 5, hh = rh - 5;
-        c.fillStyle = fills[Math.floor(r() * fills.length)]; c.beginPath(); c.roundRect(x0, y0, ww, hh, 9); c.fill();
-        const g = c.createLinearGradient(x0, y0, x0 + ww, y0 + hh); g.addColorStop(0, 'rgba(255,255,255,.22)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(90,70,40,.16)');
-        c.fillStyle = g; c.beginPath(); c.roundRect(x0, y0, ww, hh, 9); c.fill();   // 受光的左上、背光的右下：石板微微隆起
-        for (let s = 0; s < 6; s++) { c.fillStyle = `rgba(${120 + r() * 40},${100 + r() * 30},${70},${0.05 + r() * 0.06})`; c.beginPath(); c.arc(x0 + r() * ww, y0 + r() * hh, 2 + r() * 6, 0, 7); c.fill(); }
-        x += w; k++;
+        const w = Math.min(R - x, w0 * (0.7 + r() * 0.6)), x0 = x + 2.5, y0 = y * rh + 2.5, ww = w - 5, hh = rh - 5, rad = 7 + r() * 5;
+        const tone = r(), fill = fills[Math.floor(r() * fills.length)];
+        c.fillStyle = fill; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
+        const g = c.createLinearGradient(x0, y0, x0 + ww, y0 + hh); g.addColorStop(0, 'rgba(255,255,255,.2)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(90,70,40,.14)');
+        c.fillStyle = g; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
+        if (tone < 0.3) { c.fillStyle = `rgba(150,128,96,${0.08 + r() * 0.1})`; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill(); }   // 幾塊顏色深一點、舊一點
+        c.strokeStyle = 'rgba(110,88,58,.28)'; c.lineWidth = 1.6; c.beginPath(); c.roundRect(x0 + 0.8, y0 + 0.8, ww - 1.6, hh - 1.6, rad); c.stroke();   // 邊緣磨圓的暗線
+        for (let s = 0; s < 10; s++) { c.fillStyle = `rgba(${110 + r() * 50},${92 + r() * 36},${64 + r() * 20},${0.04 + r() * 0.07})`; c.beginPath(); c.arc(x0 + r() * ww, y0 + r() * hh, 1.5 + r() * 7, 0, 7); c.fill(); }
+        for (let s = 0; s < 3; s++) { c.strokeStyle = `rgba(120,98,70,${0.12 + r() * 0.12})`; c.lineWidth = 0.6; c.beginPath(); const sx = x0 + r() * ww, sy = y0 + r() * hh; c.moveTo(sx, sy); c.lineTo(sx + (r() - 0.5) * 18, sy + (r() - 0.5) * 10); c.stroke(); }   // 細裂紋
+        // 高度：一圈圈往內縮、越內越高＝圓角倒角；整塊再隨機傾一點，石板不會一樣平
+        for (let i = 0; i < 6; i++) { h.fillStyle = gray(110 + i * 22); h.beginPath(); h.roundRect(x0 + i * 1.1, y0 + i * 1.1, ww - i * 2.2, hh - i * 2.2, Math.max(2, rad - i)); h.fill(); }
+        const a = r() * 6.28, tg = h.createLinearGradient(x0 + ww / 2 - Math.cos(a) * ww / 2, y0 + hh / 2 - Math.sin(a) * hh / 2, x0 + ww / 2 + Math.cos(a) * ww / 2, y0 + hh / 2 + Math.sin(a) * hh / 2);
+        tg.addColorStop(0, gray(0, 0.1)); tg.addColorStop(1, gray(255, 0.1)); h.fillStyle = tg; h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.fill();
+        for (let s = 0; s < 16; s++) { h.fillStyle = gray(r() < 0.5 ? 0 : 255, 0.06 + r() * 0.06); h.beginPath(); h.arc(x0 + 4 + r() * (ww - 8), y0 + 4 + r() * (hh - 8), 1 + r() * 5, 0, 7); h.fill(); }
+        x += w;
       }
     }
   } else {   // 土路、沙路：壓實的土（或細沙）＋小石子，兩側一樣參差
     const base = kind === 'earth' ? ['#c9ae86', '#bfa27a', '#d2b893'] : ['#f1dfb6', '#ead6a8', '#f6e7c4'];
+    h.fillStyle = gray(120); h.fillRect(0, 0, S2, S2);
     for (let y = 0; y < S2; y += 8) { const L = 6 + r() * 20, R = S2 - 6 - r() * 20; c.fillStyle = base[Math.floor(r() * 3)]; c.fillRect(L, y, R - L, 8); }
-    for (let s = 0; s < 260; s++) { c.fillStyle = kind === 'earth' ? `rgba(${150 + r() * 60},${130 + r() * 50},${100 + r() * 40},.8)` : 'rgba(200,175,130,.35)'; c.beginPath(); c.arc(30 + r() * (S2 - 60), r() * S2, 1 + r() * (kind === 'earth' ? 3.5 : 1.5), 0, 7); c.fill(); }
+    for (let s = 0; s < 260; s++) {
+      const px = 30 + r() * (S2 - 60), py = r() * S2, rad = 1 + r() * (kind === 'earth' ? 3.5 : 1.5);
+      c.fillStyle = kind === 'earth' ? `rgba(${150 + r() * 60},${130 + r() * 50},${100 + r() * 40},.8)` : 'rgba(200,175,130,.35)'; c.beginPath(); c.arc(px, py, rad, 0, 7); c.fill();
+      h.fillStyle = gray(kind === 'earth' ? 200 : 150, 0.8); h.beginPath(); h.arc(px, py, rad, 0, 7); h.fill();   // 小石子凸起來
+    }
+    if (kind === 'earth') for (let s = 0; s < 4; s++) { const px = 40 + r() * (S2 - 80); h.strokeStyle = gray(90, 0.5); h.lineWidth = 6; h.beginPath(); h.moveTo(px, 0); h.lineTo(px + (r() - 0.5) * 20, S2); h.stroke(); }   // 淺淺的車轍
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
+  PAVEN[kind] = normalFrom(hc, kind === 'stone' ? 2.2 : 1.4);
   return (PAVE[kind] = t);
 }
 function roads() {
-  const mat = k => bend(new THREE.MeshStandardMaterial({ map: paveTex(k), alphaTest: 0.5, roughness: 0.92 }));
+  const mat = k => { const map = paveTex(k); return bend(new THREE.MeshStandardMaterial({ map, normalMap: PAVEN[k], normalScale: new THREE.Vector2(1, 1), alphaTest: 0.5, roughness: 0.9 })); };
   const MAT = { stone: mat('stone'), earth: mat('earth'), sand: mat('sand') }, KIND = { stone: 'stone', address: 'stone', earth: 'earth', sand: 'sand' };
   const buf = new Map();
+  let ri = 0;
   for (const r of PLAN.roads) {
     const k = KIND[r.kind]; if (!k) continue;
+    const lift = 0.03 + (ri++ % 6) * 0.004;   // 每條路差幾公釐：路口重疊時上面那條整齊蓋住下面，不會互相閃爍（z-fighting）
     const pts = [];   // 每 0.5 公尺一個點
     for (let i = 0; i < r.path.length - 1; i++) {
       const a = r.path[i], b = r.path[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 0.5));
@@ -817,7 +857,7 @@ function roads() {
       const mx = (pts[i][0] + pts[i + 1][0]) / 2, mz = (pts[i][1] + pts[i + 1][1]) / 2, [wx, wz] = warp(mx, mz), t = tileAt(wx, wz);
       if (t < 0 || t === 3 || t === 6 || t === 4 || t === 7 || isBridgeAt(wx, wz)) continue;
       const F = [-1, -0.5, 0, 0.5, 1], cols = F.map(f => [edge(i, f * r.w / 2), edge(i + 1, f * r.w / 2)]);
-      const vtx = ([px, pz]) => { const [qx, qz] = warp(px, pz); return [qx, groundAt(qx, qz) + 0.03, qz]; };
+      const vtx = ([px, pz]) => { const [qx, qz] = warp(px, pz); return [qx, groundAt(qx, qz) + lift, qz]; };
       for (let j = 0; j < 4; j++) {
         const u0 = (F[j] + 1) / 2, u1 = (F[j + 1] + 1) / 2, a = vtx(cols[j][0]), b = vtx(cols[j][1]), cc = vtx(cols[j + 1][1]), d = vtx(cols[j + 1][0]);
         const up = (b[2] - a[2]) * (cc[0] - a[0]) - (b[0] - a[0]) * (cc[2] - a[2]) > 0;   // 三角形要逆時針（從上面看）才是正面，法線朝上、受光正確
