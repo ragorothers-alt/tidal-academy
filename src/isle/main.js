@@ -65,6 +65,7 @@ import * as seasons from './seasons.js';
 import * as shake from './shake.js';
 import * as written from './written.js';
 import * as route from './route.js';
+import * as fieldnote from './fieldnote.js';
 import * as highland from './highland.js';
 import * as details from './details.js';
 import * as hotel from './hotel.js';
@@ -334,7 +335,7 @@ async function villagerTalk(v) {
   { const rem = planner.remind(v); if (rem) await ui.say(sp(v), rem); }
   await town.playBond(v, sp(v));
   for (;;) {
-    const opts = [['quiz', '來考我吧！（連續挑戰）'], ['tip', '讀書秘訣'], ['chat', '聊聊天']];
+    const opts = [['practice', `一起練習（${challenge.SET} 題、不限時）`], ['quiz', '連續挑戰（獎金越疊越多）'], ['tip', '讀書秘訣'], ['chat', '聊聊天']];   // 穩定練習是預設；想拚紀錄再選連續挑戰
     const unk = s.pockets.filter(x => x && x.k === 'unk').length;
     const don = s.pockets.filter(x => x && KINDS[x.k] && !s.museum[x.k][x.id]).length;
     if (v.sid === 'history') { if (unk) opts.unshift(['appraise', `鑑定化石（${unk}）`]); if (don) opts.unshift(['donate', `捐贈給博物館（${don}）`]); opts.push(['museum', '看看博物館展品']); }
@@ -366,6 +367,7 @@ async function villagerTalk(v) {
     const k = opts[i] ? opts[i][0] : 'bye';
     if (k === 'fn') { const r = await opts[i][2](); paintHud(); if (r === 'exit') return; continue; }
     if (k === 'bye') { await ui.say(sp(v), pick(['下次見！', '要常來找我喔！', '加油喔！']) + tail(v)); return; }
+    if (k === 'practice') { await challenge.practice(v); paintHud(); }
     if (k === 'quiz') { await challenge.streak(v); paintHud(); }
     if (k === 'tip') { const n = (s.tips[v.sid] || 0) % (v.tips || []).length; s.tips[v.sid] = n + 1; save(); await ui.say(sp(v), (v.tips || ['多練習就會進步！'])[n] || '多練習就會進步！'); }
     if (k === 'chat') await ui.say(sp(v), pick(v.chat || ['今天天氣真好。']) + tail(v));
@@ -599,11 +601,12 @@ function openDex(kind) {
     grid.innerHTML = ''; info.innerHTML = '<small class="muted">點圖示查看說明。灰色剪影是還沒取得的。</small>';
     list(kind).forEach(x => {
       const got = s.dex[kind][x.id], mus = s.museum[kind][x.id];
-      const b = ui.el('button', 'dex-cell' + (got ? '' : ' unknown') + (mus ? ' donated' : '')); b.type = 'button'; b.innerHTML = `<img src="${icon(x.id, kind)}" alt="">${mus ? '<i>館</i>' : ''}`;
+      const noted = !got && fieldnote.has(kind, x.id), b = ui.el('button', 'dex-cell' + (got ? '' : ' unknown') + (mus ? ' donated' : '') + (noted ? ' noted' : '')); b.type = 'button'; b.innerHTML = `<img src="${icon(x.id, kind)}" alt="">${mus ? '<i>館</i>' : noted ? '<i>記</i>' : ''}`;
       b.onclick = () => { info.innerHTML = got ? `<div class="pk-sel"><img src="${icon(x.id, kind)}" alt=""><div><b>${ui.esc(x.name)} <small>${ui.esc(x.en || x.era || '')}</small></b><small>${kind === 'mineral' ? '莫氏硬度 ' + x.mohs + ' · ' + stars(x.rarity) : kind === 'fossil' ? '鑑定科目：' + (TA.subject(x.sid) || {}).name : `${whereName(kind, x)}${x.weather === 'rain' ? '（雨天限定）' : ''} · ${kind === 'sea' ? '退潮時' : fmtHours(x)} · ${fmtMonths(x)} · ${stars(x.rarity)}`} · ${x.price} 鈴錢${mus ? ' · 已捐贈' : ''}</small>${x.habitat ? `<p><b>自然棲地：</b>${ui.esc(x.habitat)}</p>` : ''}<p>${ui.esc(x.desc || '')}</p></div></div>` : `<div class="pk-sel"><img class="sil" src="${icon(x.id, kind)}" alt=""><div><b>？？？</b><small>${kind === 'mineral' ? '用鏟子敲石頭偶爾會敲出礦石，交給岳鑑定後登錄' : kind === 'fossil' ? '挖到化石並答題鑑定後登錄' : `出沒：${whereName(kind, x)} · ${kind === 'sea' ? '退潮時' : fmtHours(x)} · ${fmtMonths(x)}`}</small></div></div>`; };
       grid.appendChild(b);
     });
   };
+  const fn = fieldnote.section(); if (fn) body.append(fn);   // 答錯溜走的生物：觀察筆記，答對一題新的題目就補完
   body.append(tabs, grid, info); paint();
   ui.panel('潮汐圖鑑', body, { cls: 'dexp' });
 }

@@ -23,7 +23,7 @@ const TA = window.TA;
 const touch = () => matchMedia('(pointer: coarse)').matches;
 const STEPS = [
   { key: 'talk', title: '認識一位導師', how: () => touch() ? '走到任何一位島民旁邊，按右下角的「動作」' : '走到任何一位島民旁邊按 E（WASD 走路）' },
-  { key: 'quiz', title: '答對一題', how: () => '和島民聊天時選「來考我吧！」——不限時間，答錯也會看到解析' },
+  { key: 'quiz', title: '答對一題', how: () => '和導師聊天時選「一起練習」——不限時間，答錯也會看到解析' },
   { key: 'gather', title: '採集一次（任選一種）', how: () => (touch() ? '點左下角的工具' : '按 1–3 拿工具') + '：釣竿面向魚影拋竿、捕蟲網靠近飛舞的蟲揮網、鏟子挖地上的星形裂縫；在沙灘撿貝殼也算' },
   { key: 'donate', title: '捐出第一件展品', how: () => '把釣到的魚、抓到的蟲或鑑定好的化石帶去學院台地的博物館，跟史遙選「捐贈給博物館」——島上就多了你的第一件收藏' },
 ];
@@ -85,7 +85,7 @@ function suggestions(max) {
   cup('fish', 'english', '釣魚大賽'); cup('bug', 'biology', '捕蟲大會');
   if (ev.includes('halloween') && h >= 17) add('潮汐夜祭：找島民選「不給糖就搗蛋！」，答對拿糖果，到阿潮的商店換限定家具');
   const pr = planner.progress(), left = pr.filter(x => x.n < x.need);
-  if (!relax && left.length) add(`今天的讀書計畫：${left.map(x => `${(TA.subject(x.sid) || {}).name} ${x.n}/${x.need}`).join('、')}——找${left.map(x => nameOf(x.sid)).join('、')}「來考我吧！」`, 'plan');
+  if (!relax && left.length) add(`今天的讀書計畫：${left.map(x => `${(TA.subject(x.sid) || {}).name} ${x.n}/${x.need}`).join('、')}——找${left.map(x => nameOf(x.sid)).join('、')}「一起練習」`, 'plan');
   if (tide.state(env.date).low) add('現在退潮：沙灘邊的潮池和泥灘有生物可以觀察（空手靠近按' + E() + '）');
   if (astro.isNight(h) && !env.raining) add('今晚沒下雨：到學院台地的觀星台觀星，找找這個季節的星座');
   const vd = TA.L.vocabDue().length; if (!relax && vd >= 10) add(`有 ${vd} 個單字到期了：${PHONE()} →「單字燈塔」翻卡複習`, 'vocab');
@@ -98,7 +98,7 @@ function suggestions(max) {
   if (!relax && todo.length) { const [id, sid, name] = todo[seed % todo.length]; add(`${(P[id] || {}).n ? '今天還沒玩' : '還沒玩過'}：${nameOf(sid)}的「${name}」（每天第一輪答對有鈴錢）`); }
   if (!relax && ((s.quizcup || {}).d) !== day) add('潮汐考場的「潮汐盃快問快答」：和三位導師比 10 題，每天一次');
   const best = (s.streakQ || {}).best || 0;
-  if (!relax) add(best ? `連續挑戰最佳紀錄 ${best} 題：找島民「來考我吧！」挑戰新紀錄` : '找島民「來考我吧！」：答對一題獎金就疊上去，看你能連對幾題');
+  if (!relax) add(best ? `連續挑戰最佳紀錄 ${best} 題：找島民選「連續挑戰」挑戰新紀錄` : '想拚紀錄的話，找島民選「連續挑戰」：答對一題獎金就疊上去，看你能連對幾題');
   return out;
 }
 
@@ -155,7 +155,7 @@ export function paint() {
   el.hidden = false; el.classList.toggle('closed', !open);
   const head = `<div class="q-head"><b>${r.shut ? '今天收工了 🌿' : left ? `今日路線 ${2 - left}/2 · ${r.len} 分` : r.chest ? '今日路線 ✔ 完成' : '今日路線 ✔ 開寶箱！'}</b><button type="button" class="q-toggle" aria-label="收合">${open ? '－' : '＋'}</button></div>`;
   if (!open) { setHTML(head + (tips[0] ? `<div class="q-now one">💡 ${ui.esc(tips[0].t)}</div>` : '')); return; }
-  const next = steps.find(([, , x]) => x.v < x.need), HOWR = { study: '島民「來考我吧！」、每日潮汐、單字燈塔、專注時光、潮汐考場都算', life: '任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花、撿貝殼…' };
+  const next = steps.find(([, , x]) => x.v < x.need), HOWR = { study: '導師的「一起練習」、每日潮汐、單字燈塔、專注時光、潮汐考場都算', life: '任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花、撿貝殼…' };
   const goals = r.shut ? `<small class="q-done">自由時間：島民不會主動找你出題，想練習時再找他們。</small>`
     : '<ul>' + steps.map(([, t, x]) => `<li class="${x.v >= x.need ? 'ok' : ''}">${x.v >= x.need ? '✔' : '○'} ${t}${x.v >= x.need ? '' : ` <i>${x.v}/${x.need}</i>`}</li>`).join('') + `<li class="opt">☆ 加碼（可選）：${ui.esc(r.extra.name)}${r.extra.all ? ' ✔' : ` <i>${r.extra.v}/${r.extra.need}</i>`}</li></ul>`
       + (next ? `<small class="q-how">💡 ${HOWR[next[0]]}</small>` : r.chest ? '' : '<small class="q-how">💡 點這裡開寶箱、看今天的收工摘要</small>');

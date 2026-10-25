@@ -13,6 +13,8 @@ import * as Audio from './audio.js';
 import { I, S, save, addItem, icon, stars, available, list } from './state.js';
 import { pickQ, vocabQ, record, pick } from './quiz.js';
 import * as miles from './miles.js';
+import * as fieldnote from './fieldnote.js';
+import { MATS } from './diy.js';
 
 export const THEMES = [
   { id: 'fish', name: '魚群島', sid: 'english', sea: '#3fb8d8', node: 'fish', desc: '海面滿是魚影，答對英文單字就能釣起稀有的魚。' },
@@ -257,7 +259,13 @@ async function explore(n) {
   const SP = { name: theme.name, color: '#5ab0c8', voice: 520 };
   const i = await ui.ask(SP, q.q, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok);
   n.done = true; n.g.visible = false;
-  if (!ok) { Audio.sfx('bad'); await ui.explain(SP, q); await ui.say(SP, '這裡的寶物溜走了……換個地方試試吧。'); return; }
+  if (!ok) {   // 答錯不是白跑一趟：生物記進觀察筆記，其他資源點留下一點基本材料
+    Audio.sfx('bad'); await ui.explain(SP, q);
+    const s = S(); s.mats = s.mats || {};
+    if (theme.id === 'fish' || theme.id === 'bug') { const sp = rare(theme.id), noted = sp && fieldnote.add(theme.id, sp.id, theme.id === 'fish' ? 'vocab' : theme.sid); await ui.say(SP, noted ? `${sp.name}溜走了……${fieldnote.told}` : '這裡的寶物溜走了……換個地方試試吧。'); }
+    else { const m = theme.id === 'rock' ? 'stone' : theme.id === 'fruit' ? 'branch' : 'shell'; s.mats[m] = (s.mats[m] || 0) + 1; save(); await ui.say(SP, `寶物溜走了，只撿到 1 個${MATS[m]}。換個地方試試吧。`); }
+    return;
+  }
   if (theme.id !== 'fish' && theme.id !== 'bug') Audio.sfx('catch'); await reward(SP);
   await challenge.keepGoing(SP, q);
 }

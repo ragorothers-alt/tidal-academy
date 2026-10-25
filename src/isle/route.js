@@ -59,5 +59,5 @@ export function summary() {
   const NAME = { fish: '釣魚', bug: '捉蟲', fossil: '挖化石', sea: '潮池觀察', req: '委託', donate: '捐贈', gift: '送禮', water: '澆花', shell: '撿貝殼', craft: '做家具', photo: '拍照' };
   return `<p class="rt-sum-lead">今天的 ${st.len} 分鐘路線完成了！</p>
     <ul class="wb-list"><li>📚 學習約 <b>${st.study.v}</b> 分鐘：${parts.join('、') || '—'}</li><li>🏝 島上：${life.map(([k, n]) => `${NAME[k]} ${n}`).join('、') || '—'}</li><li>🔥 連續學習 ${L.streakAlive()} 天</li></ul>
-    <p class="muted">進度都存好了，現在離開也沒關係。選「收工」之後是自由時間：島民不會主動找你出題、答對後也不邀連答；想練習的時候，找島民「來考我吧！」或打開手機都可以。</p>`;
+    <p class="muted">進度都存好了，現在離開也沒關係。選「收工」之後是自由時間：島民不會主動找你出題、答對後也不邀連答；想練習的時候，找導師「一起練習」或打開手機都可以。</p>`;
 }

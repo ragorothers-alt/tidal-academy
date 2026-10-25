@@ -12,6 +12,7 @@ import { pickQU, pickQ, record, dayKey, fairSec } from './quiz.js';
 import { tideAt, tideTable, moonAge, moonPhase, tideRange } from './astro.js';
 import * as miles from './miles.js';
 import * as feel from './feel.js';
+import * as fieldnote from './fieldnote.js';
 
 const LOW = -0.35, W = [0, 10, 6, 3, 1.2, 0.4];
 let P = null, level = 0, pools = [], poolKey = '', busy = false;
@@ -83,7 +84,7 @@ async function catchIn(p) {
     const i = await ui.ask(POOL, `${sp.where === 'rock' ? '潮池邊的岩石上' : sp.where === 'mud' ? '泥灘上' : '潮池裡'}有東西！${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true, timer: fairSec(25, q) });
     const ok = i === q.a; record(q, ok); ui.closeDialog(); feel.note(feel.hit(ok));
     const D = S().tidePools; D.got[p.i] = (D.got[p.i] || 0) + 1; p.g.remove(c.s); p.cr.shift(); save();
-    if (!ok) { Audio.sfx('bad'); await ui.explain(null, q, `這次沒有完成${sp.name}的觀察紀錄……`); return; }
+    if (!ok) { Audio.sfx('bad'); const noted = fieldnote.add('sea', sp.id, 'sea'); await ui.explain(null, q, `這次沒有完成${sp.name}的觀察紀錄……${noted ? '不過你記下了牠的樣子：手機「圖鑑」上方的觀察筆記裡答對一題，就能補完研究。' : ''}`); return; }
     miles.add('sea'); const s = S(), first = !s.dex.sea[sp.id]; s.dex.sea[sp.id] = s.dex.sea[sp.id] || Date.now();
     if (!sp.price) s.museum.sea[sp.id] = s.museum.sea[sp.id] || Date.now();   // 保育類只拍照、不採集（不會進口袋）：照片直接送進博物館展示
     const room = sp.price > 0 ? addItem({ k: 'sea', id: sp.id }) : true; save();

@@ -13,6 +13,7 @@ import * as feel from './feel.js';
 import * as waves from './waves.js';
 import * as shake from './shake.js';
 import * as fx from './fx.js';
+import * as fieldnote from './fieldnote.js';
 
 const TA = window.TA;
 let P = null;      // 玩家
@@ -82,16 +83,18 @@ async function hook() {
   const lim = (tourney && tourney.kind === 'fish' ? 8 : 10) + (big ? 2 : 0);
   const i = await ui.ask({ name: big ? '……是大魚！' : '……有東西上鉤了！', color: '#3aa0d8', voice: 520 }, `${big ? '大魚的題目比較難：' : ''}${q.q}（${lim} 秒內作答）`, q.o, { answer: q.a, abc: true, timer: lim, keys: true });
   const ok = i === q.a; record(q, ok); ui.closeDialog(); feel.note(feel.hit(ok));
-  if (ok) {
+  const keep = !ok && !tourney && fieldnote.newbie();   // 新手保護：引導還沒完成，答錯也帶回（答題紀錄照實記錯）
+  if (ok || keep) {
     removeShadow(f);
     const s = S(), first = !s.dex.fish[sp.id];
     s.dex.fish[sp.id] = s.dex.fish[sp.id] || Date.now(); s.stats = s.stats || {}; s.stats.fish = (s.stats.fish || 0) + 1;
     const room = addItem({ k: 'fish', id: sp.id }); save(); tourneyScore('fish', sp); miles.add('fish'); cheer({ kind: 'fish', sp, first });
-    await ui.card({ pocket: room, rare: sp.rarity >= 4, icon: icon(sp.id, 'fish'), title: `我釣到了${sp.name}！`, sub: `${q.vocab.w} ＝ ${q.vocab.zh}`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回水裡。</em>'}` });
-    if (!tourney) await challenge.keepGoing({ name: '釣魚挑戰', color: '#3aa0d8', voice: 520 }, q);
+    await ui.card({ pocket: room, rare: sp.rarity >= 4, icon: icon(sp.id, 'fish'), title: `我釣到了${sp.name}！`, sub: keep ? `新手保護：這次牠沒跑掉！「${q.vocab.w}」是「${q.vocab.zh}」` : `${q.vocab.w} ＝ ${q.vocab.zh}`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回水裡。</em>'}` });
+    if (!tourney && ok) await challenge.keepGoing({ name: '釣魚挑戰', color: '#3aa0d8', voice: 520 }, q);
   } else {
     f.st = 'flee'; f.t = 0; Audio.sfx('bad');
-    await ui.say(null, i < 0 ? `時間到，魚跑掉了……「${q.vocab.w}」是「${q.vocab.zh}」。` : `魚跑掉了……「${q.vocab.w}」是「${q.vocab.zh}」，下次記得！`);
+    const noted = !tourney && fieldnote.add('fish', sp.id, 'vocab');   // 溜走了也記下牠：之後答對一題新的單字題就補完
+    await ui.say(null, `${i < 0 ? '時間到，' : ''}魚跑掉了……「${q.vocab.w}」是「${q.vocab.zh}」${noted ? '。' + fieldnote.told : '，下次記得！'}`);
     ui.closeDialog();
   }
   busy = false;
@@ -190,14 +193,16 @@ async function netAction() {
   const lim = fairSec(tourney && tourney.kind === 'bug' ? 15 : 20, q);
   const i = await ui.ask({ name: '網子裡的' + sp.name + '在掙扎！', color: '#ff8fa3', voice: 600 }, `${q.q}（${lim} 秒）`, q.o, { answer: q.a, abc: true, timer: lim, keys: true, html: true });
   const ok = i === q.a; record(q, ok); ui.closeDialog(); feel.note(feel.hit(ok));
-  if (ok) {
+  const keep = !ok && !tourney && fieldnote.newbie();   // 新手保護
+  if (ok || keep) {
     bug.st = 'gone'; const s = S(), first = !s.dex.bug[sp.id]; s.dex.bug[sp.id] = s.dex.bug[sp.id] || Date.now();
     const room = addItem({ k: 'bug', id: sp.id }); save(); tourneyScore('bug', sp); miles.add('bug'); cheer({ kind: 'bug', sp, first });
-    await ui.card({ pocket: room, rare: sp.rarity >= 4, icon: icon(sp.id, 'bug'), title: `我抓到了${sp.name}！`, sub: '國文題答對了！', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
-    if (!tourney) await challenge.keepGoing({ name: '捕蟲挑戰', color: '#ff8fa3', voice: 600 }, q);
+    await ui.card({ pocket: room, rare: sp.rarity >= 4, icon: icon(sp.id, 'bug'), title: `我抓到了${sp.name}！`, sub: keep ? `新手保護：這次牠沒跑掉！正確答案是 ${ui.ansOf(q)}` : '國文題答對了！', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
+    if (!tourney && ok) await challenge.keepGoing({ name: '捕蟲挑戰', color: '#ff8fa3', voice: 600 }, q);
   } else {
     bug.st = 'flee'; bug.t = 0; Audio.sfx('bad');
-    await ui.explain(null, q, `${sp.name}溜走了……`); ui.closeDialog();
+    const noted = !tourney && fieldnote.add('bug', sp.id, 'chinese');
+    await ui.explain(null, q, `${sp.name}溜走了……${noted ? fieldnote.told : ''}`); ui.closeDialog();
   }
   busy = false;
 }

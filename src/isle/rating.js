@@ -21,7 +21,7 @@ export function score() {
 }
 const ADVICE = {
   study: r => r.detail.today < r.detail.goal ? `今天還差 ${r.detail.goal - r.detail.today} 題達成每日目標` : r.detail.streak < 7 ? `連續學習 ${r.detail.streak} 天，撐到 7 天分數會大幅上升` : `已練過 ${r.detail.seen} / ${r.detail.total} 題，多和導師聊天探索新題目`,
-  friends: () => '每天找導師「來考我吧」，每人每天最多加 3 點好感度',
+  friends: () => '每天找導師「一起練習」或「連續挑戰」，每人每天最多加 3 點好感度',
   museum: r => `博物館收藏 ${r.detail.donated} 件，把釣到、抓到、鑑定好的東西拿給史遙`,
   dex: r => `圖鑑登錄 ${r.detail.caught} / ${r.detail.all}，不同月份與時段會出現不同的生物`,
   home: r => `房間裡有 ${r.detail.room} 件家具；也可以按 G 鋪步道，或到商店買種子、在花園培育新花色`

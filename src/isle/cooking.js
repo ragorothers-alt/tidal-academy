@@ -8,7 +8,7 @@ import { pickQ, record, dayKey } from './quiz.js';
 
 export const ING = { fruit: '橘子', branch: '樹枝', fish: '魚', oyster: '蚵', shellfish: '貝類', pea: '豌豆' };
 export const SHELLFISH = ['oyster', 'limpet', 'periwinkle', 'chiton'];
-export const EFFECT = { bells: ['💰', '島民「來考我吧！」答題鈴錢 +50%'], luck: ['🍀', '提高稀有魚、蟲的出現機率'], speed: ['👟', '走路變快'] };
+export const EFFECT = { bells: ['💰', '導師「一起練習」「連續挑戰」答題鈴錢 +50%'], luck: ['🍀', '提高稀有魚、蟲的出現機率'], speed: ['👟', '走路變快'] };
 const BUFF_MIN = 30;
 const all = () => I.FOODS || [];
 export const food = id => all().find(f => f.id === id);

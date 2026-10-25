@@ -1,11 +1,12 @@
 /* 潮汐小島 · 連續挑戰與島民主動出題
-   連續挑戰（「來考我吧！」）：答對一題就把獎金放進彩池，可以選「繼續（下一題更難）」或「見好就收」領走全部；答錯只能領回一半。
+   一起練習（導師的預設練習，v7.1）：一組 5 題、不限時、難度照表現調整，答對的鈴錢不收回。
+   連續挑戰：答對一題就把獎金放進彩池，可以選「繼續（下一題更難）」或「見好就收」領走全部；答錯只能領回一半。
    連對越多難度越高：前 2 題簡單、第 3–5 題中等、第 6 題起困難、連對 10 題起每題限時（越來越短，但題目長、有閱讀材料或多選時會多給時間）；
    題庫裡的題組（附閱讀材料）與多選題也會出，長題目用大題目面板作答；
    每題獎金 = 難度 × 100 × 連勝倍率（每多連對一題 +0.25 倍），連對 5、10、15、20…題另外直接送禮物（答錯也不會收回）。
    單場連對數也算進「十連潮湧」「巨浪不止」成就。
    島民主動出題：每隔 3–5 分鐘，附近有空的島民會走過來問「考你一題好不好？」，優先出你的錯題與該複習的題目，答對有隨機獎勵。
-   攔路出的題只出輕量的短題（單選、不是題組）；深度題留給玩家自己選的「來考我吧」。
+   攔路出的題只出輕量的短題（單選、不是題組）；深度題留給玩家自己選的「一起練習」與「連續挑戰」。
    答錯之後（連續挑戰結束、島民出題）可以「同單元再練一題」（換一題，不是同一題）或直接翻到那個單元的筆記。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
@@ -42,7 +43,7 @@ async function milestone(sp, k) {
   await ui.card({ icon: icon('star', 'star'), title: `連對 ${k} 題！`, sub: `獲得潮晶 ×${gems}、${MATS[m]} ×${n}` });
 }
 
-/** 連續答題的迴圈（來考我吧、以及所有單題答對後的「繼續挑戰」共用）。
+/** 連續答題的迴圈（導師的「連續挑戰」、以及所有單題答對後的「繼續挑戰」共用）。
     o：{ sp 說話的人, pick(d, seen) 出下一題（d 是希望的難度，回傳 null 表示沒題了）, n 已連對幾題, v 島民（有的話加好感度、用他的台詞）, mesh 冒表情的模型, seen 已出過的題目 id }
     回傳最後連對的題數 */
 async function loop(o) {
@@ -88,7 +89,7 @@ async function loop(o) {
 /** 依科目出題：越連對越難，同一場不重複 */
 const bySubject = sid => (d, seen) => pickQ(sid, d, { minD: d, skip: seen, any: true }) || pickQ(sid, 3, { skip: seen, any: true }) || pickQ(sid, 3, { any: true });   // 這一科的題目都出過了：允許重複（不會因為題目用完而中斷）
 
-/** 連續挑戰（「來考我吧！」）：回傳本場連對題數 */
+/** 連續挑戰（導師選單的「連續挑戰」）：回傳本場連對題數 */
 export async function streak(v) {
   const sp = H.sp(v), R = rec();
   const first = !R.intro; R.intro = 1;
@@ -97,6 +98,38 @@ export async function streak(v) {
   if (n > (R.by[v.sid] || 0)) { R.by[v.sid] = n; save(); }
   if (R.gift === v.sid) { R.gift = null; save(); await H.gift(v); }
   return n;
+}
+
+/** 一起練習（v7.1，導師的預設練習）：一組 5 題、不限時，難度照這科的表現調整（連對兩題升一級、答錯降一級）；
+    每題答對就拿 100 × 難度鈴錢，後面答錯也不收回；答錯看完解析繼續下一題，最後說這組的結果。想拚紀錄的玩家另選「連續挑戰」。回傳答對題數 */
+export const SET = 5;
+export async function practice(v) {
+  const s = S(), sp = H.sp(v), R = rec(), seen = new Set(), st = L.subjectStats(v.sid);
+  const okL = v.ok || ['答對了！', '漂亮！', '完全正確！'], badL = v.bad || ['可惜！', '差一點！'];
+  let d = st.attempts < 5 || st.acc < 0.55 ? 1 : st.acc < 0.8 ? 2 : 3, run = 0, got = 0, bells = 0, friend = '', k = 0;
+  await ui.say(sp, R.pIntro ? pick(v.ask || ['我們來練幾題！']) : '我們一起練 5 題：不限時間，難度會照你的狀況調整。答對一題就拿一題的鈴錢，答錯也不會收回，看完解析就換下一題。');
+  R.pIntro = 1;
+  for (k = 1; k <= SET; k++) {
+    const q = pickQ(v.sid, d, { minD: d, skip: seen, any: true }) || pickQ(v.sid, 3, { skip: seen, any: true }); if (!q) break;
+    seen.add(q.id);
+    const qd = q.d || d, { ok, ans } = await askQ(sp, q, `【一起練習 第 ${k}/${SET} 題・${DN[qd]}】<br>`);
+    record(q, ok);
+    if (ok) {
+      got++; run++; const b = Math.round(100 * qd * cooking.bellsMul()); bells += b; s.bells += b;
+      if ((s.frDay[v.sid] || 0) < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = (s.frDay[v.sid] || 0) + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; }
+      save(); Audio.sfx('ok'); ui.emote(v.mesh, '♪', '#ff7b9c'); ui.floatText(H.player, `+${b} 鈴錢`, '#e0a020'); ui.passage(null);
+      if (run >= 2 && d < 3) { d++; run = 0; }
+      if (k < SET) await ui.say(sp, pick(okL));
+    } else {
+      run = 0; d = Math.max(1, d - 1);
+      Audio.sfx('bad'); ui.emote(v.mesh, '💧', '#5fa8ff');
+      await ui.explain(sp, q, ans === -1 ? '時間到！' : pick(badL)); ui.passage(null);
+    }
+  }
+  const n = Math.min(SET, k - 1);
+  await ui.say(sp, n ? `這組 ${n} 題答對 ${got} 題，拿到 ${bells} 鈴錢。${got === n ? '全對！下次可以挑戰難一點的。' : got ? '答錯的題目記下來了，過幾天會再考你。' : '沒關係，錯的題目過幾天會再出現，到時候就會了。'}${H.tail(v)}${friend}` : '題目都被你答完了！');
+  if (R.gift === v.sid) { R.gift = null; save(); await H.gift(v); }
+  return got;
 }
 
 /** 島上任何一道題答對之後（石碑、釣魚、抓蟲、鑑定、熱氣球、雪人、島民出題…）：問要不要接著連續挑戰。

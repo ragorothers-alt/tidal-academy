@@ -24,7 +24,7 @@ export function studyHave(sid, st) {
 }
 const studyText = (sid, st) => st.k === 'correct' ? `累計答對${subjName(sid)}題目` : st.k === 'stars' ? `${subjName(sid)}單元試煉 ${st.min} 星以上` : `熟練的${subjName(sid)}題目`;
 const studyUnit = st => st.k === 'stars' ? ' 個單元' : ' 題';
-const studyHint = st => st.k === 'correct' ? '「來考我吧」、潮汐考場、每日潮汐裡這一科的題目都算。'
+const studyHint = st => st.k === 'correct' ? '導師的「一起練習」、潮汐考場、每日潮汐裡這一科的題目都算。'
   : st.k === 'stars' ? '到潮汐考場打開航海圖，挑這一科的單元試煉：10 題答對 8 題以上就是 2 星。'
   : '同一題要在不同天都答對、排到間隔複習的第 4 格才算熟練——每日潮汐和島民出題會幫你排好複習，慢慢累積就好。';
 const rec = sid => { const s = S(); s.lab = s.lab || {}; return (s.lab[sid] = s.lab[sid] || { stage: 0, seen: 0, at: [] }); };
