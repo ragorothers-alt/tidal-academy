@@ -94,7 +94,7 @@ const elsewhere = () => trip.inside || museum.inside || dreamisle.inside || shop
 import { drill, picker } from './drill.js';
 import { pickQ, pickQU, askQ, record, pick, dayKey } from './quiz.js';
 import * as figs from './figs.js';
-import { env, I, S, save, KINDS, list, find, itemName, itemPrice, itemIcon, icon, removeAt, addItem, newDay, stars, fmtHours, fmtMonths, WHERE, whereName, POCKET_N } from './state.js';
+import { env, I, S, save, KINDS, list, find, itemName, itemPrice, itemIcon, icon, removeAt, addItem, newDay, stars, fmtHours, fmtMonths, WHERE, whereName, POCKET_N, available } from './state.js';
 
 const TA = window.TA, L = TA.L;
 const $ = id => document.getElementById(id);
@@ -340,7 +340,7 @@ async function villagerTalk(v) {
     const opts = [['practice', `一起練習（${challenge.SET} 題、不限時）`], ['quiz', '連續挑戰（獎金越疊越多）'], ['tip', '讀書秘訣'], ['chat', '聊聊天']];   // 穩定練習是預設；想拚紀錄再選連續挑戰
     const unk = s.pockets.filter(x => x && x.k === 'unk').length;
     const don = s.pockets.filter(x => x && KINDS[x.k] && !s.museum[x.k][x.id]).length;
-    if (v.sid === 'history') { if (unk) opts.unshift(['appraise', `鑑定化石（${unk}）`]); if (don) opts.unshift(['donate', `捐贈給博物館（${don}）`]); opts.push(['museum', '看看博物館展品']); }
+    if (v.sid === 'history') { if (unk) opts.unshift(['appraise', `鑑定化石（${unk}）`]); if (don) opts.unshift(['donate', `捐贈給博物館（${don}）`]); opts.push(['specimen', '標本研究（現在看不到的生物）'], ['museum', '看看博物館展品']); }
     social.menu(v, sp(v)).reverse().forEach(([l, f]) => opts.unshift(['fn', l, f]));
     const TK = { english: 'fish', biology: 'bug' }[v.sid];
     if (TK && events.active().includes(TK + '_cup') && !life.tourney) opts.unshift(['fn', TK === 'fish' ? '參加釣魚大賽' : '參加捕蟲大會', () => joinTourney(v, TK)]);
@@ -375,6 +375,7 @@ async function villagerTalk(v) {
     if (k === 'chat') await ui.say(sp(v), pick(v.chat || ['今天天氣真好。']) + tail(v));
     if (k === 'appraise') await appraise(v);
     if (k === 'donate') await donate(v);
+    if (k === 'specimen') await specimen(v);
     if (k === 'museum') { ui.closeDialog(); openDex('fossil'); return; }
   }
   void fr;
@@ -604,13 +605,31 @@ function openDex(kind) {
     list(kind).forEach(x => {
       const got = s.dex[kind][x.id], mus = s.museum[kind][x.id];
       const noted = !got && fieldnote.has(kind, x.id), b = ui.el('button', 'dex-cell' + (got ? '' : ' unknown') + (mus ? ' donated' : '') + (noted ? ' noted' : '')); b.type = 'button'; b.innerHTML = `<img src="${icon(x.id, kind)}" alt="">${mus ? '<i>館</i>' : noted ? '<i>記</i>' : ''}`;
-      b.onclick = () => { info.innerHTML = got ? `<div class="pk-sel"><img src="${icon(x.id, kind)}" alt=""><div><b>${ui.esc(x.name)} <small>${ui.esc(x.en || x.era || '')}</small></b><small>${kind === 'mineral' ? '莫氏硬度 ' + x.mohs + ' · ' + stars(x.rarity) : kind === 'fossil' ? '鑑定科目：' + (TA.subject(x.sid) || {}).name : `${whereName(kind, x)}${x.weather === 'rain' ? '（雨天限定）' : ''} · ${kind === 'sea' ? '退潮時' : fmtHours(x)} · ${fmtMonths(x)} · ${stars(x.rarity)}`} · ${x.price} 鈴錢${mus ? ' · 已捐贈' : ''}</small>${x.habitat ? `<p><b>自然棲地：</b>${ui.esc(x.habitat)}</p>` : ''}<p>${ui.esc(x.desc || '')}</p></div></div>` : `<div class="pk-sel"><img class="sil" src="${icon(x.id, kind)}" alt=""><div><b>？？？</b><small>${kind === 'mineral' ? '用鏟子敲石頭偶爾會敲出礦石，交給岳鑑定後登錄' : kind === 'fossil' ? '挖到化石並答題鑑定後登錄' : `出沒：${whereName(kind, x)} · ${kind === 'sea' ? '退潮時' : fmtHours(x)} · ${fmtMonths(x)}`}</small></div></div>`; };
+      b.onclick = () => { info.innerHTML = got ? `<div class="pk-sel"><img src="${icon(x.id, kind)}" alt=""><div><b>${ui.esc(x.name)} <small>${ui.esc(x.en || x.era || '')}</small></b><small>${kind === 'mineral' ? '莫氏硬度 ' + x.mohs + ' · ' + stars(x.rarity) : kind === 'fossil' ? '鑑定科目：' + (TA.subject(x.sid) || {}).name : `${whereName(kind, x)}${x.weather === 'rain' ? '（雨天限定）' : ''} · ${kind === 'sea' ? '退潮時' : fmtHours(x)} · ${fmtMonths(x)} · ${stars(x.rarity)}`} · ${x.price} 鈴錢${mus ? ' · 已捐贈' : ''}</small>${x.habitat ? `<p><b>自然棲地：</b>${ui.esc(x.habitat)}</p>` : ''}<p>${ui.esc(x.desc || '')}</p></div></div>` : `<div class="pk-sel"><img class="sil" src="${icon(x.id, kind)}" alt=""><div><b>？？？</b><small>${kind === 'mineral' ? '用鏟子敲石頭偶爾會敲出礦石，交給岳鑑定後登錄' : kind === 'fossil' ? '挖到化石並答題鑑定後登錄' : `出沒：${whereName(kind, x)}${x.weather === 'rain' ? '（雨天）' : ''} · ${kind === 'sea' ? '退潮時' : fmtHours(x)} · ${fmtMonths(x)}${kind === 'fish' || kind === 'bug' ? (available(kind).some(y => y.id === x.id) ? ' · <b>現在就看得到</b>' : ' · 現在看不到：可以找史遙做標本研究') : ''}`}</small></div></div>`; };
       grid.appendChild(b);
     });
   };
   const fn = fieldnote.section(); if (fn) body.append(fn);   // 答錯溜走的生物：觀察筆記，答對一題新的題目就補完
   body.append(tabs, grid, info); paint();
   ui.panel('潮汐圖鑑', body, { cls: 'dexp' });
+}
+
+/** 標本研究（v7.1）：季節、時段或天氣不對、現在島上看不到的魚蟲，可以在博物館的標本室研究——
+    3 題答對 2 題就登錄圖鑑、帶走一份標本（一天一次）。放學後才上線的玩家也補得到白天或過季的生物 */
+async function specimen(v) {
+  const s = S(), d = dayKey(), say = t => ui.say(sp(v), t);
+  if (s.specimenDay === d) { await say('今天的標本研究做過了，明天再來看看別的吧。'); return; }
+  const cand = ['fish', 'bug'].flatMap(k => { const now = new Set(available(k).map(x => x.id)); return list(k).filter(x => !s.dex[k][x.id] && !now.has(x.id) && x.rarity <= 3).map(x => [k, x]); });
+  if (!cand.length) { await say('圖鑑裡還缺的生物，現在島上都找得到喔！拿著釣竿和捕蟲網出去看看吧。'); return; }
+  if (!s.pockets.some(x => !x)) { await say('口袋滿了，先整理一下再來拿標本吧。'); return; }
+  const opts = cand.sort(() => Math.random() - 0.5).slice(0, 3);
+  const i = await ui.ask(sp(v), '標本室裡有幾種現在島上看不到的生物（季節、時段或天氣不對）。一起研究標本：3 題答對 2 題，就能登錄圖鑑、帶走一份標本。要研究哪一種？', opts.map(([k, x]) => `${x.name}（${k === 'fish' ? '魚' : '蟲'} · ${x.weather === 'rain' ? '雨天 · ' : ''}${fmtHours(x)} · ${fmtMonths(x)}）`).concat(['下次吧']), { keys: true });
+  if (i < 0 || i >= opts.length) return;
+  const [k, x] = opts[i], res = await drill(sp(v), picker({ mode: 'subject', subject: k === 'fish' ? 'english' : 'chinese' }), 3, {});
+  s.specimenDay = d; save();
+  if (res.ok < 2) { await say(`答對 ${res.ok} / ${res.n}，差一點。標本還在，明天再來研究吧。`); return; }
+  const first = !s.dex[k][x.id]; s.dex[k][x.id] = s.dex[k][x.id] || Date.now(); const room = addItem({ k, id: x.id }); save(); ui.closeDialog();
+  await ui.card({ pocket: room, icon: icon(x.id, k), title: `標本研究：${x.name}`, sub: `答對 ${res.ok} / ${res.n}！${x.name}平常${fmtHours(x)}、${fmtMonths(x)}才看得到。`, extra: `<span class="stars">${stars(x.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}` });
 }
 
 /* ---------- 手機 ---------- */
@@ -781,7 +800,7 @@ function phoneMap() {
   ui.panel('地圖', body, { cls: 'phone' });
 }
 function phoneTime() {
-  const body = ui.el('div', 'ph-set', `<label>預覽時間（拖曳看日夜與不同時段的生物）<input type="range" min="0" max="24" step="0.25" value="${hourOverride ?? nowHour()}"></label><p class="muted">正式版跟現實時間同步。</p>`);
+  const body = ui.el('div', 'ph-set', `<label>預覽時間（拖曳看日夜的天色與光線）<input type="range" min="0" max="24" step="0.25" value="${hourOverride ?? nowHour()}"></label><p class="muted">這只是預覽畫面：魚、蟲的出沒、島民作息與活動都照現實時間。想補看不到的生物，可以找史遙做「標本研究」。</p>`);
   body.querySelector('input').oninput = e => { hourOverride = +e.target.value; paintHud(); };
   const r = ui.el('button', 'btn', '回到現實時間'); r.type = 'button'; r.onclick = () => { hourOverride = null; paintHud(); ui.closePanel(); }; body.appendChild(r);
   ui.panel('時間', body, { cls: 'phone' });

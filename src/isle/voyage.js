@@ -152,13 +152,15 @@ function runRush(sid) {
 /* ---------- 燈塔首領戰 ---------- */
 const BASE_T = { math: 80, physics: 65, chemistry: 65, english: 45, chinese: 45 };
 const timeFor = (q, rage) => Math.round(((BASE_T[q.subject] || 40) + (q.d === 3 ? 15 : 0) + (q.passage ? 35 : 0) + (q.type === 'multi' ? 15 : q.type === 'fill' ? 40 : 0)) * (rage ? 0.8 : 1));
-const heartsMax = () => 3 + (L.streakAlive() >= 7 ? 1 : 0);
+/** 這週（最近 7 天）有學習的天數：首領戰多一顆心看這個，不看連續天數（v7.1：連續紀錄只是紀念，不給戰力） */
+const weekDays = () => { let n = 0; for (let i = 0; i < 7; i++) { const d = new Date(); d.setDate(d.getDate() - i); const r = (TA.S.days || {})[TA.U.dayKey(d)]; if (r && (L.studyMin(r) >= L.STREAK_Q || r.focus)) n++; } return n; };
+const heartsMax = () => 3 + (weekDays() >= 3 ? 1 : 0);
 /** 首領介紹：海獸、規則與紀錄 */
 export function openBoss(sid) {
   const s = subj(sid), b = TA.BOSSES[sid], rec = TA.S.boss[sid], st = L.subjectStats(sid), body = ui.el('div', 'hall vb-intro');
   body.innerHTML = `<div class="hall-scroll"><div class="vb-stage small" style="--c:${s.color}"><canvas></canvas></div>
     <div class="hr-kicker">BOSS · ${b.en}</div><h2>${b.name}</h2><p>${b.lore}</p>
-    <ul class="vb-rules"><li>⚔️ 答對造成傷害：越快越痛，前 30% 時間內作答會暴擊</li><li>❤️ 你有 ${heartsMax()} 顆心${heartsMax() > 3 ? '（連續學習 7 天以上 +1）' : ''}；答錯或超時失去一顆</li><li>⚡ 首領血量低於一半會狂暴：作答時間縮短 20%</li><li>💎 勝利獎勵 40 潮晶${rec && rec.wins ? '' : '（首勝再 +60）'}</li></ul>
+    <ul class="vb-rules"><li>⚔️ 答對造成傷害：越快越痛，前 30% 時間內作答會暴擊</li><li>❤️ 你有 ${heartsMax()} 顆心${heartsMax() > 3 ? '（這週學習 3 天以上 +1）' : '（這週學習 3 天以上會多一顆）'}；答錯或超時失去一顆</li><li>⚡ 首領血量低於一半會狂暴：作答時間縮短 20%</li><li>💎 勝利獎勵 40 潮晶${rec && rec.wins ? '' : '（首勝再 +60）'}</li></ul>
     <p class="muted">${s.name}精熟 ${Math.round(st.mastery * 100)}%${rec && rec.best ? ` · 最快 ${fmtT(rec.best)}` : ''}${rec && rec.wins ? ` · 已擊敗 ${rec.wins} 次` : ''} · 進階題為主</p></div>
     <div class="hx-foot"><button type="button" class="btn ghost prac">先去練習</button><span class="spacer"></span><button type="button" class="btn danger fight">開戰</button></div>`;
   let cr = null;

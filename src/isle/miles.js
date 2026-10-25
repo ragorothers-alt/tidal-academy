@@ -52,11 +52,16 @@ export function ping(key) { listeners.forEach(fn => fn(key)); }
 export function add(key, n) { const m = data(); m.cnt[key] = (m.cnt[key] || 0) + (n || 1); check(m); save(); ping(key); }
 /** 同一個對象一天只算一次（例如和同一位島民聊天） */
 export function addOnce(key, who) { const m = data(); m.once = m.once || {}; const k = key + ':' + who; if (m.once[k]) return; m.once[k] = true; add(key); }
+/** 這週累積完成的里程目標（v7.1：額外 500 點改成一週內任選 15 項，不必每天五項全清） */
+const WEEK_N = 15;
+const weekKey = () => { const d = new Date(); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return TA.U.dayKey(d); };
+function week() { const s = S(), w = weekKey(); if (!s.milesWeek || s.milesWeek.w !== w) s.milesWeek = { w, n: 0, got: false }; return s.milesWeek; }
 /** 檢查完成（答對題數也會在每次 check 時更新） */
 export function check(m) {
   m = m || data(); let changed = false;
-  m.tasks.forEach(t => { if (!m.done[t.id] && prog(m, t) >= t.need) { m.done[t.id] = true; m.pts += t.pts; m.life += t.pts; changed = true; Audio.sfx('catch'); ui.toast(`🌊 潮汐里程：${t.name} +${t.pts}`); } });
-  if (!m.bonus && m.tasks.every(t => m.done[t.id])) { m.bonus = true; m.pts += 500; m.life += 500; changed = true; setTimeout(() => ui.toast('🌊 今天的里程全部完成！額外 +500'), 900); }
+  const W = week();
+  m.tasks.forEach(t => { if (!m.done[t.id] && prog(m, t) >= t.need) { m.done[t.id] = true; m.pts += t.pts; m.life += t.pts; W.n++; changed = true; Audio.sfx('catch'); ui.toast(`🌊 潮汐里程：${t.name} +${t.pts}`); } });
+  if (!W.got && W.n >= WEEK_N) { W.got = true; m.pts += 500; m.life += 500; changed = true; setTimeout(() => ui.toast(`🌊 這週累積完成 ${WEEK_N} 項里程目標！額外 +500`), 900); }
   if (changed) save();
   return m;
 }
@@ -66,7 +71,7 @@ export function open(onHat) {
   const draw = () => {
     body.innerHTML = `<p class="muted">今日目標（每天換）· 里程點數 <b>${m.pts.toLocaleString()}</b> · 累計 ${m.life.toLocaleString()}</p>` +
       m.tasks.map(t => { const p = Math.min(t.need, prog(m, t)); return `<div class="ml-row${m.done[t.id] ? ' done' : ''}"><b>${m.done[t.id] ? '✔' : '○'} ${t.name}</b><i><em style="width:${p / t.need * 100}%"></em></i><small>${p} / ${t.need} · +${t.pts}</small></div>`; }).join('') +
-      `<p class="muted">${m.bonus ? '今天全部完成了，辛苦了！' : '五項全部完成再加 500 點。'}</p><h4>兌換獎勵</h4>`;
+      `<p class="muted">${week().got ? `這週已經累積 ${WEEK_N} 項，額外 500 點拿到了！` : `一週內任選完成 ${WEEK_N} 項再加 500 點（這週 ${week().n} / ${WEEK_N}）；不用每天全部做完。`}</p><h4>兌換獎勵</h4>`;
     const grid = ui.el('div', 'fs-grid');
     REWARDS.forEach(rw => { const got = rw.once && m.got[rw.id], b = ui.el('button', 'fs-item' + (got ? ' own' : ''), `<b>${rw.name}</b><small>${got ? '已兌換' : rw.cost.toLocaleString() + ' 點'}</small>`); b.type = 'button';
       b.onclick = () => { if (got) return; if (m.pts < rw.cost) { ui.toast('里程點數不夠'); Audio.sfx('deny'); return; } m.pts -= rw.cost; if (rw.once) m.got[rw.id] = true; if (rw.give) rw.give(s); if (rw.hat && onHat) onHat(rw.hat); save(); Audio.sfx('coin'); ui.toast(`兌換了${rw.name}！`); draw(); };

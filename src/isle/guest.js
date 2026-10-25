@@ -14,7 +14,8 @@ const TA = window.TA;
 let ctx = null;
 export const residents = [];   // 已搬來的旅客（島民物件）
 export let camper = null;      // 今天在露營地的旅客
-const st = () => { const s = S(); s.guests = s.guests || { met: {}, prog: {}, moved: {}, done: {} }; ['met', 'prog', 'moved', 'done'].forEach(k => { s.guests[k] = s.guests[k] || {}; }); return s.guests; };
+const PTS = 12;   // v7.1：搬來島上看累積答對的題數（以前要「5 題答對 4 題」通過 3 次，失敗那天等於白來）
+const st = () => { const s = S(); s.guests = s.guests || { met: {}, prog: {}, moved: {}, done: {} }; ['met', 'prog', 'moved', 'done', 'pts'].forEach(k => { s.guests[k] = s.guests[k] || {}; }); Object.keys(s.guests.prog).forEach(id => { if (s.guests.pts[id] == null) s.guests.pts[id] = Math.min(PTS, (s.guests.prog[id] || 0) * 4); }); return s.guests; };
 const def = id => (I.GUESTS || []).find(g => g.id === id);
 const spOf = v => ({ name: v.name, color: v.color, voice: v.voice || 400 });
 const tail = v => (v.catch && Math.random() < 0.5 ? v.catch : '');
@@ -64,13 +65,13 @@ export async function talk(v) {
   else if (gifts.isBirthday(v)) await ui.say(sp, pick(((gifts.pref(v) || {}).lines || {}).birthday || ['今天是我的生日！']));
   else await ui.say(sp, pick(v.resident ? (L1.settled || L1.greet || ['你好！']) : (L1.greet || ['你好！'])) + tail(v));
   for (;;) {
-    const doneToday = G.done[id] === dayKey(), prog = G.prog[id] || 0, f = v.focus || { mode: 'mixed', label: '跨科挑戰' };
+    const doneToday = G.done[id] === dayKey(), pts = G.pts[id] || 0, f = v.focus || { mode: 'mixed', label: '跨科挑戰' };
     const opts = [];
-    opts.push([doneToday ? `${f.label}（今天已挑戰）` : `${f.label}（5 題答對 4 題）`, 'ch']);
-    if (!v.resident && prog >= 3 && !G.moved[id]) opts.push(['邀請你搬到島上', 'move']);
+    opts.push([doneToday ? `${f.label}（今天已挑戰）` : `${f.label}（一起讀 5 題）`, 'ch']);
+    if (!v.resident && pts >= PTS && !G.moved[id]) opts.push(['邀請你搬到島上', 'move']);
     if (gifts.isBirthday(v)) opts.unshift(['祝你生日快樂！', 'bday']);
     opts.push(['送禮物', 'gift'], ['聊聊天', 'chat'], ['再見', 'bye']);
-    const i = await ui.ask(sp, v.resident ? '今天也一起讀書嗎？' : `你已經通過 ${Math.min(3, prog)} / 3 次挑戰。`, opts.map(o => o[0]));
+    const i = await ui.ask(sp, v.resident ? '今天也一起讀書嗎？' : `讀書夥伴進度：一起答對 ${Math.min(PTS, pts)} / ${PTS} 題${pts >= PTS ? '——可以邀請我搬來了！' : '（每天一起讀 5 題，答對的都會累積）'}`, opts.map(o => o[0]));
     const k = opts[i] ? opts[i][1] : 'bye';
     if (k === 'bye') { await ui.say(sp, pick(['下次見！', '加油喔！', '明天也來找我吧。']) + tail(v)); return; }
     if (k === 'gift') { await gifts.give(v, sp); continue; }
@@ -89,11 +90,11 @@ export async function talk(v) {
       await ui.say(sp, pick(L1.challenge || ['開始吧！']));
       const r = await drill(sp, picker({ mode: f.mode === 'subject' ? 'subject' : f.mode, subject: f.subject || null }), 5, { praise: L1.pass });
       G.done[id] = dayKey();
-      const pass = r.ok >= Math.min(4, r.n);
-      if (pass) { G.prog[id] = prog + 1; S().bells += 800 + r.ok * 100; Audio.sfx('catch'); }
+      const pass = r.ok >= Math.min(4, r.n), before = G.pts[id] || 0, b = 300 + r.ok * 100;
+      G.pts[id] = Math.min(PTS, before + r.ok); if (pass) G.prog[id] = (G.prog[id] || 0) + 1; S().bells += b; Audio.sfx(pass ? 'catch' : 'pop');
       save();
-      await ui.say(sp, `${pass ? pick(L1.pass || ['太棒了！']) : pick(L1.fail || ['沒關係，明天再試。'])}（答對 ${r.ok} / ${r.n}${pass ? `，+${800 + r.ok * 100} 鈴錢` : ''}）`);
-      if (pass && !v.resident && G.prog[id] === 3) await ui.say(sp, '你已經是我最好的讀書夥伴了。如果島上有空地……我想搬過來住。');
+      await ui.say(sp, `${pass ? pick(L1.pass || ['太棒了！']) : pick(L1.fail || ['沒關係，明天再一起讀。'])}（答對 ${r.ok} / ${r.n}，+${b} 鈴錢${v.resident ? '' : ` · 讀書夥伴 ${G.pts[id]} / ${PTS}`}）`);
+      if (!v.resident && before < PTS && G.pts[id] >= PTS) await ui.say(sp, '你已經是我最好的讀書夥伴了。如果島上有空地……我想搬過來住。');
       ctx.paint();
     }
   }

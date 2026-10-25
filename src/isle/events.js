@@ -139,13 +139,16 @@ export function line(v) {
 /* ---------- 活動禮物（每個活動每年一次，寄到信箱） ---------- */
 export function gifts(sendLetter, villagers) {
   const s = S(); s.ev = s.ev || { got: {} }; s.ev.got = s.ev.got || {};
-  const year = now().getFullYear();
-  active().forEach(e => {
+  const year = now().getFullYear(), today = active();
+  // v7.1：錯過的活動禮物一週內補寄（只補玩家開始玩之後的活動）：活動獎勵是紀念，不是錯過就沒了
+  const late = new Set(), born = TA.S.created || 0;
+  for (let i = 1; i <= 7; i++) { const d = now(); d.setDate(d.getDate() - i); if (d.getTime() + 864e5 < born) break; active(d).forEach(e => { if (!today.includes(e)) late.add(e); }); }
+  today.map(e => [e, false]).concat([...late].map(e => [e, true])).forEach(([e, isLate]) => {
     const f = (I.FURNITURE || []).find(x => x.src === 'event:' + e); const k = e + '-' + (e === 'weekly' ? dayKey() : year);
     if (e === 'weekly' || e === 'fish_cup' || e === 'bug_cup' || s.ev.got[k]) return;
     s.ev.got[k] = true;
     const v = pick(villagers.filter(x => !x.shop)), L1 = (I.LINES && I.LINES[v.sid]) || {}, L6 = (I.LINES6 && I.LINES6[v.sid] && I.LINES6[v.sid][e]) || null, txt = (L1.event && L1.event[e]) ? pick(L1.event[e]) : L6 ? pick(L6) : `${NAMES[e]}快樂！今天也照自己的步調，好好讀書、好好休息。`;
-    sendLetter({ from: v.sid, title: `${NAMES[e]}：${v.name}的祝福`, open: '給你：', text: txt, gift: f ? { type: 'furn', id: f.id } : { type: 'bells', n: 1000 }, giftLine: f ? `隨信附上「${f.name}」，放在房間裡當紀念吧。` : '隨信附上 1000 鈴錢。', close: '—— ' + v.name });
+    sendLetter({ from: v.sid, title: `${NAMES[e]}：${v.name}的祝福${isLate ? '（補寄）' : ''}`, open: '給你：', text: (isLate ? `前幾天的${NAMES[e]}沒遇到你，這份還是要給你。` : '') + txt, gift: f ? { type: 'furn', id: f.id } : { type: 'bells', n: 1000 }, giftLine: f ? `隨信附上「${f.name}」，放在房間裡當紀念吧。` : '隨信附上 1000 鈴錢。', close: '—— ' + v.name });
   });
   save();
 }
