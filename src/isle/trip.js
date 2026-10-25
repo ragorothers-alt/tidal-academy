@@ -273,7 +273,7 @@ async function reward(SP) {
   if (theme.id === 'fish' || theme.id === 'bug') {
     const k = theme.id, sp = rare(k); if (!sp) return;
     const first = !s.dex[k][sp.id]; s.dex[k][sp.id] = s.dex[k][sp.id] || Date.now(); const room = addItem({ k, id: sp.id }); save(); miles.add(k);
-    await ui.card({ icon: icon(sp.id, k), title: `${k === 'fish' ? '釣到了' : '抓到了'}${sp.name}！`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
+    await ui.card({ pocket: room, icon: icon(sp.id, k), title: `${k === 'fish' ? '釣到了' : '抓到了'}${sp.name}！`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
   } else if (theme.id === 'rock') {
     const ore = Math.random() < 0.6 && addItem({ k: 'ore', id: 'ore_unknown' });
     if (!ore) { s.mats.iron = (s.mats.iron || 0) + 2; s.mats.stone = (s.mats.stone || 0) + 2; }

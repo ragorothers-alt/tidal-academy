@@ -23,7 +23,7 @@ export const have = m => (m === 'frag' ? ((S().stars || {}).frag || 0) : (mats()
 function take(m, n) { if (m === 'frag') S().stars.frag -= n; else mats()[m] -= n; }
 export function known() { const s = S(); s.recipes = s.recipes || []; recipesAll().slice(0, STARTER).forEach(f => { if (!s.recipes.includes(f.id)) s.recipes.push(f.id); }); return s.recipes; }
 const day = () => { const s = S(), d = dayKey(); if (!s.diyDay || s.diyDay.d !== d) s.diyDay = { d, trees: {}, rocks: {}, shells: null, bottle: null }; return s.diyDay; };
-function gain(m, n, obj) { mats()[m] = (mats()[m] || 0) + (n || 1); save(); ui.floatText(obj || P, `+${n || 1} ${MATS[m]}`, '#8a5a3b'); }
+function gain(m, n, obj) { mats()[m] = (mats()[m] || 0) + (n || 1); save(); ui.floatText(obj || P, `+${n || 1} ${MATS[m]}`, '#8a5a3b'); if (m !== 'frag') ui.flyToPocket(icon(m, m), obj || P); }   // 材料圖示飛進背包
 
 /* ---------- 場景物件：貝殼、漂流瓶、工作台 ---------- */
 let P = null, hooks = {}, bench = null;

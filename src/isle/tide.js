@@ -87,7 +87,7 @@ async function catchIn(p) {
     miles.add('sea'); const s = S(), first = !s.dex.sea[sp.id]; s.dex.sea[sp.id] = s.dex.sea[sp.id] || Date.now();
     if (!sp.price) s.museum.sea[sp.id] = s.museum.sea[sp.id] || Date.now();   // 保育類只拍照、不採集（不會進口袋）：照片直接送進博物館展示
     const room = sp.price > 0 ? addItem({ k: 'sea', id: sp.id }) : true; save();
-    await ui.card({ icon: icon(sp.id, 'sea'), title: `找到了${sp.name}！`, sub: sp.price > 0 ? '海洋題答對了！' : '海洋題答對了！已在原位拍照記錄，讓珊瑚繼續留在原處，不觸碰、不採集。照片已經送到博物館的潮池展區。', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回去。</em>'}` });
+    await ui.card({ pocket: room && sp.price > 0, icon: icon(sp.id, 'sea'), title: `找到了${sp.name}！`, sub: sp.price > 0 ? '海洋題答對了！' : '海洋題答對了！已在原位拍照記錄，讓珊瑚繼續留在原處，不觸碰、不採集。照片已經送到博物館的潮池展區。', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回去。</em>'}` });
     await challenge.keepGoing(POOL, q);
   } finally { busy = false; }
 }

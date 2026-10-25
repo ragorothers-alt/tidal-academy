@@ -763,6 +763,7 @@ function countUp(el, v) {
 const bump = el => { if (!el) return; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); };
 function paintHud() {
   guide.paint();
+  { const free = S().pockets.filter(x => !x).length, b = $('pocketBtn'); b.classList.toggle('full', free <= 2); b.title = `口袋 (I)${free <= 2 ? ` · 只剩 ${free} 格` : ''}`; }   // 口袋快滿：背包按鈕變橘色
   const d = new Date(), h = hourOverride ?? nowHour(), hh = Math.floor(h), mm = Math.floor((h % 1) * 60);
   $('hm').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
   $('date').textContent = `${d.getMonth() + 1}月${d.getDate()}日（${'日一二三四五六'[d.getDay()]}）${tide.icon2(simDate())}${cooking.hudText() ? ' · ' + cooking.hudText() : ''}`;

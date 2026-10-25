@@ -1476,3 +1476,8 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .hall-ov.fig .hov-box.fig-box { width: min(1060px, 96%); max-width: none; padding: 12px; }
 .hall-ov.fig .fig-frame { height: min(62vh, 60vw); }
 @media (max-width: 640px) { .hall-ov.fig .fig-frame { height: min(70vh, 640px); } }
+/* 收進口袋：圖示沿弧線飛進背包按鈕（ui.flyToPocket） */
+.fly-item { position: fixed; left: 0; top: 0; width: 44px; height: 44px; z-index: 40; pointer-events: none; display: grid; place-items: center; font-size: 32px; filter: drop-shadow(0 3px 4px rgba(60, 40, 20, .35)); will-change: transform; }
+.fly-item img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
+#pocketBtn.full { background: #ffd9a8; box-shadow: 0 0 0 3px #ff9a3c inset, 0 4px 10px rgba(255, 140, 40, .35); }
+.wr-len { margin: 8px 0 0; padding: 7px 12px; border-radius: 10px; background: #fff1dc; color: #95560f; font-weight: 700; font-size: .92em; }

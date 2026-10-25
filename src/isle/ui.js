@@ -188,7 +188,7 @@ export function passage(text) {
 }
 /** 玩家按下繼續（E／點擊） */
 export function advance() {
-  if (cardRes) { const r = cardRes; cardRes = null; $('card').hidden = true; r(); return true; }
+  if (cardRes) { const r = cardRes; cardRes = null; const im = cardPocket && $('card').querySelector('.card-icon img'), rc = im && (im.getBoundingClientRect().width ? im.getBoundingClientRect() : $('card').querySelector('.card-in').getBoundingClientRect()); $('card').hidden = true; if (rc && rc.width) flyToPocket(im.src, [rc.left + rc.width / 2, rc.top + Math.min(rc.height / 2, 90)], Math.min(rc.width, 96)); cardPocket = false; r(); return true; }   // 收進口袋的卡片：關掉時圖示飛進背包
   if (!D.open) return false;
   if (D.typing) { D.finishType && D.finishType(); return true; }
   if (D.input) return true;   // 選填題用 Enter 或「送出」，E／空白鍵不會送出
@@ -212,13 +212,13 @@ export function dialogKey(e) {
 }
 
 /* ---------- 收穫卡片（我釣到了！） ---------- */
-let cardRes = null, cardAt = 0;
+let cardRes = null, cardAt = 0, cardPocket = false;
 let cardChain = Promise.resolve();
 /** 卡片排隊顯示：前一張還沒關閉時，下一張會等它（避免覆蓋掉前一張的完成回呼） */
 /** 獲得卡片。o：icon、title、sub、extra（html）、rare 稀有的金色光芒 */
 export function card(o) { const p = cardChain.then(() => showCard(o)); cardChain = p.catch(() => {}); return p; }
 function showCard(o) {
-  const c = $('card'); c.hidden = false;
+  const c = $('card'); c.hidden = false; cardPocket = !!o.pocket;
   c.innerHTML = `<div class="card-in${o.rare ? ' rare' : ''}"><div class="card-icon">${o.icon ? `<img src="${o.icon}" alt="">` : ''}</div><b>${esc(o.title)}</b>${o.sub ? `<p>${rich(keys(o.sub))}</p>` : ''}${o.extra ? `<div class="card-extra">${o.extra}</div>` : ''}<small>${COARSE.matches ? '點一下繼續' : '按 E 繼續'}</small></div>`;
   Audio.sfx(o.rare ? 'rare' : 'catch'); if (o.rare) shake.haptic('rare');   // 稀有（四、五星）：金色旋轉光芒與閃亮的音效
   return new Promise(res => { cardRes = res; cardAt = performance.now(); });
@@ -249,6 +249,17 @@ export function think(obj, text, ms) {
 export function bubble(obj, text, ms) {
   const e = el('div', 'bubble', esc(text)); $('labels').appendChild(e);
   const t0 = performance.now(), D2 = ms || 2400; const tick = () => { const [x, y] = screenOf(obj, 2.05); e.style.left = x + 'px'; e.style.top = y + 'px'; if (performance.now() - t0 < D2) requestAnimationFrame(tick); else e.remove(); }; tick();
+}
+/** 收進口袋：圖示從 from（螢幕座標 [x, y]，或 3D 物件）沿弧線飛進背包按鈕，按鈕彈一下；口袋只剩 2 格以下按鈕變色（main.js 的 paintPocket） */
+export function flyToPocket(src, from, size) {
+  const b = $('pocketBtn'); if (!b || !b.getClientRects().length) return;
+  const [x0, y0] = Array.isArray(from) ? from : screenOf(from, 1.1), r = b.getBoundingClientRect(), x1 = r.left + r.width / 2, y1 = r.top + r.height / 2;
+  const e = el('div', 'fly-item', /^(data:|blob:|https?:|\/|\.)/.test(src || '') || /\.(png|webp|jpe?g|svg)$/i.test(src || '') ? `<img src="${src}" alt="">` : esc(src || '🎒'));
+  const s0 = Math.min(1.6, (size || 44) / 44), mx = (x0 + x1) / 2 + (x1 - x0) * 0.1, my = Math.min(y0, y1) - 70;
+  document.body.appendChild(e);
+  const T = (x, y, s) => `translate(${x - 22}px, ${y - 22}px) scale(${s})`;
+  const a = e.animate([{ transform: T(x0, y0, s0), opacity: 1 }, { transform: T(mx, my, s0 * 0.8), opacity: 1, offset: 0.45 }, { transform: T(x1, y1, 0.35), opacity: 0.85 }], { duration: 560, easing: 'cubic-bezier(.45,0,.7,.35)' });
+  a.onfinish = () => { e.remove(); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); Audio.sfx('tick', { pitch: 1.5, vol: 0.5 }); };
 }
 export function floatText(obj, text, color) {
   const e = el('div', 'float'); e.textContent = text; if (color) e.style.color = color; $('labels').appendChild(e);

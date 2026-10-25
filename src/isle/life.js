@@ -86,7 +86,7 @@ async function hook() {
     const s = S(), first = !s.dex.fish[sp.id];
     s.dex.fish[sp.id] = s.dex.fish[sp.id] || Date.now(); s.stats = s.stats || {}; s.stats.fish = (s.stats.fish || 0) + 1;
     const room = addItem({ k: 'fish', id: sp.id }); save(); tourneyScore('fish', sp); miles.add('fish'); cheer({ kind: 'fish', sp, first });
-    await ui.card({ rare: sp.rarity >= 4, icon: icon(sp.id, 'fish'), title: `我釣到了${sp.name}！`, sub: `${q.vocab.w} ＝ ${q.vocab.zh}`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回水裡。</em>'}` });
+    await ui.card({ pocket: room, rare: sp.rarity >= 4, icon: icon(sp.id, 'fish'), title: `我釣到了${sp.name}！`, sub: `${q.vocab.w} ＝ ${q.vocab.zh}`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放回水裡。</em>'}` });
     if (!tourney) await challenge.keepGoing({ name: '釣魚挑戰', color: '#3aa0d8', voice: 520 }, q);
   } else {
     f.st = 'flee'; f.t = 0; Audio.sfx('bad');
@@ -192,7 +192,7 @@ async function netAction() {
   if (ok) {
     bug.st = 'gone'; const s = S(), first = !s.dex.bug[sp.id]; s.dex.bug[sp.id] = s.dex.bug[sp.id] || Date.now();
     const room = addItem({ k: 'bug', id: sp.id }); save(); tourneyScore('bug', sp); miles.add('bug'); cheer({ kind: 'bug', sp, first });
-    await ui.card({ rare: sp.rarity >= 4, icon: icon(sp.id, 'bug'), title: `我抓到了${sp.name}！`, sub: '國文題答對了！', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
+    await ui.card({ pocket: room, rare: sp.rarity >= 4, icon: icon(sp.id, 'bug'), title: `我抓到了${sp.name}！`, sub: '國文題答對了！', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}${room ? '' : '<em>口袋滿了，只好放牠走。</em>'}` });
     if (!tourney) await challenge.keepGoing({ name: '捕蟲挑戰', color: '#ff8fa3', voice: 600 }, q);
   } else {
     bug.st = 'flee'; bug.t = 0; Audio.sfx('bad');
@@ -224,7 +224,7 @@ async function digAction() {
   busy = true;
   const room = addItem({ k: 'unk', id: 'fossil_unknown' }); save(); miles.add('fossil');
   cheer({ kind: 'fossil' });
-  await ui.card({ icon: icon('fossil_unknown', 'unk'), title: '挖到了化石！', sub: '還不知道是什麼。拿去博物館給史遙鑑定吧！', extra: room ? '' : '<em>口袋滿了，先整理一下口袋。</em>' });
+  await ui.card({ pocket: room, icon: icon('fossil_unknown', 'unk'), title: '挖到了化石！', sub: '還不知道是什麼。拿去博物館給史遙鑑定吧！', extra: room ? '' : '<em>口袋滿了，先整理一下口袋。</em>' });
   busy = false;
 }
 
