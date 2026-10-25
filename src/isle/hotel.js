@@ -17,6 +17,7 @@ import * as Audio from './audio.js';
 import { I, S, save, dayKey } from './state.js';
 import { pickQ, record, pick } from './quiz.js';
 import * as memo from './memo.js';
+import * as route from './route.js';
 
 const TA = window.TA;
 export const THEMES = [
@@ -235,9 +236,10 @@ async function guestTalk(gi, roomI) {
   const G = GUESTS[gi % GUESTS.length], h = H(), sp = { name: G.name, color: G.color, voice: 560 + gi * 30 };
   const r = roomI != null ? h.rooms[roomI] : null, th = r && THEMES.find(t => t.id === r.theme);
   const tk = today(h, 'talk');
-  const lines = [th ? `住在${th.name}好舒服，就像住在自己家一樣。` : '這座島好漂亮，每天都有新發現！', '島上的居民都好親切喔。', '聽說西邊的山頂可以看到很美的夕陽！', '我是來這裡度假兼讀書的，要不要一起讀一題？'];
+  const lines = [th ? `住在${th.name}好舒服，就像住在自己家一樣。` : '這座島好漂亮，每天都有新發現！', '島上的居民都好親切喔。', '聽說西邊的山頂可以看到很美的夕陽！', '我是來這裡度假兼讀書的。'];
   await ui.say(sp, pick(lines));
-  if (tk.who[gi]) return;
+  if (tk.who[gi] || route.quiet()) return;   // 收工、散步、休息中：旅客只聊天
+  if (await ui.ask(sp, '我在讀一題，要不要一起看看？答對送你飯店優惠券。', ['好啊！', '下次吧'], { keys: true, hl: 1 }) !== 0) { route.hush(20); await ui.say(sp, '好喔，那我自己再想想！'); return; }   // 先問，不直接出題
   const sid = pick(TA.SUBJECTS).id, q = pickQ(sid, 2) || pickQ(sid, 3); if (!q) return;
   const i = await ui.ask(sp, `我在讀這一題，你會嗎？${q.q}`, q.o, { answer: q.a, abc: true, keys: true, html: true }), ok = i === q.a; record(q, ok); tk.who[gi] = 1;
   if (ok) { h.coupons += 60; save(); Audio.sfx('catch'); await ui.say(sp, `好厲害！謝謝你教我。這 60 張優惠券送你（共 ${h.coupons} 張）。`); await challenge.keepGoing(sp, q); }

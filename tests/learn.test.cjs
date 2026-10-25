@@ -625,3 +625,11 @@ test('題型專練：只抽指定題型、題組完整、不算進級分估算',
   TA.S.exams.push({ at: t0, group: '英文', n: 20, c: 20, pts: 20, secs: 600, drill: 'passage' });
   assert.equal(L.estimate('英文').lv, null, '專練滿分也不拿來估級分');
 });
+
+test('學習分鐘：題數、單字卡、專注合在一起算，連續學習與今日路線共用', () => {
+  const t0 = new Date(2026, 9, 26, 10).getTime(), { TA } = boot(null, t0), L = TA.L;
+  const d = L.dayRec(); assert.equal(L.studyMin(d), 0);
+  d.voc = 39; assert.equal(L.studyMin(d), 9); assert.equal(L.touchStreak(), false, '單字 39 張還差一點');
+  d.voc = 40; assert.equal(L.studyMin(d), 10); assert.equal(L.touchStreak(), true, '單字 40 張（約 10 分鐘）就算今天有學習');
+  d.min = 5; d.q = 3; d.wq = 2; assert.equal(L.studyMin(d), 20);
+});

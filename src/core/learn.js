@@ -123,6 +123,8 @@
   L.dayRec = dayRec;
   /** 一天的有效學習量（題）：選擇題作答數＋非選題折算的題數（每日目標與連續學習都用這個） */
   L.effort = d => (d.q || 0) + (d.wq || 0);
+  /** 學習分鐘（v7.1，今日路線與連續學習共用）：一題（含看解析）約 1 分、單字卡 4 張約 1 分、專注 1 分鐘算 1 分 */
+  L.studyMin = d => L.effort(d) + Math.floor((d.voc || 0) / 4) + (d.min || 0);
 
   /* ---------- 非選題（v7.0）：寫完對照參考答案自評，分數記在 TA.S.written；自評達八成才往後排，未達五成明天再練 ---------- */
   const WR_EQ = { 'en-trans': 2, short: 2, 'math-open': 4, 'en-essay': 10, 'zh-essay': 12 }, WR_GAP = [1, 3, 7, 16, 35];   // 一次練習折算幾題；複習間隔（天）
@@ -209,7 +211,7 @@
   L.touchStreak = function () {
     const S = TA.S, key = U.dayKey(), d = dayRec(key);
     if (S.streak.last === key) return false;
-    if (L.effort(d) + Math.floor(d.voc / 4) < L.STREAK_Q && !d.focus) return false;
+    if (L.studyMin(d) < L.STREAK_Q && !d.focus) return false;   // 學習 10 分鐘（＝今日路線最短的 20 分鐘版）或專注一輪
     const gap = S.streak.last ? U.dayNum() - U.keyToNum(S.streak.last) : 99;
     if (gap === 1) S.streak.cur++;
     else if (gap === 2 && S.streak.shields > 0) { S.streak.shields--; S.streak.cur++; TA.emit('toast', { icon: 'shield', text: '潮汐護符替你守住了昨天的連續紀錄' }); }

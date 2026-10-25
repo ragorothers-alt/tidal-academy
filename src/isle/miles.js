@@ -1,5 +1,6 @@
-/* 潮汐小島 · 潮汐里程：每天 5 個小目標（第一個固定是答對題目），完成得到里程點數，可以在手機兌換獎勵。
-   各模組在對應動作時呼叫 add(key)；答對題數直接讀每日學習紀錄（TA.S.days）。 */
+/* 潮汐小島 · 潮汐里程：每天 5 個小目標（第一個固定是學科練習），完成得到里程點數，可以在手機兌換獎勵。
+   各模組在對應動作時呼叫 add(key)；練習題數直接讀每日學習紀錄（TA.S.days，作答數＋非選題折算，和今日路線同一個算法）。
+   v7.1：今天要做什麼改由今日路線（route.js）列出；里程是額外的探索獎勵，計數也給今日路線的「島上的事」用（count）。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { S, save } from './state.js';
@@ -32,14 +33,16 @@ function data() {
     const r = seeded(d), pool = TASKS.filter(t => t.id !== 'quiz').sort(() => r() - 0.5).slice(0, 4);
     const goal = TA.S.profile.dailyGoal || 30;
     m.d = d; m.cnt = {}; m.done = {}; m.bonus = false; m.once = {};
-    m.tasks = [{ id: 'study', name: `今天答對 ${Math.max(10, Math.round(goal * 0.6))} 題學科練習（任何學科題都算，不含單字題）`, need: Math.max(10, Math.round(goal * 0.6)), pts: 300 }]
+    m.tasks = [{ id: 'study', name: `今天練 ${Math.max(10, Math.round(goal * 0.6))} 題學科（任何學科題都算，非選題依題型折算；不含單字題）`, need: Math.max(10, Math.round(goal * 0.6)), pts: 300 }]
       .concat(pool.map(t => { const n = t.n[0] + Math.floor(r() * (t.n[1] - t.n[0] + 1)); return { id: t.id, name: t.name.replace('{n}', n), need: n, pts: t.pts }; }));
     save();
   }
   return m;
 }
 export const progress = (m, t) => prog(m, t);
-const prog = (m, t) => (t.id === 'study' ? (L.dayRec().c || 0) : (m.cnt[t.id] || 0));
+const prog = (m, t) => (t.id === 'study' ? L.effort(L.dayRec()) : (m.cnt[t.id] || 0));   // 練習量看作答數，不看答對數：低正確率的玩家不必多做題
+/** 今天某個動作的次數（今日路線用） */
+export const count = key => (data().cnt[key] || 0);
 /* 事件通知：任務欄（guide.js）靠這個知道玩家做了什麼 */
 const listeners = [];
 export function listen(fn) { listeners.push(fn); }

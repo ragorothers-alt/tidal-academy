@@ -15,6 +15,7 @@ import { pickQ, pickQU, record, pick, vocabQ, askQ, readSec, quickQ } from './qu
 import { openNotes } from './library.js';
 import { I, S, save, icon } from './state.js';
 import { MATS } from './diy.js';
+import * as route from './route.js';
 
 const TA = window.TA, L = TA.L;
 let H = {};   // main.js 的工具：sp、player、tail、hearts、gift、giveFurn
@@ -106,7 +107,7 @@ const MORE = ['還想再答嗎？連續答對的話，獎金會一直疊上去�
   '這科你好像很熟了，要不要試試更難的題目？', '再答一題就好？不想答的話選「先這樣」就可以。'];
 /* 邀請的頻率：每隔 8 分鐘最多問一次；連續拒絕兩次就隔 30 分鐘；設定裡可以關掉。預設反白「先這樣」，連按 E 不會誤進挑戰 */
 const KG = { last: 0, no: 0 };
-const kgReady = () => S().settings && S().settings.keepGoing === false ? false : Date.now() - KG.last > (KG.no >= 2 ? 30 : 8) * 60000;
+const kgReady = () => S().settings && S().settings.keepGoing === false ? false : !route.quiet() && Date.now() - KG.last > (KG.no >= 2 ? 30 : 8) * 60000;   // 收工、散步、休息、剛拒絕過（route.quiet）也不問
 export async function keepGoing(sp, q, opt) {
   opt = opt || {};
   const sid = q && (q.subject || (L.Q[q.id] && L.Q[q.id].subject));
@@ -114,7 +115,7 @@ export async function keepGoing(sp, q, opt) {
   if (!pk || !kgReady()) { ui.closeDialog(); return 0; }
   KG.last = Date.now();
   // 結束時收起對話框：釣魚、抓蟲、石碑這些不是在對話裡出的題，沒有人會幫忙關（還在對話中的話，下一句會再打開）
-  if (await ui.ask(sp, pick(MORE), ['繼續挑戰！', '先這樣'], { keys: true, hl: 1 }) !== 0) { KG.no++; ui.closeDialog(); return 0; }
+  if (await ui.ask(sp, pick(MORE), ['繼續挑戰！', '先這樣'], { keys: true, hl: 1 }) !== 0) { KG.no++; route.hush(20); ui.closeDialog(); return 0; }   // 拒絕一次：全島安靜 20 分鐘
   KG.no = 0;
   const n = await loop({ sp, pick: pk, n: 1, v: opt.v, mesh: opt.mesh, seen: new Set(q && q.id ? [q.id] : []) });
   ui.closeDialog();
@@ -135,7 +136,7 @@ function roll() { let r = Math.random() * REWARDS.reduce((a, x) => a + x[0], 0);
 /** 島民走到面前時呼叫（已在 talking 鎖裡） */
 export async function popQuiz(v) {
   const s = S(), sp = H.sp(v);
-  if (await ui.ask(sp, pick(OPEN), ['好啊！', '現在不行']) !== 0) { await ui.say(sp, pick(['好吧，下次再考你！', '那我晚點再來找你～', '沒關係，改天吧！'])); return false; }
+  if (await ui.ask(sp, pick(OPEN), ['好啊！', '現在不行']) !== 0) { route.hush(20); await ui.say(sp, pick(['好吧，下次再考你！', '那我晚點再來找你～', '沒關係，改天吧！'])); return false; }
   // 優先出這科的錯題與到期該複習的題（輕量的短題、不在冷卻中）；攔路不出題組與長題
   const pool = (L.BY_SUBJECT[v.sid] || []).filter(id => (L.isMistake(id) || L.isDue(id)) && !L.cooling(id) && quickQ(L.Q[id]));
   let q = pool.length ? L.view(L.Q[pick(pool)]) : null;

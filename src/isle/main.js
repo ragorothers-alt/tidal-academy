@@ -64,6 +64,7 @@ import * as waves from './waves.js';
 import * as seasons from './seasons.js';
 import * as shake from './shake.js';
 import * as written from './written.js';
+import * as route from './route.js';
 import * as highland from './highland.js';
 import * as details from './details.js';
 import * as hotel from './hotel.js';
@@ -632,6 +633,8 @@ function phoneDream() {
 }
 room.setBedHook(() => sleepMenu());
 dreamisle.init({ player, addStorage: (id, n) => room.addStorage(id, n), beforeEnter: () => { if (room.inside) room.exit(); }, villagers: () => villagers.filter(v => !v.shop && !v.guest), wake: () => { enterHome(); setTimeout(() => ui.toast('醒來了。夢境島會一直保留著，下次睡覺還能回去'), 800); } });
+const PHONE_CORE = ['考前衝刺', '今日學習', '每日潮汐', '單字燈塔', '專注時光', '信箱', '委託', '島民', '口袋', '地圖', '圖鑑', '島上指南', '設定'];
+let phoneMore = false;   // 這次打開遊戲按過「更多 App」
 function phone() {
   const body = ui.el('div', 'phone-sec');
   // 手機狀態列：時間、日期與天氣（像 NookPhone 的上緣）
@@ -663,7 +666,13 @@ function phone() {
     ['工具', [['我的檔案', '🪪', '#dce6ff', openProfile], ['島上指南', '🧭', '#d8f0e0', () => settings.guide()], ['我的生日', '🎂', '#ffd0e0', () => gifts.openBirthday(paintHud)], ['時間', '⏰', '#ffc0a0', phoneTime], ['設定', '⚙️', '#e0e0e8', () => settings.open()]]]
   ];
   const base = n => n.replace(/（.*?）$/, '');   // 「信箱（5）」→「信箱」
-  { const all = SEC.flatMap(x => x[1]), recent = (S().phoneRecent || []).map(r => all.find(a => base(a[0]) === r)).filter(Boolean); if (recent.length) SEC.unshift(['最近使用', recent]); }   // 最近用過的 App 排在最上面
+  // 新手期（新手引導沒做完、玩不到 3 天）：先列常用的 App，其他收在「更多」；熟手在設定裡打開「手機顯示全部 App」
+  const full = phoneMore || (S().settings || {}).phoneAll || (guide.finished() && Object.keys(TA.S.days || {}).length >= 3);
+  if (!full) {
+    const all = SEC.flatMap(x => x[1]), core = all.filter(a => PHONE_CORE.includes(base(a[0]))), used = (S().phoneRecent || []).map(r => all.find(a => base(a[0]) === r)).filter(a => a && !core.includes(a));
+    SEC.length = 0; SEC.push(['常用', core.concat(used)], [`其他 ${all.length - core.length - used.length} 個 App`, [['顯示全部', '➕', '#e8e8f0', () => { phoneMore = true; phone(); }]]]);   // 數字放標題，不放紅點（不是通知）
+  }
+  { const all = SEC.flatMap(x => x[1]), recent = full ? (S().phoneRecent || []).map(r => all.find(a => base(a[0]) === r)).filter(Boolean) : []; if (recent.length) SEC.unshift(['最近使用', recent]); }   // 最近用過的 App 排在最上面
   SEC.forEach(([title, apps]) => {
     body.appendChild(ui.el('h4', 'ph-sec', title));
     const grid = ui.el('div', 'apps');
@@ -686,36 +695,47 @@ function phoneVillagers() {
   });
   ui.panel('島民', body, { cls: 'phone' });
 }
-/** 今日航程：四項任務的進度與寶箱（今日學習與任務欄的提示共用） */
-function todayState() {
-  const S = TA.S, d = L.dayRec(), goal = S.profile.dailyGoal || 30;
-  const set = L.pickDaily(), dk = TA.U.dayKey(), idx = S.daily.date === dk ? (S.daily.idx || 0) : 0;   // pickDaily 會在換日時重設 daily（含寶箱）
-  const tasks = [
-    ['daily', '🌅', '每日潮汐', '12 題：到期複習＋弱點＋新題', S.daily.done ? 1 : idx / set.length, S.daily.done ? '完成' : `${idx} / ${set.length}`],
-    ['vocab', '🃏', '單字 20 張', '單字燈塔翻卡或測驗、釣魚都算', Math.min(1, d.voc / 20), `${Math.min(d.voc, 20)} / 20`],
-    ['goal', '🎯', `答題 ${goal} 題`, '島上任何學科題都算（非選題依題型折算）', Math.min(1, L.effort(d) / goal), `${Math.min(L.effort(d), goal)} / ${goal}`],
-    ['focus', '⏳', '專注 25 分鐘', '用專注時光讀課本或寫考卷', Math.min(1, d.min / 25), `${Math.min(d.min, 25)} / 25 分`],
-  ];
-  const doneN = tasks.filter(t => t[4] >= 1).length, claimed = !!S.daily.chest && S.daily.date === dk;   // 寶箱用自己的欄位（以前和每日潮汐共用 claimed，先做完潮汐就開不了寶箱）
-  return { d, goal, tasks, doneN, claimed, ready: doneN >= 3 && !claimed };
-}
+/** 今日學習：今日路線（選時長、學習＋島上的事＋可選加碼、寶箱與收工摘要）、複習狀況、可以怎麼學 */
 function phoneToday() {
-  const S = TA.S, { d, goal, tasks, doneN, claimed, ready } = todayState(), due = L.dueList().length, mis = L.mistakes().length, vd = L.vocabDue().length;
+  const S0 = TA.S, st = route.state(), due = L.dueList().length, mis = L.mistakes().length, vd = L.vocabDue().length;
+  if (st.extra.all && route.claimExtra()) { L.gain(30, 10); TA.Store.save(); ui.toast('✨ 三項加碼（每日潮汐、單字、專注）都完成了：+30 經驗、+10 潮晶'); }
+  const row = (id, ic, t, sub, v, need, lab, opt) => `<button type="button" class="td-task${v >= need ? ' done' : ''}${opt ? ' opt' : ''}" data-t="${id}"><i>${v >= need ? '✔' : ic}</i><span><b>${t}</b><small>${sub}</small><em style="--k:${Math.min(1, v / need).toFixed(3)}"></em></span><code>${lab}</code></button>`;
+  const two = (st.study.v >= st.study.need) + (st.life.v >= st.life.need);
   const body = ui.el('div', 'today', `
-    <div class="td-top"><div class="td-ring" style="--k:${Math.min(1, d.q / goal)}"><b>${d.q}</b><small>/ ${goal} 題</small></div>
-    <ul><li>到期複習 <b>${due}</b> 題</li><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul></div>
-    <div class="td-voy"><div class="td-vh"><b>今日航程</b><small>完成任 3 項開寶箱：+60 經驗、+50 潮晶</small><button type="button" class="btn td-chest${ready ? ' gold' : ''}"${ready ? '' : ' disabled'}>${claimed ? '已領取 ✔' : ready ? '🎁 開寶箱' : `${doneN} / 3`}</button></div>
-    ${tasks.map(([id, ic, t, sub, v, lab]) => `<button type="button" class="td-task${v >= 1 ? ' done' : ''}" data-t="${id}"><i>${v >= 1 ? '✔' : (I.APPICONS || {})[ic] ? `<img src="${I.APPICONS[ic]}" alt="">` : ic}</i><span><b>${t}</b><small>${sub}</small><em style="--k:${Math.min(1, v).toFixed(3)}"></em></span><code>${lab}</code></button>`).join('')}</div>
+    <div class="rt-len"><span>今天大概有</span>${route.LENS.map(n => `<button type="button" class="rt-chip${n === st.len ? ' on' : ''}" data-len="${n}">${n} 分鐘</button>`).join('')}</div>
+    <div class="td-voy"><div class="td-vh"><b>今日路線</b><small>學習和島上的事都做完：開寶箱（+60 經驗、+50 潮晶），看今天的收工摘要</small><button type="button" class="btn td-chest${st.ready ? ' gold' : ''}"${st.ready || st.chest ? '' : ' disabled'}>${st.chest ? '收工摘要' : st.ready ? '🎁 開寶箱' : `${two} / 2`}</button></div>
+      ${row('study', '📚', `學習 ${st.study.need} 分鐘`, '哪裡的學習都算：島民出題、每日潮汐、考場、非選練習、單字卡（4 張約 1 分）、專注時光', st.study.v, st.study.need, `${Math.min(st.study.v, st.study.need)} / ${st.study.need} 分`)}
+      ${row('life', '🏝', `島上的事 ${st.life.need} 件`, '任選：釣魚、捉蟲、挖化石、潮池、委託、捐贈、送禮、澆花、撿貝殼、做家具、拍照', st.life.v, st.life.need, `${Math.min(st.life.v, st.life.need)} / ${st.life.need}`)}
+      ${row('extra', '✨', `加碼（可選）：${st.extra.name}`, st.extra.all ? '三項加碼都完成了！' : '想多練一點再做；不做也算完成今天', st.extra.v, st.extra.need, `${st.extra.v} / ${st.extra.need}`, true)}
+    </div>
+    <div class="rt-quiet">${route.quiet() ? `<span>🌿 ${route.quietWhy()}：島民不會主動找你出題</span>` : '<span>想安靜逛逛的話：</span>'}<button type="button" class="btn ghost rt-walk">${st.walk ? '結束散步模式' : st.shut ? '回到學習模式' : '🌿 散步模式'}</button></div>
+    <ul class="rt-stat"><li>到期複習 <b>${due}</b> 題</li><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul>
     ${events.active().length ? `<p class="ev-now">🎉 今日活動：${events.active().map(e => events.NAMES[e]).join('、')}</p>` : ''}
-    <p class="muted">島民出題、釣魚、捉蟲、鑑定化石都會優先拿到期的複習題和錯題。模擬考、錯題本、成績統計在島上的潮汐考場，這裡也能直接打開。</p>
-    <div class="td-acts"><button type="button" class="btn" data-h="chart">航海圖</button><button type="button" class="btn" data-h="vocab">單字燈塔</button><button type="button" class="btn" data-h="mock">模擬考</button><button type="button" class="btn" data-h="mis">錯題本</button><button type="button" class="btn" data-h="stats">成績統計</button></div>`);
+    <p class="muted">島民出題、釣魚、捉蟲、鑑定化石都會優先拿到期的複習題和錯題。到期的題目很多時不用一次補完，做完今天的路線就好。</p>
+    <div class="td-acts"><button type="button" class="btn" data-h="daily">每日潮汐</button><button type="button" class="btn" data-h="vocab">單字燈塔</button><button type="button" class="btn" data-h="chart">航海圖</button><button type="button" class="btn" data-h="mock">模擬考</button><button type="button" class="btn" data-h="mis">錯題本</button><button type="button" class="btn" data-h="stats">成績統計</button></div>`);
+  body.querySelectorAll('[data-len]').forEach(b => { b.onclick = () => { route.setLen(+b.dataset.len); Audio.sfx('tick'); paintHud(); phoneToday(); }; });
   body.querySelector('.td-chest').onclick = () => {
-    if (!ready) return;
-    S.daily.chest = true; L.gain(60, 50); L.checkAch(); TA.Store.save(); Audio.sfx('catch'); ui.toast('🎁 今日航程完成！+60 經驗、+50 潮晶'); phoneToday();
+    if (st.ready) { S0.daily.chest = true; L.gain(60, 50); L.checkAch(); TA.Store.save(); Audio.sfx('catch'); ui.toast('🎁 今日路線完成！+60 經驗、+50 潮晶'); daySummary(); return; }
+    if (st.chest) daySummary();
   };
-  body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S.vocLv || 0), goal: () => voyage.openChart(), focus: () => { ui.closePanel(); focus.open(paintHud); } })[b.dataset.t](); });
-  body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => ({ chart: () => voyage.openChart(), vocab: () => lexicon.open(), mock: () => hall.openMock(), mis: () => hall.openMistakes(), stats: () => hall.openStats() })[b.dataset.h](); });
+  body.querySelector('.rt-walk').onclick = () => { if (st.walk) route.setWalk(false); else if (st.shut) route.shut(false); else route.setWalk(true); Audio.sfx('tick'); paintHud(); phoneToday(); };
+  body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => voyage.openDaily(), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
+  body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), chart: () => voyage.openChart(), vocab: () => lexicon.open(), mock: () => hall.openMock(), mis: () => hall.openMistakes(), stats: () => hall.openStats() })[b.dataset.h](); });
   ui.panel('今日學習', body, { cls: 'phone' });
+}
+/** 收工摘要：今天學了什麼、島上做了什麼；選「收工」就進入自由時間 */
+function daySummary() {
+  const st = route.state(), body = ui.el('div', 'wb', route.summary() + `<div class="td-acts">${st.shut ? '<button type="button" class="btn" data-s="back">回到學習模式</button>' : '<button type="button" class="btn gold" data-s="shut">收工，自由時間</button><button type="button" class="btn" data-s="more">還想再學一點</button>'}</div>`);
+  body.querySelectorAll('[data-s]').forEach(b => { b.onclick = () => { const k = b.dataset.s; if (k === 'shut') { route.shut(); ui.toast('🌿 自由時間：島民不會主動找你出題'); } if (k === 'back') route.shut(false); paintHud(); ui.closePanel(); }; });
+  ui.panel('今天的收工摘要', body, { cls: 'phone' });
+}
+/** 每天第一次進島：問今天大概有多少時間（預設上次的選擇）；選好之後任務欄只列今天的路線 */
+async function routeAsk() {
+  if (route.asked() || !guide.finished()) return;
+  const n0 = route.len(), opts = route.LENS.map(n => `${n} 分鐘${n === 20 ? '：複習一小段、逛一下島' : n === 40 ? '：學習加上島上生活' : '：專注讀書加複習'}`);
+  const i = await ui.ask({ name: '今日路線', color: '#5ab0e0', voice: 520 }, '今天大概有多少時間？選好之後，左上角只列今天要做的兩件事（隨時可以在手機「今日學習」改）。', opts, { keys: true, hl: route.LENS.indexOf(n0) });
+  ui.closeDialog();
+  route.setLen(route.LENS[i] || n0); paintHud();
 }
 function phoneMap() {
   if (elsewhere()) { ui.toast('在這裡看不到潮汐小島的地圖'); return; }
@@ -1104,7 +1124,7 @@ function waterSpot(x, z) {
 let popAt = 180 + Math.random() * 120;   // 下一次的時間（simT）
 function popTick() {
   if (simT < popAt) return;
-  if (S().settings && S().settings.popQuiz === false) { popAt = simT + 60; return; }
+  if ((S().settings && S().settings.popQuiz === false) || route.quiet()) { popAt = simT + 60; return; }   // 收工、散步模式、休息時間、剛拒絕過：不主動出題
   if (talking || sitting || life.busy || life.tourney || life.fishing() || design.active() || photo.active() || astro.isOpen() || focus.active() || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen() || villagers.some(v => v.popQuiz)) { popAt = simT + 15; return; }   // 玩家正在忙：過一會兒再看
   const p = player.position, c = villagers.filter(v => thinks(v) && !v.away && v.mesh.visible && !v.sitting && !v.sitGoal && !v.benchGoal && !v.chatting && !v.goPlayer && (L.BY_SUBJECT[v.sid] || []).length)
     .map(v => [v, Math.hypot(v.mesh.position.x - p.x, v.mesh.position.z - p.z)]).filter(([, d]) => d > 3 && d < 28).sort((a, b) => a[1] - b[1]);
@@ -1430,7 +1450,7 @@ function startGame() {
     openReqs: () => { if (!talking && !ui.dialogOpen()) social.phoneList(); },
     openVocab: () => { if (!talking && !ui.dialogOpen()) lexicon.open(); },
     openToday: () => { if (!talking && !ui.dialogOpen()) phoneToday(); },
-    chest: () => todayState().ready,
+    chest: () => route.state().ready,
     labReady: () => { const v = lab.firstReady(villagers.filter(x => !x.shop && !x.guest)); return v ? v.name : ''; },
     env: () => ({ hour: hourOverride ?? nowHour(), date: simDate(), raining: weather.raining(), tourney: !!life.tourney }),
   });
@@ -1443,14 +1463,14 @@ function startGame() {
       const r = relocNote; relocNote = null;
       await ui.card({ title: '小島改建完成：星環學院', sub: `島上照新的城鎮規劃重建了：碼頭與城門、主街、噴泉廣場，北邊的學院台地上是博物館、考場、圖書館與觀星台。<br>你的家搬到廣場西邊` + (r.moved ? `，庭院裡的 ${r.moved} 樣擺設與花也跟著搬過去了。` : '。') + (r.refund ? `<br>放不下的設計已退回 ${r.refund} 鈴錢。` : '') + (r.bagged ? `<br>${r.bagged} 株花收回種子袋。` : '') });
     }
-    if (new URLSearchParams(location.search).get('go')) deepLink(); else welcomeBack();
+    if (new URLSearchParams(location.search).get('go')) deepLink(); else if (!welcomeBack()) await routeAsk();
   })();
   focus.resume(paintHud);
 }
 /** 回島小結：隔了兩天以上再回來時，整理這段時間累積的複習、單字、信件與連續紀錄，給出今天的第一步 */
 function welcomeBack() {
-  const U2 = TA.U, S0 = TA.S; if (!awayFrom || !S0.profile.onboarded) return;
-  const away = U2.dayNum() - U2.keyToNum(awayFrom); if (!(away >= 2)) return;
+  const U2 = TA.U, S0 = TA.S; if (!awayFrom || !S0.profile.onboarded) return false;
+  const away = U2.dayNum() - U2.keyToNum(awayFrom); if (!(away >= 2)) return false;
   const due = L.dueList().length, mis = L.mistakes().length, vd = L.vocabDue().length, un = social.unread(), exam = U2.daysUntil(S0.profile.examDate || profile.DEFAULT_EXAM);
   const gap = S0.streak.last ? U2.dayNum() - U2.keyToNum(S0.streak.last) : 99;
   const streak = gap <= 1 ? `連續學習 ${S0.streak.cur} 天，今天也來延續吧！`
@@ -1463,6 +1483,7 @@ function welcomeBack() {
     <div class="td-acts"><button type="button" class="btn gold" data-w="daily">每日潮汐</button>${vd ? '<button type="button" class="btn" data-w="vocab">單字燈塔</button>' : ''}${un ? '<button type="button" class="btn" data-w="mail">看信箱</button>' : ''}<button type="button" class="btn" data-w="walk">先到處逛逛</button></div>`);
   body.querySelectorAll('[data-w]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.open(), mail: () => social.openMail(), walk: () => ui.closePanel() })[b.dataset.w](); });
   ui.panel('歡迎回來', body, { cls: 'phone' });
+  return true;
 }
 /** 舊的學習中心連結（index.html?go=…）會轉到這裡：開始後直接打開對應的面板 */
 function deepLink() {

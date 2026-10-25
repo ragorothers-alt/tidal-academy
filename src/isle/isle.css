@@ -1481,3 +1481,12 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .fly-item img { width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
 #pocketBtn.full { background: #ffd9a8; box-shadow: 0 0 0 3px #ff9a3c inset, 0 4px 10px rgba(255, 140, 40, .35); }
 .wr-len { margin: 8px 0 0; padding: 7px 12px; border-radius: 10px; background: #fff1dc; color: #95560f; font-weight: 700; font-size: .92em; }
+/* 今日路線（route.js，v7.1）：手機「今日學習」與任務欄 */
+.rt-len { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; font-weight: 800; color: var(--ink-2); }
+.rt-chip { border: 0; border-radius: 999px; padding: 7px 14px; font: inherit; font-weight: 800; background: rgba(255, 255, 255, .75); color: var(--ink); cursor: pointer; box-shadow: 0 2px 0 rgba(107, 79, 58, .15); }
+.rt-chip.on { background: #5ab0e0; color: #fff; box-shadow: 0 2px 0 #3a86b4; }
+.td-task.opt { background: rgba(255, 255, 255, .55); border: 2px dashed rgba(160, 130, 90, .3); }
+.rt-quiet { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between; font-size: 13px; font-weight: 700; color: #3f8f5a; }
+.rt-stat { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; justify-content: center; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.rt-sum-lead { margin: 0; font-size: 18px; font-weight: 800; color: #2f8f6a; }
+.quest li.opt { color: var(--ink-2); font-weight: 600; }

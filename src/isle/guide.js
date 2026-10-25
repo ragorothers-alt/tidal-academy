@@ -1,6 +1,7 @@
 /* 潮汐小島 · 任務欄（左上角時鐘下方）：一直告訴玩家接下來可以做什麼。
-   新手引導：六個小步驟（打招呼 → 答對一題 → 釣魚 → 抓蟲 → 看信箱 → 接委託），每一步寫清楚怎麼做，完成有小獎勵；
-   順序不限，先做到後面的步驟也算。全部完成後改成顯示今天的潮汐里程目標與進度，點一下打開完整清單。
+   新手引導（v7.1）：四步做出第一個成果（認識一位導師 → 答對一題 → 採集一次 → 捐出第一件展品），每一步寫清楚怎麼做，完成有小獎勵；
+   順序不限，先做到後面的步驟也算。信箱、委託、花園、研究、旅行等其他玩法由下面的「現在可以做」依進度慢慢介紹。
+   全部完成後改成顯示今日路線（route.js：學習、島上的事、可選加碼），點一下打開手機的今日學習。
    持續引導：新手引導之後，目標下面一直有「現在可以做」——依當下的狀況（口袋、委託、信箱、潮汐、天色、活動、讀書計畫、錯題）
    與還沒玩過或今天還沒玩的玩法挑 1–3 件事，附上怎麼做；今日目標全部完成後也不會空著。每 15 秒重新挑一次。
    進度由 miles.js 的事件通知（miles.add／addOnce／ping）。 */
@@ -15,42 +16,22 @@ import * as dream from './dream.js';
 import * as garden from './garden.js';
 import * as astro from './stars.js';
 import * as trip from './trip.js';
+import * as route from './route.js';
 import { S, save, I, dayKey, freeSlots } from './state.js';
 
 const TA = window.TA;
 const touch = () => matchMedia('(pointer: coarse)').matches;
 const STEPS = [
-  { key: 'talk', title: '和島民打招呼', how: () => touch() ? '走到任何一位島民旁邊，按右下角的「動作」' : '走到任何一位島民旁邊按 E（WASD 走路）' },
-  { key: 'quiz', title: '答對一題', how: () => '和島民聊天時選「來考我吧！」——答對可以一直挑戰下去，獎金越疊越多' },
-  { key: 'fish', title: '釣一條魚', how: () => (touch() ? '點左下角的釣竿' : '按 1 拿出釣竿') + '，面向水裡的魚影拋竿；浮標往下沉、冒出「！」時馬上收竿，回答英文單字題' },
-  { key: 'bug', title: '抓一隻蟲', how: () => (touch() ? '點左下角的捕蟲網' : '按 2 拿出捕蟲網') + '，靠近花叢間飛舞的蟲揮網，回答國文題' },
-  { key: 'mail', title: '看看信箱', how: () => (touch() ? '點右下角的手機' : '按 Tab 打開手機') + ' → 信箱；島民會寄單元筆記和禮物給你' },
-  { key: 'accept', title: '接一個委託', how: () => '找頭上有「!」的島民聊天，選「有什麼需要幫忙的嗎？」' },
+  { key: 'talk', title: '認識一位導師', how: () => touch() ? '走到任何一位島民旁邊，按右下角的「動作」' : '走到任何一位島民旁邊按 E（WASD 走路）' },
+  { key: 'quiz', title: '答對一題', how: () => '和島民聊天時選「來考我吧！」——不限時間，答錯也會看到解析' },
+  { key: 'gather', title: '採集一次（任選一種）', how: () => (touch() ? '點左下角的工具' : '按 1–3 拿工具') + '：釣竿面向魚影拋竿、捕蟲網靠近飛舞的蟲揮網、鏟子挖地上的星形裂縫；在沙灘撿貝殼也算' },
+  { key: 'donate', title: '捐出第一件展品', how: () => '把釣到的魚、抓到的蟲或鑑定好的化石帶去學院台地的博物館，跟史遙選「捐贈給博物館」——島上就多了你的第一件收藏' },
 ];
+const GATHER = ['fish', 'bug', 'fossil', 'shell', 'sea'];   // 採集：任一種都算
 const REWARD = 300, FINISH = 1000;
 const k = (key, tap) => touch() ? tap : key;   // 鍵盤與觸控各自的說法
 const E = () => k(' E', '「動作」');
 const PHONE = () => k('按 Tab 打開手機', '點右下角的手機');
-/** 今日目標（潮汐里程）每一項怎麼做：任務欄顯示下一個還沒完成的提示 */
-const HOW = {
-  study: () => '找島民「來考我吧！」、解數學石碑，或到潮汐考場考模擬考、做錯題複習都算',
-  quiz: () => '島上任何題目都算：島民出題、石碑、釣魚、抓蟲、鑑定…',
-  fish: () => k('按 1 拿出釣竿', '點左下角的釣竿') + '，面向水裡的魚影拋竿，冒出「！」時馬上收竿',
-  bug: () => k('按 2 拿出捕蟲網', '點左下角的捕蟲網') + '，靠近飛舞的蟲揮網',
-  fossil: () => k('按 3 拿出鏟子', '點左下角的鏟子') + '，挖地上星形的裂縫；挖到的化石拿去博物館給史遙鑑定',
-  sea: () => '退潮時（手機的潮汐表看時間）到沙灘邊的潮池，空手靠近按' + E(),
-  talk: () => '走到島民旁邊按' + E() + '，每位島民每天算一次',
-  req: () => '找頭上有「!」的島民接委託，照他說的完成後回去找他',
-  donate: () => '把魚、蟲或鑑定好的化石帶去博物館，跟史遙選「捐贈給博物館」',
-  gift: () => '和島民聊天選「送禮物」，送口袋裡的魚、蟲、水果或料理',
-  water: () => k('按 4 拿出澆水壺', '點左下角的澆水壺') + '，替花園裡的花澆水',
-  shell: () => '在沙灘上找貝殼，走過去按' + E() + '撿起來',
-  craft: () => '家門口的 DIY 工作台：有材料就能照配方做家具',
-  photo: () => k('按 P 進入拍照模式', '手機 →「相機」') + '，按快門拍一張',
-  focus: () => '打開手機 →「專注時光」，專心讀書時島上也會陪你',
-  puzzle: () => '島上的三塊數學石碑，或手機裡的每日單字謎',
-  radio: () => '找英文導師 Lexi，選「海風電台（英文聽力）」',
-};
 
 /* ---------- 現在可以做 ---------- */
 const nameOf = sid => ((I.VILLAGERS || []).find(v => v.sid === sid) || {}).name || (TA.subject(sid) || {}).name || '島民';
@@ -94,7 +75,8 @@ function suggestions(max) {
   if (mine) add(`委託進行中：${social.reqText(mine)}${mine.type === 'weak' || mine.type === 'quiz' ? `（找${nameOf(mine.sid)}聊天就能開始）` : mine.type === 'deliver' ? '' : `（完成後回去找${nameOf(mine.sid)}）`}`, 'reqs');
   const un = social.unread(); if (un) add(`信箱有 ${un} 封新信：${PHONE()} → 信箱`, 'mail');
   { const who = H.labReady && H.labReady(); if (who) add(`${who}的研究計畫可以推進了：找${who}聊天，選「研究計畫」`); }
-  if (H.chest && H.chest()) add(`今日航程完成 3 項了：${PHONE()} →「今日學習」開寶箱（+60 經驗、+50 潮晶）`, 'today');
+  if (H.chest && H.chest()) add(`今日路線完成了：${PHONE()} →「今日學習」開寶箱（+60 經驗、+50 潮晶），看收工摘要`, 'today');
+  const relax = route.quiet();   // 收工、散步、休息中：不催讀書，只提島上生活
   const free = freeSlots(); if (free <= 3) add(free ? `口袋快滿了（剩 ${free} 格）：到阿潮的商店賣東西，或捐給博物館` : '口袋滿了：到阿潮的商店賣東西，或捐給博物館');
   // 2. 現在才有的事（活動、時段、潮汐）
   const ev = events.active();
@@ -103,25 +85,30 @@ function suggestions(max) {
   cup('fish', 'english', '釣魚大賽'); cup('bug', 'biology', '捕蟲大會');
   if (ev.includes('halloween') && h >= 17) add('潮汐夜祭：找島民選「不給糖就搗蛋！」，答對拿糖果，到阿潮的商店換限定家具');
   const pr = planner.progress(), left = pr.filter(x => x.n < x.need);
-  if (left.length) add(`今天的讀書計畫：${left.map(x => `${(TA.subject(x.sid) || {}).name} ${x.n}/${x.need}`).join('、')}——找${left.map(x => nameOf(x.sid)).join('、')}「來考我吧！」`, 'plan');
+  if (!relax && left.length) add(`今天的讀書計畫：${left.map(x => `${(TA.subject(x.sid) || {}).name} ${x.n}/${x.need}`).join('、')}——找${left.map(x => nameOf(x.sid)).join('、')}「來考我吧！」`, 'plan');
   if (tide.state(env.date).low) add('現在退潮：沙灘邊的潮池和泥灘有生物可以觀察（空手靠近按' + E() + '）');
   if (astro.isNight(h) && !env.raining) add('今晚沒下雨：到學院台地的觀星台觀星，找找這個季節的星座');
-  const vd = TA.L.vocabDue().length; if (vd >= 10) add(`有 ${vd} 個單字到期了：${PHONE()} →「單字燈塔」翻卡複習`, 'vocab');
-  const mis = dream.count(); if (mis >= 3) add(`錯題本有 ${mis} 題：回家睡一覺，在夢裡重考（在不同天答對 3 次才會離開錯題本）`);
+  const vd = TA.L.vocabDue().length; if (!relax && vd >= 10) add(`有 ${vd} 個單字到期了：${PHONE()} →「單字燈塔」翻卡複習`, 'vocab');
+  const mis = dream.count(); if (!relax && mis >= 3) add(`錯題本有 ${mis} 題：回家睡一覺，在夢裡重考（在不同天答對 3 次才會離開錯題本）`);
   if (!mine) { const r = (s.reqs || []).find(x => !x.accepted && !x.done); if (r) add(`${nameOf(r.sid)}頭上有「!」：找他接委託`); }
   // 3. 還沒試過的玩法、今天還沒玩的練習（每天換一個）
   const seed = [...day].reduce((a, c) => a + c.charCodeAt(0), 0);
   const fresh = FIRST.filter(([, need]) => need(s)); if (fresh.length) add(fresh[seed % fresh.length][2]());
   const P = s.practice || {}, todo = GAMES.filter(([id]) => (P[id] || {}).last !== day);
-  if (todo.length) { const [id, sid, name] = todo[seed % todo.length]; add(`${(P[id] || {}).n ? '今天還沒玩' : '還沒玩過'}：${nameOf(sid)}的「${name}」（每天第一輪答對有鈴錢）`); }
-  if (((s.quizcup || {}).d) !== day) add('潮汐考場的「潮汐盃快問快答」：和三位導師比 10 題，每天一次');
+  if (!relax && todo.length) { const [id, sid, name] = todo[seed % todo.length]; add(`${(P[id] || {}).n ? '今天還沒玩' : '還沒玩過'}：${nameOf(sid)}的「${name}」（每天第一輪答對有鈴錢）`); }
+  if (!relax && ((s.quizcup || {}).d) !== day) add('潮汐考場的「潮汐盃快問快答」：和三位導師比 10 題，每天一次');
   const best = (s.streakQ || {}).best || 0;
-  add(best ? `連續挑戰最佳紀錄 ${best} 題：找島民「來考我吧！」挑戰新紀錄` : '找島民「來考我吧！」：答對一題獎金就疊上去，看你能連對幾題');
+  if (!relax) add(best ? `連續挑戰最佳紀錄 ${best} 題：找島民「來考我吧！」挑戰新紀錄` : '找島民「來考我吧！」：答對一題獎金就疊上去，看你能連對幾題');
   return out;
 }
 
 let el = null, open = true, H = {};   // H.openMiles：打開潮汐里程（和手機裡同一個，兌換帽子要穿得上）；openMail／openPlanner／openReqs
-const data = () => { const s = S(); if (!s.guide) s.guide = { done: {}, fin: !!s.intro }; return s.guide; };   // 已經玩過的存檔（開場介紹看過了）直接略過新手引導
+const data = () => {
+  const s = S(); if (!s.guide) s.guide = { done: {}, fin: !!s.intro };   // 已經玩過的存檔（開場介紹看過了）直接略過新手引導
+  const g = s.guide; if (!g.fin && (g.done.fish || g.done.bug) && !g.done.gather) g.done.gather = true;   // 舊版引導釣過魚、抓過蟲：算採集過
+  return g;
+};
+export const finished = () => !!data().fin;
 
 export function init(hooks) {
   H = hooks || {}; el = document.getElementById('quest'); if (!el) return;
@@ -131,7 +118,7 @@ export function init(hooks) {
     if (e.target.closest('.q-toggle')) { open = !open; paint(); return; }
     const a = e.target.closest('[data-act]');
     if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday }[a.dataset.act]; if (f) { f(); return; } }
-    if (data().fin && H.openMiles) H.openMiles();   // 點今日目標：打開完整的潮汐里程
+    if (data().fin && H.openToday) H.openToday();   // 點今日路線：打開手機的今日學習（改時長、開寶箱、收工）
   });
   miles.listen(onEvent);
   setInterval(() => { if (!document.hidden) paint(); }, 15000);   // 潮汐、天色、時段會變：定期重新挑建議
@@ -139,12 +126,13 @@ export function init(hooks) {
 }
 function onEvent(key) {
   const g = data(); if (g.fin) { paint(); return; }
+  if (GATHER.includes(key)) key = 'gather';
   const st = STEPS.find(x => x.key === key); if (!st || g.done[key]) { paint(); return; }
   g.done[key] = true; const s = S(); s.bells += REWARD; save(); Audio.sfx('coin');
   ui.toast(`✔ 新手引導：${st.title}（+${REWARD} 鈴錢）`);
   if (STEPS.every(x => g.done[x.key])) {
     g.fin = true; s.bells += FINISH; save();
-    setTimeout(() => ui.card({ icon: '', title: '新手引導完成！', sub: `再送你 ${FINISH.toLocaleString()} 鈴錢。<br>之後左上角會列出今天的潮汐里程目標，下面的「現在可以做」會隨時提示島上可以做的事；手機的「島上指南」整理了所有玩法。` }), 900);
+    setTimeout(() => ui.card({ icon: '', title: '新手引導完成！', sub: `再送你 ${FINISH.toLocaleString()} 鈴錢。博物館裡已經有你的第一件收藏了。<br>之後左上角是「今日路線」：一份學習、一件島上的事，做完就可以安心收工；下面的「現在可以做」會慢慢介紹島上其他玩法。手機的「島上指南」整理了所有玩法。` }), 900);
   }
   paint();
 }
@@ -161,14 +149,16 @@ export function paint() {
       (open ? `<div class="q-step">${st.title}</div><small>${st.how()}</small>` : `<div class="q-step">${st.title}</div>`));
     return;
   }
-  const m = miles.check(), left = m.tasks.filter(t => !m.done[t.id]).length, next = m.tasks.find(t => !m.done[t.id]);
+  // 今日路線：學習、島上的事兩步（加碼可選）；收工後只留輕鬆的建議
+  const r = route.state(), steps = [['study', `學習 ${r.study.need} 分鐘`, r.study], ['life', `島上的事 ${r.life.need} 件`, r.life]], left = steps.filter(([, , x]) => x.v < x.need).length;
   const narrow = innerWidth <= 640, tips = suggestions(left ? (narrow ? 1 : 2) : (narrow ? 2 : 3));   // 手機畫面小：少列一則
   el.hidden = false; el.classList.toggle('closed', !open);
-  const head = `<div class="q-head"><b>${left ? `今日目標 ${m.tasks.length - left}/${m.tasks.length}` : '今日目標 ✔ 全部完成'}</b><button type="button" class="q-toggle" aria-label="收合">${open ? '－' : '＋'}</button></div>`;
+  const head = `<div class="q-head"><b>${r.shut ? '今天收工了 🌿' : left ? `今日路線 ${2 - left}/2 · ${r.len} 分` : r.chest ? '今日路線 ✔ 完成' : '今日路線 ✔ 開寶箱！'}</b><button type="button" class="q-toggle" aria-label="收合">${open ? '－' : '＋'}</button></div>`;
   if (!open) { setHTML(head + (tips[0] ? `<div class="q-now one">💡 ${ui.esc(tips[0].t)}</div>` : '')); return; }
-  const goals = left
-    ? '<ul>' + m.tasks.map(t => { const p = Math.min(t.need, miles.progress(m, t)); return `<li class="${m.done[t.id] ? 'ok' : ''}">${m.done[t.id] ? '✔' : '○'} ${ui.esc(t.name.replace(/（.*?）/, ''))}${m.done[t.id] || t.need <= 1 ? '' : ` <i>${p}/${t.need}</i>`}</li>`; }).join('') + `</ul>${next && HOW[next.id] ? `<small class="q-how">💡 ${HOW[next.id]()}</small>` : ''}`
-    : '<small class="q-done">潮汐里程的獎勵記得兌換（點這裡）</small>';
-  const now = tips.length ? `<div class="q-sub">現在可以做</div><ul class="q-now">${tips.map(x => `<li${x.act ? ` data-act="${x.act}" class="act"` : ''}>${ui.esc(x.t)}</li>`).join('')}</ul>` : '';
-  setHTML(head + goals + now + (left ? '<small>點這裡看潮汐里程與獎勵</small>' : ''));
+  const next = steps.find(([, , x]) => x.v < x.need), HOWR = { study: '島民「來考我吧！」、每日潮汐、單字燈塔、專注時光、潮汐考場都算', life: '任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花、撿貝殼…' };
+  const goals = r.shut ? `<small class="q-done">自由時間：島民不會主動找你出題，想練習時再找他們。</small>`
+    : '<ul>' + steps.map(([, t, x]) => `<li class="${x.v >= x.need ? 'ok' : ''}">${x.v >= x.need ? '✔' : '○'} ${t}${x.v >= x.need ? '' : ` <i>${x.v}/${x.need}</i>`}</li>`).join('') + `<li class="opt">☆ 加碼（可選）：${ui.esc(r.extra.name)}${r.extra.all ? ' ✔' : ` <i>${r.extra.v}/${r.extra.need}</i>`}</li></ul>`
+      + (next ? `<small class="q-how">💡 ${HOWR[next[0]]}</small>` : r.chest ? '' : '<small class="q-how">💡 點這裡開寶箱、看今天的收工摘要</small>');
+  const now = tips.length ? `<div class="q-sub">${r.shut ? '想做的話' : '現在可以做'}</div><ul class="q-now">${tips.map(x => `<li${x.act ? ` data-act="${x.act}" class="act"` : ''}>${ui.esc(x.t)}</li>`).join('')}</ul>` : '';
+  setHTML(head + goals + now + '<small>點這裡打開今日學習</small>');
 }
