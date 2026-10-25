@@ -17,6 +17,7 @@ import { openNotes } from './library.js';
 import { I, S, save, icon } from './state.js';
 import { MATS } from './diy.js';
 import * as route from './route.js';
+import * as bond from './bond.js';
 
 const TA = window.TA, L = TA.L;
 let H = {};   // main.js 的工具：sp、player、tail、hearts、gift、giveFurn
@@ -73,7 +74,7 @@ async function loop(o) {
     n++; const gain = prizeOf(qd, n); pot += gain;
     Audio.sfx('ok'); if (mesh) ui.emote(mesh, n >= 5 ? '★' : '♪', '#ff7b9c'); ui.floatText(H.player, `彩池 +${gain}`, '#e0a020');
     // 好感度真的升到 5 的倍數才送禮物（到了上限 20 就不再每場都送）
-    if (v) { const today = s.frDay[v.sid] || 0; if (today < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = today + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; } }
+    if (v) { const today = s.frDay[v.sid] || 0; if (today < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = today + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; if (before >= 20 && bond.overflow(v)) friend = '（多了一段共同回憶，寫進回憶錄了）'; } }   // 好感度滿了：改存共同回憶
     save();
     if (n % 5 === 0) await milestone(sp, n);
     const nd = levelOf(n), nt = timerOf(n);
@@ -116,7 +117,7 @@ export async function practice(v) {
     record(q, ok);
     if (ok) {
       got++; run++; const b = Math.round(100 * qd * cooking.bellsMul()); bells += b; s.bells += b;
-      if ((s.frDay[v.sid] || 0) < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = (s.frDay[v.sid] || 0) + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; }
+      if ((s.frDay[v.sid] || 0) < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = (s.frDay[v.sid] || 0) + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; if (before >= 20 && bond.overflow(v)) friend = '（多了一段共同回憶，寫進回憶錄了）'; }
       save(); Audio.sfx('ok'); ui.emote(v.mesh, '♪', '#ff7b9c'); ui.floatText(H.player, `+${b} 鈴錢`, '#e0a020'); ui.passage(null);
       if (run >= 2 && d < 3) { d++; run = 0; }
       if (k < SET) await ui.say(sp, pick(okL));

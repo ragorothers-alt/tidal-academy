@@ -158,7 +158,7 @@ export function paint() {
   if (!open) { setHTML(head + (tips[0] ? `<div class="q-now one">💡 ${ui.esc(tips[0].t)}</div>` : '')); return; }
   const next = steps.find(([, , x]) => x.v < x.need), HOWR = { study: r.study.cram ? '考前衝刺的 5 題精選做完就算完成（手機「考前衝刺」）' : '導師的「一起練習」、每日潮汐、單字燈塔、專注時光、潮汐考場都算', life: '任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花、撿貝殼…' };
   const goals = r.shut ? `<small class="q-done">自由時間：島民不會主動找你出題，想練習時再找他們。</small>`
-    : '<ul>' + steps.map(([, t, x]) => `<li class="${x.v >= x.need ? 'ok' : ''}">${x.v >= x.need ? '✔' : '○'} ${t}${x.v >= x.need ? '' : ` <i>${x.v}/${x.need}</i>`}</li>`).join('') + `<li class="opt">${r.extra.rest ? `🌙 ${ui.esc(r.extra.name)}` : `☆ 加碼（可選）：${ui.esc(r.extra.name)}${r.extra.all ? ' ✔' : ` <i>${r.extra.v}/${r.extra.need}</i>`}`}</li></ul>`
+    : '<ul>' + steps.map(([, t, x]) => `<li class="${x.v >= x.need ? 'ok' : ''}">${x.v >= x.need ? '✔' : '○'} ${t}${x.v >= x.need ? '' : ` <i>${x.v}/${x.need}</i>`}</li>`).join('') + (H.week && H.week() ? `<li class="opt">📌 ${ui.esc(H.week())}</li>` : '') + `<li class="opt">${r.extra.rest ? `🌙 ${ui.esc(r.extra.name)}` : `☆ 加碼（可選）：${ui.esc(r.extra.name)}${r.extra.all ? ' ✔' : ` <i>${r.extra.v}/${r.extra.need}</i>`}`}</li></ul>`
       + (next ? `<small class="q-how">💡 ${HOWR[next[0]]}</small>` : r.chest ? '' : '<small class="q-how">💡 點這裡開寶箱、看今天的收工摘要</small>');
   const now = tips.length ? `<div class="q-sub">${r.shut ? '想做的話' : '現在可以做'}</div><ul class="q-now">${tips.map(x => `<li${x.act ? ` data-act="${x.act}" class="act"` : ''}>${ui.esc(x.t)}</li>`).join('')}</ul>` : '';
   setHTML(head + goals + now + '<small>點這裡打開今日學習</small>');

@@ -66,6 +66,7 @@ import * as shake from './shake.js';
 import * as written from './written.js';
 import * as route from './route.js';
 import * as fieldnote from './fieldnote.js';
+import * as bond from './bond.js';
 import * as highland from './highland.js';
 import * as details from './details.js';
 import * as hotel from './hotel.js';
@@ -694,7 +695,7 @@ function phoneVillagers() {
   const WH = { out: '在外面散步', home: '在家（可以拜訪）', sleep: '睡覺中' }, h = hourOverride ?? nowHour();
   villagers.filter(v => !v.shop && !v.guest).forEach(v => {
     const f = s.fr[v.sid] || 0, lv = town.bondLevel(v.sid), next = town.BOND_AT[lv];
-    const bd = gifts.pref(v); body.appendChild(ui.el('div', 'ph-row', `<span class="av" style="--c:${v.color}">${v.sub.short || ''}</span><div><b>${ui.esc(v.name)} <small>${WH[town.where(v, h)]}${town.homeHours(v) ? ' · 今天在家 <span class="nw">' + town.homeHours(v).replace('、', '</span>、<span class="nw">') + '</span>' : ''}${bd ? ' · 🎂 ' + gifts.fmtDate(bd.date) : ''}</small></b><small>${v.sub.name}導師 · <span class="hearts">${hearts(f)}</span> · 心事 ${lv}/${town.BOND_AT.length}${next ? `（好感度 ${f}/${next}）` : '（全部解鎖）'}　今日 ${s.frDay[v.sid] || 0}/3</small></div>`));
+    const bd = gifts.pref(v); body.appendChild(ui.el('div', 'ph-row', `<span class="av" style="--c:${v.color}">${v.sub.short || ''}</span><div><b>${ui.esc(v.name)} <small>${WH[town.where(v, h)]}${town.homeHours(v) ? ' · 今天在家 <span class="nw">' + town.homeHours(v).replace('、', '</span>、<span class="nw">') + '</span>' : ''}${bd ? ' · 🎂 ' + gifts.fmtDate(bd.date) : ''}</small></b><small>${v.sub.name}導師 · <span class="hearts">${hearts(f)}</span> · 心事 ${lv}/${town.BOND_AT.length}${next ? `（好感度 ${f}/${next}）` : `（全部解鎖${bond.count(v.sid) ? ` · 共同回憶 ${bond.count(v.sid)}` : ''}）`}　今日 ${s.frDay[v.sid] || 0}/3</small></div>`));
   });
   ui.panel('島民', body, { cls: 'phone' });
 }
@@ -711,6 +712,7 @@ function phoneToday() {
       ${row('life', '🏝', `島上的事 ${st.life.need} 件`, '任選：釣魚、捉蟲、挖化石、潮池、委託、捐贈、送禮、澆花、撿貝殼、做家具、拍照', st.life.v, st.life.need, `${Math.min(st.life.v, st.life.need)} / ${st.life.need}`)}
       ${st.extra.rest ? `<div class="td-task opt done"><i>🌙</i><span><b>${st.extra.name}</b><small>最後幾天，睡飽比多寫一份考卷更有用</small></span><code></code></div>` : row('extra', '✨', `加碼（可選）：${st.extra.name}`, st.extra.all ? '三項加碼都完成了！' : '想多練一點再做；不做也算完成今天', st.extra.v, st.extra.need, `${st.extra.v} / ${st.extra.need}`, true)}
     </div>
+    ${weekHtml()}
     <div class="rt-quiet">${route.quiet() ? `<span>🌿 ${route.quietWhy()}：島民不會主動找你出題</span>` : '<span>想安靜逛逛的話：</span>'}<button type="button" class="btn ghost rt-walk">${st.walk ? '結束散步模式' : st.shut ? '回到學習模式' : '🌿 散步模式'}</button></div>
     <ul class="rt-stat"><li>到期複習 <b>${due}</b> 題</li><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul>
     ${events.active().length ? `<p class="ev-now">🎉 今日活動：${events.active().map(e => events.NAMES[e]).join('、')}</p>` : ''}
@@ -721,10 +723,18 @@ function phoneToday() {
     if (st.ready) { S0.daily.chest = true; L.gain(60, 50); L.checkAch(); TA.Store.save(); Audio.sfx('catch'); ui.toast('🎁 今日路線完成！+60 經驗、+50 潮晶'); daySummary(); return; }
     if (st.chest) daySummary();
   };
+  { const w = body.querySelector('.rt-wk'); if (w) w.onclick = () => lab.openBook(tutors()); }
   body.querySelector('.rt-walk').onclick = () => { if (st.walk) route.setWalk(false); else if (st.shut) route.shut(false); else route.setWalk(true); Audio.sfx('tick'); paintHud(); phoneToday(); };
   body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => (st.study.cram ? cram.open(paintHud) : voyage.openDaily()), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
   body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), chart: () => voyage.openChart(), vocab: () => lexicon.open(), mock: () => hall.openMock(), mis: () => hall.openMistakes(), stats: () => hall.openStats() })[b.dataset.h](); });
   ui.panel('今日學習', body, { cls: 'phone' });
+}
+const tutors = () => villagers.filter(v => !v.shop && !v.guest);
+/** 本週計畫（lab.js）：今日學習裡的一行；還沒有導師願意聊研究時不顯示 */
+function weekHtml() {
+  if (!tutors().some(v => lab.available(v))) return '';
+  const w = lab.weekLine(tutors());
+  return `<button type="button" class="rt-wk">${w ? `📌 本週計畫：${ui.esc(w.v.name)}「${ui.esc(w.title)}」第 ${w.stage} 階段${w.done ? ' ✔ 這週推進了' : w.ready ? `<b>可以推進了！找${ui.esc(w.v.name)}聊天</b>` : `<small>還差：${ui.esc(w.left.join('、'))}</small>`}` : '📌 選一個本週計畫：一次追蹤一位導師的研究，做完一個階段就是小島的永久成果'}</button>`;
 }
 /** 收工摘要：今天學了什麼、島上做了什麼；選「收工」就進入自由時間 */
 function daySummary() {
@@ -1455,6 +1465,7 @@ function startGame() {
     openToday: () => { if (!talking && !ui.dialogOpen()) phoneToday(); },
     chest: () => route.state().ready,
     cramDone: () => cram.doneToday(),
+    week: () => { const w = tutors().some(v => lab.available(v)) && lab.weekLine(tutors()); return w ? (w.done ? `本週計畫 ✔ ${w.v.name}的研究推進了` : w.ready ? `本週計畫：${w.v.name}的研究可以推進了` : `本週計畫：${w.v.name}「${w.title}」第 ${w.stage} 階段`) : ''; },
     openCram: () => { if (!talking && !ui.dialogOpen()) cram.open(paintHud); },
     labReady: () => { const v = lab.firstReady(villagers.filter(x => !x.shop && !x.guest)); return v ? v.name : ''; },
     env: () => ({ hour: hourOverride ?? nowHour(), date: simDate(), raining: weather.raining(), tourney: !!life.tourney }),

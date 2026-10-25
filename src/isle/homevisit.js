@@ -30,9 +30,10 @@ export function review(v) {
   const r = room.room(), items = (r.items || []).map(it => room.furn(it.id)).filter(Boolean);
   const cats = new Set(items.map(f => f.cat)), liked = items.filter(f => gifts.rate(v, { type: 'furn', id: f.id, k: 'furn' }) >= 2);
   const mine = items.find(f => f.src === 'gift:' + v.sid);
-  const pts = Math.min(1, items.length / 16) * 0.45 + Math.min(1, cats.size / 7) * 0.25 + (r.wall ? 0.08 : 0) + (r.floor ? 0.07 : 0) + Math.min(1, liked.length / 2) * 0.15;
+  const cn = room.corners(r);   // 主題角落比堆數量重要（v7.1）
+  const pts = Math.min(1, items.length / 16) * 0.3 + Math.min(1, cats.size / 7) * 0.2 + Math.min(1, cn.length / 2) * 0.2 + (r.wall ? 0.08 : 0) + (r.floor ? 0.07 : 0) + Math.min(1, liked.length / 2) * 0.15;
   const stars = pts < 0.2 ? 1 : pts < 0.4 ? 2 : pts < 0.6 ? 3 : pts < 0.8 ? 4 : 5;
-  return { stars, liked: liked.length ? pick(liked) : null, mine, n: items.length };
+  return { stars, liked: liked.length ? pick(liked) : null, mine, n: items.length, corner: cn.length ? pick(cn) : null };
 }
 /** 在自己家裡和來作客的島民說話：第一次走完整流程，回傳 'leave' 表示他回家了 */
 export async function talk(v, sp) {
@@ -48,8 +49,9 @@ export async function talk(v, sp) {
   if (r.stars === 5) memo.add(`${v.name}給我的房間打了五顆星`, '這是一個很棒的房間！', { key: 'review5:' + v.sid, icon: '🏠' });
   if (r.mine) { ui.emote(v.mesh, '💖', '#ff7b9c'); await ui.say(sp, line(v, 'mine', ['啊，你把我送的{item}擺出來了！好開心。'], { item: r.mine.name })); }
   else if (r.liked) { ui.emote(v.mesh, '♪', '#ff7b9c'); await ui.say(sp, line(v, 'love', ['我很喜歡這個{item}！'], { item: r.liked.name })); }
+  if (r.corner) { const C = { study: '這個讀書角好棒，坐在這裡應該很能專心。', tea: '這個茶點角好溫馨，好想在這裡喝杯茶。', exhibit: '你把收藏擺得像小小的展覽，好有心。', green: '這一角好多植物，空氣都變清新了。', sleep: '這個角落看起來睡得好舒服。' }; await ui.say(sp, C[r.corner.id] || `我喜歡你的${r.corner.name}。`); }   // 主題角落（room.corners）
   await ui.say(sp, line(v, 'r' + r.stars, ['謝謝你讓我參觀。']));
-  await ui.card({ icon: '', title: `${v.name}的房間評價：${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}`, sub: `家具 ${r.n} 件${r.stars < 5 ? '<br>多擺幾種不同類型的家具、換上壁紙地板，或放他喜歡的東西，評價會更高' : '<br>這是一個很棒的房間！'}` });
+  await ui.card({ icon: '', title: `${v.name}的房間評價：${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}`, sub: `家具 ${r.n} 件${r.corner ? ` · ${r.corner.name}` : ''}${r.stars < 5 ? '<br>把幾件家具湊成一個角落（例如書桌、椅子和燈＝讀書角）、換上壁紙地板，或放他喜歡的東西，評價會更高' : '<br>這是一個很棒的房間！'}` });
   ui.closeDialog();
   await ui.say(sp, line(v, 'study', ['既然來了，我們一起讀幾題吧！']));
   const i = await ui.ask(sp, '一起讀 3 題嗎？', ['好啊！', '今天先聊天就好']);

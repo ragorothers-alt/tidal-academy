@@ -35,7 +35,7 @@
   };
 
   /* ---------- 間隔複習 ---------- */
-  const INT = [0, 1, 2, 4, 8, 16, 35];
+  const INT = L.INT = [0, 1, 2, 4, 8, 16, 35];
   L.MASTER_BOX = 4;
   const today = () => U.dayNum();
   const rec = id => TA.S.q[id];

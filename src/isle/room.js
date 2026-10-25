@@ -233,6 +233,22 @@ export const roomData = () => data();
 export const hostSid = () => cur.sid || null;
 const data = () => (cur.own ? room() : cur.home);
 export function room() { const s = S(); s.room = s.room || { items: [], wall: '', floor: '' }; s.storage = s.storage || {}; return s.room; }
+/** 主題角落（v7.1）：附近（2.2 公尺內）湊齊幾類家具就成形。島嶼評價看有幾種角落，不只看家具數量；來作客的導師會注意到 */
+export const CORNERS = [
+  { id: 'study', name: '讀書角', need: ['study', 'seat', 'light'], tip: '書桌類、椅子、燈放在一起' },
+  { id: 'tea', name: '茶點角', need: ['table', 'seat', 'plant'], tip: '桌子、椅子、植物放在一起' },
+  { id: 'exhibit', name: '展示角', need: ['trophy', 'trophy', 'light'], tip: '兩件獎盃或研究成果，加一盞燈' },
+  { id: 'green', name: '綠意角', need: ['plant', 'plant', 'plant'], tip: '三盆植物擺在一起' },
+  { id: 'sleep', name: '安眠角', need: ['bed', 'light', 'rug'], tip: '床、燈和地毯' },
+];
+export function corners(r) {
+  const items = ((r || room()).items || []).map(it => ({ it, f: furn(it.id) })).filter(o => o.f);
+  return CORNERS.filter(T => items.some(a => {
+    const cnt = {}; items.filter(o => Math.hypot(o.it.x - a.it.x, o.it.z - a.it.z) <= 2.2).forEach(o => { cnt[o.f.cat] = (cnt[o.f.cat] || 0) + 1; });
+    const need = {}; T.need.forEach(c => { need[c] = (need[c] || 0) + 1; });
+    return Object.keys(need).every(c => (cnt[c] || 0) >= need[c]);
+  }));
+}
 export function addStorage(id, n) { const s = S(); s.storage = s.storage || {}; s.storage[id] = (s.storage[id] || 0) + (n || 1); s.catalog = s.catalog || {}; s.catalog[id] = s.catalog[id] || Date.now(); save(); }   // 收藏目錄：拿到過就登錄
 const foot = (f, r) => { const [w, d] = f.size || [1, 1]; return r % 2 ? [d, w] : [w, d]; };
 function occupied(ignore) {

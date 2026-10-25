@@ -1505,3 +1505,11 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .pf-track .pl-chip.on { background: var(--c); color: #fff; }
 .cr-final { margin: 0; padding: 8px 12px; border-radius: 12px; background: #eef4ff; color: #3d5f9a; font-weight: 700; }
 .cr-item small { margin-left: auto; padding-left: 8px; color: var(--ink-2); font-size: 11px; font-weight: 700; }
+/* 本週計畫、島嶼評價的本週摘要（v7.1） */
+.rt-wk { display: block; width: 100%; text-align: left; border: 0; border-radius: 14px; padding: 9px 12px; background: #fff6e2; color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; line-height: 1.5; }
+.rt-wk b { display: block; color: #2f8f6a; } .rt-wk small { display: block; color: var(--ink-2); font-weight: 700; }
+.lab-row.week { box-shadow: 0 0 0 2px #ffb84a inset; }
+.lab-wk { margin-left: 6px; font-style: normal; font-size: 11px; color: #c07a1a; }
+.lab-pick { align-self: center; white-space: nowrap; font-size: 12px; padding: 6px 10px; }
+.rt-week { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 8px 12px; border-radius: 12px; background: rgba(255, 255, 255, .7); }
+.rt-week small { color: var(--ink-2); font-size: 11px; }
