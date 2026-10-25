@@ -1,7 +1,7 @@
 /* 潮汐小島 · 島民委託與來信：每天 3 個委託（釣魚、捉蟲、化石、特訓、送包裹）；信箱收到島民來信，內容是你最近答錯單元的潮汐筆記。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
-import { I, S, save, available, find, list, icon, addItem, itemName } from './state.js';
+import { I, S, save, available, find, list, icon, addItem, itemName, fmtHours, whereName } from './state.js';
 import { pickQ, record, pick, dayKey } from './quiz.js';
 import { drill, picker } from './drill.js';
 import * as miles from './miles.js';
@@ -17,7 +17,11 @@ const vOf = sid => VS.find(v => v.sid === sid);
 /* ================= 委託 ================= */
 const TYPES = [['fish', 3], ['bug', 3], ['fossil', 1.5], ['quiz', 3], ['deliver', 2]];
 function rollType() { let r = Math.random() * TYPES.reduce((a, t) => a + t[1], 0); for (const [t, w] of TYPES) { r -= w; if (r <= 0) return t; } return 'quiz'; }
-function todayPool(k) { const d = new Date(); return list(k).filter(sp => sp.rarity <= 3 && sp.months.includes(d.getMonth() + 1)); }
+/** 委託目標：這個月有、今天稍後（至少還有一小時）還會出現的物種；雨天限定的不派（天氣說不準） */
+function todayPool(k) {
+  const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
+  return list(k).filter(sp => sp.rarity <= 3 && (!sp.months || sp.months.includes(d.getMonth() + 1)) && sp.weather !== 'rain' && (!sp.hours || sp.hours.some(([, b]) => b > h + 1)));
+}
 export function newDay() {
   const s = S();
   // 已經接下、包裹還在口袋裡的送貨委託留到送達為止（跨過午夜送到也拿得到謝禮）
@@ -42,8 +46,9 @@ export function badge(v) { const r = reqOf(v.sid); return r && !r.accepted ? '�
 export function reqText(r) {
   const v = vOf(r.sid), n = targetName(r);
   if (r.type === 'weak') return `陪${v.name}複習「${n}」（你的弱點單元${r.acc != null ? '，正確率 ' + r.acc + '%' : '，還沒練過'}）`;
-  if (r.type === 'fish') return `幫${v.name}釣一條「${n}」`;
-  if (r.type === 'bug') return `幫${v.name}抓一隻「${n}」`;
+  const sp = (r.type === 'fish' || r.type === 'bug') && find(r.type, r.target), at = sp ? `（${whereName(r.type, sp)}，${fmtHours(sp)}）` : '';
+  if (r.type === 'fish') return `幫${v.name}釣一條「${n}」${at}`;
+  if (r.type === 'bug') return `幫${v.name}抓一隻「${n}」${at}`;
   if (r.type === 'fossil') return `帶一件鑑定過的化石給${v.name}`;
   if (r.type === 'quiz') return `和${v.name}做 3 題連答特訓`;
   if (r.type === 'deliver') return `把${v.name}的筆記本送給${n}`;
