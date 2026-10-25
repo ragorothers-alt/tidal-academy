@@ -142,6 +142,9 @@ test('每日潮汐：同一天穩定、12 題、不重複', () => {
   assert.equal(a.length, 12);
   assert.deepEqual(a, b);
   assert.equal(new Set(a).size, 12);
+  // 寶箱與潮汐獎勵是兩個欄位；同一天因題庫更新重抽也不會被重設
+  TA.S.daily.claimed = true; TA.S.daily.chest = true; TA.S.daily.set[0] = 'gone';
+  const c = TA.L.pickDaily(); assert.equal(c.length, 12); assert.ok(TA.S.daily.claimed && TA.S.daily.chest);
 });
 
 test('單元試煉與科目練習出題', () => {

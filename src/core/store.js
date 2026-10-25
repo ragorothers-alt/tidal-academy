@@ -21,7 +21,7 @@
       units: {},    // 單元 id → {stars,best,notes}
       days: {},     // 'YYYY-MM-DD' → {q,c,voc,min,xp}
       streak: { cur: 0, best: 0, last: '', shields: 1 },
-      daily: { date: '', set: [], done: false, claimed: false, idx: 0 },
+      daily: { date: '', set: [], done: false, claimed: false, chest: false, idx: 0 },   // claimed：每日潮汐完成獎勵；chest：今日航程寶箱
       dailyDone: 0, // 完成今日航程（每日潮汐）的次數（成就「七日航誌」）
       bestCombo: 0, // 最高連續答對
       vocLv: 0,     // 單字卡上次選的等級

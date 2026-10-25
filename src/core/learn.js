@@ -291,7 +291,8 @@
     const fresh = balancedTake(TA.SUBJECTS.map(s => U.shuffle((L.BY_SUBJECT[s.id] || []).filter(id => !seen(id) && L.Q[id].d <= 2), rnd)), 12, rnd);
     const set = uniq(due.concat(weak, U.shuffle(fresh, rnd))).slice(0, 12);
     if (set.length < 12) uniq(set.concat(U.shuffle(L.ALL, rnd))).slice(0, 12).forEach(id => { if (!set.includes(id)) set.push(id); });
-    S.daily = { date: key, set: set.slice(0, 12), done: false, claimed: false };
+    const same = S.daily.date === key;   // 同一天因題庫更新重抽時，保留已領的獎勵
+    S.daily = { date: key, set: set.slice(0, 12), done: same && !!S.daily.done, claimed: same && !!S.daily.claimed, chest: same && !!S.daily.chest };
     TA.Store.save();
     return S.daily.set;
   };

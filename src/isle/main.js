@@ -696,7 +696,7 @@ function todayState() {
     ['goal', '🎯', `答題 ${goal} 題`, '島上任何學科題都算（非選題依題型折算）', Math.min(1, L.effort(d) / goal), `${Math.min(L.effort(d), goal)} / ${goal}`],
     ['focus', '⏳', '專注 25 分鐘', '用專注時光讀課本或寫考卷', Math.min(1, d.min / 25), `${Math.min(d.min, 25)} / 25 分`],
   ];
-  const doneN = tasks.filter(t => t[4] >= 1).length, claimed = !!S.daily.claimed && S.daily.date === dk;
+  const doneN = tasks.filter(t => t[4] >= 1).length, claimed = !!S.daily.chest && S.daily.date === dk;   // 寶箱用自己的欄位（以前和每日潮汐共用 claimed，先做完潮汐就開不了寶箱）
   return { d, goal, tasks, doneN, claimed, ready: doneN >= 3 && !claimed };
 }
 function phoneToday() {
@@ -711,7 +711,7 @@ function phoneToday() {
     <div class="td-acts"><button type="button" class="btn" data-h="chart">航海圖</button><button type="button" class="btn" data-h="vocab">單字燈塔</button><button type="button" class="btn" data-h="mock">模擬考</button><button type="button" class="btn" data-h="mis">錯題本</button><button type="button" class="btn" data-h="stats">成績統計</button></div>`);
   body.querySelector('.td-chest').onclick = () => {
     if (!ready) return;
-    S.daily.claimed = true; L.gain(60, 50); L.checkAch(); TA.Store.save(); Audio.sfx('catch'); ui.toast('🎁 今日航程完成！+60 經驗、+50 潮晶'); phoneToday();
+    S.daily.chest = true; L.gain(60, 50); L.checkAch(); TA.Store.save(); Audio.sfx('catch'); ui.toast('🎁 今日航程完成！+60 經驗、+50 潮晶'); phoneToday();
   };
   body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S.vocLv || 0), goal: () => voyage.openChart(), focus: () => { ui.closePanel(); focus.open(paintHud); } })[b.dataset.t](); });
   body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => ({ chart: () => voyage.openChart(), vocab: () => lexicon.open(), mock: () => hall.openMock(), mis: () => hall.openMistakes(), stats: () => hall.openStats() })[b.dataset.h](); });
