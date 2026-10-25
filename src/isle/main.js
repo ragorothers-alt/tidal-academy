@@ -1740,7 +1740,7 @@ function tick(fixed) {
   for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.userData.t += dt; p.scale.setScalar(1 + p.userData.t * 4); p.material.opacity = 0.8 * (1 - p.userData.t / 0.5); p.position.y += dt * 0.5; if (p.userData.t > 0.5) { scene.remove(p); puffs.splice(i, 1); } }
   // 光照與鏡頭
   const { dir, night, golden } = applyTime(hourOverride ?? nowHour());
-  nightFill.position.set(player.position.x + 1.2, player.position.y + 2.8, player.position.z + 2.2); nightFill.intensity = night * 4;   // 夜裡角色身邊一圈柔和的暖光（像動森，晚上也看得清楚自己）
+  nightFill.position.set(player.position.x + 1.2, player.position.y + 2.8, player.position.z + 2.2); nightFill.intensity = night * 2.6;   // 夜裡角色身邊一圈柔和的暖光（像動森，晚上也看得清楚自己）
   events.update(dt, night, player.position);
   look.set(player.position.x, player.position.y + 1.3, player.position.z);
   const rk = weather.update(dt, hourOverride ?? nowHour(), night, look, (w, prev) => {
@@ -1838,7 +1838,7 @@ function tick(fixed) {
   // 天空用抬高後的方向畫（skyU.lift），反推太陽在天幕上的實際方向再投影
   const L = skyU.lift.value, sS = skyU.sunSky.value, A = sS.y * L + Math.sqrt(Math.max(0, sS.y * sS.y * L * L - L * L + 1));   // 用天幕上畫太陽的方向（以畫面地平線為準）反推畫面位置
   const fxSp = sunTmp.p.set(sS.x * A, sS.y * A - L, sS.z * A).multiplyScalar(200).add(camera.position).project(camera);
-  post.fx.golden = golden * (1 - night); post.fx.haze.copy(scene.fog.color).lerp(skyU.bot.value, 0.5); post.fx.clear = fxClear; post.fx.night = night; post.fx.sunCol.copy(sun.color);
+  post.fx.golden = golden * (1 - night); post.fx.haze.copy(scene.fog.color).lerp(skyU.bot.value, 0.5); post.fx.sunW.copy(dir); post.fx.clear = fxClear; post.fx.night = night; post.fx.sunCol.copy(sun.color);
   post.fx.sunVis = fxSp.z < 1 ? fxFront : 0; post.fx.sun.set(THREE.MathUtils.clamp((fxSp.x + 1) / 2, -0.1, 1.1), THREE.MathUtils.clamp((fxSp.y + 1) / 2, 0.55, 1.08));   // 太陽在畫面外時，把光源拉到畫面邊緣附近
   U.uSunV.value.copy(dir).transformDirection(camera.matrixWorldInverse); U.uRimCol.value.copy(sun.color);
   U.uRim.value = (0.28 + golden * 0.4) * fxClear * (1 - night);   // 白天也有側逆光的亮邊

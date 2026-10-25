@@ -332,7 +332,7 @@ SCENE.onAfterRender = () => { for (const o of LAYERED) o.layers.mask = 1; LAYERE
   const casters = which => { for (const o of placed) { if (!o.sh || !o.st) continue; const want = which ? o.rf : o.rn; if (o.cs !== want) { o.cs = want; for (const m of o.sh) m.castShadow = want; } } };
   sm.render = function (lights, scene, cam) {
     if (scene !== SCENE || lights.length !== 2 || !lights.includes(sunFar)) return orig.call(sm, lights, scene, cam);
-    const m0 = cam.layers.mask; cam.layers.mask = m0 | 2;
+    const m0 = cam.layers.mask; cam.layers.mask = m0 | 2 | 8;   // 圖層 3（post.js 第二階段才畫的透明物）照樣投影
     casters(0); orig.call(sm, ONE, scene, cam);
     if (sunFar.shadow.needsUpdate) { casters(1); orig.call(sm, TWO, scene, cam); }
     cam.layers.mask = m0;

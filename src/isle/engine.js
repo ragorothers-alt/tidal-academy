@@ -141,6 +141,77 @@ export async function initDetail(size) {
   }
 }
 const WN = 'vWN = normalize(mat3(modelMatrix) * objectNormal);';
+/* ---------- 水面的第二階段（v7.0）----------
+   post.js 先畫不透明的場景（圖層 0），把顏色與深度複製到最終緩衝，再把透明的東西畫上去——水最先畫（renderOrder -10）。
+   水讀得到底下真的顏色（uOpq）與深度（uOpqD）：依水深吸收紅光（淺灘清透、深處湛藍）、波紋折射水底、
+   螢幕空間倒影（岸邊的燈、房子、樹倒映在水裡）、遠方的天空與城堡用方向查找、岸線依深度柔和淡出並帶一圈碎泡。
+   uLate = 0（省電模式、室內、其他小島）時照舊用一般的半透明混色 */
+export const WL = { uLate: { value: 0 }, uOpq: { value: null }, uOpqD: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uNF: { value: new THREE.Vector2(0.5, 500) },
+  uPrj: { value: new THREE.Matrix4() }, uSSR: { value: 1 }, uAbs: { value: new THREE.Vector3(1.4, 0.45, 0.3) }, uAbsSea: { value: new THREE.Vector3(0.42, 0.075, 0.05) }, uScat: { value: new THREE.Color('#06323c') }, uDbg: { value: 0 }, uSplit: { value: 0 } };   // uSplit：這一格島上用兩階段（地形的水底不再自己染色）
+const LATE_W = `
+  uniform float uLate; uniform sampler2D uOpq; uniform sampler2D uOpqD; uniform vec2 uRes; uniform vec2 uNF; uniform mat4 uPrj; uniform float uSSR; uniform vec3 uAbs; uniform vec3 uAbsSea; uniform vec3 uScat; uniform float uDbg;
+  float taLin(float d){ return uNF.x * uNF.y / (uNF.y - d * (uNF.y - uNF.x)); }
+  vec2 taUV(vec3 p){ vec4 c = uPrj * vec4(p, 1.0); return c.xy / c.w * 0.5 + 0.5; }
+  float taEdge(vec2 u){ vec2 e = min(u, 1.0 - u); return smoothstep(0.0, 0.07, min(e.x, e.y)); }
+  vec3 taSkyA(vec3 R, vec3 upV){ float ry = dot(R, upV), yy = clamp(max(ry, 0.0) / 0.55, 0.0, 1.0);
+    vec3 s = yy < 0.16 ? mix(uSkyB, uSkyM, yy / 0.16) : mix(uSkyM, uSkyT, smoothstep(0.16, 0.75, yy));
+    return mix(s, uSkyM * 0.7, smoothstep(0.0, -0.15, ry)); }
+  /* n：視空間法線；irr：水面收到的光（漫射，已含陰影與燈光格子）；skyR：解析的天空倒影；spec：太陽／月亮的反光；alb：水體散射的顏色 */
+  /* 晨昏的大海：倒影偏深青藍，只有太陽那一側映著金橘（和天幕畫的遠海同一個公式，海平線不會有一條分界） */
+  vec3 taDusk(vec3 c, vec3 R, vec3 upV){ float gk = clamp(uGlow * 2.0, 0.0, 1.0) * (1.0 - uNight);
+    vec3 rH = normalize(R - upV * dot(R, upV) + 1e-4), sH = normalize(uSunV - upV * dot(uSunV, upV) + 1e-4);
+    return mix(c, vec3(0.012, 0.085, 0.19) + c * 0.12, gk * (1.0 - pow(max(dot(rH, sH), 0.0), 14.0) * 0.8) * 0.9); }
+  vec3 taLateWater(vec3 n, vec3 irr, vec3 skyR, vec3 spec, vec3 alb, float calm, vec3 absK, float sea, float edgeK){
+    vec2 suv = gl_FragCoord.xy / uRes;
+    vec3 P = -vViewPosition, V = normalize(vViewPosition);
+    vec3 upV = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+    float zW = -P.z, rayK = length(P) / max(zW, 1e-3);
+    float zO = taLin(texture2D(uOpqD, suv).x), thick0 = max(zO - zW, 0.0) * rayK;
+    float cosV = max(dot(V, upV), 0.06), vdep = thick0 * cosV;   // 垂直水深（約）
+    // 折射：水面的傾斜把水底的像推開一點；推到了水面前面的東西（腳、石頭）就不推
+    vec2 tilt = (n - upV * dot(n, upV)).xy;
+    vec2 ruv = suv + tilt * 0.055 * clamp(thick0, 0.0, 1.4) / (1.0 + zW * 0.05);
+    float zR = taLin(texture2D(uOpqD, ruv).x);
+    if (zR < zW + 0.03) { ruv = suv; zR = zO; }
+    float thick = max(zR - zW, 0.0) * rayK;
+    vec3 under = texture2D(uOpq, ruv).rgb;
+    vec3 Tr = exp(-absK * thick);
+    vec3 body = irr * alb;   // 水體把光散射回來的顏色（越深越多）
+    vec3 refr = under * Tr + body * (1.0 - Tr);
+    // 倒影：先看鏡頭在這個方向看到的遠景（天空、雲、城堡——遠到視差可以忽略），再用螢幕空間追蹤找近處的東西
+    vec3 R = normalize(reflect(-V, n));
+    vec3 refl = skyR;
+    { vec4 cs = uPrj * vec4(R, 0.0);
+      if (cs.w > 1e-3) { vec2 su = cs.xy / cs.w * 0.5 + 0.5; if (su.x > 0.0 && su.x < 1.0 && su.y > 0.0 && su.y < 1.0) {
+        float ds = texture2D(uOpqD, su).x, zs = taLin(ds); vec3 Ps = vec3((su * 2.0 - 1.0) / vec2(uPrj[0][0], uPrj[1][1]) * zs, -zs);
+        bool above = ds > 0.9999 || (zs > 70.0 && cameraPosition.y + dot(Ps, upV) > vWP.y + 2.0);   // 只取天空與水面上方的遠景（城堡、浮空島）；水底的海床不算
+        if (above) { vec3 lk = texture2D(uOpq, su).rgb; if (sea > 0.5) lk = taDusk(lk, R, upV); refl = mix(refl, lk, taEdge(su)); } } } }
+    if (uSSR > 0.5) {
+      float st = 0.1 + zW * 0.01, jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      vec3 p = P + R * st * (0.3 + jit), pa = P; float hit = 0.0; vec2 huv = vec2(0.5);
+      for (int i = 0; i < 30; i++) {
+        vec2 u = taUV(p); if (u.x < 0.0 || u.x > 1.0 || u.y < 0.0 || u.y > 1.0 || -p.z < 0.5) break;
+        float zs = taLin(texture2D(uOpqD, u).x), zp = -p.z;
+        if (zp > zs && zp - zs < max(0.35, st * 2.2)) {
+          vec3 a = pa, b = p;
+          for (int k = 0; k < 5; k++) { vec3 m = (a + b) * 0.5; vec2 um = taUV(m); if (-m.z > taLin(texture2D(uOpqD, um).x)) b = m; else a = m; }
+          huv = taUV(b); hit = taEdge(huv) * smoothstep(1.0, 0.9, huv.y) * (1.0 - float(i) / 30.0 * 0.5); break;
+        }
+        pa = p; p += R * st; st *= 1.13;
+      }
+      if (hit > 0.0) refl = mix(refl, texture2D(uOpq, huv).rgb, hit);
+    }
+    float F = 0.05 + 0.95 * pow(1.0 - clamp(dot(n, V), 0.0, 1.0), 3.2);   // 風格化的菲涅耳：斜看時倒影比物理值明顯一點（像插畫裡的水）
+    vec3 col = mix(refr, refl, F * mix(0.85, 1.0, calm)) + spec;
+    if (uDbg > 0.5) return uDbg < 1.5 ? refl : uDbg < 2.5 ? refr : uDbg < 3.5 ? vec3(F) : vec3(thick0 * 0.5, vdep * 2.0, 0.0);
+    // 岸線：貼著岸的地方一圈斷斷續續的碎泡（依真的水深），再依深度柔和地淡進岸上
+    vec2 q = vWP.xz;
+    float lace = n_v(q * 2.6 + vec2(uTime * 0.35, -uTime * 0.22)) * 0.6 + n_v(q * 7.0 - vec2(uTime * 0.5, uTime * 0.3)) * 0.4;
+    float foam = smoothstep(0.16, 0.0, vdep + (lace - 0.5) * 0.16) * smoothstep(0.35, 0.7, lace) * (1.0 - calm * 0.5);
+    col = mix(col, irr * 0.92 + spec * 0.3, foam * 0.75);
+    return mix(texture2D(uOpq, suv).rgb, col, smoothstep(0.0, 0.045, vdep) * edgeK);   // edgeK：大海網格的外緣淡進天幕畫的遠海
+  }
+`;
 const SEA_GLSL = `
         #ifdef TA_SEA
         vec3 seaSpec = vec3(0.0);
@@ -173,6 +244,7 @@ const SEA_GLSL = `
           skyR = mix(skyR, uSkyM * 0.7, under);
           { float sunSide = pow(max(dot(rH, sH), 0.0), 14.0), gk = clamp(uGlow * 2.0, 0.0, 1.0) * (1.0 - uNight);   // 晨昏：倒影偏深青藍（概念圖的海），只有太陽那一側映著金橘
             skyR = mix(skyR, vec3(0.012, 0.085, 0.19) + skyR * 0.12, gk * (1.0 - sunSide * 0.8) * 0.9); }
+          wN = nV; wSkyR = skyR;   // 第二階段的水面合成用同一組波紋法線與天空倒影
           float fr = mix((0.03 + 0.97 * pow(1.0 - max(dot(nV, Vv), 0.0), 5.0)) * 0.82, 1.0, smoothstep(45.0, 125.0, dist));   // 中近處留一點海水本色；遠處是純倒影，和天幕畫的遠海同色（不會有一條分界線）
           float sd = max(dot(R, uSunV), 0.0), low = 1.0 - smoothstep(0.15, 0.7, dot(uSunV, upV));   // 太陽越低，反光帶越長越亮
           float ss = max(dot(reflect(-Vv, nS), uSunV), 0.0);
@@ -290,9 +362,11 @@ export function bend(mat, kind) {
     Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
     const dk = DETK[kind];
     if (dk) dk.forEach((n, i) => { sh.uniforms['uD' + i] = DET[n].d; sh.uniforms['uN' + i] = DET[n].n; });
-    if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason });
+    if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
     if (kind === 'water') Object.assign(sh.uniforms, { uSkyT: skyU.top, uSkyM: skyU.mid, uSkyB: skyU.bot, uSunCol: skyU.sunCol, uGlow: skyU.glow, uNight: skyU.night });   // 大海的倒影用當下的天色
-    let f = FTOP + LG_TOP + NOISE + (dk ? TRI : '') + (kind === 'terrain' ? 'uniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry;\n' : '') + (kind === 'water' ? 'uniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
+    if (kind === 'water') Object.assign(sh.uniforms, WL);   // 第二階段：讀得到底下的場景
+    let f = FTOP + LG_TOP + NOISE + (dk ? TRI : '') + (kind === 'terrain' ? 'uniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry; uniform float uSplit;\n' : '') + (kind === 'water' ? 'uniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
+    if (kind === 'water') f = f.replace('void main() {', LATE_W + 'void main() {');
     if (dk) {
       // gDetN：細節法線在世界空間的擾動（顏色階段算好，法線階段加上）
       f = f.replace('#include <map_fragment>', '#include <map_fragment>\n  vec3 gDetN = vec3(0.0); vec3 gB = triW(normalize(vWN));');
@@ -311,7 +385,7 @@ export function bend(mat, kind) {
     // 樹冠模型：葉片是一片片朝向各異的薄面，背光的那面會整片黑掉；法線往天空方向混合，整個樹冠像一團有體積的葉子均勻受光
     normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), 0.55));
   #endif`);
-    if (kind !== 'grass' && kind !== 'flower') f = f.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + OCC_F);
+    if (kind !== 'grass' && kind !== 'flower' && kind !== 'water') f = f.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + OCC_F);   // 水面不鏤空：discard 會關掉提早深度測試，藏在地形底下的整片海面都要算倒影
     if (kind === 'terrain') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
         vec3 wn = normalize(vWN); float up = smoothstep(0.55, 0.85, wn.y);
@@ -392,8 +466,8 @@ export function bend(mat, kind) {
             float c1 = n_cell(cp + vec2(uTime * 0.09, uTime * 0.05)), c2 = n_cell(cp * 1.37 + 3.1 - vec2(uTime * 0.06, -uTime * 0.08));
             float caus = smoothstep(0.38, 0.62, c1) * smoothstep(0.38, 0.62, c2);
             caus = caus * caus * 1.6 + smoothstep(0.5, 0.7, max(c1, c2)) * 0.25;
-            diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (vWP.y > 0.5 ? vec3(0.42, 0.72, 0.78) : vec3(0.72, 0.98, 1.0)), uw * (vWP.y > 0.5 ? 0.85 : 0.55));   // 小溪的溪底在水下：暗一點、偏青綠（水吸收了紅光），透過水面看是清透的藍綠色
-            diffuseColor.rgb += vec3(0.55, 0.85, 0.82) * caus * uw * (0.12 + 0.3 * uShade);
+            diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (vWP.y > 0.5 ? vec3(0.42, 0.72, 0.78) : vec3(0.72, 0.98, 1.0)), uw * (vWP.y > 0.5 ? 0.85 : 0.55) * (1.0 - uSplit * 0.7));   // 第二階段的水自己會吸收紅光：水底還原成沙石的顏色   // 小溪的溪底在水下：暗一點、偏青綠（水吸收了紅光），透過水面看是清透的藍綠色
+            diffuseColor.rgb += vec3(0.55, 0.85, 0.82) * caus * uw * (0.12 * (1.0 - uSplit) + 0.3 * uShade);
           }
         }
       }
@@ -468,6 +542,7 @@ export function bend(mat, kind) {
     if (kind === 'bark') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 qd = vWP * vec3(1.6, 0.7, 1.6); diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qd, gB) * 2.0, 0.95); gDetN = triN(uN0, qd, gB) * 1.2; }`);
     if (kind === 'water') f = f.replace('#include <color_fragment>', `#include <color_fragment>
+      vec3 wAlb = diffuseColor.rgb;   // 第二階段：水體散射的顏色（頂點色、隨時間變的海色）
       {
         // 水面：緩慢流動的亮線（水光）與細碎的閃光
         vec2 p = vWP.xz; float t = uTime;
@@ -519,7 +594,8 @@ export function bend(mat, kind) {
         float wf = pow(1.0 - clamp(normalize(cameraPosition - vWP).y, 0.0, 1.0), 2.5);
         float shallow = vWP.y > 0.8 ? 0.12 : 1.0;   // 小溪很淺：斜看也不會整片反白
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.78, 1.0), wf * 0.3 * shallow); diffuseColor.a = mix(diffuseColor.a, 1.0, wf * 0.35 * shallow);
-      }`);
+      }
+      if (uLate > 0.5) diffuseColor.rgb = vec3(1.0);   // 第二階段：打光只算水面收到多少光，顏色由 taLateWater 合成`);
     if (kind === 'glass') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
         // 窗玻璃：映出天空與對面的景色（上亮下暗），斜斜一道反光，靠近邊框的地方比較暗
@@ -538,7 +614,7 @@ export function bend(mat, kind) {
     if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  roughnessFactor = 0.56 + n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))) * 0.14;');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）
     if (kind === 'water') f = f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  if (vWP.y > 0.8) reflectedLight.indirectSpecular *= 0.3;');   // 小溪：天空倒影淡一點，低角度看也是清透的青綠色、看得到溪底（不會整片泛白）
     f = f.replace('#include <opaque_fragment>', `
-        outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? SEA_GLSL + `
+        outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? '\n        vec3 wN = normal, wSkyR = vec3(-1.0), wSpec = vec3(0.0);' + SEA_GLSL + `
         { float lw = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b); outgoingLight *= lw > 1.0 ? (1.0 + (lw - 1.0) * 0.25) / lw : 1.0; }
         #ifdef TA_SEA
         outgoingLight += seaSpec;   // 大海的反光帶在亮度壓縮之後才加
@@ -547,7 +623,22 @@ export function bend(mat, kind) {
         float fres = pow(1.0 - clamp(dot(normal, toCam), 0.0, 1.0), 3.0);
         float back = clamp(dot(uSunV, -toCam) * 0.5 + 0.5, 0.0, 1.0);
         outgoingLight += uRimCol * fres * back * back * uRim * diffuseColor.rgb;
-        outgoingLight += vec3(0.55, 0.74, 1.0) * fres * min(uRim * 1.0, 0.1) * diffuseColor.rgb;
+        outgoingLight += vec3(0.55, 0.74, 1.0) * fres * min(uRim * 1.0, 0.1) * diffuseColor.rgb;${kind === 'water' ? `
+        if (uLate > 0.5) {
+          vec3 wUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wIrr = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
+          if (wSkyR.x < 0.0) wSkyR = taSkyA(reflect(-normalize(vViewPosition), wN), wUp) * 0.95;
+          #ifdef TA_SEA
+            float wCalm = 0.0; vec3 wS = seaSpec, wAbs = uAbsSea, wA = wAlb * 0.16 + vec3(0.0, 0.025, 0.03);   // 大海：清透的熱帶淺灘，深處是散射回來的青藍
+          #else
+            float wCalm = vWP.y > 0.8 ? 1.0 : 0.5; vec3 wS = reflectedLight.directSpecular * 0.6, wAbs = uAbs, wA = mix(uScat, wAlb * 0.3, 0.2);   // 河與小溪：偏青綠，越深越暗
+          #endif
+          #ifdef TA_SEA
+            outgoingLight = taLateWater(wN, wIrr, wSkyR, wS, wA, wCalm, wAbs, 1.0, smoothstep(160.0, 138.0, max(abs(vWP.x), abs(vWP.z))));
+          #else
+            outgoingLight = taLateWater(wN, wIrr, wSkyR, wS, wA, wCalm, wAbs, 0.0, 1.0);
+          #endif
+          diffuseColor.a = 1.0;
+        }` : ''}
         #include <opaque_fragment>`);
     f = f.replace('#include <lights_fragment_begin>', '#include <lights_fragment_begin>' + (/^(grass|flower|sway|pine|sakura)$/.test(kind) ? '\n#define TA_LGFEW' : '') + LG_GLSL);   // 燈光格子：這一格的燈都照
     sh.fragmentShader = f;
@@ -922,17 +1013,19 @@ export const water = { sea: null, river: null };
 export const SEA = { day: '#22aee8' };   // 白天海面的底色（受強烈日光與色調映射，要比想看到的顏色深、飽和）
 
 // 時間色票（參考 Codex 的概念圖取樣）：top 頭頂、mid 低空、bot 地平線的霧白；sea 遠方海面；其餘是陽光、天光、霧與曝光
-const NIGHT = { top: '#152660', mid: '#36497e', bot: '#6a70a4', sea: '#14306a', sun: '#b4c8ff', si: 0.95, hs: '#8a9cc6', hg: '#4c5a58', hi: 1.0, fog: '#344476', exp: 1.1, night: 1 };   // 夜色：可遊玩的冷藍夜（參考插畫的夜不是一片黑）；v6.93 頭頂深靛、往地平線漸淡成薰衣草藍
+/* v7.0：依 Codex 美術顧問的時段色票重調（主光：補光約 4：1，夜晚的環境光大幅降低、燈光才是夜裡最亮的東西）。
+   fn／ff：這個時段的線性霧距（公尺；雨天由 weather.js 再拉近） */
+const NIGHT = { top: '#101d42', mid: '#233b64', bot: '#56617d', sea: '#14306a', sun: '#b9cffc', si: 0.42, hs: '#7186ba', hg: '#253e44', hi: 0.36, fog: '#263859', exp: 1.08, night: 1, fn: 65, ff: 180 };   // 夜色：深靛的天、月光是冷藍的主光；地面只剩月光與燈光
 const KEYS = [
   [0, NIGHT],
-  [4.8, { top: '#1a2e66', mid: '#34447e', bot: '#5e5a8e', sea: '#1c2c5c', sun: '#b0c0ff', si: 0.9, hs: '#7a8ac0', hg: '#2a3a3a', hi: 0.9, fog: '#3e4a7a', exp: 1.0, night: 0.85 }],
-  [6.1, { top: '#7686d4', mid: '#d0a2c4', bot: '#ffc0a2', sea: '#d8b8c4', sun: '#ffe2b8', si: 1.5, hs: '#cbbad4', hg: '#7a7a6a', hi: 0.85, fog: '#ead0cc', exp: 1.0, night: 0 }],   // 清晨：薰衣草色的天、桃粉的地平線
-  [7.6, { top: '#5a80d0', mid: '#98b8e8', bot: '#e4e2ee', sea: '#8fcbea', sun: '#fff0d6', si: 2.4, hs: '#c4d6f2', hg: '#9aa080', hi: 1.25, fog: '#d8e4f2', exp: 1.15, night: 0 }],
-  [9, { top: '#5884d0', mid: '#86aee6', bot: '#dfe6f2', sea: '#7ad3f6', sun: '#ffe4bc', si: 3.05, hs: '#b0cbef', hg: '#b4ab87', hi: 1.55, fog: '#c8dcef', exp: 1.27, night: 0 }],   // 白天：頭頂深藍 → 低空淺青 → 地平線霧白
-  [15.5, { top: '#5a84cc', mid: '#8ab0e4', bot: '#e2e6f0', sea: '#7ad0f2', sun: '#ffdfb2', si: 2.95, hs: '#b2cbef', hg: '#b4ab87', hi: 1.52, fog: '#cadcee', exp: 1.24, night: 0 }],
-  [17, { top: '#4a7fd0', mid: '#a4bfe4', bot: '#ffd6a0', sea: '#e8c49a', sun: '#ffd08c', si: 2.4, hs: '#b4c4e8', hg: '#92966e', hi: 1.3, fog: '#e8cfa8', exp: 1.08, night: 0 }],   // 黃金時段：低角度金色逆光
-  [18.2, { top: '#4a4f98', mid: '#d47e80', bot: '#ffb04a', sea: '#f2a050', sun: '#ffac5c', si: 1.9, hs: '#b49ac0', hg: '#85816b', hi: 1.15, fog: '#e8a07a', exp: 1.08, night: 0.05 }],   // 夕陽：橘金的地平線 → 粉紫 → 藍紫的頭頂
-  [19.5, { top: '#24326c', mid: '#55558e', bot: '#b88aa0', sea: '#4a4a7a', sun: '#c8b0ff', si: 0.9, hs: '#8a8ac0', hg: '#2c3c3c', hi: 0.85, fog: '#5a5a8a', exp: 1.0, night: 0.7 }],
+  [4.8, { top: '#1a2e66', mid: '#34447e', bot: '#5e5a8e', sea: '#1c2c5c', sun: '#b0c0ff', si: 0.46, hs: '#7a8ac0', hg: '#2a3a3a', hi: 0.4, fog: '#3e4a7a', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],
+  [6.1, { top: '#7686d4', mid: '#d0a2c4', bot: '#ffc0a2', sea: '#d8b8c4', sun: '#ffe2b8', si: 1.5, hs: '#cbbad4', hg: '#7a7a6a', hi: 0.85, fog: '#ead0cc', exp: 1.0, night: 0, fn: 45, ff: 140 }],   // 清晨：薰衣草色的天、桃粉的地平線
+  [7.6, { top: '#6c8fc6', mid: '#b5c9de', bot: '#f5dac3', sea: '#8fcbea', sun: '#ffe2ba', si: 1.95, hs: '#b9c9ea', hg: '#777e65', hi: 1.05, fog: '#d4dce8', exp: 1.1, night: 0, fn: 50, ff: 150 }],
+  [9, { top: '#4a85c8', mid: '#88bde1', bot: '#d9e8e9', sea: '#7ad3f6', sun: '#fff0d8', si: 2.9, hs: '#b7d5f0', hg: '#85876d', hi: 1.42, fog: '#c9e2ed', exp: 1.2, night: 0, fn: 70, ff: 190 }],   // 白天：頭頂深藍 → 低空淺青 → 地平線霧白；空氣通透
+  [15.5, { top: '#4c84c6', mid: '#8cbce0', bot: '#dde8e8', sea: '#7ad0f2', sun: '#ffe9cc', si: 2.8, hs: '#b4d0ee', hg: '#86866b', hi: 1.4, fog: '#cbe0ec', exp: 1.18, night: 0, fn: 68, ff: 185 }],
+  [17, { top: '#527db8', mid: '#a9b6d4', bot: '#f4c49a', sea: '#e8c49a', sun: '#ffd08a', si: 2.1, hs: '#aac3e8', hg: '#71766b', hi: 0.95, fog: '#d8d5db', exp: 1.04, night: 0, fn: 55, ff: 160 }],   // 黃金時段：低角度金色逆光、陰影偏冷
+  [18.2, { top: '#414d86', mid: '#a088ae', bot: '#f2a864', sea: '#f2a050', sun: '#ffad76', si: 1.45, hs: '#9a9bcf', hg: '#656873', hi: 0.72, fog: '#c4a8b8', exp: 1.02, night: 0.05, fn: 45, ff: 140 }],   // 夕陽：橘色只留在地平線與迎光面，天光是藍紫
+  [19.5, { top: '#24326c', mid: '#55558e', bot: '#b88aa0', sea: '#4a4a7a', sun: '#c8b0ff', si: 0.6, hs: '#8a8ac0', hg: '#2c3c3c', hi: 0.5, fog: '#5a5a8a', exp: 1.04, night: 0.7, fn: 55, ff: 160 }],
   [21, NIGHT], [24, NIGHT]
 ];
 // 月亮：在北偏東的天上（從廣場往北看在右上方）。MOON_L 是月光的方向（夜裡的主光）；天幕上畫月亮的位置由 main.js 依畫面上的地平線算
@@ -986,13 +1079,13 @@ export function applyTime(h) {
   // 白天是側光：早上太陽在東邊的正側面（略偏後），物體邊緣有亮邊、影子斜斜拉長；中午從左前上方（西南、仰角約 50°）照過來——
   // 像參考插畫的主光：建築的正面與左側受光、右側在陰影裡，影子斜斜地往右後方拉長
   const sk = Math.sin(t * Math.PI);
-  const dir = day ? new THREE.Vector3(Math.cos(t * Math.PI) * 0.85 - sk * 0.32, sk * 0.42 + 0.22, -0.18 + sk * 0.62) : MOON_L.clone();   // 夜裡的主光是月光（海面上的銀色反光帶對著月亮）
+  const dir = day ? new THREE.Vector3(Math.cos(t * Math.PI) * 0.85 - sk * 0.55, sk * 0.42 + 0.22, -0.18 + sk * 0.45) : MOON_L.clone();   // v7.0：中午的太陽更偏左側，影子斜斜往右後方拉長、看得出體積（以前幾乎是順光）   // 夜裡的主光是月光（海面上的銀色反光帶對著月亮）
   // 黃金時段：太陽轉到鏡頭前方、壓低高度 → 逆光、長長的影子朝向鏡頭
   const golden = THREE.MathUtils.smoothstep(h, 15.3, 16.8) * (1 - THREE.MathUtils.smoothstep(h, 18.4, 19.3));
   const sink = THREE.MathUtils.smoothstep(h, 17.0, 18.3);   // 夕陽慢慢沉到海平線
   if (day) { dir.z = THREE.MathUtils.lerp(dir.z, -0.9, golden); dir.y = THREE.MathUtils.lerp(dir.y, 0.32 - sink * 0.22, golden); dir.x = THREE.MathUtils.lerp(dir.x, 0.16, golden); }
   dir.normalize();
-  scene.fog.near = FOG.near - golden * 8; scene.fog.far = FOG.far - golden * 24;   // 黃金時段空氣多一點暖色霧氣（雨天由 weather.js 再拉近）
+  scene.fog.near = (A.fn + (B.fn - A.fn) * k) * FOG.near / 60; scene.fog.far = (A.ff + (B.ff - A.ff) * k) * FOG.far / 150;   // 每個時段自己的霧距（FOG 是整體倍率；雨天由 weather.js 再拉近）
   const dawn = THREE.MathUtils.smoothstep(h, 4.8, 5.9) * (1 - THREE.MathUtils.smoothstep(h, 7.0, 8.4));   // 清晨：粉金的晨光
   skyU.glow.value = Math.max(golden * 0.5, dawn * 0.32); skyU.dawn.value = dawn;
   skyU.sunDir.value.copy(dir); skyU.sunCol.value.copy(sun.color).multiplyScalar(day ? 1 : 0.4);

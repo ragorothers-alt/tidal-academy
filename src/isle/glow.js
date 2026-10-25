@@ -10,10 +10,10 @@ import { groundAt } from './terrain.js';
 
 /** 每種光源：顏色、強度（燭光）、照射距離、衰減、空氣光暈的大小（公尺） */
 const KIND = {
-  window:  { color: '#ffb35c', power: 5.5, range: 7, decay: 1.6, halo: 0 },
-  lantern: { color: '#ffc070', power: 3.2, range: 5, decay: 1.7, halo: 0.6 },
-  lamp:    { color: '#ffc070', power: 10, range: 12, decay: 1.5, halo: 1.0 },
-  garden:  { color: '#ffc870', power: 6, range: 7, decay: 1.8, halo: 0.75 },
+  window:  { color: '#ffb35c', power: 4.6, range: 5, decay: 1.7, halo: 0 },   // v7.0：夜裡的燈是一圈圈的光池（燈下亮、燈外暗 4–6 倍），不再把整座廣場照成白天
+  lantern: { color: '#ffc070', power: 3.2, range: 5, decay: 1.8, halo: 0.6 },
+  lamp:    { color: '#ffc070', power: 8.5, range: 8.5, decay: 1.85, halo: 1.0 },
+  garden:  { color: '#ffc870', power: 5, range: 6, decay: 1.9, halo: 0.75 },
   crystal: { color: '#8fd0ff', power: 4.5, range: 7, decay: 1.6, halo: 1.1, day: 0.25 },
   beacon:  { color: '#ffd98a', power: 26, range: 26, decay: 1.6, halo: 3.2 }
 };

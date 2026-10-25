@@ -312,7 +312,7 @@ function updateRing(dt, t, night) {
   ring.g.lookAt(camera.position); ring.g.rotateX(-0.24);   // 略微仰起：像斜掛在天上的橢圓
   const gold = Math.min(1, skyU.glow.value * 2);
   ring.col.copy(RING_DAY).lerp(RING_DUSK, gold).lerp(RING_NIGHT, night);
-  const op = ((0.11 + gold * 0.22) * (1 - night) + night * 0.34) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
+  const op = ((0.065 + gold * 0.08) * (1 - night) + night * 0.17) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
   ring.layers.forEach(o => { o.m.rotation.z += o.spin * dt; o.m.material.color.copy(ring.col); o.m.material.opacity = op * o.w * pulse; });
 }
 
@@ -359,8 +359,8 @@ export function update(dt, t, night, show) {
   hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + (skyU.dawn.value + Math.min(1, skyU.glow.value * 2)) * 0.12 + gloomK * 0.22;   // 晨昏空氣多一點；陰雨天遠方淡進灰色的空氣
   const gold = Math.min(1, skyU.glow.value * 2);
   fillCol.setRGB(1, 1, 1).lerp(GOLD, gold * 0.45).lerp(MOONLIT, night).lerp(RAINY, gloomK * 0.6);   // v6.93：黃昏的金色收一點（城堡不會融成一團黃白光）
-  fills.forEach(m => { m.emissive.copy(fillCol); m.emissiveIntensity = m.userData.fill * 0.3 * (1 + night * 0.6); });   // 一點均勻的底光，主要的亮度交給正面補光
-  hazeU.uFront.value.copy(fillCol).multiplyScalar(0.75 * (1 - night * 0.3));   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
+  fills.forEach(m => { m.emissive.copy(fillCol); m.emissiveIntensity = m.userData.fill * 0.19 * (1 + night * 0.6); });   // v7.0：底光收一點，城堡、浮空島看得出受光面與背光面   // 一點均勻的底光，主要的亮度交給正面補光
+  hazeU.uFront.value.copy(fillCol).multiplyScalar(0.42 * (1 - night * 0.3));   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar(1 - night * 0.55);

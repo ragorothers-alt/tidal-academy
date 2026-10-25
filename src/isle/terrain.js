@@ -349,7 +349,7 @@ export const terrain = (function build() {
 {
   const g = new THREE.RingGeometry(0.01, 160, 96, 90); g.rotateX(-Math.PI / 2);   // 細分的同心環：滾筒彎曲是逐頂點計算，三角形太大會整片歪掉
   const p = g.attributes.position, cols = [];
-  const shallow = new THREE.Color('#f0e4b4'), mid = new THREE.Color('#22c4d4'), deep = new THREE.Color('#0b4ec2');
+  const shallow = new THREE.Color('#efe3b2'), mid = new THREE.Color('#d2c48e'), deep = new THREE.Color('#6f8478');   // v7.0：海床是真的沙（濕沙、深處的海草），水的顏色交給海面的吸收與散射
   // 離最近陸地的距離（格子上做一次距離轉換）：新長出的西部高地外海也有一圈淺灘
   const D = new Float32Array(N * N).fill(1e9);
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (T(x, z) >= 0) D[z * N + x] = 0;
@@ -360,19 +360,19 @@ export const terrain = (function build() {
   }
   const seaDist = (x, z) => { const fx = Math.min(N - 1, Math.max(0, x + C)), fz = Math.min(N - 1, Math.max(0, z + C)); return D[Math.floor(fz) * N + Math.floor(fx)] + Math.hypot(x + C - fx, z + C - fz); };
   for (let i = 0; i < p.count; i++) {
-    const d = seaDist(p.getX(i), p.getZ(i)), k1 = THREE.MathUtils.smoothstep(d, 0.5, 8), k2 = THREE.MathUtils.smoothstep(d, 8, 38);
-    p.setY(i, -0.7 - k1 * 2.5 - k2 * 6);
+    const d = seaDist(p.getX(i), p.getZ(i)), k1 = THREE.MathUtils.smoothstep(d, 0.3, 14), k2 = THREE.MathUtils.smoothstep(d, 12, 45);
+    p.setY(i, -0.45 - k1 * 1.2 - k2 * 7);   // 寬一點的淺灘（大陸棚），透亮的青綠一路漸深成湛藍
     const c = shallow.clone().lerp(mid, k1).lerp(deep, k2); cols.push(c.r, c.g, c.b);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, VC); m.receiveShadow = true; scene.add(m);
+  const m = new THREE.Mesh(g, TERRAIN); m.receiveShadow = true; scene.add(m);   // v7.0：和沙灘同一種材質（沙粒、風紋、水底焦散），淺灘接得上岸邊的沙
 }
 water.sea = bend(new THREE.MeshStandardMaterial({ color: '#38bdf0', transparent: true, opacity: 0.58, roughness: 0.06, metalness: 0.1, fog: false }), 'water'); water.sea.defines = { TA_SEA: '' };   // 大海：倒影與反光帶自己算（engine.js 的 SEA_GLSL），不吃霧（遠方交給倒影的地平線色）
 /* 深海的底：海面是半透明的，島外沒有海床時會透出天幕（遠方的海白成一片）；鋪一片深藍的海底（比最深的海床低一點），
    近岸看得到淺灘，越往外越是飽和的深藍。不吃霧，遠方的海一路保持海色，交給天空的地平線薄霧收邊 */
-export const deepMesh = (() => { const g = new THREE.PlaneGeometry(280, 280, 70, 70); g.rotateX(-Math.PI / 2); const m = new THREE.Mesh(g, bend(new THREE.MeshStandardMaterial({ color: '#0c5a8a', roughness: 1, fog: false }))); m.position.y = -1.3; m.raycast = () => {}; scene.add(m); return m; })();
+export const deepMesh = (() => { const g = new THREE.PlaneGeometry(280, 280, 70, 70); g.rotateX(-Math.PI / 2); const m = new THREE.Mesh(g, bend(new THREE.MeshStandardMaterial({ color: '#0c4a72', roughness: 1, fog: false }))); m.position.y = -9; m.raycast = () => {}; scene.add(m); return m; })();
 // 海面每個頂點量一次水深（aDepth，海面的透明度用）：地形外沒有海床，當成很深
-export const seaMesh = (() => { const g = new THREE.PlaneGeometry(320, 320, 160, 160); g.rotateX(-Math.PI / 2); { const P = g.attributes.position, dep = new Float32Array(P.count); for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i); dep[i] = Math.abs(x) < C - 1 && Math.abs(z) < C - 1 ? Math.max(0, 0.02 - groundAt(x, z)) : 2; } g.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1)); } const m = new THREE.Mesh(g, water.sea); m.position.y = 0.02; m.receiveShadow = true; scene.add(m); return m; })();
+export const seaMesh = (() => { const g = new THREE.PlaneGeometry(320, 320, 160, 160); g.rotateX(-Math.PI / 2); { const P = g.attributes.position, dep = new Float32Array(P.count); for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i); dep[i] = Math.abs(x) < C - 1 && Math.abs(z) < C - 1 ? Math.max(0, 0.02 - groundAt(x, z)) : 2; } g.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1)); } const m = new THREE.Mesh(g, water.sea); m.position.y = 0.02; m.receiveShadow = true; m.renderOrder = -10; scene.add(m); return m; })();   // renderOrder：透明物裡最先畫（post.js 的第二階段）
 water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, transparent: true, opacity: 0.5, roughness: 0.17 }), 'water');   // 清透一點，看得到河床上的焦散光紋
 /* 河面：每格細分成 4×4，靠岸的地方顏色淺、比較透明而且有流動的白沫（頂點顏色的 alpha 是「離岸多近」），
    河中央是較深的藍；流進沙灘或大海的那幾格，水面順著往下斜進海裡，不會浮在沙灘上 */
@@ -408,7 +408,7 @@ water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColo
   }
   for (let i = 0; i < P.length; i += 3) { const [wx, wz] = warp(P[i], P[i + 2]); P[i] = wx; P[i + 2] = wz; }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CL, 4)); g.computeVertexNormals();
-  scene.add(new THREE.Mesh(g, water.river));
+  { const rm = new THREE.Mesh(g, water.river); rm.renderOrder = -10; scene.add(rm); }
 }
 export const foamMat = bend(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false }));
 {
