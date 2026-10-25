@@ -13,6 +13,8 @@ import { I, S, save, icon } from './state.js';
 import { pickQ, record, dayKey } from './quiz.js';
 import * as miles from './miles.js';
 import * as ores from './rocks.js';
+import * as fx from './fx.js';
+import { kick } from './shake.js';
 import { afterTyphoon } from './weather.js';
 
 export const MATS = { branch: '樹枝', stone: '石頭', shell: '貝殼', fruit: '橘子', iron: '鐵塊', frag: '星之碎片' };
@@ -121,6 +123,7 @@ async function shake(tr) {
 }
 async function hit(rk) {
   const D = day(), k = rocks.indexOf(rk), n = D.rocks[k] || 0; P.userData.swing = 1; Audio.sfx('dig'); wobble(rk.m, 0.08);
+  { const p = rk.m.position, d = Math.hypot(P.position.x - p.x, P.position.z - p.z) || 1; fx.clods(p.x + (P.position.x - p.x) / d * 0.45, p.y + 0.25, p.z + (P.position.z - p.z) / d * 0.45, { color: '#a59a8c', n: n >= 3 ? 3 : 7, speed: 1.8, up: 0.7 }); kick(n >= 3 ? 0.012 : 0.022); }   // 敲到的那一面噴出碎石
   if (n >= 3) { ui.toast('這顆石頭今天敲不出東西了，明天再來'); return; }
   D.rocks[k] = n + 1; save();
   if (ores.tryOre()) return;

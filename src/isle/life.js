@@ -12,6 +12,7 @@ import * as miles from './miles.js';
 import * as feel from './feel.js';
 import * as waves from './waves.js';
 import * as shake from './shake.js';
+import * as fx from './fx.js';
 
 const TA = window.TA;
 let P = null;      // 玩家
@@ -202,17 +203,24 @@ async function netAction() {
 }
 
 /* ================= 化石 ================= */
-const spotMeshes = [];
+const spotMeshes = [], holes = [];
+const holeGeo = new THREE.CircleGeometry(0.34, 14), moundGeo = new THREE.TorusGeometry(0.4, 0.08, 5, 14);
 const starGeo = (() => { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 0.14 : 0.36, a = i / 10 * Math.PI * 2; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); } return new THREE.ShapeGeometry(sh); })();
 export function layoutSpots() {
-  spotMeshes.forEach(m => scene.remove(m)); spotMeshes.length = 0;
+  spotMeshes.forEach(m => scene.remove(m)); spotMeshes.length = 0; holes.forEach(m => scene.remove(m)); holes.length = 0;
   const s = S();
   if (!s.spots.length) {
     let seed = [...dayKey()].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) >>> 0; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (let k = 0; k < 300 && s.spots.length < 4; k++) { const x = (r() - 0.5) * N * 0.92, z = (r() - 0.5) * N * 0.92, t = tileAt(x, z); if ((t === 1 || t === 0 || t === 2) && !blocked(x, z, 0.8) && s.spots.every(o => Math.hypot(o.x - x, o.z - z) > 8)) s.spots.push({ x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, dug: false }); }
     save();
   }
-  s.spots.forEach(o => { if (o.dug) return; const m = new THREE.Mesh(starGeo, M('#6b4a2e')); m.rotation.x = -Math.PI / 2; m.position.set(o.x, groundAt(o.x, o.z) + 0.03, o.z); m.receiveShadow = true; scene.add(m); m.userData.spot = o; spotMeshes.push(m); });
+  s.spots.forEach(o => { if (o.dug) { hole(o.x, o.z); return; } const m = new THREE.Mesh(starGeo, M('#6b4a2e')); m.rotation.x = -Math.PI / 2; m.position.set(o.x, groundAt(o.x, o.z) + 0.03, o.z); m.receiveShadow = true; scene.add(m); m.userData.spot = o; spotMeshes.push(m); });
+}
+/** 今天挖過的地方留一個洞：深色的坑＋一圈翻出來的土（隔天 layoutSpots 換新的挖掘點時一起清掉） */
+function hole(x, z) {
+  const y = groundAt(x, z), h = new THREE.Mesh(holeGeo, M('#3a2818')); h.rotation.x = -Math.PI / 2; h.position.set(x, y + 0.025, z); h.receiveShadow = true;
+  const r = new THREE.Mesh(moundGeo, M('#8a6440')); r.rotation.x = -Math.PI / 2; r.scale.z = 0.45; r.position.set(x, y + 0.02, z); r.receiveShadow = true;
+  scene.add(h, r); holes.push(h, r);
 }
 async function digAction() {
   P.userData.swing = 1; Audio.sfx('dig');
@@ -220,8 +228,16 @@ async function digAction() {
   const m = spotMeshes.find(m => Math.hypot(m.position.x - x, m.position.z - z) < 0.9);
   if (!m) { ui.toast('這裡挖不到東西。找找地上的星形裂縫！'); return; }
   if (!freeSlots()) { ui.toast('口袋滿了，先整理口袋再來挖！（裂縫還在，不會消失）', 'bad'); return; }   // 先檢查口袋：挖了放不下的話，今天的挖掘點不能白白用掉
+  const sx = m.position.x, sz = m.position.z, sy = groundAt(sx, sz);
+  if (!m.userData.hit) {   // 第一下：土噴出來、裂縫變大，再挖一下才出來
+    m.userData.hit = 1; m.scale.setScalar(1.3); m.material = M('#4a3120');
+    fx.clods(sx, sy, sz, { color: '#7a5634', n: 10 }); shake.kick(0.02); shake.haptic('tap');
+    ui.floatText(P, '再挖一下！', '#8a5a3b'); return;
+  }
   m.userData.spot.dug = true; scene.remove(m); spotMeshes.splice(spotMeshes.indexOf(m), 1);
   busy = true;
+  fx.clods(sx, sy, sz, { color: '#6b4a2e', n: 14, speed: 2.8 }); hole(sx, sz); shake.kick(0.035); shake.haptic('hit'); Audio.sfx('pop');
+  await fx.pop(sx, sy, sz, icon('fossil_unknown', 'unk'));   // 化石從洞裡彈出來，彈到最高點再出卡片
   const room = addItem({ k: 'unk', id: 'fossil_unknown' }); save(); miles.add('fossil');
   cheer({ kind: 'fossil' });
   await ui.card({ pocket: room, icon: icon('fossil_unknown', 'unk'), title: '挖到了化石！', sub: '還不知道是什麼。拿去博物館給史遙鑑定吧！', extra: room ? '' : '<em>口袋滿了，先整理一下口袋。</em>' });
@@ -231,6 +247,7 @@ async function digAction() {
 /* ================= 對外 ================= */
 let spawnT = 0;
 export function update(dt, t, running) {
+  fx.update(dt);
   if (tourney && !busy) { const s0 = Math.ceil(tourney.left); tourney.left -= dt; if (tourney.left < 10 && Math.ceil(tourney.left) !== s0) Audio.sfx('tick'); if (tourney.left <= 0) { const t = tourney; tourney = null; Audio.sfx('whistle'); onTourneyEnd && onTourneyEnd(t); } }   // 最後 10 秒每秒滴答、時間到吹哨
   spawnT -= dt;
   if (spawnT <= 0) {
