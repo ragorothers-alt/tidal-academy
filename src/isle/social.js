@@ -29,7 +29,7 @@ export function newDay() {
   const keep = (s.reqs || []).filter(r => r.accepted && !r.done && (r.type === 'deliver' ? s.pockets.some(x => x && x.k === 'pkg' && x.from === r.sid && x.to === r.target) : r.type === 'fish' || r.type === 'bug' ? still(r) : r.type === 'fossil'));
   s.reqs = keep.slice();
   // 第一個委託來自學習弱點：正確率最低（或還沒碰過）的單元，由該科導師提出
-  const weak = L.weakUnits(12).find(w => vOf(w.subject.id) && !keep.some(r => r.sid === w.subject.id) && (L.BY_UNIT[w.id] || []).length >= 4);
+  const weak = L.weakUnits(12).find(w => vOf(w.subject.id) && L.inTrack(w.subject.id) && !keep.some(r => r.sid === w.subject.id) && (L.BY_UNIT[w.id] || []).length >= 4);
   if (weak) s.reqs.push({ sid: weak.subject.id, type: 'weak', target: weak.id, accepted: false, done: false, acc: weak.st.attempts ? Math.round(weak.st.acc * 100) : null });
   const who = VS.filter(v => (!weak || v.sid !== weak.subject.id) && !keep.some(r => r.sid === v.sid)).sort(() => Math.random() - 0.5).slice(0, Math.max(1, 3 - s.reqs.length));   // 一天約 3 個（留下來的也算），至少有 1 個新的
   who.forEach(v => {

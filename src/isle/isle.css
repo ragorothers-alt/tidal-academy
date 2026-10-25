@@ -1497,3 +1497,11 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .fn-row img { width: 40px; height: 40px; object-fit: contain; }
 .fn-row b { display: block; } .fn-row small { color: var(--ink-2); font-size: 12px; }
 .dex-cell.noted { outline: 2px dashed #6f9a52; outline-offset: -3px; }
+/* 備考航線（profile.js，v7.1） */
+.pf-trk { display: grid; gap: 6px; }
+.pf-track { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pf-track small { font-weight: 800; color: var(--ink-2); margin-right: 2px; }
+.pf-track .pl-chip { --c: #5ab0e0; min-width: 56px; border: 2px solid var(--c); background: #fff; color: var(--ink); border-radius: 99px; padding: 5px 12px; font: inherit; font-weight: 800; font-size: 13px; cursor: pointer; }
+.pf-track .pl-chip.on { background: var(--c); color: #fff; }
+.cr-final { margin: 0; padding: 8px 12px; border-radius: 12px; background: #eef4ff; color: #3d5f9a; font-weight: 700; }
+.cr-item small { margin-left: auto; padding-left: 8px; color: var(--ink-2); font-size: 11px; font-weight: 700; }

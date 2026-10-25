@@ -1,7 +1,7 @@
 /* 潮汐小島 · 航海圖與試煉
    航海圖：十科的單元燈塔（星等、精熟度、筆記、試煉）、科目練習與錯題、首領卡。
    單元試煉：10 題，正確率 60／80／100% 得 1／2／3 星，新得到的星星送潮晶。第一次讀完單元筆記 +15 經驗。
-   每日潮汐：每天 12 題（到期複習、弱點單元、新題），可以分次做完；做完記一次「今日航程」。
+   每日潮汐：每天 12 題（到期複習、弱點單元、新題；只排要考的考科，考前 30 天起不出新題、考前一週 8 題），可以分次做完；做完記一次「今日航程」。
    激流衝刺：90 秒快問快答（基本、標準難度的單選），答對加時、連對加倍率，答錯扣 5 秒。
    燈塔首領戰：十隻知識海獸。答對造成傷害（越快越痛，前 30% 時間內暴擊），答錯或超時失去一顆心；半血以下狂暴，作答時間縮短 20%。
    紀錄：TA.S.units、daily、dailyDone、rush、boss。 */
@@ -80,7 +80,7 @@ export function openDaily() {
       r.kicker = 'DAILY TIDE'; r.gems = 0;
       if (!replay && D.done && !D.claimed) { D.claimed = true; TA.S.dailyDone = (TA.S.dailyDone || 0) + 1; r.gems = 20; r.xp += L.gain(60, 0).xp; }
       r.heading = D.done ? '今日潮汐完成' : '已保存進度';
-      r.sub = D.done ? (replay ? `再練一次：答對 ${r.correct} / ${r.total}` : `答對 ${r.correct} / ${r.total} · 完成今天的 12 題（累計 ${TA.S.dailyDone} 天）`) : `答對 ${r.correct} / ${r.total} · 已做到第 ${D.idx} / ${ids.length} 題，下次接著做`;
+      r.sub = D.done ? (replay ? `再練一次：答對 ${r.correct} / ${r.total}` : `答對 ${r.correct} / ${r.total} · 完成今天的 ${r.total} 題（累計 ${TA.S.dailyDone} 天）`) : `答對 ${r.correct} / ${r.total} · 已做到第 ${D.idx} / ${ids.length} 題，下次接著做`;
     },
   });
 }

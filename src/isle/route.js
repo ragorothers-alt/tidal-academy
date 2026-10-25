@@ -6,6 +6,7 @@
    安靜（quiet）：收工後、散步模式、專注後的休息時間，以及拒絕一次邀答後的 20 分鐘——島民不主動出題、答對後不邀連答、旅客先問要不要讀題。 */
 import { S, save, dayKey } from './state.js';
 import * as miles from './miles.js';
+import * as cram from './cram.js';
 
 const TA = window.TA, L = TA.L;
 export const LENS = [20, 40, 60];
@@ -18,15 +19,16 @@ function data() {
   if (!s.route || s.route.d !== d) s.route = { d, len: 0, asked: false, shut: false, walk: false, extra: false, hush: 0 };
   return s.route;
 }
-export const len = () => data().len || S().routeLen || guess();
+export const len = () => data().len || (L.phase() === 'final' ? 20 : S().routeLen || guess());   // 考前一週沒選時預設短的
 export const asked = () => data().asked;
 export function setLen(n) { if (!LENS.includes(n)) return; const r = data(); r.len = n; r.asked = true; S().routeLen = n; save(); }
 const lifeN = () => LIFE_KEYS.reduce((a, k) => a + miles.count(k), 0);
 /** 加碼（可選）：第一個還沒做完的——每日潮汐、單字 20 張、專注 25 分鐘 */
 function extraOf(d) {
-  const D = TA.S.daily, idx = D.date === dayKey() ? (D.idx || 0) : 0;
+  if (L.phase() === 'final') return { id: 'rest', name: '考前一週不加碼：早點休息', v: 1, need: 1, rest: true };
+  const D = TA.S.daily, idx = D.date === dayKey() ? (D.idx || 0) : 0, n = D.set.length || L.dailySize();
   const list = [
-    { id: 'daily', name: '每日潮汐 12 題', v: D.done ? 12 : idx, need: 12 },
+    { id: 'daily', name: `每日潮汐 ${n} 題`, v: D.done ? n : idx, need: n },
     { id: 'vocab', name: '單字 20 張', v: Math.min(20, d.voc || 0), need: 20 },
     { id: 'focus', name: '專注 25 分鐘', v: Math.min(25, d.min || 0), need: 25 },
   ];
@@ -36,13 +38,14 @@ function extraOf(d) {
 export function state() {
   L.pickDaily();   // 換日時先重設每日潮汐（寶箱的領取紀錄跟著它，日期要是今天）
   const r = data(), n = len(), d = L.dayRec(), D = TA.S.daily;
-  const study = { v: L.studyMin(d), need: STUDY[n] }, life = { v: lifeN(), need: LIFE[n] };
+  const ph = L.phase(), cr = !!ph && cram.doneToday();   // 考前 30 天起：做完考前衝刺的 5 題精選就算完成學習
+  const study = { v: cr ? Math.max(L.studyMin(d), STUDY[n]) : L.studyMin(d), need: STUDY[n], cram: !!ph }, life = { v: lifeN(), need: LIFE[n] };
   const done = study.v >= study.need && life.v >= life.need;
   const chest = !!D.chest && D.date === dayKey();
   return { len: n, study, life, extra: extraOf(d), done, chest, ready: done && !chest, shut: r.shut, walk: r.walk };
 }
 /** 加碼完成：一天一次小獎勵（呼叫端負責提示） */
-export function claimExtra() { const r = data(), e = extraOf(L.dayRec()); if (r.extra || !e.all) return false; r.extra = true; save(); return true; }
+export function claimExtra() { const r = data(), e = extraOf(L.dayRec()); if (r.extra || !e.all || e.rest) return false; r.extra = true; save(); return true; }
 export function shut(on) { const r = data(); r.shut = on !== false; save(); }
 export function setWalk(on) { const r = data(); r.walk = !!on; save(); }
 /** 拒絕一次邀答：全島安靜 min 分鐘（島民主動出題、連答邀請共用） */

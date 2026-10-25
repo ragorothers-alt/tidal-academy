@@ -283,16 +283,31 @@
     for (let i = 0; i < Math.max(m.length, d.length); i++) { if (m[i]) mix.push(m[i]); if (d[i]) mix.push(d[i]); }
     return L.readyFirst(uniq(mix)).slice(0, n || 15);
   };
+  /* ---------- 備考航線（v7.1）：profile.track = { groups 要考的考科（空＝全部）, main 主力考科（最多 2 個） } ---------- */
+  const track = () => TA.S.profile.track || { groups: [], main: [] };
+  L.trackGroups = () => { const g = (track().groups || []).filter(x => TA.GROUPS.includes(x)); return g.length ? g : TA.GROUPS.slice(); };
+  L.inTrack = sid => { const s = TA.subject(sid); return !s || L.trackGroups().includes(s.group); };
+  L.trackSubjects = () => TA.SUBJECTS.filter(s => L.inTrack(s.id)).map(s => s.id);
+  L.mainGroups = () => (track().main || []).filter(x => L.trackGroups().includes(x)).slice(0, 2);
+  L.mainSubjects = () => { const m = L.mainGroups(); return TA.SUBJECTS.filter(s => m.includes(s.group)).map(s => s.id); };
+  /** 考前階段：'final' 倒數 7 天內、'cram' 30 天內、'' 平常（考完也是 ''） */
+  L.phase = () => { const n = U.daysUntil(TA.S.profile.examDate || '2027-01-22'); return n < 0 ? '' : n <= 7 ? 'final' : n <= 30 ? 'cram' : ''; };
+  /** 每日潮汐的題數：平常 12 題、考前一週 8 題 */
+  L.dailySize = () => (L.phase() === 'final' ? 8 : 12);
+
   L.pickDaily = function () {
     const S = TA.S, key = U.dayKey();
     if (S.daily.date === key && S.daily.set.length && S.daily.set.every(id => L.Q[id])) return S.daily.set;
-    const rnd = U.rng(key + ':' + S.created);
-    const due = L.pickReview(5);
-    const weakUnits = L.weakUnits(4).map(u => u.id);
+    const rnd = U.rng(key + ':' + S.created), ph = L.phase(), size = L.dailySize(), main = L.mainSubjects();
+    const inTr = id => L.inTrack(L.Q[id].subject);
+    // 只排要考的考科；考前 30 天起多排複習（8 題）、不出新題（湊不滿才補），主力考科的新題多一倍
+    const due = L.pickReview(40).filter(inTr).slice(0, ph ? 8 : 5);
+    const weakUnits = L.weakUnits(16).filter(u => L.inTrack(u.subject.id)).slice(0, 4).map(u => u.id);
     const weak = weakUnits.map(uid => U.shuffle(L.BY_UNIT[uid], rnd).find(id => !due.includes(id))).filter(Boolean);
-    const fresh = balancedTake(TA.SUBJECTS.map(s => U.shuffle((L.BY_SUBJECT[s.id] || []).filter(id => !seen(id) && L.Q[id].d <= 2), rnd)), 12, rnd);
-    const set = uniq(due.concat(weak, U.shuffle(fresh, rnd))).slice(0, 12);
-    if (set.length < 12) uniq(set.concat(U.shuffle(L.ALL, rnd))).slice(0, 12).forEach(id => { if (!set.includes(id)) set.push(id); });
+    const pools = L.trackSubjects().flatMap(sid => { const p = U.shuffle((L.BY_SUBJECT[sid] || []).filter(id => !seen(id) && L.Q[id].d <= 2), rnd); return main.includes(sid) ? [p, p.slice().reverse()] : [p]; });
+    const fresh = ph ? [] : balancedTake(pools, size, rnd);
+    const set = uniq(due.concat(weak, U.shuffle(fresh, rnd))).slice(0, size);
+    if (set.length < size) uniq(set.concat(ph ? balancedTake(pools, size, rnd) : [], U.shuffle(L.ALL.filter(inTr), rnd), U.shuffle(L.ALL, rnd))).slice(0, size).forEach(id => { if (!set.includes(id)) set.push(id); });
     const same = S.daily.date === key;   // 同一天因題庫更新重抽時，保留已領的獎勵
     S.daily = { date: key, set: set.slice(0, 12), done: same && !!S.daily.done, claimed: same && !!S.daily.claimed, chest: same && !!S.daily.chest };
     TA.Store.save();

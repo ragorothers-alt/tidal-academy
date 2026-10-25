@@ -633,3 +633,15 @@ test('學習分鐘：題數、單字卡、專注合在一起算，連續學習�
   d.voc = 40; assert.equal(L.studyMin(d), 10); assert.equal(L.touchStreak(), true, '單字 40 張（約 10 分鐘）就算今天有學習');
   d.min = 5; d.q = 3; d.wq = 2; assert.equal(L.studyMin(d), 20);
 });
+
+test('備考航線與考前階段：每日潮汐只排要考的考科，考前一週 8 題', () => {
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L;
+  assert.equal(L.phase(), ''); assert.equal(L.trackGroups().length, 5, '沒選＝全部考科');
+  TA.S.profile.track = { groups: ['英文', '社會'], main: ['社會'] };
+  assert.deepEqual([...L.trackSubjects()], ['english', 'history', 'geography', 'civics']); assert.deepEqual([...L.mainSubjects()], ['history', 'geography', 'civics']);
+  const set = L.pickDaily(); assert.equal(set.length, 12); assert.ok(set.every(id => ['english', 'history', 'geography', 'civics'].includes(L.Q[id].subject)), '只有英文與社會');
+  TA.S.profile.examDate = TA.U.dayKey(new Date(t0 + 20 * day)); assert.equal(L.phase(), 'cram');
+  TA.S.profile.examDate = TA.U.dayKey(new Date(t0 + 5 * day)); assert.equal(L.phase(), 'final'); assert.equal(L.dailySize(), 8);
+  setNow(t0 + day + 3600e3); assert.equal(L.pickDaily().length, 8, '考前一週每日潮汐 8 題');
+  TA.S.profile.examDate = TA.U.dayKey(new Date(t0 - 3 * day)); assert.equal(L.phase(), '', '考完了');
+});

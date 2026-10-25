@@ -7,13 +7,15 @@ import { dayKey } from './quiz.js';
 
 const TA = window.TA, L = TA.L;
 const DAYS = ['日', '一', '二', '三', '四', '五', '六'];
-/** 預設計畫：國英數每週各 3 天，其他科輪流，最弱的科目多排一天 */
+/** 預設計畫（v7.1 依備考航線）：只排要考的考科；國英數（有考的）每週各 3 天、其他科輪流；主力考科每天都排一科，最弱的科目週末多排一天 */
 function defaults() {
-  const ids = TA.SUBJECTS.map(s => s.id), weak = L.weakUnits(3).map(w => w.subject.id), d = {};
-  const core = ['chinese', 'english', 'math'], other = ids.filter(x => !core.includes(x));
-  for (let i = 0; i < 7; i++) d[i] = [core[i % 3], other[i % other.length]];
-  if (weak[0] && !d[0].includes(weak[0])) d[0].push(weak[0]);
-  if (weak[1] && !d[6].includes(weak[1])) d[6].push(weak[1]);
+  const ids = L.trackSubjects(), main = L.mainSubjects(), weak = L.weakUnits(12).filter(w => ids.includes(w.subject.id)).map(w => w.subject.id), d = {};
+  const core = ['chinese', 'english', 'math'].filter(x => ids.includes(x)), other = ids.filter(x => !core.includes(x));
+  const A = core.length ? core : other, B = core.length ? other : [];
+  for (let i = 0; i < 7; i++) { d[i] = [A[i % A.length]]; if (B.length) d[i].push(B[i % B.length]); }
+  if (main.length) for (let i = 0; i < 7; i++) { const m = main[i % main.length]; if (!d[i].includes(m)) { if (d[i].length >= 3) d[i].pop(); d[i].push(m); } }
+  if (weak[0] && !d[0].includes(weak[0]) && d[0].length < 3) d[0].push(weak[0]);
+  if (weak[1] && !d[6].includes(weak[1]) && d[6].length < 3) d[6].push(weak[1]);
   return d;
 }
 function plan() { const s = S(); s.plan = s.plan || { days: defaults(), target: 10, done: {} }; s.plan.done = s.plan.done || {}; return s.plan; }

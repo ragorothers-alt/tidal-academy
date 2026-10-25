@@ -76,7 +76,8 @@ function suggestions(max) {
   const un = social.unread(); if (un) add(`信箱有 ${un} 封新信：${PHONE()} → 信箱`, 'mail');
   { const who = H.labReady && H.labReady(); if (who) add(`${who}的研究計畫可以推進了：找${who}聊天，選「研究計畫」`); }
   if (H.chest && H.chest()) add(`今日路線完成了：${PHONE()} →「今日學習」開寶箱（+60 經驗、+50 潮晶），看收工摘要`, 'today');
-  const relax = route.quiet();   // 收工、散步、休息中：不催讀書，只提島上生活
+  const relax = route.quiet(), exam = TA.L.phase();   // 收工、散步、休息中：不催讀書，只提島上生活；考前 30 天：不介紹新玩法、不推連答紀錄
+  if (exam && !relax && H.cramDone && !H.cramDone()) add(`考前衝刺：${PHONE()} →「考前衝刺」做今天的 5 題精選（做完就算完成今天的學習）`, 'cram');
   const free = freeSlots(); if (free <= 3) add(free ? `口袋快滿了（剩 ${free} 格）：到阿潮的商店賣東西，或捐給博物館` : '口袋滿了：到阿潮的商店賣東西，或捐給博物館');
   // 2. 現在才有的事（活動、時段、潮汐）
   const ev = events.active();
@@ -93,12 +94,12 @@ function suggestions(max) {
   if (!mine) { const r = (s.reqs || []).find(x => !x.accepted && !x.done); if (r) add(`${nameOf(r.sid)}頭上有「!」：找他接委託`); }
   // 3. 還沒試過的玩法、今天還沒玩的練習（每天換一個）
   const seed = [...day].reduce((a, c) => a + c.charCodeAt(0), 0);
-  const fresh = FIRST.filter(([, need]) => need(s)); if (fresh.length) add(fresh[seed % fresh.length][2]());
+  const fresh = exam ? [] : FIRST.filter(([, need]) => need(s)); if (fresh.length) add(fresh[seed % fresh.length][2]());
   const P = s.practice || {}, todo = GAMES.filter(([id]) => (P[id] || {}).last !== day);
-  if (!relax && todo.length) { const [id, sid, name] = todo[seed % todo.length]; add(`${(P[id] || {}).n ? '今天還沒玩' : '還沒玩過'}：${nameOf(sid)}的「${name}」（每天第一輪答對有鈴錢）`); }
-  if (!relax && ((s.quizcup || {}).d) !== day) add('潮汐考場的「潮汐盃快問快答」：和三位導師比 10 題，每天一次');
+  if (!relax && !exam && todo.length) { const [id, sid, name] = todo[seed % todo.length]; add(`${(P[id] || {}).n ? '今天還沒玩' : '還沒玩過'}：${nameOf(sid)}的「${name}」（每天第一輪答對有鈴錢）`); }
+  if (!relax && !exam && ((s.quizcup || {}).d) !== day) add('潮汐考場的「潮汐盃快問快答」：和三位導師比 10 題，每天一次');
   const best = (s.streakQ || {}).best || 0;
-  if (!relax) add(best ? `連續挑戰最佳紀錄 ${best} 題：找島民選「連續挑戰」挑戰新紀錄` : '想拚紀錄的話，找島民選「連續挑戰」：答對一題獎金就疊上去，看你能連對幾題');
+  if (!relax && !exam) add(best ? `連續挑戰最佳紀錄 ${best} 題：找島民選「連續挑戰」挑戰新紀錄` : '想拚紀錄的話，找島民選「連續挑戰」：答對一題獎金就疊上去，看你能連對幾題');
   return out;
 }
 
@@ -117,7 +118,7 @@ export function init(hooks) {
   el.addEventListener('click', e => {
     if (e.target.closest('.q-toggle')) { open = !open; paint(); return; }
     const a = e.target.closest('[data-act]');
-    if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday }[a.dataset.act]; if (f) { f(); return; } }
+    if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday, cram: H.openCram }[a.dataset.act]; if (f) { f(); return; } }
     if (data().fin && H.openToday) H.openToday();   // 點今日路線：打開手機的今日學習（改時長、開寶箱、收工）
   });
   miles.listen(onEvent);
@@ -155,9 +156,9 @@ export function paint() {
   el.hidden = false; el.classList.toggle('closed', !open);
   const head = `<div class="q-head"><b>${r.shut ? '今天收工了 🌿' : left ? `今日路線 ${2 - left}/2 · ${r.len} 分` : r.chest ? '今日路線 ✔ 完成' : '今日路線 ✔ 開寶箱！'}</b><button type="button" class="q-toggle" aria-label="收合">${open ? '－' : '＋'}</button></div>`;
   if (!open) { setHTML(head + (tips[0] ? `<div class="q-now one">💡 ${ui.esc(tips[0].t)}</div>` : '')); return; }
-  const next = steps.find(([, , x]) => x.v < x.need), HOWR = { study: '導師的「一起練習」、每日潮汐、單字燈塔、專注時光、潮汐考場都算', life: '任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花、撿貝殼…' };
+  const next = steps.find(([, , x]) => x.v < x.need), HOWR = { study: r.study.cram ? '考前衝刺的 5 題精選做完就算完成（手機「考前衝刺」）' : '導師的「一起練習」、每日潮汐、單字燈塔、專注時光、潮汐考場都算', life: '任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花、撿貝殼…' };
   const goals = r.shut ? `<small class="q-done">自由時間：島民不會主動找你出題，想練習時再找他們。</small>`
-    : '<ul>' + steps.map(([, t, x]) => `<li class="${x.v >= x.need ? 'ok' : ''}">${x.v >= x.need ? '✔' : '○'} ${t}${x.v >= x.need ? '' : ` <i>${x.v}/${x.need}</i>`}</li>`).join('') + `<li class="opt">☆ 加碼（可選）：${ui.esc(r.extra.name)}${r.extra.all ? ' ✔' : ` <i>${r.extra.v}/${r.extra.need}</i>`}</li></ul>`
+    : '<ul>' + steps.map(([, t, x]) => `<li class="${x.v >= x.need ? 'ok' : ''}">${x.v >= x.need ? '✔' : '○'} ${t}${x.v >= x.need ? '' : ` <i>${x.v}/${x.need}</i>`}</li>`).join('') + `<li class="opt">${r.extra.rest ? `🌙 ${ui.esc(r.extra.name)}` : `☆ 加碼（可選）：${ui.esc(r.extra.name)}${r.extra.all ? ' ✔' : ` <i>${r.extra.v}/${r.extra.need}</i>`}`}</li></ul>`
       + (next ? `<small class="q-how">💡 ${HOWR[next[0]]}</small>` : r.chest ? '' : '<small class="q-how">💡 點這裡開寶箱、看今天的收工摘要</small>');
   const now = tips.length ? `<div class="q-sub">${r.shut ? '想做的話' : '現在可以做'}</div><ul class="q-now">${tips.map(x => `<li${x.act ? ` data-act="${x.act}" class="act"` : ''}>${ui.esc(x.t)}</li>`).join('')}</ul>` : '';
   setHTML(head + goals + now + '<small>點這裡打開今日學習</small>');

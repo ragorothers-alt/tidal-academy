@@ -707,9 +707,9 @@ function phoneToday() {
   const body = ui.el('div', 'today', `
     <div class="rt-len"><span>今天大概有</span>${route.LENS.map(n => `<button type="button" class="rt-chip${n === st.len ? ' on' : ''}" data-len="${n}">${n} 分鐘</button>`).join('')}</div>
     <div class="td-voy"><div class="td-vh"><b>今日路線</b><small>學習和島上的事都做完：開寶箱（+60 經驗、+50 潮晶），看今天的收工摘要</small><button type="button" class="btn td-chest${st.ready ? ' gold' : ''}"${st.ready || st.chest ? '' : ' disabled'}>${st.chest ? '收工摘要' : st.ready ? '🎁 開寶箱' : `${two} / 2`}</button></div>
-      ${row('study', '📚', `學習 ${st.study.need} 分鐘`, '哪裡的學習都算：島民出題、每日潮汐、考場、非選練習、單字卡（4 張約 1 分）、專注時光', st.study.v, st.study.need, `${Math.min(st.study.v, st.study.need)} / ${st.study.need} 分`)}
+      ${row('study', '📚', `學習 ${st.study.need} 分鐘`, st.study.cram ? '考前衝刺的 5 題精選做完就算完成；其他學習也都算' : '哪裡的學習都算：島民出題、每日潮汐、考場、非選練習、單字卡（4 張約 1 分）、專注時光', st.study.v, st.study.need, `${Math.min(st.study.v, st.study.need)} / ${st.study.need} 分`)}
       ${row('life', '🏝', `島上的事 ${st.life.need} 件`, '任選：釣魚、捉蟲、挖化石、潮池、委託、捐贈、送禮、澆花、撿貝殼、做家具、拍照', st.life.v, st.life.need, `${Math.min(st.life.v, st.life.need)} / ${st.life.need}`)}
-      ${row('extra', '✨', `加碼（可選）：${st.extra.name}`, st.extra.all ? '三項加碼都完成了！' : '想多練一點再做；不做也算完成今天', st.extra.v, st.extra.need, `${st.extra.v} / ${st.extra.need}`, true)}
+      ${st.extra.rest ? `<div class="td-task opt done"><i>🌙</i><span><b>${st.extra.name}</b><small>最後幾天，睡飽比多寫一份考卷更有用</small></span><code></code></div>` : row('extra', '✨', `加碼（可選）：${st.extra.name}`, st.extra.all ? '三項加碼都完成了！' : '想多練一點再做；不做也算完成今天', st.extra.v, st.extra.need, `${st.extra.v} / ${st.extra.need}`, true)}
     </div>
     <div class="rt-quiet">${route.quiet() ? `<span>🌿 ${route.quietWhy()}：島民不會主動找你出題</span>` : '<span>想安靜逛逛的話：</span>'}<button type="button" class="btn ghost rt-walk">${st.walk ? '結束散步模式' : st.shut ? '回到學習模式' : '🌿 散步模式'}</button></div>
     <ul class="rt-stat"><li>到期複習 <b>${due}</b> 題</li><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul>
@@ -722,7 +722,7 @@ function phoneToday() {
     if (st.chest) daySummary();
   };
   body.querySelector('.rt-walk').onclick = () => { if (st.walk) route.setWalk(false); else if (st.shut) route.shut(false); else route.setWalk(true); Audio.sfx('tick'); paintHud(); phoneToday(); };
-  body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => voyage.openDaily(), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
+  body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => (st.study.cram ? cram.open(paintHud) : voyage.openDaily()), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
   body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), chart: () => voyage.openChart(), vocab: () => lexicon.open(), mock: () => hall.openMock(), mis: () => hall.openMistakes(), stats: () => hall.openStats() })[b.dataset.h](); });
   ui.panel('今日學習', body, { cls: 'phone' });
 }
@@ -736,7 +736,7 @@ function daySummary() {
 async function routeAsk() {
   if (route.asked() || !guide.finished()) return;
   const n0 = route.len(), opts = route.LENS.map(n => `${n} 分鐘${n === 20 ? '：複習一小段、逛一下島' : n === 40 ? '：學習加上島上生活' : '：專注讀書加複習'}`);
-  const i = await ui.ask({ name: '今日路線', color: '#5ab0e0', voice: 520 }, '今天大概有多少時間？選好之後，左上角只列今天要做的兩件事（隨時可以在手機「今日學習」改）。', opts, { keys: true, hl: route.LENS.indexOf(n0) });
+  const i = await ui.ask({ name: '今日路線', color: '#5ab0e0', voice: 520 }, (L.phase() === 'final' ? '考前一週了：建議選 20 分鐘，做完考前衝刺的 5 題就休息。' : '') + '今天大概有多少時間？選好之後，左上角只列今天要做的兩件事（隨時可以在手機「今日學習」改）。', opts, { keys: true, hl: route.LENS.indexOf(n0) });
   ui.closeDialog();
   route.setLen(route.LENS[i] || n0); paintHud();
 }
@@ -1454,6 +1454,8 @@ function startGame() {
     openVocab: () => { if (!talking && !ui.dialogOpen()) lexicon.open(); },
     openToday: () => { if (!talking && !ui.dialogOpen()) phoneToday(); },
     chest: () => route.state().ready,
+    cramDone: () => cram.doneToday(),
+    openCram: () => { if (!talking && !ui.dialogOpen()) cram.open(paintHud); },
     labReady: () => { const v = lab.firstReady(villagers.filter(x => !x.shop && !x.guest)); return v ? v.name : ''; },
     env: () => ({ hour: hourOverride ?? nowHour(), date: simDate(), raining: weather.raining(), tourney: !!life.tourney }),
   });

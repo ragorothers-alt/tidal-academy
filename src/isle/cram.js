@@ -1,5 +1,7 @@
-/* 潮汐小島 · 考前衝刺：學測倒數 30 天起，手機多一個「考前衝刺」：每天 5 題精選（錯題、到期複習、弱點單元優先）、
-   考前準備清單，以及倒數天數。島民也會換成溫和的考前鼓勵。 */
+/* 潮汐小島 · 考前衝刺：學測倒數 30 天起，手機多一個「考前衝刺」：每天 5 題精選（錯題、到期複習、弱點單元優先，只出要考的考科）、
+   考前準備清單，以及倒數天數。島民也會換成溫和的考前鼓勵。
+   v7.1：做完當天的 5 題精選就算完成今日路線的學習（route.js）；準備清單分成「確認一次就好」（考場、規定、時間分配）和每天的作息，
+   考前一週只建議短複習與休息，模擬考留給自己選。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { S, save } from './state.js';
@@ -14,20 +16,25 @@ const ok = id => !!L.Q[id];   // 題組與多選也會出（drill 用 askQ 作�
 export function picks() {
   const seen = new Set(), out = [];
   const add = ids => { for (const id of ids) { if (out.length >= 5) return; if (!seen.has(id) && ok(id)) { seen.add(id); out.push(id); } } };
-  add(L.mistakes().sort(() => Math.random() - 0.5));
-  add(L.dueList ? L.dueList() : []);
-  L.weakUnits(5).forEach(w => add((L.BY_UNIT[w.id] || []).filter(id => !L.rec(id) || L.mastery(id) < 0.5).sort(() => Math.random() - 0.5).slice(0, 2)));
-  add(L.ALL.filter(id => !L.rec(id)).sort(() => Math.random() - 0.5));
-  add(L.ALL.slice().sort(() => Math.random() - 0.5));   // 不足五題時從其他題目補足
+  const tr = id => L.inTrack(L.Q[id].subject);   // 只出要考的考科
+  add(L.mistakes().filter(tr).sort(() => Math.random() - 0.5));
+  add((L.dueList ? L.dueList() : []).filter(tr));
+  L.weakUnits(12).filter(w => L.inTrack(w.subject.id)).slice(0, 5).forEach(w => add((L.BY_UNIT[w.id] || []).filter(id => !L.rec(id) || L.mastery(id) < 0.5).sort(() => Math.random() - 0.5).slice(0, 2)));
+  add(L.ALL.filter(id => tr(id) && !L.rec(id)).sort(() => Math.random() - 0.5));
+  add(L.ALL.filter(tr).sort(() => Math.random() - 0.5));   // 不足五題時從其他題目補足
   return out;
 }
-const CHECK = [['sleep', '維持固定作息，預留充足睡眠'], ['mistake', '翻一次錯題本'], ['mock', '用模擬考練習時間分配'], ['rule', '確認考試規定、考場位置與攜帶物品'], ['rest', '留一點時間散步、放鬆']];
-const data = () => { const s = S(), d = dayKey(); if (!s.cram || s.cram.d !== d) s.cram = { d, done: false, check: {} }; return s.cram; };
+/** 準備清單：once 確認一次就好（記在 S().cramOnce，考前一天再看一次就好），其他每天重置 */
+const CHECK = [['rule', '確認考試規定、考場位置與攜帶物品', true], ['mock', '用一次模擬考練習時間分配', true], ['sleep', '維持固定作息，預留充足睡眠'], ['mistake', '翻一次錯題本'], ['rest', '留一點時間散步、放鬆']];
+const data = () => { const s = S(), d = dayKey(); if (!s.cram || s.cram.d !== d) s.cram = { d, done: false, check: {} }; s.cramOnce = s.cramOnce || {}; return s.cram; };
+/** 今天的 5 題精選做完了（今日路線用） */
+export const doneToday = () => { const c = S().cram; return !!c && c.d === dayKey() && c.done; };
 export function open(paint) {
   const n = daysLeft(), C = data(), body = ui.el('div', 'cram');
   const draw = () => {
     body.innerHTML = `<div class="cr-count"><b>${n > 0 ? 'D-' + n : n >= -2 ? '考試中' : '已考完'}</b><small>${n > 0 ? '距離學測' : n >= -2 ? '學測加油！' : '辛苦了'}</small></div>
-      <p class="muted">每天 5 題考前精選：錯題、到期複習、弱點單元優先。${C.done ? '今天已完成 ✔' : ''}</p>`;
+      <p class="muted">每天 5 題考前精選：錯題、到期複習、弱點單元優先。做完就算完成今天的學習。${C.done ? '今天已完成 ✔' : ''}</p>
+      ${n <= 7 && n > 0 ? '<p class="cr-final">最後一週：每天這 5 題就夠了。模擬考想做再做，早點睡比多寫一份考卷更有用。</p>' : ''}`;
     const go = ui.el('button', 'btn gold', C.done ? '再練一輪' : '開始今天的 5 題'); go.type = 'button';
     go.onclick = async () => {
       ui.closePanel(); const ids = picks(); if (!ids.length) { ui.toast('目前沒有可以出的題目'); return; }
@@ -37,8 +44,8 @@ export function open(paint) {
       await ui.say(sp, `答對 ${res.ok} / ${res.n} 題。${first ? '今天的精選完成，+800 鈴錢。' : full ? '' : '這一輪沒有做完五題，還不算完成。'}答錯的題目已加入複習，之後會優先安排。`); ui.closeDialog(); paint && paint();
     };
     body.appendChild(go);
-    const list = ui.el('div', 'cr-check', '<h4>考前準備清單（每天重置）</h4>');
-    CHECK.forEach(([k, t]) => { const b = ui.el('label', 'cr-item', `<input type="checkbox"${C.check[k] ? ' checked' : ''}> ${t}`); b.querySelector('input').onchange = e => { C.check[k] = e.target.checked; save(); Audio.sfx('pop'); }; list.appendChild(b); });
+    const O = S().cramOnce, list = ui.el('div', 'cr-check', '<h4>考前準備清單</h4>');
+    CHECK.forEach(([k, t, once]) => { const box = once ? O : C.check, b = ui.el('label', 'cr-item', `<input type="checkbox"${box[k] ? ' checked' : ''}> ${t}<small>${once ? '確認一次就好' : '每天'}</small>`); b.querySelector('input').onchange = e => { box[k] = e.target.checked; save(); Audio.sfx('pop'); }; list.appendChild(b); });
     body.appendChild(list);
     body.appendChild(ui.el('p', 'muted', '最後一個月，比起多讀新範圍，把會的題目練熟、維持作息更重要。'));
   };
