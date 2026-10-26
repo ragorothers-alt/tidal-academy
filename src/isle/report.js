@@ -1,5 +1,5 @@
 /* 潮汐小島 · 學習週報：最近 7 天的每日題數與正確率、和前一週比較、各科本週練習量與熟練度、最弱的單元。
-   每週一（或那一週第一次上島）史遙會把摘要寄到信箱，手機「學習週報」看完整圖表。 */
+   每週一（或那一週第一次上島）史遙會把摘要寄到信箱，手機「考科航線」→「學習週報」看完整圖表。 */
 import * as ui from './ui.js';
 import { S, save } from './state.js';
 
@@ -41,7 +41,7 @@ export function weekly(sendLetter) {
   if (first) return false;   // 第一次上島不寄（還沒有一整週的資料）
   const end = new Date(mon); end.setDate(mon.getDate() - 1);
   const r = compute(end);
-  sendLetter({ fromName: '史遙', title: `學習週報（${dayOf(end, -6).getMonth() + 1}/${dayOf(end, -6).getDate()}–${end.getMonth() + 1}/${end.getDate()}）`, open: '呼呼，這是上一週的學習航海日誌：', text: summary(r), giftLine: '手機的「學習週報」另提供截至今天的近 7 天圖表。', close: '—— 博物館館長 史遙' });
+  sendLetter({ fromName: '史遙', title: `學習週報（${dayOf(end, -6).getMonth() + 1}/${dayOf(end, -6).getDate()}–${end.getMonth() + 1}/${end.getDate()}）`, open: '呼呼，這是上一週的學習航海日誌：', text: summary(r), giftLine: '手機「考科航線」裡的「學習週報」另提供截至今天的近 7 天圖表。', close: '—— 博物館館長 史遙' });
   return true;
 }
 export function open() {

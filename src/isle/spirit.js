@@ -1,5 +1,6 @@
 /* 潮汐小島 · 潮靈小汐：有錯題的夜晚，廣場邊會出現迷路的潮靈。
-   他的記憶碎片散落在島上，每一片都是你答錯過的一題；重新答對就能撿回來，五片都找回有鈴錢與潮晶謝禮。 */
+   他的記憶碎片散落在島上，每一片都是你答錯過的一題；重新答對就能撿回來，五片都找回有鈴錢與潮晶謝禮。
+   v7.1：錯題取自「今天的複習」清單（L.reviewLeft，只排要考的考科），撿碎片也算今天的複習。 */
 import * as THREE from 'three';
 import { scene, M, mesh } from './engine.js';
 import { tileAt, groundAt } from './terrain.js';
@@ -13,7 +14,7 @@ import { record, dayKey, askQ } from './quiz.js';
 const TA = window.TA, L = TA.L;
 const SP = { name: '潮靈小汐', color: '#6fd8e8', voice: 720 };
 const N = 5;
-const ok = id => !!L.Q[id];   // 任何錯題都可以（長題目用大題目面板、題組附閱讀材料）
+const ok = id => !!L.Q[id] && L.isMistake(id) && L.inTrack(L.Q[id].subject);   // 要考的考科裡的錯題（長題目用大題目面板、題組附閱讀材料）
 let P = null, wisp = null, orbs = [], isNight = () => false;
 const group = new THREE.Group(); scene.add(group);
 const data = () => { const s = S(), d = dayKey(); if (!s.wisp || s.wisp.d !== d) s.wisp = { d, state: 'lost', frags: [] }; return s.wisp; };
@@ -41,7 +42,7 @@ function makeOrb() {
 }
 export function init(player, nightFn) { P = player; isNight = nightFn; }
 function spawnFrags(W) {
-  const ids = L.mistakes().filter(ok).sort(() => Math.random() - 0.5).slice(0, N);
+  let ids = L.reviewNext(N, ok); if (ids.length < 3) ids = L.mistakes().filter(ok).slice(0, N);   // 照今天的複習清單的順序；都在冷卻中就照錯題本
   let seed = Date.now() % 2147483647 || 7; const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let k = 0; k < 600 && W.frags.length < ids.length; k++) {
     const x = (r() - 0.5) * 70, z = (r() - 0.5) * 70, t = tileAt(x, z);

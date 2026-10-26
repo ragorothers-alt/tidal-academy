@@ -129,7 +129,7 @@ export function openMock() {
       <div class="hs-label">題數</div><div class="hs-grid g3">${[...short.map((k, i) => [k, ['短版小考', '短版練習', '短版大考'][i]]), ['full', '整卷']].map(([k, t]) => `<button type="button" class="hs-pick${k === n ? ' on' : ''}" data-n="${k}"><b>${k === 'full' ? `整卷 · ${cfg.realN} 題` : k + ' 題'}</b><small>${t}</small></button>`).join('')}</div>
       <div class="hs-label">題型</div><div class="hs-grid g3">${[['', '各題型都有'], ...drills.map(k => [k, `${L.drillCount(group, k)} 題`])].map(([k, t]) => `<button type="button" class="hs-pick${k === drill ? ' on' : ''}" data-d="${k}"><b>${k ? L.DRILLS[k].name : '完整考卷'}</b><small>${t}</small></button>`).join('')}</div>
       <p class="hs-info">限時 <b>${fmtT(L.mockSeconds(group, n))}</b>（${full ? `整卷採學測${group}正式節次 ${cfg.realMin} 分鐘` : `短版按純選擇作答時間估算，約每題 ${(cfg.choiceMin / cfg.realN).toFixed(1)} 分鐘`}）</p>
-      <p class="muted">短版提供 ${short.join('／')} 題；整卷題數依 115 學測選擇（填）題，包含混合題中的選擇題；非選題、翻譯與作文請到「非選練習」（手機），寫完對照參考答案自評。完整題組一起抽取，短版題數若無法整組湊齊會略少；這是原創練習卷，題型配分與難度不等同正式試卷。</p>
+      <p class="muted">短版提供 ${short.join('／')} 題；整卷題數依 115 學測選擇（填）題，包含混合題中的選擇題；非選題、翻譯與作文請到手機「自由練習」→「非選練習」，寫完對照參考答案自評。完整題組一起抽取，短版題數若無法整組湊齊會略少；這是原創練習卷，題型配分與難度不等同正式試卷。</p>
       ${hist.length ? `<div class="hs-label">最近成績</div><div class="hs-hist">${hist.map(e => { const rate = (e.pts != null ? e.pts : e.c) / e.n; return `<div><span>${new Date(e.at).toLocaleDateString('zh-TW')}</span><b>${e.group}${e.drill && L.DRILLS[e.drill] ? `<small> · ${L.DRILLS[e.drill].name}</small>` : ''}</b><span>${e.n} 題</span><i style="--k:${rate.toFixed(3)}"></i><b>${Math.round(rate * 100)} 分</b></div>`; }).join('')}</div>` : ''}
     </div><div class="hx-foot"><span class="muted">準備好再開始，開始後就會計時。</span><button type="button" class="btn go">開始作答</button></div>`;
     body.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { group = b.dataset.g; Audio.sfx('tick'); paint(); });
@@ -321,6 +321,20 @@ export function showResult(r) {
 }
 
 /* ---------- 錯題本 ---------- */
+/* ---------- 今天的複習（v7.1，L.reviewToday）：各場景共用的說法與手機／錯題本的入口 ---------- */
+/** 一行狀態，例如「今天的複習還有 8 題（已複習 12 題）」 */
+export function reviewLine() {
+  const r = L.reviewToday();
+  return r.left ? `今天的複習還有 ${r.left} 題${r.done ? `（已複習 ${r.done} 題）` : ''}` : r.done ? `今天的複習完成了 ✔（${r.done} 題）` : '今天沒有要複習的題目';
+}
+/** 沒有題目可以出時的原因（全部在冷卻中，或真的沒有） */
+export const reviewEmpty = () => L.pickReview(9999).some(id => L.inTrack(L.Q[id].subject)) ? `剛答過的題目要隔 ${L.COOL_MIN} 分鐘再複習，過一會兒再來` : '今天沒有要複習的題目了';
+/** 接著做今天的複習（下一小段，預設 8 題） */
+export function reviewGo(n) {
+  const ids = L.reviewNext(n || 8);
+  if (!ids.length) { ui.toast(reviewEmpty()); return; }
+  runSet('今天的複習', ids, { review: true, again: () => reviewGo(n) });
+}
 export function openMistakes(sid) {
   let filter = sid || '';
   const body = ui.el('div', 'hall hm');
@@ -329,16 +343,17 @@ export function openMistakes(sid) {
     const total = L.mistakes().length, due = Object.values(dues).reduce((a, b) => a + b, 0), ids = L.pickReview(9999, filter || null), today = U.dayNum();
     const fixed = Object.values(TA.S.q).filter(r => r.wr > 0 && r.s >= 3).length;
     body.innerHTML = `<div class="hall-scroll">
+      <div class="hm-today">🔁 ${reviewLine()}<small>圖書館、睡覺做夢、潮靈、導師的一起練習也都從這份清單出題</small></div>
       <div class="hm-hero"><div><b>${total}</b><small>真正錯題</small></div><div><b>${due}</b><small>到期複習（不含錯題）</small></div><div><b>${fixed}</b><small>已修復</small></div></div>
       <p class="muted hm-rule">答錯的題目會回到第 0 格；須跨日且距最後答錯至少 8 小時，到期答對才升一格，間隔 1→2→4→8→16→35 天，升到第 3 格算修復。當天答錯後再答對會記次數與正確數，不升格。錯題複習與重練錯題排除 ${L.COOL_MIN} 分鐘內剛答過的題目；全部冷卻時請稍後再來。</p>
       <div class="hm-chips"><button type="button" data-s="" class="${filter ? '' : 'on'}">全部 <b>錯 ${total} · 到期 ${due}</b></button>${TA.SUBJECTS.filter(s => counts[s.id] || dues[s.id]).map(s => `<button type="button" data-s="${s.id}" class="${filter === s.id ? 'on' : ''}" style="--c:${s.color}">${s.name} <b>錯 ${counts[s.id]} · 到期 ${dues[s.id]}</b></button>`).join('')}</div>
       <div class="hr-list"></div></div>
-      <div class="hx-foot"><span class="muted">${ids.length > 80 ? `先列出最需要複習的 80 題` : ''}</span><span class="spacer"></span><button type="button" class="btn go"${ids.length ? '' : ' disabled'}>開始複習（最多 15 題）</button></div>`;
+      <div class="hx-foot"><span class="muted">${ids.length > 80 ? `先列出最需要複習的 80 題` : ''}</span><span class="spacer"></span><button type="button" class="btn go"${ids.length ? '' : ' disabled'}>${filter ? '開始複習（最多 15 題）' : '繼續今天的複習'}</button></div>`;
     const list = body.querySelector('.hr-list');
     if (!ids.length) list.innerHTML = '<p class="muted hm-empty">這片海域很乾淨，沒有錯題或到期複習。</p>';
     ids.slice(0, 80).forEach(id => { const r = L.rec(id); const d = reviewItem({ id, ok: !L.isMistake(id), ans: null }, body, `${L.isMistake(id) ? `真正錯題 · 答錯 ${r.wr} 次` : '到期複習'} · ${r.due <= today ? '今天到期' : `${r.due - today} 天後到期`}${L.cooling(id) ? ' · 冷卻中' : ''}`); if (d) list.appendChild(d); });
     body.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { filter = b.dataset.s; Audio.sfx('tick'); paint(); });
-    body.querySelector('.go').onclick = () => { const pick = L.pickReview(15, filter || null); runSet(filter ? `${subj(filter).name}錯題複習` : '錯題複習', pick, { review: true, again: () => openMistakes(filter) }); };
+    body.querySelector('.go').onclick = () => { if (!filter && L.reviewNext(1).length) { reviewGo(15); return; } const pick = L.pickReview(15, filter || null); runSet(filter ? `${subj(filter).name}錯題複習` : '錯題複習', pick, { review: true, again: () => openMistakes(filter) }); };   // 全部：今天的複習（只排要考的考科）；挑一科：那一科全部
   };
   paint();
   open('錯題本', body);

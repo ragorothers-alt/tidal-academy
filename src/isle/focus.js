@@ -101,7 +101,7 @@ function tickRest() {
   const r = rest(); if (!r) { hidePill(); return; }
   const l = Math.max(0, (r.endAt - Date.now()) / 1000);
   pill.innerHTML = `☕ 休息 <b>${fmt(l)}</b>`;
-  if (l <= 0) { S().restRun = null; save(); hidePill(); Audio.sfx('open'); ui.toast('☕ 休息結束！準備好就再專注一輪吧（手機「專注時光」）'); }
+  if (l <= 0) { S().restRun = null; save(); hidePill(); Audio.sfx('open'); ui.toast('☕ 休息結束！準備好就再專注一輪吧（手機「自由練習」→「專注時光」）'); }
 }
 function hidePill() { clearInterval(rtimer); if (pill) { pill.remove(); pill = null; } }
 function restPanel(paint) {

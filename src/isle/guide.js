@@ -52,10 +52,10 @@ const FIRST = [
   ['cook', s => !(s.stats || {}).cook, () => '還沒做過料理：找晶晶上料理教室學食譜，回家門口的工作台做菜'],
   ['diy', s => !(s.stats || {}).diy, () => '還沒用過 DIY 工作台：撿樹枝、石頭、貝殼，到家門口的工作台照配方做家具'],
   ['dream', s => !(s.stats || {}).dream && dream.count() > 0, () => '還沒做過夢：回家在床邊按' + E() + '睡一覺，夢裡會重考錯題本的題目'],
-  ['focus', s => !(s.stats || {}).focusMin, () => '讀書時可以開「專注時光」：' + PHONE() + ' →「專注時光」，島上會陪你一起專心'],
+  ['focus', s => !(s.stats || {}).focusMin, () => '讀書時可以開「專注時光」：' + PHONE() + ' →「自由練習」→「專注時光」，島上會陪你一起專心'],
   ['lab', s => !Object.keys(s.lab || {}).length && Object.values(s.fr || {}).some(f => f >= 4), () => '和熟識的導師聊天時選「研究計畫」：一起做一個長期研究，完成每個階段都有研究家具'],
-  ['lexicon', () => !Object.keys(TA.S.voc || {}).length, () => '還沒背過單字卡：' + PHONE() + ' →「單字燈塔」翻卡，熟悉、模糊、不熟會排不同的複習間隔'],
-  ['wordle', s => !(s.stats || {}).wordle, () => '每日單字謎：' + PHONE() + ' →「單字謎」，每天一題英文單字'],
+  ['lexicon', () => !Object.keys(TA.S.voc || {}).length, () => '還沒背過單字卡：' + PHONE() + ' →「自由練習」→「單字燈塔」翻卡，熟悉、模糊、不熟會排不同的複習間隔'],
+  ['wordle', s => !(s.stats || {}).wordle, () => '每日單字謎：' + PHONE() + ' →「自由練習」→「單字謎」，每天一題英文單字'],
   ['tablets', s => !(s.stats || {}).tablets, () => '島上有三塊數學石碑，每天換一題（題庫的數學題），走過去按' + E()],
   ['stars', () => !astro.bookCount(), () => '晚上 7 點到清晨 5 點、沒下雨時，到學院台地的觀星台觀星，登錄星座'],
   ['visit', s => !(s.stats || {}).homeVisits, () => '和熟識的島民聊天，可以「邀請來我家玩」，他會參觀你的房間、陪你讀書'],
@@ -79,7 +79,7 @@ function suggestions(max) {
   const relax = route.quiet(), exam = TA.L.phase();   // 收工、散步、休息中：不催讀書，只提島上生活；考前 30 天：不介紹新玩法、不推連答紀錄
   if (exam && !relax && H.cramDone && !H.cramDone()) add(`考前衝刺：${PHONE()} →「考前衝刺」做今天的 5 題精選（做完就算完成今天的學習）`, 'cram');
   { const w = H.wishShelf && H.wishShelf(); if (w) add(`今天阿潮的貨架上有你的願望：「${w}」`); }
-  if (!relax && exam !== 'final') { const due = TA.L.conceptDue().map(id => TA.L.CONCEPTS[id]).filter(c => TA.L.inTrack(c.sid)); if (due.length) add(`概念複習：「${due[0].name}」到了再驗證的日子。${PHONE()} →「練習護照」玩一輪，八成以上就升格`, 'passport'); }
+  if (!relax && exam !== 'final') { const due = TA.L.conceptDue().map(id => TA.L.CONCEPTS[id]).filter(c => TA.L.inTrack(c.sid)); if (due.length) add(`概念複習：「${due[0].name}」到了再驗證的日子。${PHONE()} →「自由練習」→「練習護照」玩一輪，八成以上就升格`, 'passport'); }
   const free = freeSlots(); if (free <= 3) add(free ? `口袋快滿了（剩 ${free} 格）：到阿潮的商店賣東西，或捐給博物館` : '口袋滿了：到阿潮的商店賣東西，或捐給博物館');
   // 2. 現在才有的事（活動、時段、潮汐）
   const ev = events.active();
@@ -91,7 +91,7 @@ function suggestions(max) {
   if (!relax && left.length) add(`今天的讀書計畫：${left.map(x => `${(TA.subject(x.sid) || {}).name} ${x.n}/${x.need}`).join('、')}——找${left.map(x => nameOf(x.sid)).join('、')}「一起練習」`, 'plan');
   if (tide.state(env.date).low) add('現在退潮：沙灘邊的潮池和泥灘有生物可以觀察（空手靠近按' + E() + '）');
   if (astro.isNight(h) && !env.raining) add('今晚沒下雨：到學院台地的觀星台觀星，找找這個季節的星座');
-  const vd = TA.L.vocabDue().length; if (!relax && vd >= 10) add(`有 ${vd} 個單字到期了：${PHONE()} →「單字燈塔」翻卡複習`, 'vocab');
+  const vd = TA.L.vocabDue().length; if (!relax && vd >= 10) add(`有 ${vd} 個單字到期了：${PHONE()} →「自由練習」→「單字燈塔」翻卡複習`, 'vocab');
   const mis = dream.count(); if (!relax && mis >= 3) add(`錯題本有 ${mis} 題：回家睡一覺，在夢裡重考（在不同天答對 3 次才會離開錯題本）`);
   if (!mine) { const r = (s.reqs || []).find(x => !x.accepted && !x.done); if (r) add(`${nameOf(r.sid)}頭上有「!」：找他接委託`); }
   // 3. 還沒試過的玩法、今天還沒玩的練習（每天換一個）

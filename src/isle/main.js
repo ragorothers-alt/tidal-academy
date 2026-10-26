@@ -657,23 +657,70 @@ function phoneDream() {
 }
 room.setBedHook(() => sleepMenu());
 dreamisle.init({ player, addStorage: (id, n) => room.addStorage(id, n), beforeEnter: () => { if (room.inside) room.exit(); }, villagers: () => villagers.filter(v => !v.shop && !v.guest), wake: () => { enterHome(); setTimeout(() => ui.toast('醒來了。夢境島會一直保留著，下次睡覺還能回去'), 800); } });
-const PHONE_CORE = ['考前衝刺', '今日學習', '每日潮汐', '單字燈塔', '專注時光', '信箱', '委託', '島民', '口袋', '地圖', '圖鑑', '島上指南', '設定'];
+const appBase = n => n.replace(/（.*?）$/, '');   // 「信箱（5）」→「信箱」
+/** 一排 App 圖示（手機首頁與兩個學習入口共用）：點了記進「最近使用」，打開的面板左上角有返回鈕（back、label） */
+function appGrid(apps, back, label) {
+  const grid = ui.el('div', 'apps');
+  apps.forEach(([n, ic, c, fn]) => {
+    const img = (I.APPICONS || {})[ic], m = n.match(/^(.*?)（(.+)）$/), name = m ? m[1] : n, tag = m ? (m[2] === '今日' ? '!' : m[2]) : '';   // 「信箱（5）」：數字改成圖示角落的紅色小圓點，名稱不再折成兩行
+    const a = ui.el('button', 'app', `<i style="--c:${c}">${img ? `<img src="${img}" alt="">` : ic}${tag ? `<b class="ap-dot">${tag}</b>` : ''}</i>${name}`); a.type = 'button';
+    a.onclick = () => { const s0 = S(); s0.phoneRecent = [appBase(n)].concat((s0.phoneRecent || []).filter(x => x !== appBase(n))).slice(0, 4); save(); ui.setBack(back, label); fn(); };
+    if (tag) a.setAttribute('aria-label', n); grid.appendChild(a);
+  });
+  return grid;
+}
+/** 考科航線裡的 App */
+const trackApps = () => [['航海圖', '🧭', '#c8f0e8', () => voyage.openChart()], ['讀書計畫', '📅', '#d0e8ff', () => planner.open(paintHud)], ['成績統計', '📊', '#d8e8ff', () => hall.openStats()], ['學習週報', '📈', '#c8f0d8', () => report.open()]];
+/** 自由練習裡的 App：[複習與基本功, 練習遊戲] */
+const freeApps = () => { const vdue = L.vocabDue().length; return [
+  [['每日潮汐' + (TA.S.daily.done ? '' : '（今日）'), '🌅', '#ffe8b0', () => voyage.openDaily()], ['單字燈塔' + (vdue ? `（${Math.min(99, vdue)}）` : ''), '🃏', '#c8f0e0', () => lexicon.open()], ['錯題本', '📕', '#ffd0c8', () => hall.openMistakes()], ['夢境複習' + (dream.count() ? `（${dream.count()}）` : ''), '💤', '#e0d8ff', phoneDream], ['非選練習', '✍️', '#ffe8d8', () => written.open()], ['激流衝刺', '⚡', '#fff0a8', () => voyage.openRush()], ['專注時光', '⏳', '#ffe0b0', () => { ui.closePanel(); focus.open(paintHud); }]],
+  [['練習護照', '🛂', '#f0e8c0', () => passport.open(openGame)], ['單字謎' + (words.doneToday() ? '' : '（今日）'), '🔤', '#e8f0c0', () => words.open(paintHud)], ['海風電台', '📻', '#c8e8ff', () => radio.open(paintHud)], ['拋射實驗', '🥥', '#ffe0c0', () => throwGame.open(paintHud)], ['年代排序', '🏺', '#f0e0c8', () => chrono.open(paintHud)], ['元素週期表', '⚗️', '#e0d8ff', () => periodic.open(paintHud)], ['島民議會', '🗳', '#d0f0e8', () => council.open(paintHud)], ['函數圖形', '📉', '#d8e8ff', () => plot.open(paintHud)], ['成語診所', '🖌', '#f8e0d0', () => idiom.open(paintHud)], ['潮汐夜市', '🏮', '#ffd8b0', () => market.open(paintHud)], ['月相觀測', '🌙', '#d0d8f8', () => moon.open(paintHud)]]
+]; };
+const hubApps = () => trackApps().concat(...freeApps());
+/** 今天的複習（hall.reviewLine／reviewGo）：今日學習與自由練習上方的一張卡 */
+function reviewCard() {
+  const r = L.reviewToday(), box = ui.el('div', 'rv-card' + (r.left ? '' : ' done'), `<i>🔁</i><span><b>${hall.reviewLine()}</b><small>錯題與到期題合成一份，只排要考的考科；圖書館、睡覺做夢、潮靈、導師的「一起練習」也從這份出題，做哪一個都算。${!r.left && r.more ? `今天的份做完了，還有 ${r.more} 題可以明天再來。` : ''}</small></span>`);
+  const b = ui.el('button', 'btn' + (r.left ? ' gold' : ' ghost'), r.left ? '繼續複習' : r.more ? '再多做一些' : '沒有了'); b.type = 'button';
+  b.disabled = !r.left && !r.more; b.onclick = () => hall.reviewGo(8); box.appendChild(b);
+  return box;
+}
+/** 考科航線：要考的考科、各考科的級分估算與最弱單元；航海圖、讀書計畫、成績統計、學習週報從這裡進 */
+function phoneTrack() {
+  const groups = L.trackGroups(), main = L.mainGroups(), body = ui.el('div', 'phone-sec hub');
+  const top = ui.el('div', 'hub-top', `<span><b>要考：${groups.join('、')}</b><small>${main.length ? `主力考科：${main.join('、')}（每日潮汐的新題多一倍）` : '還沒選主力考科'}${L.phase() ? ` · ${L.phase() === 'final' ? '考前一週' : '考前 30 天'}` : ''}</small></span>`);
+  const ed = ui.el('button', 'btn ghost sm', '調整航線'); ed.type = 'button'; ed.onclick = () => { ui.setBack(phoneTrack, '考科航線'); openProfile(); }; top.appendChild(ed); body.appendChild(top);
+  const weak = L.weakUnits(40).filter(w => w.weak), list = ui.el('div', 'hub-groups');
+  groups.forEach(g => {
+    const e = L.estimate(g === '數學' ? '數學A' : g), subs = TA.SUBJECTS.filter(x => x.group === g), w = weak.find(x => x.subject.group === g);
+    const row = ui.el('div', 'hub-g' + (main.includes(g) ? ' main' : ''), `<b>${g}${main.includes(g) ? '<em>主力</em>' : ''}</b><span>${e && e.lv ? `估計 ${e.lo}–${e.hi} 級分` : `再練 ${e ? e.need : 40} 題就能估級分`}<small>${w ? `最弱：${ui.esc(w.unit.name)}（${Math.round(w.st.acc * 100)}%）` : '還沒有確認的弱點單元'}</small></span>`);
+    if (w) { const b = ui.el('button', 'btn sm', '補弱點'); b.type = 'button'; b.onclick = () => hall.runSet(`${w.unit.name} · 單元練習`, L.pickUnit(w.id, 10), { again: phoneTrack }); row.appendChild(b); }
+    const c = ui.el('button', 'btn ghost sm', '航海圖'); c.type = 'button'; c.onclick = () => { ui.setBack(phoneTrack, '考科航線'); voyage.openChart(subs[0] && subs[0].id); }; row.appendChild(c);
+    list.appendChild(row);
+  });
+  body.appendChild(list);
+  body.appendChild(ui.el('h4', 'ph-sec', '進度與計畫')); body.appendChild(appGrid(trackApps(), phoneTrack, '考科航線'));
+  body.appendChild(ui.el('p', 'muted', '沒有列在航線裡的考科也能自由練：航海圖、錯題本與導師都有全部的科目。'));
+  ui.setBack(phone); ui.panel('考科航線', body, { cls: 'phone' });   // 從裡面的 App 返回時也有「‹ 手機」
+}
+/** 自由練習：今天的複習、複習與基本功、練習遊戲 */
+function phoneFree() {
+  const body = ui.el('div', 'phone-sec hub'), [base, games] = freeApps();
+  body.appendChild(reviewCard());
+  body.appendChild(ui.el('h4', 'ph-sec', '複習與基本功')); body.appendChild(appGrid(base, phoneFree, '自由練習'));
+  body.appendChild(ui.el('h4', 'ph-sec', '練習遊戲')); body.appendChild(appGrid(games, phoneFree, '自由練習'));
+  ui.setBack(phone); ui.panel('自由練習', body, { cls: 'phone' });
+}
+const PHONE_CORE = ['考前衝刺', '今日學習', '考科航線', '自由練習', '模擬考', '信箱', '委託', '島民', '口袋', '地圖', '圖鑑', '島上指南', '設定'];
 let phoneMore = false;   // 這次打開遊戲按過「更多 App」
 function phone() {
   const body = ui.el('div', 'phone-sec');
   // 手機狀態列：時間、日期與天氣（像 NookPhone 的上緣）
   { const d = simDate(), hh = Math.floor(hourOverride ?? nowHour()), mm = Math.floor(((hourOverride ?? nowHour()) % 1) * 60);
     body.appendChild(ui.el('div', 'ph-status', `<b>${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}</b><span>${d.getMonth() + 1} 月 ${d.getDate()} 日（${'日一二三四五六'[d.getDay()]}）</span><i>${$('wx') ? $('wx').textContent : ''}</i>`)); }
-  const vdue = L.vocabDue().length;
   const SEC = [
-    ['學習', [
+    ['學習', [   // v7.1：學習只留四個入口（今天、考科航線、自由練習、模考）；其他模式收進兩個入口裡，用過的會出現在「最近使用」
       ...(cram.active() ? [['考前衝刺', '🎯', '#ffc0b8', () => cram.open(paintHud)]] : []),
-      ['今日學習', '📚', '#9fe0a0', phoneToday], ['讀書計畫', '📅', '#d0e8ff', () => planner.open(paintHud)], ['專注時光', '⏳', '#ffe0b0', () => { ui.closePanel(); focus.open(paintHud); }],
-      ['夢境複習' + (dream.count() ? `（${dream.count()}）` : ''), '💤', '#e0d8ff', phoneDream], ['學習週報', '📈', '#c8f0d8', () => report.open()], ['每日潮汐' + (TA.S.daily.done ? '' : '（今日）'), '🌅', '#ffe8b0', () => voyage.openDaily()], ['航海圖', '🧭', '#c8f0e8', () => voyage.openChart()], ['單字燈塔' + (vdue ? `（${Math.min(99, vdue)}）` : ''), '🃏', '#c8f0e0', () => lexicon.open()], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()], ['非選練習', '✍️', '#ffe8d8', () => written.open()], ['錯題本', '📕', '#ffd0c8', () => hall.openMistakes()], ['成績統計', '📊', '#d8e8ff', () => hall.openStats()], ['激流衝刺', '⚡', '#fff0a8', () => voyage.openRush()], ['成就', '🏆', '#ffe0a0', phoneAch]
-    ]],
-    ['練習遊戲', [
-      ['練習護照', '🛂', '#f0e8c0', () => passport.open(openGame)],
-      ['單字謎' + (words.doneToday() ? '' : '（今日）'), '🔤', '#e8f0c0', () => words.open(paintHud)], ['海風電台', '📻', '#c8e8ff', () => radio.open(paintHud)], ['拋射實驗', '🥥', '#ffe0c0', () => throwGame.open(paintHud)], ['年代排序', '🏺', '#f0e0c8', () => chrono.open(paintHud)], ['元素週期表', '⚗️', '#e0d8ff', () => periodic.open(paintHud)], ['島民議會', '🗳', '#d0f0e8', () => council.open(paintHud)], ['函數圖形', '📉', '#d8e8ff', () => plot.open(paintHud)], ['成語診所', '🖌', '#f8e0d0', () => idiom.open(paintHud)], ['潮汐夜市', '🏮', '#ffd8b0', () => market.open(paintHud)], ['月相觀測', '🌙', '#d0d8f8', () => moon.open(paintHud)]
+      ['今日學習', '📚', '#9fe0a0', phoneToday], ['考科航線', '⛵', '#c8e4ff', phoneTrack], ['自由練習', '🧩', '#e8f0c0', phoneFree], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()]
     ]],
     ['島上生活', [
       ['信箱' + (social.unread() ? `（${social.unread()}）` : ''), '✉️', '#ffc8d8', () => social.openMail()], ['委託', '📋', '#c8e0ff', () => social.phoneList()],
@@ -687,27 +734,17 @@ function phone() {
       ['衣櫃', '👕', '#ffd0e8', () => wardrobe.openCloset(player)], ['相機', '📷', '#ffd6a0', () => { ui.closePanel(); if (elsewhere()) ui.toast('這裡暫時不能拍照'); else photo.toggle(room.inside); }], ['相簿', '🖼', '#e0d0ff', () => photo.album()], ['回憶錄', '📔', '#ffd8c8', () => memo.open()],
       ['島嶼設計', '🌷', '#c8f0c0', () => { if (room.inside || elsewhere()) ui.toast('回到潮汐小島的戶外才能設計島嶼'); else design.open(player, paintHud); }], ['裝潢', '🛋', '#e0c8a8', () => { if (room.inside) room.openDecor(); else ui.toast('回到家裡才能裝潢'); }]
     ]],
-    ['工具', [['我的檔案', '🪪', '#dce6ff', openProfile], ['鈴錢帳本', '📒', '#f0e6c8', openLedger], ['島上指南', '🧭', '#d8f0e0', () => settings.guide()], ['我的生日', '🎂', '#ffd0e0', () => gifts.openBirthday(paintHud)], ['時間', '⏰', '#ffc0a0', phoneTime], ['設定', '⚙️', '#e0e0e8', () => settings.open()]]]
+    ['工具', [['我的檔案', '🪪', '#dce6ff', openProfile], ['鈴錢帳本', '📒', '#f0e6c8', openLedger], ['島上指南', '🧭', '#d8f0e0', () => settings.guide()], ['我的生日', '🎂', '#ffd0e0', () => gifts.openBirthday(paintHud)], ['時間', '⏰', '#ffc0a0', phoneTime], ['成就', '🏆', '#ffe0a0', phoneAch], ['設定', '⚙️', '#e0e0e8', () => settings.open()]]]
   ];
-  const base = n => n.replace(/（.*?）$/, '');   // 「信箱（5）」→「信箱」
+  const base = appBase;
   // 新手期（新手引導沒做完、玩不到 3 天）：先列常用的 App，其他收在「更多」；熟手在設定裡打開「手機顯示全部 App」
   const full = phoneMore || (S().settings || {}).phoneAll || (guide.finished() && Object.keys(TA.S.days || {}).length >= 3);
   if (!full) {
     const all = SEC.flatMap(x => x[1]), core = all.filter(a => PHONE_CORE.includes(base(a[0]))), used = (S().phoneRecent || []).map(r => all.find(a => base(a[0]) === r)).filter(a => a && !core.includes(a));
     SEC.length = 0; SEC.push(['常用', core.concat(used)], [`其他 ${all.length - core.length - used.length} 個 App`, [['顯示全部', '➕', '#e8e8f0', () => { phoneMore = true; phone(); }]]]);   // 數字放標題，不放紅點（不是通知）
   }
-  { const all = SEC.flatMap(x => x[1]), recent = full ? (S().phoneRecent || []).map(r => all.find(a => base(a[0]) === r)).filter(Boolean) : []; if (recent.length) SEC.unshift(['最近使用', recent]); }   // 最近用過的 App 排在最上面
-  SEC.forEach(([title, apps]) => {
-    body.appendChild(ui.el('h4', 'ph-sec', title));
-    const grid = ui.el('div', 'apps');
-    apps.forEach(([n, ic, c, fn]) => {
-      const img = (I.APPICONS || {})[ic], m = n.match(/^(.*?)（(.+)）$/), name = m ? m[1] : n, tag = m ? (m[2] === '今日' ? '!' : m[2]) : '';   // 「信箱（5）」：數字改成圖示角落的紅色小圓點，名稱不再折成兩行
-      const a = ui.el('button', 'app', `<i style="--c:${c}">${img ? `<img src="${img}" alt="">` : ic}${tag ? `<b class="ap-dot">${tag}</b>` : ''}</i>${name}`); a.type = 'button';
-      a.onclick = () => { const s0 = S(); s0.phoneRecent = [base(n)].concat((s0.phoneRecent || []).filter(x => x !== base(n))).slice(0, 4); save(); ui.setBack(phone); fn(); };   // 記下最近使用；打開的面板左上角有「‹ 手機」
-      if (tag) a.setAttribute('aria-label', n); grid.appendChild(a);
-    });
-    body.appendChild(grid);
-  });
+  { const all = SEC.flatMap(x => x[1]).concat(hubApps()), recent = full ? (S().phoneRecent || []).map(r => all.find(a => base(a[0]) === r)).filter(Boolean) : []; if (recent.length) SEC.unshift(['最近使用', recent]); }   // 兩個入口裡的 App 用過也會出現在這裡   // 最近用過的 App 排在最上面
+  SEC.forEach(([title, apps]) => { body.appendChild(ui.el('h4', 'ph-sec', title)); body.appendChild(appGrid(apps, phone, '手機')); });
   ui.panel('潮汐手機', body, { cls: 'phone phone-home' });
 }
 function phoneVillagers() {
@@ -721,7 +758,7 @@ function phoneVillagers() {
 }
 /** 今日學習：今日路線（選時長、學習＋島上的事＋可選加碼、寶箱與收工摘要）、複習狀況、可以怎麼學 */
 function phoneToday() {
-  const S0 = TA.S, st = route.state(), due = L.dueList().length, mis = L.mistakes().length, vd = L.vocabDue().length;
+  const S0 = TA.S, st = route.state(), mis = L.mistakes().length, vd = L.vocabDue().length;
   if (st.extra.all && route.claimExtra()) { L.gain(30, 10); TA.Store.save(); ui.toast('✨ 三項加碼（每日潮汐、單字、專注）都完成了：+30 經驗、+10 潮晶'); }
   const row = (id, ic, t, sub, v, need, lab, opt) => `<button type="button" class="td-task${v >= need ? ' done' : ''}${opt ? ' opt' : ''}" data-t="${id}"><i>${v >= need ? '✔' : ic}</i><span><b>${t}</b><small>${sub}</small><em style="--k:${Math.min(1, v / need).toFixed(3)}"></em></span><code>${lab}</code></button>`;
   const two = (st.study.v >= st.study.need) + (st.life.v >= st.life.need);
@@ -734,10 +771,12 @@ function phoneToday() {
     </div>
     ${weekHtml()}
     <div class="rt-quiet">${route.quiet() ? `<span>🌿 ${route.quietWhy()}：島民不會主動找你出題</span>` : '<span>想安靜逛逛的話：</span>'}<button type="button" class="btn ghost rt-walk">${st.walk ? '結束散步模式' : st.shut ? '回到學習模式' : '🌿 散步模式'}</button></div>
-    <ul class="rt-stat"><li>到期複習 <b>${due}</b> 題</li><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul>
+    <div class="rv-slot"></div>
+    <ul class="rt-stat"><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul>
     ${events.active().length ? `<p class="ev-now">🎉 今日活動：${events.active().map(e => events.NAMES[e]).join('、')}</p>` : ''}
-    <p class="muted">島民出題、釣魚、捉蟲、鑑定化石都會優先拿到期的複習題和錯題。到期的題目很多時不用一次補完，做完今天的路線就好。</p>
-    <div class="td-acts"><button type="button" class="btn" data-h="daily">每日潮汐</button><button type="button" class="btn" data-h="vocab">單字燈塔</button><button type="button" class="btn" data-h="chart">航海圖</button><button type="button" class="btn" data-h="mock">模擬考</button><button type="button" class="btn" data-h="mis">錯題本</button><button type="button" class="btn" data-h="stats">成績統計</button></div>`);
+    <p class="muted">島民出題、釣魚、捉蟲、鑑定化石也會優先拿複習題。複習題很多時不用一次補完，做完今天的份就好。</p>
+    <div class="td-acts"><button type="button" class="btn" data-h="daily">每日潮汐</button><button type="button" class="btn" data-h="vocab">單字燈塔</button><button type="button" class="btn" data-h="track">考科航線</button><button type="button" class="btn" data-h="free">自由練習</button></div>`);
+  body.querySelector('.rv-slot').replaceWith(reviewCard());
   body.querySelectorAll('[data-len]').forEach(b => { b.onclick = () => { route.setLen(+b.dataset.len); Audio.sfx('tick'); paintHud(); phoneToday(); }; });
   body.querySelector('.td-chest').onclick = () => {
     if (st.ready) { S0.daily.chest = true; L.gain(60, 50); L.checkAch(); TA.Store.save(); Audio.sfx('catch'); ui.toast('🎁 今日路線完成！+60 經驗、+50 潮晶'); daySummary(); return; }
@@ -746,7 +785,7 @@ function phoneToday() {
   { const w = body.querySelector('.rt-wk'); if (w) w.onclick = () => lab.openBook(tutors()); }
   body.querySelector('.rt-walk').onclick = () => { if (st.walk) route.setWalk(false); else if (st.shut) route.shut(false); else route.setWalk(true); Audio.sfx('tick'); paintHud(); phoneToday(); };
   body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => (st.study.cram ? cram.open(paintHud) : voyage.openDaily()), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
-  body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => ({ daily: () => voyage.openDaily(), chart: () => voyage.openChart(), vocab: () => lexicon.open(), mock: () => hall.openMock(), mis: () => hall.openMistakes(), stats: () => hall.openStats() })[b.dataset.h](); });
+  body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { ui.setBack(phoneToday, '今日學習'); ({ daily: () => voyage.openDaily(), vocab: () => lexicon.open(), track: phoneTrack, free: phoneFree })[b.dataset.h](); }; });
   ui.panel('今日學習', body, { cls: 'phone' });
 }
 const tutors = () => villagers.filter(v => !v.shop && !v.guest);

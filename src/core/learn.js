@@ -180,7 +180,7 @@
     if (opts.blank) correct = false;
     const S = TA.S, t = today(), now = Date.now();
     const r = S.q[q.id] = S.q[q.id] || { n: 0, c: 0, s: 0, due: t, wr: 0 };
-    const firstTime = r.n === 0;
+    const firstTime = r.n === 0, wasReview = !firstTime && (r.due <= t || (r.wr > 0 && r.s < 3));   // 答之前是到期題或錯題：算一題「今天的複習」
     // 舊存檔第 0 格沒有 lastWrong：以尚未覆寫的最後作答時間保守推定，保留既有進度。
     if (!r.lastWrong && r.s === 0 && r.wr > 0 && r.last) r.lastWrong = r.last;
     r.n++; if (!opts.blank) r.last = now;
@@ -196,7 +196,7 @@
     if (uid) { const recent = S.unitRecent[uid] = S.unitRecent[uid] || []; recent.push(correct ? 1 : 0); S.unitRecent[uid] = recent.slice(-20); }
     // 讀書計畫／週報用 last 判定實際練過；空白保留 last，靠 lastWrong 保存記錯時間。
     if (opts.blank) { TA.Store.save(); return { xp: 0, gems: 0, levelUp: 0 }; }
-    const d = dayRec(); d.q++; if (correct) d.c++;
+    const d = dayRec(); d.q++; if (correct) d.c++; if (wasReview) d.rv = (d.rv || 0) + 1;
     let xp = correct ? 10 + (q.d - 1) * 3 : 2;
     if (correct && opts.combo > 1) xp += Math.min(10, opts.combo - 1);
     const out = L.gain(xp, 0);
@@ -313,6 +313,17 @@
     const m = L.mistakes(subject), d = L.dueList(subject).filter(id => !L.isMistake(id)), mix = [];
     for (let i = 0; i < Math.max(m.length, d.length); i++) { if (m[i]) mix.push(m[i]); if (d[i]) mix.push(d[i]); }
     return L.readyFirst(uniq(mix)).slice(0, n || 15);
+  };
+  /* ---------- 今天的複習（v7.1）：錯題與到期題合成一份清單（只排要考的考科、剛答過的先不排），
+     圖書館、夢境、潮靈、導師、錯題本與手機都從這裡拿下一題，完成量也共用（d.rv：今天答過的複習題）。
+     每天一份（REVIEW_DAY 題，考前一週 12 題）；做完就好，還想多做也可以繼續。 ---------- */
+  L.reviewGoal = () => (L.phase() === 'final' ? 12 : 20);
+  L.reviewLeft = f => L.pickReview(9999).filter(id => L.inTrack(L.Q[id].subject) && !L.cooling(id) && (!f || f(id)));
+  L.reviewNext = (n, f) => L.reviewLeft(f).slice(0, n);
+  /** { done 今天複習了幾題, left 今天這份還剩幾題, more 這份以外還能複習幾題 } */
+  L.reviewToday = function () {
+    const done = dayRec().rv || 0, all = L.reviewLeft().length, left = Math.min(all, Math.max(0, L.reviewGoal() - done));
+    return { done, left, more: all - left, goal: L.reviewGoal() };
   };
   /* ---------- 備考航線（v7.1）：profile.track = { groups 要考的考科（空＝全部）, main 主力考科（最多 2 個） } ---------- */
   const track = () => TA.S.profile.track || { groups: [], main: [] };

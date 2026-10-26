@@ -273,9 +273,9 @@ export function floatText(obj, text, color) {
 }
 
 /* ---------- 面板 ---------- */
-let panelBack = null, panelBackAt = 0;   // 從手機打開的下一個面板：左上角放「‹ 手機」（setBack 之後 1 秒內打開的面板才算）
-/** 下一個打開的面板加上返回鈕（手機的 App 用） */
-export const setBack = fn => { panelBack = fn; panelBackAt = performance.now(); };
+let panelBack = null, panelBackAt = 0, panelBackLabel = '手機';   // 從手機打開的下一個面板：左上角放「‹ 手機」（setBack 之後 1 秒內打開的面板才算）
+/** 下一個打開的面板加上返回鈕（手機的 App 用；label：返回到哪裡，例如「自由練習」） */
+export const setBack = (fn, label) => { panelBack = fn; panelBackAt = performance.now(); panelBackLabel = label || '手機'; };
 let panelClose = null, panelGuard = null;   // panelGuard：關閉前要確認（例如模擬考作答中），回傳 Promise<boolean>
 export const panelOpen = () => !$('panel').hidden;
 export function panel(title, body, opt) {
@@ -286,7 +286,7 @@ export function panel(title, body, opt) {
   box.innerHTML = ''; const head = el('div', 'pn-head', `<b>${esc(title)}</b>`); const x = el('button', 'pn-x', '✕'); x.type = 'button'; x.onclick = () => requestClose(); head.appendChild(x);
   box.appendChild(head); box.appendChild(body); panelClose = opt && opt.onClose; panelGuard = (opt && opt.guard) || null;
   { const back = panelBack && performance.now() - panelBackAt < 1000 && !(opt && opt.cls && /\bphone-home\b/.test(opt.cls)) ? panelBack : null; panelBack = null;
-    if (back) { const b = el('button', 'pn-back', '‹ 手機'); b.type = 'button'; b.onclick = () => { const g = panelGuard; if (g) g().then(ok => { if (ok) back(); }); else back(); }; head.insertBefore(b, head.firstChild); } }
+    if (back) { const b = el('button', 'pn-back', '‹ ' + esc(panelBackLabel)); b.type = 'button'; b.onclick = () => { const g = panelGuard; if (g) g().then(ok => { if (ok) back(); }); else back(); }; head.insertBefore(b, head.firstChild); } }
   box.tabIndex = -1; if (document.activeElement && document.activeElement !== document.body && !box.contains(document.activeElement)) document.activeElement.blur(); box.focus({ preventScroll: true });
 }
 /** 要求關閉面板：有離開確認的面板先問過（✕、點面板外面、Esc 都走這裡） */

@@ -110,12 +110,13 @@ export async function practice(v) {
   const s = S(), sp = H.sp(v), R = rec(), seen = new Set(), st = L.subjectStats(v.sid);
   const okL = v.ok || ['答對了！', '漂亮！', '完全正確！'], badL = v.bad || ['可惜！', '差一點！'];
   let d = st.attempts < 5 || st.acc < 0.55 ? 1 : st.acc < 0.8 ? 2 : 3, run = 0, got = 0, bells = 0, friend = '', k = 0;
-  await ui.say(sp, R.pIntro ? pick(v.ask || ['我們來練幾題！']) : '我們一起練 5 題：不限時間，難度會照你的狀況調整。答對一題就拿一題的鈴錢，答錯也不會收回，看完解析就換下一題。');
+  const rv = L.reviewNext(2, id => L.Q[id].subject === v.sid);   // v7.1：今天的複習清單裡這一科的題目先出（和圖書館、手機同一份）
+  await ui.say(sp, (R.pIntro ? pick(v.ask || ['我們來練幾題！']) : '我們一起練 5 題：不限時間，難度會照你的狀況調整。答對一題就拿一題的鈴錢，答錯也不會收回，看完解析就換下一題。') + (rv.length ? `先從今天的複習裡挑 ${rv.length} 題你之前做過的。` : ''));
   R.pIntro = 1;
   for (k = 1; k <= SET; k++) {
-    const q = pickQ(v.sid, d, { minD: d, skip: seen, any: true }) || pickQ(v.sid, 3, { skip: seen, any: true }); if (!q) break;
+    const q = (rv[k - 1] && L.view(L.Q[rv[k - 1]])) || pickQ(v.sid, d, { minD: d, skip: seen, any: true }) || pickQ(v.sid, 3, { skip: seen, any: true }); if (!q) break;
     seen.add(q.id);
-    const qd = q.d || d, { ok, ans } = await askQ(sp, q, `【一起練習 第 ${k}/${SET} 題・${DN[qd]}】<br>`);
+    const qd = q.d || d, { ok, ans } = await askQ(sp, q, `【一起練習 第 ${k}/${SET} 題・${rv[k - 1] ? '複習' : DN[qd]}】<br>`);
     record(q, ok);
     if (ok) {
       got++; run++; const b = Math.round(100 * qd * cooking.bellsMul()); bells += b; s.bells += b;

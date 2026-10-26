@@ -296,7 +296,7 @@ test('A1：結果重練與錯題本的真實按鈕不會出冷卻題，冷卻結
   assert.match(h.last().querySelector('.retry').textContent, /還要等 20 分鐘/);
   hall.openMistakes(); h.last().querySelector('.go').click(); assert.match(h.toasts.at(-1), /冷卻/);
   env.setNow(L.rec(q.id).last + 21 * 60000); h.last().querySelector('.go').click();
-  assert.match(h.panels.at(-1).title, /錯題複習/); assert.ok(h.last().querySelector('.hx-main').children.length);
+  assert.match(h.panels.at(-1).title, /今天的複習/, '錯題本的「全部」接著做今天的複習'); assert.ok(h.last().querySelector('.hx-main').children.length);
 });
 
 test('A2：單字未到期重答不升格，第六格仍每三十五天到期，模糊與不熟不會被立即修好', () => {
@@ -663,4 +663,21 @@ test('概念應用：一輪八成以上且不同天到期才升格，算進有�
   assert.equal(JSON.stringify(TA.S.q), qBefore, '題庫熟練不受影響');
   TA.S.concepts.bad = 5; TA.S.concepts['phy-projectile'].s = 9; TA.Store.importJSON(JSON.stringify(TA.S));
   assert.equal(TA.S.concepts.bad, undefined); assert.equal(TA.S.concepts['phy-projectile'].s, 4);
+});
+
+test('今天的複習：錯題與到期題一份清單，只排要考的考科，完成量共用、剛答過的先不排', () => {
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L;
+  const eng = L.BY_SUBJECT.english.slice(0, 3), his = L.BY_SUBJECT.history.slice(0, 2);
+  eng.concat(his).forEach(id => L.record(L.Q[id], false, { silent: true }));
+  assert.equal(L.dayRec().rv || 0, 0, '第一次答（新題）不算複習');
+  assert.equal(L.reviewLeft().length, 0, '剛答錯的題目在冷卻中');
+  setNow(t0 + 30 * 60000);
+  assert.equal(L.reviewLeft().length, 5); assert.equal(JSON.stringify(L.reviewToday()), JSON.stringify({ done: 0, left: 5, more: 0, goal: 20 }));
+  TA.S.profile.track = { groups: ['英文'], main: [] };
+  assert.equal([...L.reviewLeft()].sort().join(), eng.slice().sort().join(), '只排要考的考科');
+  const next = L.reviewNext(2); L.record(L.Q[next[0]], true, { silent: true }); L.record(L.Q[next[1]], false, { silent: true });
+  const r = L.reviewToday(); assert.equal(r.done, 2, '任何地方答的複習題都算'); assert.equal(r.left, 1, '答過的先冷卻，清單變短');
+  assert.ok(L.reviewNext(5, id => id === eng[2]).every(id => id === eng[2]), '可以只拿某一科或某一種');
+  TA.S.days[TA.U.dayKey()].rv = 19; assert.equal(L.reviewToday().left, 1, '今天的份：20 題'); TA.S.days[TA.U.dayKey()].rv = 20;
+  assert.equal(JSON.stringify(L.reviewToday()), JSON.stringify({ done: 20, left: 0, more: 1, goal: 20 }), '做完今天的份，剩下的可以明天再來');
 });

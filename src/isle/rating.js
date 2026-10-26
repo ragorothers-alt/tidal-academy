@@ -31,7 +31,7 @@ export function week() {
   return out;
 }
 const ADVICE = {
-  study: r => r.detail.research < 3 ? '和熟識的導師一起推進研究計畫：每完成一個階段，小島就多一份永久成果' : r.detail.concepts < 3 ? `已驗證 ${r.detail.concepts} 個概念：手機「練習護照」裡的遊戲，隔幾天再做對一輪就能驗證` : `熟練 ${r.detail.mastered} 題：同一題在不同天都答對才算熟練，每日潮汐會幫你排好複習`,
+  study: r => r.detail.research < 3 ? '和熟識的導師一起推進研究計畫：每完成一個階段，小島就多一份永久成果' : r.detail.concepts < 3 ? `已驗證 ${r.detail.concepts} 個概念：手機「自由練習」→「練習護照」裡的遊戲，隔幾天再做對一輪就能驗證` : `熟練 ${r.detail.mastered} 題：同一題在不同天都答對才算熟練，每日潮汐會幫你排好複習`,
   friends: () => '每天找導師「一起練習」或「連續挑戰」，每人每天最多加 3 點好感度',
   museum: r => `博物館收藏 ${r.detail.donated} 件，把釣到、抓到、鑑定好的東西拿給史遙`,
   dex: r => `圖鑑登錄 ${r.detail.caught} / ${r.detail.all}，不同月份與時段會出現不同的生物`,

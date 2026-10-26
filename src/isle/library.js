@@ -1,11 +1,11 @@
-/* 潮汐小島 · 潮汐圖書館：館員帶你做錯題特訓、到期複習、單字複習，並可翻閱全部單元的潮汐筆記。 */
+/* 潮汐小島 · 潮汐圖書館：館員陪你做「今天的複習」（和手機、夢境、潮靈同一份清單，L.reviewToday）、單字複習，並可翻閱錯題本與全部單元的潮汐筆記。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
 import { pick } from './quiz.js';
 import { drill, picker } from './drill.js';
 import * as words from './words.js';
-import { openMistakes } from './hall.js';
+import { openMistakes, reviewLine, reviewEmpty } from './hall.js';
 import * as figs from './figs.js';
 
 const TA = window.TA, L = TA.L;
@@ -17,10 +17,9 @@ export async function talk() {
   const b = LIB(), s = sp();
   await ui.say(s, pick(b.greet) + (b.catch && Math.random() < 0.5 ? b.catch : ''));
   for (;;) {
-    const mis = L.mistakes().length, due = L.dueList().length, voc = L.vocabDue().length;
+    const voc = L.vocabDue().length, rv = L.reviewToday();
     const opts = [];
-    opts.push([`錯題特訓（錯題本 ${mis} 題）`, 'mis']);
-    opts.push([`到期複習（${due} 題）`, 'due']);
+    opts.push([`繼續今天的複習（${rv.left ? `還有 ${rv.left} 題${rv.done ? ` · 已複習 ${rv.done}` : ''}` : rv.done ? `完成了 ✔ ${rv.done} 題` : '沒有題目'}）`, 'rv']);
     opts.push([`單字複習（到期 ${voc} 個）`, 'voc']);
     opts.push(['翻閱錯題本（清單與詳解）', 'book'], ['每日單字謎', 'word'], ['翻閱單元筆記', 'notes'], ['再見', 'bye']);
     const i = await ui.ask(s, '今天想做什麼呢？', opts.map(o => o[0]));
@@ -29,12 +28,12 @@ export async function talk() {
     if (k === 'bye') { await ui.say(s, '慢慢來，明天見。'); return; }
     if (k === 'notes') { ui.closeDialog(); openNotes(); return; }
     if (k === 'book') { ui.closeDialog(); openMistakes(); return; }
-    if (k === 'mis') await mistakes(b, s);
-    if (k === 'due') {
-      const ids = L.dueList(); if (!ids.length) { await ui.say(s, '今天沒有到期的題目，可以去讀新單元喔。'); continue; }
-      await ui.say(s, pick(b.due));
-      const r = await drill(s, picker({ mode: 'ids', ids }), Math.min(8, ids.length), { praise: b.praise });
-      await result(s, r);
+    if (k === 'rv') {
+      const ids = L.reviewNext(6); if (!ids.length) { await ui.say(s, reviewEmpty() + '。可以翻翻單元筆記，或去讀新單元。'); continue; }
+      await ui.say(s, pick(ids.some(L.isMistake) ? b.mistakes : b.due));
+      const before = L.mistakes().length, r = await drill(s, picker({ mode: 'ids', ids }), ids.length, { praise: b.praise });
+      await result(s, r, before - L.mistakes().length);
+      await ui.say(s, reviewLine() + '。');
     }
     if (k === 'voc') {
       await ui.say(s, pick(b.vocab));
@@ -42,18 +41,6 @@ export async function talk() {
       await result(s, r);
     }
   }
-}
-async function mistakes(b, s) {
-  const by = TA.SUBJECTS.map(x => [x, L.mistakes(x.id).length]).filter(x => x[1] > 0);
-  if (!by.length) { await ui.say(s, pick(b.empty)); return; }
-  await ui.say(s, pick(b.mistakes));
-  const opts = [['全部混合', null]].concat(by.map(([x, n]) => [`${x.name}（${n} 題）`, x.id]));
-  const i = await ui.ask(s, '要練哪一科？', opts.map(o => o[0]).concat(['先不要']));
-  if (i < 0 || i >= opts.length) return;
-  const ids = L.mistakes(opts[i][1]), before = ids.length;
-  const r = await drill(s, picker({ mode: 'ids', ids }), Math.min(6, ids.length), { praise: b.praise });
-  const fixed = before - L.mistakes(opts[i][1]).length;
-  await result(s, r, fixed);
 }
 async function result(s, r, fixed) {
   const b = LIB(), bells = r.ok * 150; S().bells += bells; save();
