@@ -1,6 +1,6 @@
 /* 潮汐小島 · 渲染核心：渲染器、滾筒地平線彎曲、材質快取、天空、光源與日夜。 */
 import * as THREE from 'three';
-import { detailTextures } from './texgen.js';
+
 
 export const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('cv'), antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -109,7 +109,7 @@ const NOISE = `
   vec3 habTint(vec3 c, vec2 p){
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722)), h = n_f(p * 0.23 + vec2(17.3, -4.1));
     float sg = smoothstep(0.42, 0.3, h), dr = smoothstep(0.55, 0.68, h);
-    vec3 t = mix(mix(vec3(0.84, 1.096, 0.512), vec3(0.758, 1.113, 0.594), sg), vec3(1.08, 1.023, 0.532), dr);
+    vec3 t = mix(mix(vec3(0.84, 1.1, 0.56), vec3(0.77, 1.11, 0.63), sg), vec3(1.05, 1.03, 0.58), dr);
     return mix(c, t * l, 0.3 + 0.25 * max(sg, dr)) * (1.0 + dr * 0.06 - sg * 0.05);
   }
 `;
@@ -132,12 +132,14 @@ const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;
     return smoothstep(0.34, 0.86, g); }
 `;
 const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform float uTrans;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
-/* ---------- 寫實細節材質：texgen.js 產生的無縫細節圖與法線圖，用世界座標三平面投影貼上 ---------- */
+/* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
 ['grass', 'dirt', 'sand', 'rock', 'plaster', 'planks', 'tiles', 'bark', 'leaves', 'cobble', 'masonry'].forEach(n => { DET[n] = { d: { value: neutral(128, 128, 128) }, n: { value: neutral(128, 128, 255) } }; });
 /** 每種材質用哪幾張細節圖（uD0..uD2 / uN0..uN2） */
-const DETK = { terrain: ['grass', 'sand', 'rock'], wall: ['planks'], roof: ['plaster'], stone: ['rock'], bark: ['bark'], sway: ['leaves'], sakura: ['leaves'], pine: ['leaves'] };
+const DETK = { terrain: ['grass', 'sand', 'rock'], wall: ['planks'], roof: ['plaster'], stone: ['rock'], bark: ['bark'], sway: ['leaves'], sakura: ['leaves'], pine: ['leaves'], wood: ['planks'], fabric: ['plaster'], ceramic: ['plaster'], metal: ['rock'], foliage: ['leaves'], paper: ['plaster'] };
+/** v7.6 室內與家具的材質種類（M(color, opts, kind) 的 kind）：木頭、布料、陶瓷、金屬、室內葉子、紙 */
+export const MATK = ['wood', 'fabric', 'ceramic', 'metal', 'foliage', 'paper'];
 const TRI = `
   uniform sampler2D uD0; uniform sampler2D uN0; uniform sampler2D uD1; uniform sampler2D uN1; uniform sampler2D uD2; uniform sampler2D uN2;
   vec3 triW(vec3 n){ vec3 b = pow(abs(n), vec3(4.0)); return b / (b.x + b.y + b.z); }
@@ -146,18 +148,27 @@ const TRI = `
     vec2 a = texture2D(t, p.zy).xy * 2.0 - 1.0, c = texture2D(t, p.xz).xy * 2.0 - 1.0, e = texture2D(t, p.xy).xy * 2.0 - 1.0;
     return vec3(0.0, a.y, a.x) * b.x + vec3(c.x, 0.0, c.y) * b.y + vec3(e.x, e.y, 0.0) * b.z; }
 `;
-/** 照片細節材質（Poly Haven，CC0；tools/phototex.py 打包成 models/tex_photo.js）：載入成功的材質就不再用程式產生 */
-function loadPhotoDetail(aniso) {
+/** 僅保留 CC0 環境倒影來源；照片 d/n 不再覆蓋木、石、草、葉與灰泥。 */
+function loadPhotoDetail() {
   const base = window.__MODEL_BASE || 'src/isle/models/';
   return new Promise(res => {
     if (window.TA && window.TA.TEX) { res(window.TA.TEX); return; }
     const sc = document.createElement('script'); sc.src = base + 'tex_photo.js'; sc.onload = () => res((window.TA && window.TA.TEX) || {}); sc.onerror = () => res({}); document.head.appendChild(sc);
-  }).then(pack => { if (pack.env) loadEnv(pack.env); return pack; }).then(pack => Promise.all(Object.entries(pack).filter(([n]) => DET[n]).map(([n, e]) => Promise.all([e.d, e.n].map(url => new Promise((ok, no) => new THREE.TextureLoader().load(url, ok, undefined, no)))).then(([d, nm]) => {
-    [d, nm].forEach(x => { x.wrapS = x.wrapT = THREE.RepeatWrapping; x.flipY = false; x.generateMipmaps = true; x.minFilter = THREE.LinearMipmapLinearFilter; x.magFilter = THREE.LinearFilter; x.anisotropy = aniso; x.colorSpace = THREE.NoColorSpace; x.needsUpdate = true; });
-    DET[n].d.value = d; DET[n].n.value = nm; return n;
-  }).catch(() => null)))).then(list => { if (window.TA && window.TA.TEX) delete window.TA.TEX; return new Set(list.filter(Boolean)); });
+  }).then(pack => { if (pack.env) loadEnv(pack.env); if (window.TA && window.TA.TEX) delete window.TA.TEX; });
 }
-/** 產生真正的細節圖（先載照片材質，其餘分批用程式產生，避免卡住畫面）；完成後直接換掉 uniform 的貼圖，所有材質同時生效 */
+/** 中性 0.5 是乘色的 1；最大偏差 ±3%，法線擾動低於 0.04。沒有照片與顆粒裂紋。 */
+function paintedDetail(kind, size) {
+  const d = new Uint8Array(size * size * 4), n = new Uint8Array(d.length), wood = kind === 'planks' || kind === 'bark';
+  const amp = kind === 'rock' || kind === 'masonry' ? 0.018 : wood ? 0.014 : 0.009;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const u = x / size * Math.PI * 2, v = y / size * Math.PI * 2, i = (y * size + x) * 4;
+    const wash = wood ? Math.sin(u * 5 + Math.sin(v) * 0.5) * 0.65 + Math.sin(u * 2 - v) * 0.35 : Math.sin(u + Math.sin(v)) * 0.6 + Math.cos(v * 2 - u) * 0.4;
+    const value = Math.round((0.5 + wash * amp) * 255);
+    d[i] = d[i + 1] = d[i + 2] = value; d[i + 3] = 255;
+    n[i] = Math.round(128 + Math.cos(u + Math.sin(v)) * 3); n[i + 1] = Math.round(128 + Math.sin(v * 2 - u) * 3); n[i + 2] = n[i + 3] = 255;
+  }
+  return { detail: new THREE.DataTexture(d, size, size), normal: new THREE.DataTexture(n, size, size) };
+}
 /* 天空倒影：Poly Haven 的晴天全景（tools/hdri_env.py 轉成一般圖片）做成環境貼圖，只給水面與玻璃反射用，不參與整體打光 */
 export const ENV_MATS = [];   // bend() 登記的水面、玻璃材質
 const envState = { tex: null, k: 1 };   // k：天空倒影的亮度（晚上變暗，倒影是白天的天空）
@@ -182,12 +193,11 @@ function loadCliff(aniso) {
 export async function initDetail(size) {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   loadCliff(aniso);
-  const photo = await loadPhotoDetail(aniso);
+  loadPhotoDetail().catch(() => {});   // 倒影非必要資源，不阻擋微表面建立
   for (const n of Object.keys(DET)) {
-    if (photo.has(n)) continue;   // 已經有照片材質
     await new Promise(r => setTimeout(r, 0));
     try {
-      const t = detailTextures(n, size || 512);
+      const t = paintedDetail(n, Math.min(size || 256, 256));
       [t.detail, t.normal].forEach(x => { x.wrapS = x.wrapT = THREE.RepeatWrapping; x.generateMipmaps = true; x.minFilter = THREE.LinearMipmapLinearFilter; x.magFilter = THREE.LinearFilter; x.anisotropy = aniso; x.colorSpace = THREE.NoColorSpace; x.needsUpdate = true; });
       DET[n].d.value = t.detail; DET[n].n.value = t.normal;
     } catch (e) { console.warn('細節材質產生失敗：', n, e); }
@@ -200,7 +210,7 @@ const WN = 'vWN = normalize(mat3(modelMatrix) * objectNormal);';
    螢幕空間倒影（岸邊的燈、房子、樹倒映在水裡）、遠方的天空與城堡用方向查找、岸線依深度柔和淡出並帶一圈碎泡。
    uLate = 0（省電模式、室內、其他小島）時照舊用一般的半透明混色 */
 export const WL = { uLate: { value: 0 }, uOpq: { value: null }, uOpqD: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uNF: { value: new THREE.Vector2(0.5, 500) },
-  uPrj: { value: new THREE.Matrix4() }, uSSR: { value: 1 }, uAbs: { value: new THREE.Vector3(1.4, 0.45, 0.3) }, uAbsSea: { value: new THREE.Vector3(0.42, 0.075, 0.05) }, uScat: { value: new THREE.Color('#06323c') }, uDbg: { value: 0 }, uSplit: { value: 0 } };   // uSplit：這一格島上用兩階段（地形的水底不再自己染色）
+  uPrj: { value: new THREE.Matrix4() }, uSSR: { value: 1 }, uAbs: { value: new THREE.Vector3(0.78, 0.40, 0.30) }, uAbsSea: { value: new THREE.Vector3(0.90, 0.40, 0.22) }, uScat: { value: new THREE.Color('#39576b') }, uDbg: { value: 0 }, uSplit: { value: 0 } };   // uSplit：這一格島上用兩階段（地形的水底不再自己染色）
 const LATE_W = `
   uniform float uLate; uniform sampler2D uOpq; uniform sampler2D uOpqD; uniform vec2 uRes; uniform vec2 uNF; uniform mat4 uPrj; uniform float uSSR; uniform vec3 uAbs; uniform vec3 uAbsSea; uniform vec3 uScat; uniform float uDbg;
   float taLin(float d){ return uNF.x * uNF.y / (uNF.y - d * (uNF.y - uNF.x)); }
@@ -223,7 +233,7 @@ const LATE_W = `
     float cosV = max(dot(V, upV), 0.06), vdep = thick0 * cosV;   // 垂直水深（約）
     // 折射：水面的傾斜把水底的像推開一點；推到了水面前面的東西（腳、石頭）就不推
     vec2 tilt = (n - upV * dot(n, upV)).xy;
-    vec2 ruv = suv + tilt * 0.055 * clamp(thick0, 0.0, 1.4) / (1.0 + zW * 0.05);
+    vec2 ruv = suv + tilt * 0.025 * clamp(thick0, 0.0, 1.4) / (1.0 + zW * 0.05);
     float zR = taLin(texture2D(uOpqD, ruv).x);
     if (zR < zW + 0.03) { ruv = suv; zR = zO; }
     float thick = max(zR - zW, 0.0) * rayK;
@@ -254,14 +264,14 @@ const LATE_W = `
       }
       if (hit > 0.0) refl = mix(refl, texture2D(uOpq, huv).rgb, hit);
     }
-    float F = 0.05 + 0.95 * pow(1.0 - clamp(dot(n, V), 0.0, 1.0), 3.2);   // 風格化的菲涅耳：斜看時倒影比物理值明顯一點（像插畫裡的水）
-    vec3 col = mix(refr, refl, F * mix(0.85, 1.0, min(calm, 1.0))) + spec;   // calm 大於 1（池塘）只用來減少白沫
+    float F = 0.035 + 0.965 * pow(1.0 - clamp(dot(n, V), 0.0, 1.0), 4.6);   // 風格化的菲涅耳：斜看時倒影比物理值明顯一點（像插畫裡的水）
+    vec3 col = mix(refr, refl, F * mix(0.68, 0.78, min(calm, 1.0))) + spec * 0.6;   // calm 大於 1（池塘）只用來減少白沫
     if (uDbg > 0.5) return uDbg < 1.5 ? refl : uDbg < 2.5 ? refr : uDbg < 3.5 ? vec3(F) : vec3(thick0 * 0.5, vdep * 2.0, 0.0);
     // 岸線：貼著岸的地方一圈斷斷續續的碎泡（依真的水深），再依深度柔和地淡進岸上
     vec2 q = vWP.xz;
     float lace = n_v(q * 2.6 + vec2(uTime * 0.35, -uTime * 0.22)) * 0.6 + n_v(q * 7.0 - vec2(uTime * 0.5, uTime * 0.3)) * 0.4;
     float foam = smoothstep(0.16, 0.0, vdep + (lace - 0.5) * 0.16) * smoothstep(0.35, 0.7, lace) * (1.0 - calm * 0.5);
-    col = mix(col, irr * 0.92 + spec * 0.3, foam * 0.75);
+    col = mix(col, irr * 0.92 + spec * 0.3, foam * 0.42);
     return mix(texture2D(uOpq, suv).rgb, col, smoothstep(0.0, 0.045, vdep) * edgeK);   // edgeK：大海網格的外緣淡進天幕畫的遠海
   }
 `;
@@ -301,7 +311,7 @@ const SEA_GLSL = `
           float fr = mix((0.03 + 0.97 * pow(1.0 - max(dot(nV, Vv), 0.0), 5.0)) * 0.82, 1.0, smoothstep(45.0, 125.0, dist));   // 中近處留一點海水本色；遠處是純倒影，和天幕畫的遠海同色（不會有一條分界線）
           float sd = max(dot(R, uSunV), 0.0), low = 1.0 - smoothstep(0.15, 0.7, dot(uSunV, upV));   // 太陽越低，反光帶越長越亮
           float ss = max(dot(reflect(-Vv, nS), uSunV), 0.0);
-          seaSpec = uSunCol * (pow(sd, mix(55.0, 30.0, uNight)) * (0.1 + low * 0.45 + uNight * 0.5) + pow(sd, mix(220.0, 700.0, lod)) * (0.35 + low * 1.3) + pow(ss, mix(2000.0, 900.0, uNight)) * (2.0 + low * 4.5 + uNight * 4.0) * lod * near) * mix(1.0, 1.6, uNight);   // 寬的柔光（遠處連成光帶）＋細碎的閃點；夜裡月光帶寬一點、亮一點   // 寬的柔光（遠處連成光帶）＋細碎的閃點
+          seaSpec = uSunCol * 0.6 * (pow(sd, mix(55.0, 30.0, uNight)) * (0.1 + low * 0.45 + uNight * 0.5) + pow(sd, mix(220.0, 700.0, lod)) * (0.35 + low * 1.3) + pow(ss, mix(2000.0, 900.0, uNight)) * (2.0 + low * 4.5 + uNight * 4.0) * lod * near) * mix(1.0, 1.6, uNight);   // 寬的柔光（遠處連成光帶）＋細碎的閃點；夜裡月光帶寬一點、亮一點   // 寬的柔光（遠處連成光帶）＋細碎的閃點
           vec3 lit0 = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;   // 只取漫射光：材質內建的太陽高光（粗糙度很低）在近處波紋上會變成一顆顆大亮點，反光改由下面的 spec 負責
           vec3 body = mix(lit0, mix(vec3(0.015, 0.09, 0.17), vec3(0.004, 0.025, 0.07), uNight), smoothstep(2.0, 14.0, dist) * clamp(uGlow * 2.2 + uNight * 0.8, 0.0, 1.0));
           outgoingLight = mix(body, skyR * 0.88, fr);
@@ -363,10 +373,13 @@ export function bend(mat, kind) {
     Object.assign(sh.uniforms, { uCurve: U.uCurve, uBendF: U.uBendF, uTime: U.uTime, uWind: U.uWind, uPlayer: U.uPlayer, uSnow: U.uSnow, uWindDir: U.uWindDir });
     const std = sh.fragmentShader.includes('#include <lights_fragment_begin>') && sh.fragmentShader.includes('#include <opaque_fragment>');
     const wn = std ? WN : 'vWN = vec3(0.0, 1.0, 0.0);';   // 沒有法線的材質（Basic、Points）
-    let v = VTOP + (kind === 'water' ? '#ifdef TA_SEA\nattribute float aDepth;\nvarying float vSeaDepth;\n#else\nattribute float aPond;\n#endif\nvarying float vPond;\n' : '') + sh.vertexShader;
+    let v = VTOP + (kind === 'terrain' ? '#ifdef TA_SURFACE\nattribute vec4 aSurface; varying vec4 vSurface;\n#endif\n' : '') + (kind === 'water' ? '#ifdef TA_SEA\nattribute float aDepth;\nvarying float vSeaDepth;\n#else\nattribute float aPond;\n#endif\nvarying float vPond;\n' : '') + sh.vertexShader;
     // 世界座標、世界法線與物件座標（材質細節、遮擋鏤空用）
     v = v.replace('#include <begin_vertex>', `#include <begin_vertex>
       vOP = position;
+      #ifdef TA_SURFACE
+        vSurface = aSurface;
+      #endif
       ${wn}
       #ifdef USE_INSTANCING
         vWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
@@ -458,7 +471,7 @@ export function bend(mat, kind) {
     if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
     if (kind === 'water') Object.assign(sh.uniforms, { uSkyT: skyU.top, uSkyM: skyU.mid, uSkyB: skyU.bot, uSunCol: skyU.sunCol, uGlow: skyU.glow, uNight: skyU.night });   // 大海的倒影用當下的天色
     if (kind === 'water') Object.assign(sh.uniforms, WL);   // 第二階段：讀得到底下的場景
-    let f = FTOP + LG_TOP + NOISE + (dk ? TRI : '') + (kind === 'terrain' ? 'uniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry; uniform float uSplit;\n' : '') + (kind === 'water' ? 'varying float vPond;\nuniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
+    let f = FTOP + LG_TOP + NOISE + (dk ? TRI : '') + (kind === 'terrain' ? '#ifdef TA_SURFACE\nvarying vec4 vSurface;\n#endif\nuniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry; uniform float uSplit;\n' : '') + (kind === 'water' ? 'varying float vPond;\nuniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
     if (kind === 'water') f = f.replace('void main() {', '#define TA_CREEK (vWP.y > 0.8 && vPond <= 0.0)\n' + LATE_W + 'void main() {');   // v7.4：高地泉（水面 2.75）以前也被當成高處的小溪，整片光網和一圈白沫
     if (dk) {
       // gDetN：細節法線在世界空間的擾動（顏色階段算好，法線階段加上）
@@ -467,12 +480,19 @@ export function bend(mat, kind) {
     }
     if (kind === 'water') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   { // 水面的細波紋：兩組交錯、會移動的波，反光與天空倒影碎成一片片的小面（小溪很淺，波紋小）
-    float wa = vWP.y > 0.8 || vPond > 0.0 ? 0.3 : 1.0;   // 小溪、池塘：細波小
+    float wa = vWP.y > 0.8 || vPond > 0.0 ? 0.22 : 0.6;   // 小溪、池塘：細波小
     vec2 q = vWP.xz;
     vec2 sl = vec2(cos(q.x * 3.0 + q.y * 1.3 + uTime * 0.7), cos(q.y * 3.0 - q.x * 0.9 + uTime * 0.6)) * 0.10
             + vec2(cos(q.y * 5.0 + q.x * 2.1 - uTime * 1.0), cos(q.x * 5.0 - q.y * 1.7 - uTime * 0.9)) * 0.07;
     normal = normalize(normal + (viewMatrix * vec4(sl.x * wa, 0.0, sl.y * wa, 0.0)).xyz);
   }`);
+    if (kind === 'flower') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      #ifdef TA_BLOOM
+        normal = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);   // 草叢裡的小花：花瓣正反面都像地面一樣朝天受光（不會背面整片發黑）
+      #endif`);
+    if (kind === 'grass') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      { vec3 grassUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+        normal = normalize(mix(normal, grassUp, gl_FrontFacing ? 0.12 : 0.8)); }`);   // 草卡背面的法線也向天，避免黑色三角根；保留實際投影陰影
     if (kind === 'sway' || kind === 'pine' || kind === 'sakura') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   #ifdef TA_MODEL
     // 樹冠模型：葉片是一片片朝向各異的薄面，背光的那面會整片黑掉；法線往天空方向混合，整個樹冠像一團有體積的葉子均勻受光
@@ -481,96 +501,61 @@ export function bend(mat, kind) {
     if (kind !== 'grass' && kind !== 'flower' && kind !== 'water') f = f.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + OCC_F);   // 水面不鏤空：discard 會關掉提早深度測試，藏在地形底下的整片海面都要算倒影
     if (kind === 'terrain') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
-        vec3 wn = normalize(vWN); float up = smoothstep(0.55, 0.85, wn.y);
-        vec3 bc = diffuseColor.rgb;
+        vec3 wn = normalize(vWN), bc = diffuseColor.rgb;
+        float up = smoothstep(0.55, 0.85, wn.y);
         float green = smoothstep(0.03, 0.12, bc.g - max(bc.r, bc.b));
         float sandy = (1.0 - green) * smoothstep(0.55, 0.7, bc.r) * step(bc.b, bc.g);
+        float masonK = uMasonry * smoothstep(1.06, 1.24, vWP.y) * (1.0 - sandy) * (1.0 - green), bed = 0.0, relief = 0.0;
+        #ifdef TA_SURFACE
+          green = vSurface.x; sandy = vSurface.y; masonK = clamp(vSurface.z, 0.0, 1.0); bed = vSurface.w;
+          relief = step(1.5, vSurface.z);
+        #endif
         vec2 p = vWP.xz;
-        // 草地：大片明暗斑駁、手繪筆觸、細小的亮草葉
-        float m1 = n_f(p * 0.22), m2 = n_f(p * 0.9 + 7.0);
-        float strokes = n_v(vec2(p.x * 7.0 + n_v(p * 1.3) * 3.0, p.y * 2.4 + n_v(p * 0.9 + 4.0) * 2.0));
-        float blades = smoothstep(0.78, 0.95, n_v(p * 13.0 + vec2(0.0, n_v(p * 5.0) * 2.0)));
-        vec3 g = bc * (0.8 + m1 * 0.34 + (strokes - 0.5) * 0.08);
-        g = mix(g, g * vec3(1.08, 1.06, 0.84), smoothstep(0.45, 0.75, m2) * 0.45);   // 大片偏金黃的草
-        // 草皮的毛流：細細的草葉筆觸（兩個方向交錯），縫裡暗、葉尖亮而偏金，近看像一片濃密的草毯
-        {
-          vec2 w1 = vec2(p.x * 26.0 + n_v(p * 3.1) * 4.0, p.y * 7.0), w2 = vec2(p.x * 9.0 - p.y * 4.0, (p.y + p.x * 0.35) * 24.0 + n_v(p * 2.7 + 9.0) * 4.0);
-          float f1 = n_v(w1), f2 = n_v(w2 + 3.0), fur = max(f1, f2);
-          g *= 0.85 + smoothstep(0.25, 0.85, fur) * 0.2;
-          g = mix(g, g * vec3(1.14, 1.12, 0.78) + vec3(0.025, 0.025, 0.01), smoothstep(0.78, 0.95, fur) * 0.3);   // 受光的葉尖
-        }
-        g += vec3(0.05, 0.07, 0.01) * blades;
-        g = habTint(g, p);
-        // 沙灘：細沙顆粒與淡淡的起伏
-        float sp = n_h(floor(p * 38.0)); vec3 sd = bc * (0.96 + (sp - 0.5) * 0.08 + (n_v(p * 2.5) - 0.5) * 0.06);
-        sd += vec3(0.04, 0.035, 0.02) * smoothstep(0.9, 1.0, sp);
-        float wet = smoothstep(0.3, 0.0, vWP.y);
-        // 風紋：不對稱的沙波（迎風面緩、背風面陡），波峰亮、波谷暗，法線也跟著起伏；越靠近水越平
-        float rp = (p.x * 0.8 + p.y * 1.4 + n_v(p * 0.6) * 3.0 + n_v(p * 2.1) * 0.6) * 8.0, rw = 0.5 + 0.5 * sin(rp - 0.35 * cos(rp));
-        float ripK = (1.0 - wet) * (0.55 + 0.45 * smoothstep(0.3, 0.7, n_v(p * 0.35 + 9.0)));
-        sd *= 1.0 + (rw - 0.45) * 0.06 * ripK;   // v7.0：沙波短一點、淡一半（以前像瓦楞紙）
-        float ripN = cos(rp) * ripK;
-        sd *= mix(vec3(1.0), vec3(1.05, 1.01, 0.93), smoothstep(0.4, 0.75, n_f(p * 0.13 + 3.0)));   // 大片的暖色、冷色沙
-        // 小石子與碎貝殼
-        { vec2 cp = p * 7.0, fp = fract(cp) - 0.5 + (vec2(n_h(floor(cp) + 1.7), n_h(floor(cp) + 4.2)) - 0.5) * 0.4; float ph = n_h(floor(cp) + 0.3);
-          float dt = smoothstep(0.17, 0.09, length(fp * vec2(1.0, 1.4))) * step(0.955, ph);
-          sd = mix(sd, ph > 0.985 ? vec3(0.96, 0.9, 0.86) : bc * vec3(0.55, 0.52, 0.5), dt * 0.85); }
-        sd = mix(sd, sd * vec3(0.72, 0.75, 0.8), wet * 0.7);   // 濕沙：顏色深、偏冷
-        // 懸崖側面：一層層的橫向岩層與裂縫
-        float side = 1.0 - up;
-        float band = sin(vWP.y * 10.0 + n_v(vec2(p.x + p.y, vWP.y) * 1.3) * 2.6);
-        float crack = smoothstep(0.08, 0.0, abs(n_v(vec2((p.x + p.y) * 2.2, vWP.y * 0.8)) - 0.5));
-        vec3 cl = bc * (0.88 + smoothstep(-0.3, 0.6, band) * 0.16) * (1.0 - crack * 0.18);
-        float paintK = uCliffOn * (1.0 - sandy) * (1.0 - green);   // 手繪岩壁：只貼在岩壁（沙坡、草皮的邊不貼）
-        if (paintK > 0.0) {
-          vec3 pq = vWP * 0.3, pw = triD(uCliffW, pq, gB), pe = triD(uCliffE, pq * 1.15 + 0.37, gB);
-          vec3 pc = mix(pe, pw, smoothstep(0.4, 1.3, vWP.y) * 0.8 + 0.2);   // 矮的土坡是泥土夾石頭，高的懸崖是米黃岩層
-          pc = mix(vec3(dot(pc, vec3(0.3, 0.59, 0.11))), pc, 0.7);   // 收一點飽和，和整體的柔和色調一致
-          cl = mix(cl, pc * clamp(dot(bc, vec3(0.3, 0.59, 0.11)) / 0.3, 0.7, 1.15), paintK);   // 保留頂點色的明暗：崖頂的薄土、牆腳較暗
-        }
-        // 白石擋土牆（新島的台地、山頂邊緣；草地高度以下的河岸維持自然岩層）：錯縫砌的象牙白石塊、灰縫，牆頂下一條深藍飾帶與金線
-        float masonK = uMasonry * smoothstep(1.06, 1.24, vWP.y) * (1.0 - sandy) * (1.0 - green);
+        // 1.5–3m 色塊先於草葉細紋；高頻亮度差低於 8%。
+        float wash = n_v(p * 0.45 + 7.0), stroke = n_v(vec2(p.x * 4.0, p.y * 1.7));
+        vec3 g = habTint(bc * (0.76 + wash * 0.05 + (stroke - 0.5) * 0.02), p);
+        vec3 sd = bc * (0.985 + n_v(p * 2.5) * 0.03);
+        // 材質濕邊依低頻位置改變寬度；不動沙面、水面或任何高度查詢。
+        float wetEdge = 0.22 + (n_v(p * 0.42 + 3.0) - 0.5) * 0.24;
+        float wet = 1.0 - smoothstep(wetEdge - 0.12, wetEdge + 0.24, vWP.y);
+        sd *= mix(vec3(1.0), vec3(0.86, 0.90, 0.96), wet * 0.55);
+        float band = sin(vWP.y * 5.0 + n_v(p * 0.45) * 1.1);
+        vec3 cl = bc * (0.97 + band * 0.035);
         if (masonK > 0.0) {
-          float hc = abs(wn.x) > abs(wn.z) ? vWP.z : vWP.x, row = floor(vWP.y / 0.42);
-          vec2 bp = vec2(hc / 0.9 + mod(row, 2.0) * 0.5 + n_h(vec2(row, 3.1)) * 0.3, vWP.y / 0.42), fb = fract(bp);
-          float mortar = smoothstep(0.0, 0.045, fb.x) * smoothstep(1.0, 0.955, fb.x) * smoothstep(0.0, 0.08, fb.y) * smoothstep(1.0, 0.92, fb.y);
-          float tone = n_h(floor(bp) + 0.37), sk = n_h(floor(bp) + 7.7);
-          vec3 sc = sk < 0.55 ? vec3(0.95, 0.92, 0.85) : sk < 0.8 ? vec3(0.87, 0.9, 0.84) : vec3(0.97, 0.9, 0.78);   // v7.4：三種石塊——灰象牙 55%、偏冷的灰綠 25%、暖米 20%（Codex 第二輪 C2）
-          vec3 st = sc * mix(1.0, 0.9, tone) * (0.92 + n_v(vWP.xz * 3.0 + vWP.y) * 0.1);
-          st *= mix(0.66, 1.0, mortar) * (0.95 + 0.05 * fb.y);   // 每塊石頭上緣受光一點
-          { // v7.4 苔痕：牆腳 10–25 公分、和一些灰縫裡斷斷續續的薄苔（#647A54），整面約一成；飾帶與金線畫在後面，保持乾淨
-            float mz = n_f(vec2(hc * 1.3, vWP.y * 2.2) + 4.0);
-            float moss = smoothstep(1.34, 1.1, vWP.y) * smoothstep(0.4, 0.6, mz) + (1.0 - mortar) * smoothstep(0.6, 0.74, mz) * 0.7;
-            st = mix(st, vec3(0.13, 0.19, 0.09) * (0.85 + 0.3 * n_v(vWP.xz * 9.0 + vWP.y * 5.0)), clamp(moss, 0.0, 1.0) * 0.72); }
-          float my = mod(vWP.y, 2.0), band = smoothstep(0.62, 0.64, my) * smoothstep(0.86, 0.84, my), gl = smoothstep(0.6, 0.62, my) * smoothstep(0.64, 0.62, my) + smoothstep(0.84, 0.86, my) * smoothstep(0.88, 0.86, my);
-          st = mix(st, vec3(0.16, 0.22, 0.42), band); st = mix(st, vec3(0.86, 0.7, 0.36), gl);
-          st = mix(st * 0.82, st, smoothstep(1.06, 1.5, vWP.y));   // 牆腳一點濕氣與髒污
+          float hc = abs(wn.x) > abs(wn.z) ? vWP.z : vWP.x, row = floor(vWP.y / 0.38);
+          vec2 bp = vec2(hc / 0.76 + mod(row, 2.0) * 0.5, vWP.y / 0.38), fb = fract(bp);
+          float mortar = smoothstep(0.0, 0.026, fb.x) * (1.0 - smoothstep(0.974, 1.0, fb.x)) * smoothstep(0.0, 0.04, fb.y) * (1.0 - smoothstep(0.96, 1.0, fb.y));
+          mortar = mix(mortar, 1.0, relief);
+          float tone = n_h(floor(bp) + 0.37);
+          vec3 st = mix(vec3(0.84, 0.78, 0.68), vec3(0.72, 0.70, 0.77), step(0.8, tone) * 0.28);
+          st *= (0.97 + tone * 0.05) * mix(0.82, 1.0, mortar);
+          float moss = (1.0 - mortar) * smoothstep(0.72, 0.88, n_v(vec2(hc * 1.2, vWP.y * 2.0) + 4.0));
+          st = mix(st, vec3(0.39, 0.48, 0.37), moss * 0.32);
+          // 藍紫飾板每約 3m 留一小段，兩側留白；壓頂／凸石不畫飾帶。
+          float plaque = (1.0 - smoothstep(0.25, 0.46, abs(fract(hc / 3.1) - 0.5))) * (1.0 - relief);
+          float my = mod(vWP.y, 2.0), ribbon = smoothstep(0.66, 0.68, my) * (1.0 - smoothstep(0.80, 0.82, my));
+          st = mix(st, vec3(0.32, 0.33, 0.44), ribbon * plaque * 0.64);
           cl = mix(cl, st, masonK);
         }
         vec3 top = mix(mix(bc, sd, sandy), g, green);
-        diffuseColor.rgb = mix(top, cl, side * (1.0 - green * up));
-        // 寫實細節：草地的細草葉、沙粒與風紋、懸崖的岩層裂縫（三平面投影）
-        vec3 q = vWP * 0.55, dG = triD(uD0, q, gB), dS = triD(uD1, q * 1.2, gB), dR = mix(triD(uD2, vWP * 0.4, gB), vec3(0.5), max(paintK * 0.8, masonK * 0.75));   // 手繪岩壁本身就有細節，照片細節只留一點
-        dG = (dG * 0.6 + triD(uD0, vWP * 0.21 + 0.37, gB) * 0.4 - 0.5) * 0.9 + 0.5;   // 兩種尺度混合，草地的明暗更明顯、看不出重複
-        float wR = side * (1.0 - green * up), wG = green * (1.0 - wR), wS = (1.0 - wG - wR);
-        vec3 det = dG * wG + dS * wS + dR * wR;
-        diffuseColor.rgb *= mix(vec3(1.0), det * 2.0, 0.72 - 0.36 * wG);   // 草地底下的紋理收斂，不和草葉搶
-        gDetN = (triN(uN0, q, gB) * wG * 0.35 + triN(uN1, q * 1.2, gB) * wS * 0.6 + triN(uN2, vWP * 0.4, gB) * wR * mix(1.2, 0.55, paintK)) * 0.8;   // 草地的凹凸放輕，近看不會像揉皺的紙
-        gDetN -= vec3(0.5, 0.0, 0.87) * ripN * 0.1 * wS * sandy;   // 沙波的起伏
-        // 水底（河床、淺海的沙底）：青綠色調與流動的焦散光紋——水面把陽光聚成一條條晃動的亮網
-        {
-          float uw = max(smoothstep(0.32, 0.12, vWP.y), smoothstep(0.75, 0.68, vWP.y) * smoothstep(0.5, 0.6, vWP.y) * sandy) * up;   // 河床、淺海，以及小溪的沙底（高度 0.62）
-          if (uw > 0.0) {
-            vec2 cp = p * 1.15 + vec2(n_v(p * 0.7 + uTime * 0.13), n_v(p * 0.7 + 5.0 - uTime * 0.11)) * 0.9;
-            float c1 = n_cell(cp + vec2(uTime * 0.09, uTime * 0.05)), c2 = n_cell(cp * 1.37 + 3.1 - vec2(uTime * 0.06, -uTime * 0.08));
-            float caus = smoothstep(0.38, 0.62, c1) * smoothstep(0.38, 0.62, c2);
-            caus = caus * caus * 1.6 + smoothstep(0.5, 0.7, max(c1, c2)) * 0.25;
-            diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (vWP.y > 0.5 ? vec3(0.42, 0.72, 0.78) : vec3(0.72, 0.98, 1.0)), uw * (vWP.y > 0.5 ? 0.85 : 0.55) * (1.0 - uSplit * 0.7));   // 第二階段的水自己會吸收紅光：水底還原成沙石的顏色   // 小溪的溪底在水下：暗一點、偏青綠（水吸收了紅光），透過水面看是清透的藍綠色
-            diffuseColor.rgb += vec3(0.55, 0.85, 0.82) * caus * uw * (0.12 * (1.0 - uSplit) + 0.3 * uShade);
-          }
+        float side = (1.0 - up) * (1.0 - green) * (1.0 - sandy) * (1.0 - bed);
+        diffuseColor.rgb = mix(top, cl, max(side, masonK));
+        // 只留低權重程式微表面；砌石和原岩的結構不再共用照片裂紋。
+        float wR = max(side, masonK), wG = green * (1.0 - wR), wS = max(0.0, 1.0 - wG - wR);
+        vec3 q = vWP * 0.5, det = triD(uD0, q, gB) * wG + triD(uD1, q, gB) * wS + triD(uD2, q, gB) * wR;
+        diffuseColor.rgb *= mix(vec3(1.0), det * 2.0, 0.35);
+        gDetN = (triN(uN0, q, gB) * wG + triN(uN1, q, gB) * wS + triN(uN2, q, gB) * wR) * 0.1;
+        // 焦散放在水底，窄而斷續；水面不再疊一層明亮的網。
+        float uw = max(bed, smoothstep(0.32, 0.12, vWP.y) * up);
+        if (uw > 0.0) {
+          vec2 cp = p * 1.15 + vec2(n_v(p * 0.7 + uTime * 0.13), n_v(p * 0.7 + 5.0 - uTime * 0.11)) * 0.9;
+          float c1 = n_cell(cp + vec2(uTime * 0.09, uTime * 0.05)), c2 = n_cell(cp * 1.37 + 3.1 - vec2(uTime * 0.06, -uTime * 0.08));
+          float caus = smoothstep(0.58, 0.72, c1) * smoothstep(0.58, 0.72, c2);
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.88, 0.97, 1.0), uw * 0.3 * (1.0 - uSplit));
+          diffuseColor.rgb += vec3(0.70, 0.77, 0.84) * caus * uw * (0.025 + 0.11 * uShade);
         }
       }
-        { float cS = smoothstep(0.5, 0.68, n_f(vWP.xz * 0.028 + vec2(uTime * 0.011, uTime * 0.004))); diffuseColor.rgb *= 1.0 - cS * 0.26 * uShade; }   // 雲影慢慢掠過地面
+      { float cS = smoothstep(0.5, 0.68, n_f(vWP.xz * 0.028 + vec2(uTime * 0.011, uTime * 0.004))); diffuseColor.rgb *= 1.0 - cS * 0.26 * uShade; }
 `);
     if (kind === 'sway' || kind === 'pine' || kind === 'sakura') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       #if !defined(TA_MODEL) && !defined(TA_LEAFTEX)
@@ -587,8 +572,8 @@ export function bend(mat, kind) {
         #endif
         diffuseColor.rgb *= mix(0.64, 1.1, smoothstep(-0.75, 0.95, on.y));   // 葉團的體積感：底部陰暗、頂部明亮
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.16, 1.12, 0.72), smoothstep(0.5, 1.0, on.y) * 0.32);   // 頂端受光偏黃綠
-        vec3 qd = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), (triD(uD0, qd, gB) - 0.5) * 2.6 + 1.0, 1.0);   // 一片片重疊的葉子
-        gDetN = triN(uN0, qd, gB) * 1.6;
+        vec3 qd = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), (triD(uD0, qd, gB) - 0.5) * 2.0 + 1.0, 0.25);   // 一片片重疊的葉子
+        gDetN = triN(uN0, qd, gB) * 0.12;
       }
       #endif   // Tripo 模型的貼圖本身已有葉片明暗，不再疊程式的葉團花紋（TA_MODEL 由 actors.js 的 loadModel 設定）
 `);
@@ -605,8 +590,8 @@ export function bend(mat, kind) {
           dirt = 1.0 - smoothstep(0.85, 0.3, vOP.y) * 0.12;   // 合併後的物件座標以建築的地面為原點：牆腳一段髒污
         #endif
         diffuseColor.rgb *= dirt * vec3(1.06, 1.0, 0.9) * mix(1.0, board * grain * (0.89 + lip * 0.11), vert);   // 木板帶一點暖色；每片板子明暗不同、板縫一條細細的陰影（以前算了沒用上）
-        vec3 q = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, q, gB) * 2.0, 0.6);
-        gDetN = triN(uN0, q, gB) * 0.9;
+        vec3 q = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, q, gB) * 2.0, 0.3);
+        gDetN = triN(uN0, q, gB) * 0.12;
       }`);
     if (kind === 'roof') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
@@ -621,69 +606,86 @@ export function bend(mat, kind) {
         diffuseColor.rgb *= mix(vec3(1.0), vec3(1.05, 0.98, 0.92), n_h(vec2(col * 1.3, row + 7.0)));   // 每片瓦的色相略有冷暖
         diffuseColor.rgb = mix(vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))), diffuseColor.rgb, 0.8);   // v6.93：屋瓦少兩成飽和（電光藍、洋紅的瓦退成柔和的石板藍、玫瑰陶土）
         vec3 qd = vWP * 0.9; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qd, gB) * 2.0, 0.4);   // 瓦面的細小斑駁
-        gDetN = triN(uN0, qd, gB) * 0.5;
+        gDetN = triN(uN0, qd, gB) * 0.10;
         // 搭接的厚度：每一排瓦往下斜、下緣翹起，壓在下一排上面——法線依排內位置往外或往上偏，看得出一層層的瓦
         { vec3 wn = normalize(vWN), dn = normalize(vec3(wn.x, 0.0, wn.z) + 1e-4);
-          float tilt = mix(0.18, -0.55, smoothstep(0.0, 0.12, q.y)) * smoothstep(0.2, 0.5, length(wn.xz));
+          float tilt = mix(0.12, -0.32, smoothstep(0.0, 0.12, q.y)) * smoothstep(0.2, 0.5, length(wn.xz));
           gDetN += (dn * tilt + vec3(0.0, -0.1, 0.0) * tilt) * 0.6;
           diffuseColor.rgb *= 1.0 + smoothstep(0.18, 0.08, q.y) * smoothstep(0.0, 0.05, q.y) * 0.12 * n_h(vec2(col + 9.0, row)); }   // 瓦片下緣受光的一條亮邊（v7.5：每片強弱不同，不是每片都鑲一條一樣的亮框）
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.16 + 0.015, step(0.935, n_h(vec2(col + 3.1, row - 2.0))) * smoothstep(0.3, 0.48, abs(q.x)) * smoothstep(0.4, 0.1, q.y));   // 約 6% 的瓦，下緣角落有一點磨損（較淺）
       }`);
     if (kind === 'stone') f = f.replace('#include <color_fragment>', `#include <color_fragment>
-      {
-        // 石材：不規則石塊與石縫
-        vec2 p = vWP.xz * 2.4 + vec2(vWP.y * 1.7);
-        float c = n_cell(p), c2 = n_cell(p * 2.3 + 5.0);
-        float gap = smoothstep(0.32, 0.2, c);
-        diffuseColor.rgb *= (0.86 + (1.0 - gap) * 0.1 + n_h(floor(p)) * 0.08) * (0.94 + c2 * 0.08);
-        vec3 qd = vWP * 0.7; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qd, gB) * 2.0, 0.55);
-        gDetN = triN(uN0, qd, gB) * 0.65;
+      { // 形體與倒角交給模型，石柱／花台不再被同一張裂紋切碎。
+        float wash = n_v(vWP.xz * 0.65 + vWP.y * 0.4);
+        diffuseColor.rgb *= 0.97 + wash * 0.06;
+        gDetN = triN(uN0, vWP * 0.45, gB) * 0.10;
       }`);
     if (kind === 'plaster') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { // v7.6 夢幻風住宅的灰泥牆：大片柔和的冷暖斑駁（±2–3%）與很淡的細顆粒，不畫石塊（'stone' 會把奶油灰泥畫成灰色石塊）
         float pn = n_f(vWP.xz * 0.55 + vec2(vWP.y * 0.8, 0.0)), fine = n_v(vWP.xz * 9.0 + vWP.y * 7.0);
-        diffuseColor.rgb *= mix(vec3(0.985, 0.97, 0.99), vec3(1.02, 1.01, 0.99), pn) * (0.985 + fine * 0.03);
+        diffuseColor.rgb *= mix(vec3(1.025, 1.01, 0.965), vec3(1.045, 1.025, 0.975), pn) * (0.985 + fine * 0.03);
       }`);
     if (kind === 'bark') f = f.replace('#include <color_fragment>', `#include <color_fragment>
-      { vec3 qd = vWP * vec3(1.6, 0.7, 1.6); diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qd, gB) * 2.0, 0.95); gDetN = triN(uN0, qd, gB) * 1.2; }`);
+      { vec2 p = vec2(vOP.x + vOP.z * 0.6, vOP.y);
+        float grain = sin(p.x * 11.0 + n_v(p * 0.8) * 1.5);
+        diffuseColor.rgb *= 0.98 + grain * 0.02;
+        gDetN = triN(uN0, vWP * vec3(0.9, 0.25, 0.9), gB) * 0.12;
+      }`);
+    if (MATK.includes(kind)) f = f.replace('#include <color_fragment>', `#include <color_fragment>
+      { // v7.6 室內與家具的材質細節（全用世界座標：合併成整棟的網格也能用）；高頻紋理隨距離淡掉，遠看不閃
+        vec3 wn = normalize(vWN); float lev = step(0.7, abs(wn.y));
+        vec2 fp = lev > 0.5 ? vWP.xz : abs(wn.x) > abs(wn.z) ? vWP.zy : vWP.xy;   // 這個面上的 2D 座標
+        float aa = clamp(1.0 - length(fwidth(fp)) * 70.0, 0.0, 1.0);
+        ${kind === 'wood' ? `// 木頭：沿木紋的細長纖維＋淡淡的年輪，每塊板子（約 30 cm × 1.6 m）明暗略不同；立面木紋直向、水平面順著 x
+        float a = mix(vWP.y, vWP.x, lev), b = mix(abs(wn.x) > abs(wn.z) ? vWP.z : vWP.x, vWP.z, lev);
+        float fib = n_v(vec2(b * 30.0, a * 1.5)) * 0.65 + n_v(vec2(b * 85.0, a * 2.6)) * 0.35 * aa;
+        float ring = sin((b + n_v(vec2(b * 1.8, a * 0.3)) * 0.4) * 42.0) * 0.5 + 0.5;
+        float plank = n_h(floor(vec2(b * 3.2, a * 0.6 + n_h(vec2(floor(b * 3.2), 3.7)))));
+        float gu = b * 7.0 + n_v(vec2(b * 1.5, a * 0.45)) * 1.1, gl = abs(fract(gu) - 0.5) * 2.0;   // 手繪感的深色木紋線：一公尺約七條，順著木紋微微彎
+        float line = smoothstep(0.16, 0.0, gl) * clamp(1.0 - fwidth(gu) * 4.0, 0.0, 1.0);
+        diffuseColor.rgb *= (0.88 + fib * 0.16 + ring * 0.06 * aa + (plank - 0.5) * 0.1) * (1.0 - line * 0.13) * mix(vec3(1.0), vec3(1.04, 1.0, 0.93), ring * 0.6);
+        gDetN = (lev > 0.5 ? vec3(0.0, 0.0, 1.0) : abs(wn.x) > abs(wn.z) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0)) * ((fib - 0.5) * 0.08 * aa - line * 0.05);` : ''}
+        ${kind === 'fabric' ? `// 布料：一塊塊的染色深淺＋織紋（約 2 cm 一格）
+        float dye = n_f(fp * 1.7), weave = sin(fp.x * 310.0) * sin(fp.y * 310.0) * 0.5 + 0.5;
+        float wa = clamp(1.0 - length(fwidth(fp)) * 40.0, 0.0, 1.0);
+        diffuseColor.rgb *= (0.93 + dye * 0.13) * (1.0 + (weave - 0.5) * 0.11 * wa);` : ''}
+        ${kind === 'ceramic' ? `// 陶瓷：上釉的柔和斑駁
+        diffuseColor.rgb *= 0.975 + n_f(fp * 3.2 + vWP.y) * 0.05;` : ''}
+        ${kind === 'metal' ? `// 金屬（黃銅、銅、鐵）：細細的拉絲與一點氧化的斑
+        diffuseColor.rgb *= (0.97 + n_v(vec2(fp.x * 3.0, fp.y * 140.0)) * 0.05 * aa) * mix(1.0, 0.9, smoothstep(0.62, 0.85, n_f(fp * 2.4)) * 0.6);` : ''}
+        ${kind === 'foliage' ? `// 室內盆栽的葉子：一片片深淺不同、頂面受光偏黃綠
+        float lc = n_cell(vec2(vWP.x + vWP.z * 0.7, vWP.y * 1.3) * 9.0);
+        diffuseColor.rgb *= (0.86 + lc * 0.2) * mix(0.84, 1.08, wn.y * 0.5 + 0.5);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.1, 1.08, 0.8), smoothstep(0.3, 0.9, wn.y) * 0.3);` : ''}
+        ${kind === 'paper' ? `// 紙：很淡的纖維
+        diffuseColor.rgb *= 0.975 + n_v(fp * 60.0) * 0.035 * aa + n_v(fp * 4.0) * 0.02;` : ''}
+      }`);
     if (kind === 'water') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       vec3 wAlb = diffuseColor.rgb;   // 第二階段：水體散射的顏色（頂點色、隨時間變的海色）
       {
         // 水面：緩慢流動的亮線（水光）與細碎的閃光
         vec2 p = vWP.xz; float t = uTime;
         #ifdef USE_COLOR_ALPHA
-          float l1 = smoothstep(0.07, 0.0, abs(n_v(p * 0.9 + vec2(t * 0.12, t * 0.05)) - 0.5));
-          float l2 = smoothstep(0.05, 0.0, abs(n_v(p * 1.8 - vec2(t * 0.08, -t * 0.1) + 3.0) - 0.5));
+          float l1 = smoothstep(0.042, 0.0, abs(n_v(p * 0.9 + vec2(t * 0.12, t * 0.05)) - 0.5));
+          float l2 = smoothstep(0.030, 0.0, abs(n_v(p * 1.8 - vec2(t * 0.08, -t * 0.1) + 3.0) - 0.5));
         #else
           // 大海：亮線細一點、淡一點，而且一段一段的（原本一圈圈很大的白線像畫在海面上的等高線）
           float gap = smoothstep(0.35, 0.65, n_v(p * 0.35 + vec2(t * 0.025, 0.0)));
-          float l1 = smoothstep(0.04, 0.0, abs(n_v(p * 1.6 + vec2(t * 0.12, t * 0.05)) - 0.5)) * gap * 0.55;
-          float l2 = smoothstep(0.028, 0.0, abs(n_v(p * 2.8 - vec2(t * 0.08, -t * 0.1) + 3.0) - 0.5)) * gap * 0.55;
+          float l1 = smoothstep(0.024, 0.0, abs(n_v(p * 1.6 + vec2(t * 0.12, t * 0.05)) - 0.5)) * gap * 0.55;
+          float l2 = smoothstep(0.017, 0.0, abs(n_v(p * 2.8 - vec2(t * 0.08, -t * 0.1) + 3.0) - 0.5)) * gap * 0.55;
         #endif
         float sp = smoothstep(0.955, 1.0, n_v(p * 6.0 + vec2(t * 0.6, -t * 0.4))) + smoothstep(0.97, 1.0, n_v(p * 13.0 - vec2(t * 0.9, t * 0.5) + 7.0)) * 0.8;   // 陽光在水面上一閃一閃的細碎亮點
         float solarK = 0.2 + 0.8 * uShade; sp *= solarK;   // 水面的陽光閃點、亮線與焦散跟著日照：晚上淡到兩成，不和燈光搶
-        diffuseColor.rgb += vec3(0.24, 0.3, 0.3) * (l1 * 0.6 + l2 * 0.4) * solarK + vec3(0.95) * sp;
+        diffuseColor.rgb += vec3(0.15, 0.18, 0.22) * (l1 * 0.6 + l2 * 0.4) * solarK + vec3(0.57) * sp;
         float gNet = 0.0;
         #ifdef USE_COLOR_ALPHA
         { // 河與小溪：淺水上一張晃動的光網（水面把陽光折成一條條亮線），比大海明顯
           vec2 wp = p * (TA_CREEK ? 3.4 : 2.2) + vec2(n_v(p * 1.3 + t * 0.2), n_v(p * 1.3 + 4.0 - t * 0.17)) * 1.4;   // 小溪的光網細一點
           float c1 = n_cell(wp + vec2(t * 0.3, t * 0.1)), c2 = n_cell(wp * 1.6 - vec2(t * 0.2, -t * 0.25) + 2.0);
           float net = smoothstep(0.66, 0.76, max(c1, c2)) * 0.55 + smoothstep(0.78, 0.9, c1 * c2 * 1.6) * 0.6;   // 細細的亮線
-          if (TA_CREEK) {
-            // 小溪：淺水把陽光折成一張細密的亮線網（經典的水面焦散：幾次互相扭曲的正弦，取 1/距離 的尖峰）
-            vec2 q = mod(p * 8.5, 6.2832) - 250.0, ii = q; float cc = 1.0;
-            for (int n = 0; n < 4; n++) {
-              float tt = t * 0.45 * (1.0 - 3.5 / float(n + 1));
-              ii = q + vec2(cos(tt - ii.x) + sin(tt + ii.y), sin(tt - ii.y) + cos(tt + ii.x));
-              cc += 1.0 / length(vec2(q.x / (sin(ii.x + tt) / 0.005), q.y / (cos(ii.y + tt) / 0.005)));
-            }
-            cc = 1.17 - pow(cc / 4.0, 1.4);
-            net = clamp(pow(abs(cc), 9.0) * 1.8, 0.0, 1.0) * (0.22 + 0.78 * smoothstep(0.3, 0.7, n_v(p * 0.45 + vec2(t * 0.04, -t * 0.03))));   // 亮線一片一片的，不是整條溪都鋪滿
-            diffuseColor.rgb *= vec3(0.3, 0.68, 0.74);
-            diffuseColor.rgb += vec3(0.95) * sp;   // 小溪上的陽光閃點多一倍   // 底色深一點、更青：亮線與暗處的對比像目標畫面那樣明顯
-          }
+          if (TA_CREEK) net *= 0.3;   // 溪底承擔焦散，水面只留零星柔光
           net *= solarK;
-          diffuseColor.rgb += vec3(0.75, 0.95, 0.9) * net * (TA_CREEK ? 1.15 : vPond > 0.0 ? 0.1 : 0.35);   // 池塘幾乎沒有光網（水深、靜）
+          diffuseColor.rgb += vec3(0.75, 0.95, 0.9) * net * (TA_CREEK ? 0.32 : vPond > 0.0 ? 0.06 : 0.20);   // 池塘幾乎沒有光網（水深、靜）
           gNet = net;
         }
         #endif
@@ -691,9 +693,9 @@ export function bend(mat, kind) {
         { // 河岸：頂點 alpha 是離岸多近；岸邊比較透明，並有一圈隨水流晃動的白沫
           float edge = vColor.a, fo = smoothstep(0.55, 0.95, edge + (n_v(p * 2.6 + vec2(t * 0.5, -t * 0.32)) - 0.5) * 0.55);
           diffuseColor.a = opacity * mix(1.0, TA_CREEK ? 0.45 : 0.62, edge) * (TA_CREEK ? 1.5 : 1.0);   // 小溪（水面 0.9）：青綠色明顯一點，光網與水底的焦散仍看得到
-          if (TA_CREEK) diffuseColor.a = max(diffuseColor.a, gNet * 0.5);   // 小溪的光網亮線不透明，像一條條浮在水面上的光
+          if (TA_CREEK) diffuseColor.a = max(diffuseColor.a, gNet * 0.12);   // 小溪的光網亮線不透明，像一條條浮在水面上的光
           float foK = TA_CREEK ? smoothstep(0.35, 0.65, n_v(p * 0.8 + t * 0.05)) * 0.6 + 0.15 : vPond > 0.0 ? 0.12 : 1.0;   // 池塘的岸邊只有零星一點白沫   // 小溪岸邊的白沫斷斷續續，不是一整圈白線
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.98, 1.0), fo * 0.8 * foK); diffuseColor.a = max(diffuseColor.a, fo * 0.88 * foK);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.98, 1.0), fo * 0.48 * foK); diffuseColor.a = max(diffuseColor.a, fo * 0.54 * foK);
         }
         #endif
         float wf = pow(1.0 - clamp(normalize(cameraPosition - vWP).y, 0.0, 1.0), 2.5);
@@ -738,13 +740,19 @@ export function bend(mat, kind) {
       }
       #endif`);
     if (kind === 'grass') f = f.replace('#include <color_fragment>', `#include <color_fragment>
-      diffuseColor.rgb *= 0.9 + n_v(vWP.xz * 0.22) * 0.25;
+      float grassL = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+      diffuseColor.rgb = mix(vec3(0.075, 0.2, 0.06), vec3(0.24, 0.43, 0.14), smoothstep(0.02, 0.45, grassL));   // 夢幻風參考圖的草是帶暖光的鮮黃綠（灰綠的草會讓整島像褪色）
+      diffuseColor.rgb *= 0.97 + n_v(vWP.xz * 0.22) * 0.06;
       diffuseColor.rgb = habTint(diffuseColor.rgb, vWP.xz);   // 和底下的地面同一組生境色塊
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.13, 0.96) + vec3(0.012, 0.016, 0.0), clamp(vGust, 0.0, 1.0) * 0.5);   // 陣風壓過去的草露出較亮的葉背
         { float cS = smoothstep(0.5, 0.68, n_f(vWP.xz * 0.028 + vec2(uTime * 0.011, uTime * 0.004))); diffuseColor.rgb *= 1.0 - cS * 0.26 * uShade; }   // 雲影慢慢掠過地面
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
     if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  { float rh = n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))); roughnessFactor = rh < 0.9 ? 0.68 + rh * 0.13 : 0.6; }');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）；v7.5：大多 0.68–0.8，一成是釉面 0.6
+    const RGH = { wood: '0.66 + n_v(vWP.xz * 2.3 + vWP.y) * 0.1', fabric: '1.0', ceramic: '0.3 + n_v(vWP.xz * 4.0 + vWP.y * 3.0) * 0.08', metal: 'roughnessFactor * (0.85 + n_v(vWP.xz * 6.0 + vWP.y * 5.0) * 0.3)', foliage: '0.78', paper: '0.95' }[kind];
+    if (RGH) f = f.replace('float sGl = 0.0;', `float sGl = 0.0;\n  roughnessFactor = ${RGH};`);   // 上釉的陶瓷有柔和的高光、木頭半霧面、布料完全霧面
+    if (kind === 'fabric') f = f.replace('#include <opaque_fragment>', `{ float sh = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); outgoingLight *= 1.0 + sh * sh * 0.22; }   // 布料的絨面：邊緣斜看時亮一點
+        #include <opaque_fragment>`);
     if (kind === 'water') f = f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  if (vWP.y > 0.8) reflectedLight.indirectSpecular *= 0.3;');   // 小溪：天空倒影淡一點，低角度看也是清透的青綠色、看得到溪底（不會整片泛白）
     f = f.replace('#include <opaque_fragment>', `
         outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? '\n        vec3 wN = normal, wSkyR = vec3(-1.0), wSpec = vec3(0.0);' + SEA_GLSL + `
@@ -761,7 +769,7 @@ export function bend(mat, kind) {
           vec3 wUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wIrr = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
           if (wSkyR.x < 0.0) wSkyR = taSkyA(reflect(-normalize(vViewPosition), wN), wUp) * 0.95;
           #ifdef TA_SEA
-            float wCalm = 0.0; vec3 wS = seaSpec, wAbs = uAbsSea, wA = wAlb * 0.16 + vec3(0.0, 0.025, 0.03);   // 大海：清透的熱帶淺灘，深處是散射回來的青藍
+            float wCalm = 0.0; vec3 wS = seaSpec, wAbs = uAbsSea, wA = mix(wAlb * 0.3, vec3(0.16, 0.24, 0.32), 0.5);   // 淺灘淡藍、深處灰藍；保留透過水面的砂底
           #else
             float wCalm = vWP.y > 0.8 ? 1.0 : 0.5; vec3 wS = reflectedLight.directSpecular * 0.6, wAbs = uAbs, wA = mix(uScat, wAlb * 0.3, 0.2);   // 河與小溪：偏青綠，越深越暗
             if (vPond > 0.0) {   // v7.4 池塘：很靜（白沫只剩一成），池心當成更深的水——吸收多、散射回深青綠 #3D7778；岸邊淺、看得到砂底
@@ -791,7 +799,7 @@ function seasonGLSL(kind) {
       vec3 bc = diffuseColor.rgb;
       float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.2, l0 * 1.17, l0 * 0.78), uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // 一大片一大片橄欖綠與金黃交錯；秋天：柔和的鼠尾草金（v7.6 夢幻風：以前 1.32／1.2／0.56 偏金黃）
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), uBloom * 0.4);
-      diffuseColor.rgb *= vec3(0.93, 0.98, 1.22);   // v7.6 夢幻風：草葉往薄荷鼠尾草收（少一點黃），花才露得出來
+      diffuseColor.rgb *= vec3(0.99, 1.03, 0.95);   // v7.6 夢幻風：鮮一點的嫩綠，粉白的花襯在上面才跳得出來
     }` : '';
   const cover = kind === 'terrain' ? 'smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.0, 0.12, n - (0.42 - (dep + 0.1) * 1.4)) * smoothstep(0.55, 0.75, vWP.y)'   // 河床、海床不積雪
     : kind === 'sway' || kind === 'pine' || kind === 'sakura' ? 'smoothstep(-0.05, 0.45, up)'
@@ -835,17 +843,20 @@ function seasonGLSL(kind) {
         // 春天：櫻花樹與一部分闊葉樹開滿櫻花（粉紅花團帶白色細點）
         float lum = dot(bc, vec3(0.3, 0.59, 0.11)) / 0.28;
         float sp = n_v(vOP.xy * 18.0 + vOP.z * 7.0);
-        vec3 pk = mix(vec3(0.79, 0.35, 0.58), vec3(0.9, 0.51, 0.69), smoothstep(0.3, 0.6, sp));   // v7.6 夢幻風：主團 #F3BED8／#E69FC8
+        vec3 pk = mix(vec3(0.86, 0.36, 0.5), vec3(0.93, 0.52, 0.62), smoothstep(0.3, 0.6, sp));   // v7.6 夢幻風：主團暖粉 #EFA1BA／#F5BED0（參考圖的櫻花是粉，不是薰衣草）
         pk = mix(pk, vec3(0.96, 0.78, 0.85), smoothstep(0.72, 0.86, sp));   // 亮團 #FBE5EE
-        pk = mix(vec3(0.42, 0.26, 0.5), pk, 0.55 + 0.45 * smoothstep(-0.6, 0.4, normalize(vWN).y)) * clamp(lum, 0.55, 1.35);   // 冠內與背光是薰衣草 #AD8CBB
+        pk = mix(vec3(0.55, 0.27, 0.42), pk, 0.55 + 0.45 * smoothstep(-0.6, 0.4, normalize(vWN).y)) * clamp(lum, 0.55, 1.35);   // 冠內與背光是玫瑰灰紫 #C28DAC
         diffuseColor.rgb = mix(diffuseColor.rgb, pk, leafy * uBloom);
       }` : kind === 'terrain' ? `
       float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.2, l0 * 1.17, l0 * 0.78), leafy * uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // v6.93：秋草是柔和的橄欖金，金色留給大樹與花（v7.6：再柔一點）
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), leafy * uBloom * 0.4);
-      diffuseColor.rgb *= mix(vec3(1.0), vec3(0.93, 0.98, 1.22), leafy);   // v7.6 夢幻風：地面的草色和草葉一起往薄荷鼠尾草收` : '';
+      diffuseColor.rgb *= mix(vec3(1.0), vec3(0.99, 1.03, 0.95), leafy);   // v7.6 夢幻風：地面的草色和草葉一起是鮮一點的嫩綠` : '';
   return `{
       vec3 bc = diffuseColor.rgb;
       float leafy = smoothstep(0.02, 0.1, bc.g - max(bc.r, bc.b));
+      #ifdef TA_SURFACE
+        leafy = vSurface.x;
+      #endif
       #ifdef TA_MODEL
         leafy = smoothstep(-0.03, 0.03, bc.g - bc.r) * smoothstep(0.0, 0.04, bc.g - bc.b);   // 模型的葉子偏黃綠，綠色只比紅色多一點點；樹幹的褐色仍然排除
       #endif
@@ -1182,7 +1193,7 @@ export const nightMats = [];   // 夜晚發光的窗戶與燈
 export const lamps = [];
 export const FOG = { near: 60, far: 150 };   // 晴天的霧（線性，公尺）
 export const water = { sea: null, river: null };
-export const SEA = { day: '#22aee8' };   // 白天海面的底色（受強烈日光與色調映射，要比想看到的顏色深、飽和）
+export const SEA = { day: '#8bb9cf' };   // 白天海面的底色（受強烈日光與色調映射，要比想看到的顏色深、飽和）
 
 // 時間色票（參考 Codex 的概念圖取樣）：top 頭頂、mid 低空、bot 地平線的霧白；sea 遠方海面；其餘是陽光、天光、霧與曝光
 /* v7.0：依 Codex 美術顧問的時段色票重調（主光：補光約 4：1，夜晚的環境光大幅降低、燈光才是夜裡最亮的東西）。
@@ -1194,10 +1205,10 @@ const KEYS = [
   [0, NIGHT],
   [4.8, { top: '#2a2866', mid: '#4a4486', bot: '#7a6a9e', sea: '#232a62', sun: '#bcb8ff', si: 0.46, hs: '#8a86c0', hg: '#3a3450', hi: 0.4, fog: '#4e4a80', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],
   [6.1, { top: '#7a7cd0', mid: '#cfa6d6', bot: '#f8c0c4', sea: '#d6bcd2', sun: '#ffe2c8', si: 1.5, hs: '#c8bce4', hg: '#857890', hi: 0.88, fog: '#e2cce0', exp: 1.02, night: 0, fn: 50, ff: 160 }],   // 清晨：薰衣草的天、粉桃的地平線
-  [7.6, { top: '#6a86cc', mid: '#b8b8e2', bot: '#f0d0d8', sea: '#96c8ec', sun: '#ffe6cc', si: 2.0, hs: '#c4c4ea', hg: '#888092', hi: 1.08, fog: '#d8d4ea', exp: 1.1, night: 0, fn: 60, ff: 178 }],
-  [9, { top: '#5482d2', mid: '#9cb0e6', bot: '#ecd2e0', sea: '#7cc8f2', sun: '#fff0dc', si: 2.75, hs: '#c2c6ee', hg: '#8a8292', hi: 1.42, fog: '#d2d4ec', exp: 1.18, night: 0, fn: 70, ff: 195 }],   // 白天：頭頂矢車菊藍 → 低空長春花紫 → 地平線粉白；空氣通透
-  [15.5, { top: '#5682d0', mid: '#a0b0e4', bot: '#eed2de', sea: '#7cc6f0', sun: '#ffeacc', si: 2.65, hs: '#c0c2ec', hg: '#8a8090', hi: 1.38, fog: '#d4d2ea', exp: 1.16, night: 0, fn: 68, ff: 190 }],
-  [17, { top: '#5c7cc8', mid: '#b4a2d8', bot: '#f2c0c4', sea: '#e4c0cc', sun: '#ffd8b8', si: 2.0, hs: '#b8b2e2', hg: '#7e7088', hi: 0.95, fog: '#dcc8dc', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、低空粉紫、地平線粉桃；奶油粉的逆光、薰衣草的陰影
+  [7.6, { top: '#6a86cc', mid: '#b8b8e2', bot: '#f0d0d8', sea: '#96c8ec', sun: '#ffe6cc', si: 2.0, hs: '#d4cce0', hg: '#948890', hi: 1.08, fog: '#d8d4ea', exp: 1.1, night: 0, fn: 60, ff: 178 }],
+  [9, { top: '#6488d4', mid: '#a8b2e6', bot: '#ecd2e0', sea: '#7cc8f2', sun: '#ffe4c6', si: 2.75, hs: '#d6cfe6', hg: '#968a94', hi: 1.42, fog: '#d2d4ec', exp: 1.1, night: 0, fn: 70, ff: 195 }],   // 白天：頭頂矢車菊藍 → 低空長春花紫 → 地平線粉白；空氣通透
+  [15.5, { top: '#6688d2', mid: '#aab2e4', bot: '#eed2de', sea: '#7cc6f0', sun: '#ffdfbe', si: 2.65, hs: '#d4cde4', hg: '#948892', hi: 1.38, fog: '#d4d2ea', exp: 1.08, night: 0, fn: 68, ff: 190 }],
+  [17, { top: '#6c80c8', mid: '#b8a4d8', bot: '#f2c0c4', sea: '#e4c0cc', sun: '#ffd8b8', si: 2.0, hs: '#b8b2e2', hg: '#7e7088', hi: 0.95, fog: '#dcc8dc', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、低空粉紫、地平線粉桃；奶油粉的逆光、薰衣草的陰影
   [18.2, { top: '#4c4e9a', mid: '#b090c4', bot: '#f4ae9c', sea: '#e8a090', sun: '#ffb88e', si: 1.4, hs: '#a29cd2', hg: '#6a6278', hi: 0.72, fog: '#c8a8c4', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：粉橘只留在地平線，天是藍紫到粉紫
   [19.5, { top: '#33306e', mid: '#6a5f9c', bot: '#c49ab8', sea: '#4c4a80', sun: '#c8b8ff', si: 0.6, hs: '#8f88c4', hg: '#3a3550', hi: 0.5, fog: '#6a6094', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],
   [21, NIGHT], [24, NIGHT]
@@ -1268,7 +1279,7 @@ export function applyTime(h) {
   lamps.forEach(l => { l.intensity = night * (l.userData.k || 6); });
   refreshEnv(Math.round(h * 10), dir, night);   // k：個別燈的亮度（新島的燈籠路燈比較亮）
   if (water.sea) {
-    water.sea.color.copy(lerpC(SEA.day, '#7aa8d8', dawn * 0.6)).lerp(cb.set('#2c86a8'), golden * sink * 0.6).lerp(cb.set('#1d4680'), THREE.MathUtils.smoothstep(night, 0.3, 0.8));
+    water.sea.color.copy(lerpC(SEA.day, '#7aa8d8', dawn * 0.6)).lerp(cb.set('#b6a9ca'), golden * sink * 0.6).lerp(cb.set('#1d4680'), THREE.MathUtils.smoothstep(night, 0.3, 0.8));
     water.sea.emissive.copy(skyU.bot.value).multiplyScalar(dawn * 0.08);   // 晨昏的海面映著天色
   }
   return { dir, night, golden, dawn };

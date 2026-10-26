@@ -9,8 +9,10 @@ import { ULTRA } from './perf.js';
 const isGlass = m => !Array.isArray(m) && nightMats.includes(m) && m.userData.kind === 'glass';   // kit.win() 的窗玻璃與燈籠
 import { loadModel } from './actors.js';
 import { MODEL_IDS } from './model-list.js';
+import { NATURE_IDS, natureModel, natureCrown } from './naturemodels.js';
+import { ROCK_IDS, natureRockModel } from './naturerocks.js';
 
-const READY = new Set(MODEL_IDS);
+const READY = new Set([...MODEL_IDS, ...NATURE_IDS, ...ROCK_IDS]);
 const KIND = { prop_pine: 'pine', prop_palm: 'pine', prop_bamboo: 'pine', prop_tree: 'sway', prop_shrub: 'sway', prop_boulder: 'stone', prop_shorerock: 'stone' };   // 會隨風擺動的植物；其他是不動的擺設
 /** 擺設模型的朝向修正（Tripo 靜態模型的正面方向，視模型而定） */
 const TURN = {};
@@ -27,12 +29,14 @@ function variant(gl, id, kind) {
   return (remat[key] = { scene: model });
 }
 function fit(g, gl, p) {
-  if (p.kind && p.kind !== (KIND[p.id] || 'plain')) gl = variant(gl, p.id, p.kind);
+  if (!gl.scene.userData.natureProcedural && p.kind && p.kind !== (KIND[p.id] || 'plain')) gl = variant(gl, p.id, p.kind);
   const model = gl.scene.clone(true);
   model.rotation.y = TURN[p.id] || 0; model.updateMatrixWorld(true);
-  box.setFromObject(model); box.getSize(size); box.getCenter(ctr);
+  const envelope = model.userData.natureBounds;
+  if (envelope) box.set(new THREE.Vector3(...envelope.min), new THREE.Vector3(...envelope.max)); else box.setFromObject(model);
+  box.getSize(size); box.getCenter(ctr);
   const k = p.w ? p.w / Math.max(size.x, size.z) : p.h / size.y;
-  model.scale.multiplyScalar(k); model.position.set(-ctr.x * k, -box.min.y * k - (p.sink || 0), -ctr.z * k);   // sink：往下埋一點（礁石半泡在浪裡）
+  model.scale.multiplyScalar(k); model.position.set(-ctr.x * k, -box.min.y * k - (p.sink || 0) - (model.userData.natureSink || 0), -ctr.z * k);   // sink：往下埋一點（礁石半泡在浪裡）；灌木最低葉團沉地 1.5cm
   const keep = new Set(p.keep || []);
   g.children.forEach(c => { if (!keep.has(c) && !c.isLight) c.visible = false; });
   if (LOW.has(p.id)) model.traverse(o => { o.castShadow = false; });   // 矮小的擺設不投影子（省一次陰影繪製，看起來差不多）
@@ -62,38 +66,63 @@ function leafPoints(model) {
   });
   return pts;
 }
-/** 大樹的葉片卡貼圖：比一般樹大的星形葉（五裂，像楓香），每片明暗不同，近看看得出一片片的葉子 */
+/** Neutral single-leaf fallback: alpha silhouette only, no repeated star / clover print. */
 let HERO_TEX = null;
 function heroLeafTex() {
   if (HERO_TEX) return HERO_TEX;
-  const S = 256, d = new Uint8Array(S * S * 4); let seed = 11;
-  const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let k = 0; k < 15; k++) {
-    const a = r() * 6.2832, rad = Math.pow(r(), 0.6) * S * 0.27, cx = S / 2 + Math.cos(a) * rad, cy = S / 2 + Math.sin(a) * rad;
-    const L = 44 + r() * 22, rot = r() * 6.2832, base = 70 + r() * 185, lobes = 5;
-    for (let y = Math.max(0, Math.floor(cy - L)); y < Math.min(S, Math.ceil(cy + L)); y++) for (let x = Math.max(0, Math.floor(cx - L)); x < Math.min(S, Math.ceil(cx + L)); x++) {
-      const dx = x - cx, dy = y - cy, rr = Math.hypot(dx, dy) / L, th = Math.atan2(dy, dx) - rot;
-      const edge = 0.5 + 0.5 * Math.pow(Math.abs(Math.cos(th * lobes / 2)), 0.7);   // 五個尖尖的裂片
-      if (rr > edge) continue;
-      const vein = Math.abs(Math.sin(th * lobes / 2)) < 0.06 && rr > 0.12 ? 0.82 : 1, i = (y * S + x) * 4;
-      const val = base * (0.78 + 0.22 * (1 - rr / edge)) * vein;   // 葉心亮、葉緣稍暗
-      d[i] = d[i + 1] = d[i + 2] = Math.min(255, val); d[i + 3] = 255;
-    }
+  const S = 128, d = new Uint8Array(S * S * 4);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const u = (x / (S - 1) - .5) * 2, v = (y / (S - 1) - .5) * 2, i = (y * S + x) * 4;
+    d[i] = d[i + 1] = d[i + 2] = 245;
+    d[i + 3] = u * u / .72 + v * v < .92 ? 255 : 0;
   }
-  for (let i = 0; i < S * S; i++) if (!d[i * 4 + 3]) { d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = 190; }
   const t = new THREE.DataTexture(d, S, S); t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.colorSpace = THREE.NoColorSpace; t.needsUpdate = true;
   return (HERO_TEX = t);
 }
 const HERO_DEPTH = () => new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: heroLeafTex(), alphaTest: 0.5 });
-/** Codex 畫的葉叢貼圖（models/tex_leaves.js：秋天金黃、夏天綠各一張）；載入失敗就沿用程式畫的星形葉 */
+/** 低對比單葉貼圖（models/tex_leaves.js：金／綠共用 alpha）；載入失敗沿用單葉輪廓 */
+let LEAF_LOAD = null;
 function loadLeaves() {
+  if (LEAF_LOAD) return LEAF_LOAD;
   const base = window.__MODEL_BASE || 'src/isle/models/';
-  return new Promise(res => {
+  return (LEAF_LOAD = new Promise(res => {
     if (window.TA && window.TA.LEAVES) { res(window.TA.LEAVES); return; }
     const sc = document.createElement('script'); sc.src = base + 'tex_leaves.js'; sc.onload = () => res((window.TA && window.TA.LEAVES) || null); sc.onerror = () => res(null); document.head.appendChild(sc);
-  }).then(pk => pk && Promise.all(['green', 'gold'].map(k => new Promise((ok, no) => new THREE.TextureLoader().load(pk[k], t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, no))))).catch(() => null);
+  }).then(pk => pk && Promise.all(['green', 'gold'].map(k => new Promise((ok, no) => new THREE.TextureLoader().load(pk[k], t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; ok(t); }, undefined, no))))).catch(() => null));
 }
 function buildCanopy(g, model, kind, H) {
+  const procedural = natureCrown(model);
+  if (procedural) {
+    const gold = m => { m.defines = { ...m.defines, TA_MODEL: '', ...(kind === 'sakura' ? { TA_GOLD: '' } : {}) }; return bend(m, kind); };
+    const card = gold(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, map: heroLeafTex(), alphaTest: .5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: .94 }));
+    if (kind === 'sway') treeK(card);
+    // Crown core and surface share one material (including fruit, a normal tree uses three).
+    procedural.parts.forEach((geo, k) => geo.setAttribute('aNatureCore', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count).fill(k === 0 ? 1 : 0), 1)));
+    const depth = HERO_DEPTH(), goldU = { value: null }, compile = card.onBeforeCompile;
+    card.onBeforeCompile = (sh, renderer) => {
+      compile(sh, renderer); sh.uniforms.uGoldMap = goldU;
+      sh.vertexShader = 'attribute float aNatureCore;\nattribute vec3 aNatureAutumn;\nvarying float vNatureCore;\nvarying vec3 vNatureAutumn;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvNatureCore = aNatureCore;\nvNatureAutumn = aNatureAutumn;');
+      sh.fragmentShader = 'uniform sampler2D uGoldMap;\nvarying float vNatureCore;\nvarying vec3 vNatureAutumn;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+        // Shape comes from geometry. Map RGB never prints a leaf spray on the opaque cloud core.
+        // Vertex albedo is shared by core / edge leaves; only alpha cuts the small leaf silhouettes.
+        float natureWash = 0.97 + 0.045 * n_v(vOP.xz * 4.7 + vOP.y * 2.3);
+        diffuseColor.rgb *= natureWash;
+        if (vNatureCore < 0.5) diffuseColor.a *= texture2D(map, vMapUv).a;
+        #ifdef TA_LEAFTEX
+          // Compensated material input for the unchanged seasonGLSL multipliers.
+          vec3 goldC = vNatureAutumn * natureWash;
+        #endif`);
+    };
+    card.customProgramCacheKey = () => `nature-crown-v2-${kind}`;
+    loadLeaves().then(tx => {
+      if (!tx) return;
+      useLeafTex(tx[0], tx[1]); card.map = tx[0]; card.color.set('#ffffff'); goldU.value = tx[1];
+      card.defines = { ...card.defines, TA_LEAFTEX: '' }; card.needsUpdate = true;
+      depth.map = tx[0]; depth.side = THREE.DoubleSide; depth.needsUpdate = true;
+    });
+    const coreDepth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    return { h: H, noleaf: new Map(), C0: procedural.C0, parts: [[procedural.parts[0], card, coreDepth], [procedural.parts[1], card, depth]] };
+  }
   let pts = leafPoints(model); if (pts.length < 40) return null;
   const top = pts.reduce((a, p) => Math.max(a, p.y), 0); pts = pts.filter(p => p.y > top * 0.36); pts.forEach(p => { p.x *= 1.15; p.z *= 1.15; });   // 樹冠從枝椏分岔處以上開始，底下露出樹幹
   // 藏起模型的葉子
@@ -169,6 +198,19 @@ function treeK(m) {
 const hash2 = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s); };
 /** 七成跟著所在的 9 公尺區塊（相鄰兩三棵同色、成一群），三成自己抽：整體比例不變，但讀起來是一片片的色群，不是每棵隨機 */
 const treeHash = (x, z) => { const X = Math.round(x * 10), Z = Math.round(z * 10); return hash2(X, Z) < 0.7 ? hash2(Math.floor(x / 9) + 101, Math.floor(z / 9) + 7) : hash2(Z + 3, X + 11); };
+const AUTUMN_HEX = ['#D9B75F', '#DEA274', '#DA8F82', '#99A472'];
+// Linear albedo, pre-divided by the existing engine tT and its 1.12 brightness gain.
+// A shared gold texture alone cannot undo four different channel multipliers.
+const AUTUMN_INPUT = AUTUMN_HEX.map((hex, i) => new THREE.Color(hex).toArray().map((v, j) => v / ([[1.12, .92, 1.6], [1.06, 1.06, 1.45], [1.02, .62, 1.7], [.45, .78, 1.5]][i][j] * 1.12)));
+const HERO_AUTUMN_INPUT = new THREE.Color('#E0BB63').toArray().map((v, j) => v / ([1.04, .98, 1.45][j] * 1.12));
+const autumnInput = (k, kind) => kind === 'sakura' ? HERO_AUTUMN_INPUT : AUTUMN_INPUT[k < .4 ? 0 : k < .7 ? 1 : k < .9 ? 2 : 3];
+/** Rank coarse spatial groups: deterministic 35/30/20/15, keeping neighbouring trees together. */
+function assignTreeColors(groups) {
+  const trees = groups.filter(g => !g.userData.prop.kind || g.userData.prop.kind === 'sway');
+  const block = g => hash2(Math.floor(g.position.x / 9) + 101, Math.floor(g.position.z / 9) + 7);
+  trees.sort((a, b) => block(a) - block(b) || treeHash(a.position.x, a.position.z) - treeHash(b.position.x, b.position.z));
+  trees.forEach((g, i) => { const q = (i + .5) / trees.length; g.userData.natureTreeK = q < .35 ? .2 : q < .65 ? .55 : q < .85 ? .8 : .95; });
+}
 /** 換上葉片卡樹冠：同一種模型（與著色方式）只算一次，以第一棵（廣場大樹排在最前面）的大小為準，其他棵依高度等比例縮放、共用網格與材質 */
 function canopy(g, model, p) {
   const kind = p.kind || 'sway', key = p.id + '|' + kind;
@@ -181,9 +223,11 @@ function canopy(g, model, p) {
     c.instS = c.parts.map(([geo, mat, depth]) => { const im = new THREE.InstancedMesh(geo, mat, 256); im.count = 0; im.castShadow = true; im.frustumCulled = false; im.layers.set(1); if (depth) im.customDepthMaterial = depth; scene.add(im); return im; });   // 畫面外、影子落進畫面的樹冠：只畫進陰影貼圖
     c.trees = []; INST.push(c);
     if (kind === 'sway') c.kA = c.parts.map(([geo]) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(256), 1); geo.setAttribute('aTreeK', a); return a; });
+    c.kind = kind;
+    if (c.parts[0][0].attributes.aNatureCore) c.autumnA = c.parts.map(([geo]) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(256 * 3), 3); geo.setAttribute('aNatureAutumn', a); return a; });
   }
   const hold = new THREE.Object3D(); hold.scale.setScalar(p.h / c.h); hold.position.set(0, 0, 0); g.add(hold);
-  c.trees.push({ g, hold, vis: true }); return hold;
+  c.trees.push({ g, hold, vis: true, k: g.userData.natureTreeK }); return hold;
 }
 const INST = [], mA = new THREE.Matrix4(), mOff = new THREE.Matrix4();
 /** 依目前看得到的樹，重填每種樹冠的 InstancedMesh */
@@ -195,9 +239,15 @@ function fillCanopies() {
       const shOnly = t.hold.userData.st === 2; if (shOnly ? ns >= 256 : n >= 256) continue;
       t.hold.updateWorldMatrix(true, false); mA.multiplyMatrices(t.hold.matrixWorld, mOff);
       if (c.kA && t.k == null) t.k = treeHash(t.hold.matrixWorld.elements[12], t.hold.matrixWorld.elements[14]);
-      if (shOnly) { c.instS.forEach(im => im.setMatrixAt(ns, mA)); ns++; } else { c.inst.forEach(im => im.setMatrixAt(n, mA)); if (c.kA) c.kA.forEach(a => { a.array[n] = t.k; }); n++; }
+      if (shOnly) { c.instS.forEach(im => im.setMatrixAt(ns, mA)); ns++; } else {
+        c.inst.forEach(im => im.setMatrixAt(n, mA));
+        if (c.kA) c.kA.forEach(a => { a.array[n] = t.k; });
+        if (c.autumnA) c.autumnA.forEach(a => a.setXYZ(n, ...autumnInput(t.k, c.kind)));
+        n++;
+      }
     }
     if (c.kA) c.kA.forEach(a => { a.needsUpdate = true; });
+    if (c.autumnA) c.autumnA.forEach(a => { a.needsUpdate = true; });
     c.inst.forEach(im => { im.count = n; im.instanceMatrix.needsUpdate = true; });
     c.instS.forEach(im => { im.count = ns; im.instanceMatrix.needsUpdate = true; });
   }
@@ -222,10 +272,24 @@ export function dressAll() {
   const byId = {};
   groups.sort((a, b) => (b.userData.prop.hero ? 1 : 0) - (a.userData.prop.hero ? 1 : 0));   // 廣場大樹先換：樹冠以它的大小為準
   groups.forEach(g => (byId[g.userData.prop.id] = byId[g.userData.prop.id] || []).push(g));
-  Object.entries(byId).forEach(([id, gs]) => loadModel(id, KIND[id] || 'plain').then(gl => {
+  Object.entries(byId).forEach(([id, gs]) => {
+    if (id === 'prop_tree') assignTreeColors(gs);
+    // Stable placement-derived variants do not consume props.js's island layout RNG.
+    if (NATURE_IDS.has(id) || ROCK_IDS.has(id)) {
+      try {
+        gs.forEach(g => {
+          const v = Math.floor(hash2(g.position.x * 10, g.position.z * 10) * 120);
+          const gl = NATURE_IDS.has(id) ? natureModel(id, v) : natureRockModel(id, v);
+          fit(g, gl, g.userData.prop);
+        });
+        return;
+      } catch (e) { console.warn('程式化自然物失敗，回退來源 GLB：', id, e); }
+    }
+    loadModel(id, KIND[id] || 'plain').then(gl => {
     if (id === 'prop_shrub') gl.scene.traverse(o => { if (o.isMesh) { o.material.defines = Object.assign({}, o.material.defines, { TA_SHRUB: '' }); o.material.needsUpdate = true; } });   // 灌木：秋色淡一點
     gs.forEach(g => fit(g, gl, g.userData.prop));
-  }).catch(e => console.warn('擺設模型載入失敗：', id, e)));
+    }).catch(e => console.warn('擺設模型載入失敗：', id, e));
+  });
 }
 
 /* 視錐剔除：場景裡的物件都關掉了 three.js 的剔除（它用彎曲前的位置判斷，滾筒地平線會讓遠方的東西被誤剔除），

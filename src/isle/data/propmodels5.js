@@ -1,4 +1,4 @@
-/* 潮汐小島 · 松林 V2：三種 3.3m 松／杉輪廓，曲幹＋七層重疊垂枝團＋厚摺針葉簇。
+/* 潮汐小島 · 松林 V3：三種 3.3m 松／杉輪廓，曲幹＋七層不規則立體針葉團。
    根部原點；每株兩個 mesh／兩種材質。上下表面共用外向受光場，不使用 DoubleSide。
    工廠只用自己的固定種子，不改變島上擺設的亂數序列。 */
 (function(root) {
@@ -7,61 +7,21 @@
   I.PROPMODELS = I.PROPMODELS || {};
   let needles = null;
 
-  // 大塊針葉簇：中央連成面，邊緣以六組寬楔簇交錯，沒有單像素細針。
-  // 透明區同樣擴色；低頻灰階不把烘焙陰影重複乘進遊戲光照。
+  // 葉團輪廓完全由封閉幾何決定；貼圖僅保留寬鬆、低對比的針葉筆觸。
+  // 沿用 kit.card/cardDepth 與 TA_LEAFTEX 的風／季節／實例化路徑，沒有透明裙片。
   function needleTexture(THREE) {
     if (needles) return needles;
-    const S = 256, pixels = new Uint8Array(S * S * 4);
-    for (let i = 0; i < pixels.length; i += 4) pixels[i] = pixels[i + 1] = pixels[i + 2] = 246;
-    // 寬楔形的多尖葉簇，最窄處仍有 6–10 texels；縮小後保留一團一團的缺口。
-    function polygon(points, gray) {
-      const xs = points.map(p => p[0]), ys = points.map(p => p[1]);
-      for (let y = Math.max(0, Math.floor(Math.min(...ys) * S)); y <= Math.min(S - 1, Math.ceil(Math.max(...ys) * S)); y++) {
-        for (let x = Math.max(0, Math.floor(Math.min(...xs) * S)); x <= Math.min(S - 1, Math.ceil(Math.max(...xs) * S)); x++) {
-          const px = (x + 0.5) / S, py = (y + 0.5) / S; let inside = false;
-          for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-            const [ax, ay] = points[i], [bx, by] = points[j];
-            if ((ay > py) !== (by > py) && px < (bx - ax) * (py - ay) / (by - ay) + ax) inside = !inside;
-          }
-          if (inside) { const i = (y * S + x) * 4; pixels[i] = pixels[i + 1] = pixels[i + 2] = gray; pixels[i + 3] = 255; }
-        }
-      }
+    const S = 64, pixels = new Uint8Array(S * S * 4);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const i = (y * S + x) * 4, u = x / S, v = y / S;
+      const stroke = Math.sin((u * 3 + Math.abs(v - 0.5) * 1.6) * Math.PI * 2);
+      const gray = Math.round(247 + stroke * 5);
+      pixels[i] = pixels[i + 1] = pixels[i + 2] = gray; pixels[i + 3] = 255;
     }
-    polygon([[0.015, 0.38], [0.20, 0.29], [0.82, 0.35], [0.985, 0.5], [0.82, 0.65], [0.20, 0.71], [0.015, 0.62]], 229);
-    for (let j = 0; j < 6; j++) for (const side of [-1, 1]) {
-      const x = 0.06 + j * 0.13, reach = 0.33 + Math.sin(j / 6 * Math.PI) * 0.06;
-      const points = [[x - 0.04, 0.5], [x - 0.015, 0.5 + side * 0.22],
-        [x + 0.035, 0.5 + side * reach], [x + 0.065, 0.5 + side * (reach - 0.065)],
-        [x + 0.13, 0.5 + side * (reach + 0.025)], [x + 0.14, 0.5 + side * (reach - 0.10)],
-        [x + 0.22, 0.5 + side * (reach - 0.045)], [x + 0.18, 0.5 + side * 0.15], [x + 0.08, 0.5]];
-      polygon(points, 218 + (j % 3) * 11);
-      // 一簇內只畫兩個低對比寬面，沒有獨立細針／隨機噪點。
-      polygon([[x + 0.025, 0.5], [x + 0.07, 0.5 + side * (reach - 0.06)],
-        [x + 0.12, 0.5 + side * (reach - 0.09)], [x + 0.15, 0.5 + side * 0.13]], 240 + (j % 2) * 9);
-    }
-    polygon([[0.76, 0.42], [0.88, 0.33], [0.86, 0.42], [0.985, 0.47], [0.92, 0.50],
-      [0.985, 0.53], [0.86, 0.58], [0.88, 0.67], [0.76, 0.58]], 250);
     const tex = new THREE.DataTexture(pixels, S, S);
-    tex.name = 'tidal-pine-cluster-v2'; tex.colorSpace = THREE.NoColorSpace;
-    // alpha-test 植被的 coverage-preserving mipmaps：避免遠距離葉簇因平均 alpha 突然變稀。
-    const threshold = 0.45 * 255, coverage = pixels.reduce((n, v, i) => n + (i % 4 === 3 && v >= threshold ? 1 : 0), 0) / (S * S);
-    tex.mipmaps = [{ data: pixels, width: S, height: S }];
-    let raw = pixels, size = S;
-    while (size > 1) {
-      const nextSize = size / 2, averaged = new Uint8Array(nextSize * nextSize * 4);
-      for (let y = 0; y < nextSize; y++) for (let x = 0; x < nextSize; x++) for (let channel = 0; channel < 4; channel++) {
-        const i = (y * nextSize + x) * 4 + channel, j = (y * 2 * size + x * 2) * 4 + channel;
-        averaged[i] = Math.round((raw[j] + raw[j + 4] + raw[j + size * 4] + raw[j + size * 4 + 4]) / 4);
-      }
-      const alphas = [];
-      for (let i = 3; i < averaged.length; i += 4) alphas.push(averaged[i]);
-      alphas.sort((a, b) => b - a);
-      const cutoff = alphas[Math.max(0, Math.round(alphas.length * coverage) - 1)], scale = (threshold + 8) / Math.max(cutoff, 1), data = averaged.slice();
-      for (let i = 3; i < data.length; i += 4) data[i] = Math.min(255, Math.round(data[i] * scale));
-      tex.mipmaps.push({ data, width: nextSize, height: nextSize }); raw = averaged; size = nextSize;
-    }
-    tex.generateMipmaps = false; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
-    tex.anisotropy = 4; tex.needsUpdate = true;
+    tex.name = 'tidal-pine-volume-v3'; tex.colorSpace = THREE.NoColorSpace;
+    tex.generateMipmaps = true; tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter; tex.anisotropy = 4; tex.needsUpdate = true;
     return (needles = tex);
   }
 
@@ -71,8 +31,8 @@
     const TAU = Math.PI * 2, up = new THREE.Vector3(0, 1, 0), group = new THREE.Group();
     group.name = cfg.name;
     const bark = { p: [], n: [], c: [], uv: [], ix: [] }, leaf = { p: [], n: [], c: [], uv: [], ix: [] };
-    const shadowColor = new THREE.Color('#1d3f3b'), bodyColor = new THREE.Color('#3a6b55'), tipColor = new THREE.Color('#6f9262');   // 主體深青綠、暗部偏青（不墨黑）；朝上的枝團會吃滿陽光，底色要比規格再深一點
-    const tex = needleTexture(THREE), wood = kit.mat('#6e4e36', { roughness: 0.96, vertexColors: true }, 'bark');
+    const shadowColor = new THREE.Color('#597E7D'), bodyColor = new THREE.Color('#7FA69A'), tipColor = new THREE.Color('#AEC6AE');
+    const tex = needleTexture(THREE), wood = kit.mat('#B98E6B', { roughness: 0.96, vertexColors: true }, 'bark');
     const foliage = kit.card('#ffffff', tex, 'pine'), depth = kit.cardDepth(tex, 'pine');
     function axis(y) {
       const t = y / 3.3;
@@ -108,60 +68,52 @@
       const a = j / 5 * TAU + 0.3, radius = 0.24 + rand() * 0.10;
       tube([new THREE.Vector3(Math.cos(a) * 0.07, 0.13, Math.sin(a) * 0.07), new THREE.Vector3(Math.cos(a) * radius, 0.025, Math.sin(a) * radius)], [0.073, 0.011], 4, 0.94);
     }
-    // 葉團是有凸起上表面、下表面與垂邊的封閉摺卡，不是水平交叉帶。
-    // 整株錐體法線主導受光，22% 的枝團橢球法線保留各團的明暗。
-    function clumpNormal(p, center, direction, length, width, thickness) {
-      const n = p.clone().sub(axis(p.y)), radius = Math.hypot(n.x, n.z);
-      n.y = Math.max(0.08, radius * 0.52); n.normalize();
-      const local = p.clone().sub(center), along = local.dot(direction);
-      const sphere = local.clone().addScaledVector(direction, -along);
-      sphere.multiplyScalar(1 / Math.max(width, 0.06));
-      sphere.addScaledVector(direction, along / Math.max(length, 0.08));
-      sphere.y = local.y / Math.max(thickness, 0.06);
-      sphere.normalize();
-      n.lerp(sphere, 0.22).normalize();
-      return n;
+    // 每枝三簇封閉的圓鈍楔形葉團，六邊截面、三圈鼓面；每簇 36 tris。
+    // 交錯的長短、側偏和高度形成枝團間空隙，不再以整層鋸齒 alpha 裁切。
+    function clump(origin, direction, side, length, width, thickness, tint, phase) {
+      const base = leaf.p.length / 3, sides = 6;
+      const cross = new THREE.Vector3().crossVectors(side, direction).normalize();
+      const rings = [[0, 0], [0.19, 0.76], [0.48, 1], [0.77, 0.68], [1, 0]];
+      const add = (t, radius, j) => {
+        const a = j / sides * TAU, q = Math.cos(a), v = Math.sin(a);
+        const r = radius * (1 + 0.055 * Math.sin(j * 2.1 + phase));
+        const p = origin.clone().addScaledVector(direction, length * t)
+          .addScaledVector(side, q * width * r)
+          .addScaledVector(up, direction.y > 0.5 ? 0 : Math.sin(t * Math.PI) * length * 0.08 - length * 0.21 * t * t)
+          .addScaledVector(cross, v * thickness * r);
+        const radial = p.clone().sub(axis(p.y)); radial.y = Math.max(0.18, Math.hypot(radial.x, radial.z) * 0.72); radial.normalize();
+        const local = direction.clone().multiplyScalar((t - 0.48) * 1.4)
+          .addScaledVector(side, q * r).addScaledVector(cross, v * r * 0.85).normalize();
+        const normal = radial.lerp(local, 0.32).normalize();
+        const color = bodyColor.clone().lerp(v < 0 ? shadowColor : tipColor, v < 0 ? -v * 0.27 : v * 0.30 + t * 0.10);
+        color.multiplyScalar(tint);
+        vertex(leaf, p, normal, color, 0.10 + t * 0.8, 0.14 + j / sides * 0.72);
+      };
+      add(0, 0, 0);
+      for (let r = 1; r < 4; r++) for (let j = 0; j < sides; j++) add(rings[r][0], rings[r][1], j);
+      add(1, 0, 0);
+      for (let j = 0; j < sides; j++) {
+        const k = (j + 1) % sides;
+        leaf.ix.push(base, base + 1 + j, base + 1 + k);
+        for (let r = 0; r < 2; r++) {
+          const a = base + 1 + r * sides + j, b = base + 1 + r * sides + k;
+          leaf.ix.push(a, a + sides, b + sides, a, b + sides, b);
+        }
+        leaf.ix.push(base + 19, base + 13 + k, base + 13 + j);
+      }
     }
     function bough(origin, direction, side, length, width, tint, phase) {
-      const rows = [0.025, 0.25, 0.52, 0.78, 1], cols = [-1, -1 / 3, 1 / 3, 1];
-      const center = origin.clone().addScaledVector(direction, length * 0.58).addScaledVector(up, -0.12);
-      const thickness = Math.min(0.16 + length * 0.09, length * 0.32 + 0.06), base = leaf.p.length / 3;
-      const point = (t, q, bottom) => {
-        const w = width * (0.28 + 0.72 * Math.sin(Math.PI * (0.14 + t * 0.72)));
-        // 梢端分成粗葉簇，兩側也有低頻起伏，鋸齒由幾何與 alpha 共同構成。
-        const scallop = Math.sin(q * 8.5 + phase) * 0.035 * t * t;
-        const r = length * (t + scallop + 0.045 * (1 - q * q) * t * t);
-        const hump = Math.sin(t * Math.PI) * (0.09 + length * 0.045);
-        const y = 0.14 + hump - (0.24 + length * 0.14 + 0.06 * Math.sin(phase)) * t * t - q * q * (0.08 + length * 0.035);
-        return origin.clone().addScaledVector(direction, r).addScaledVector(side, q * w)
-          .addScaledVector(up, y - (bottom ? thickness * (0.38 + 0.62 * (1 - q * q)) * (0.65 + 0.35 * Math.sin(t * Math.PI)) : 0));
-      };
-      for (let bottom = 0; bottom < 2; bottom++) for (const t of rows) for (const q of cols) {
-        const p = point(t, q, bottom), n = clumpNormal(p, center, direction, length, width, thickness);
-        const color = bottom ? shadowColor.clone().lerp(bodyColor, 0.10 + 0.10 * t)
-          : bodyColor.clone().lerp(tipColor, Math.max(0, (t - 0.40) * 0.72));
-        color.multiplyScalar(tint * (bottom ? 1 : 0.94 + 0.06 * (1 - q * q)));
-        vertex(leaf, p, n, color, t, (q + 1) * 0.5);
-      }
-      for (let bottom = 0; bottom < 2; bottom++) for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) {
-        const a = base + bottom * 20 + i * 4 + j, b = a + 4, c = b + 1, d = a + 1;
-        if (bottom) leaf.ix.push(a, b, c, a, c, d);
-        else leaf.ix.push(a, c, b, a, d, c);
-      }
-      // 顯式連接上下表面；上下共用輪廓 UV，避免不透明垂邊突出 alpha 邊緣。
-      const rim = [];
-      for (let j = 0; j < 4; j++) rim.push([0, j]);
-      for (let i = 1; i < 5; i++) rim.push([i, 3]);
-      for (let j = 2; j >= 0; j--) rim.push([4, j]);
-      for (let i = 3; i > 0; i--) rim.push([i, 0]);
-      for (let e = 0; e < rim.length; e++) {
-        const [i, j] = rim[e], [ii, jj] = rim[(e + 1) % rim.length], b = leaf.p.length / 3;
-        for (const [r, c, bottom] of [[i, j, 0], [ii, jj, 0], [ii, jj, 1], [i, j, 1]]) {
-          const p = point(rows[r], cols[c], bottom), n = clumpNormal(p, center, direction, length, width, thickness);
-          const color = shadowColor.clone().lerp(bodyColor, bottom ? 0.15 : 0.64).multiplyScalar(tint);
-          vertex(leaf, p, n, color, rows[r], (cols[c] + 1) * 0.5);
-        }
-        leaf.ix.push(b, b + 2, b + 1, b, b + 3, b + 2);
+      // 三簇相互咬合但不共面，既遮住細枝又保有蓬鬆邊緣。
+      for (let j = 0; j < 3; j++) {
+        const t = [0.02, 0.27, 0.48][j], sign = j === 1 ? -1 : 1;
+        const center = origin.clone().addScaledVector(direction, length * t)
+          .addScaledVector(side, j ? width * 0.34 * sign : 0)
+          .addScaledVector(up, 0.06 - length * 0.12 * t + Math.sin(phase + j * 2) * 0.032);
+        const dir = direction.clone().addScaledVector(side, j ? sign * 0.15 : 0).normalize();
+        const sideways = new THREE.Vector3(-dir.z, 0, dir.x);
+        clump(center, dir, sideways, length * [0.75, 0.67, 0.55][j],
+          width * [0.70, 0.65, 0.52][j], Math.min(0.19, 0.085 + length * 0.10) * (1 - j * 0.09),
+          tint * (0.98 + j * 0.015), phase + j * 1.7);
       }
     }
     for (let layer = 0; layer < cfg.layers; layer++) {
@@ -173,8 +125,8 @@
         const angle = phase + branch / count * TAU + (rand() - 0.5) * 0.15;
         const direction = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)), side = new THREE.Vector3(-direction.z, 0, direction.x);
         const length = reach * (0.88 + rand() * 0.24), y = height + (rand() - 0.5) * 0.15, origin = axis(y);
-        const curve = k => origin.clone().addScaledVector(direction, length * k).addScaledVector(up, -length * 0.29 * k * k);
-        tube([curve(0.015), curve(0.48), curve(0.88)], [0.024 * (1 - t * 0.7), 0.012 * (1 - t * 0.65), 0.002], 3, 0.87);
+        const curve = k => origin.clone().addScaledVector(direction, length * k).addScaledVector(up, -length * 0.16 * k * k);
+        tube([curve(0.015), curve(0.40), curve(0.70)], [0.024 * (1 - t * 0.7), 0.012 * (1 - t * 0.65), 0.002], 3, 0.94);
         // 相鄰枝團在幹軸和兩翼互相交疊；最底層垂緣約落在 0.55–0.65m。
         const width = length * (Math.PI / count) * 1.18 + 0.075 * (1 - t);
         bough(origin, direction, side, length, width, 0.96 + rand() * 0.08, phase + branch * 1.9);
@@ -183,27 +135,16 @@
       group.userData.pineLayers = group.userData.pineLayers || [];
       group.userData.pineLayers.push({ firstTriangle: first / 3, triangles: (leaf.ix.length - first) / 3, height });
     }
-    // 內縮的樹冠心材遮住上層幹軸空窗；外輪廓仍由七層垂枝團決定。
-    // 同一 pine mesh／同一材質，不增加森林批次。頂冠錯層縮徑，避免一根細枝或光滑尖帽。
-    const crownY = [0.58, 1.20, 1.57, 1.94, 2.30, 2.63, 2.88, 3.10, 3.30];
-    const crownR = [0.16, 0.35, 0.32, 0.28, 0.25, 0.22, 0.16, 0.075, 0.002], sides = 8, topBase = leaf.p.length / 3;
-    for (let i = 0; i < crownY.length; i++) for (let j = 0; j <= sides; j++) {
-      const a = j % sides / sides * TAU, r = crownR[i] * (1 + 0.12 * Math.sin(j % sides * 2.4 + i));
-      const p = axis(crownY[i]).add(new THREE.Vector3(Math.cos(a) * r, i === crownY.length - 1 ? 0 : Math.sin(a * 3 + i) * 0.025, Math.sin(a) * r));
-      const n = new THREE.Vector3(Math.cos(a), 0.52, Math.sin(a)).normalize();
-      const color = shadowColor.clone().lerp(bodyColor, 0.48 + i * 0.045);
-      if (i > 6) color.lerp(tipColor, (i - 6) * 0.10);
-      vertex(leaf, p, n, color, 0.43 + (j % 2) * 0.06, 0.46 + (i % 2) * 0.08);
+    // 幹軸周圍用短葉團填空，不加可見的深色錐殼；冠頂由鈍圓小團收束。
+    for (let i = 0; i < 6; i++) {
+      const y = 1.17 + i * 0.33, a = i * 2.39996;
+      const direction = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      clump(axis(y), direction, new THREE.Vector3(-direction.z, 0, direction.x),
+        0.28 - i * 0.025, 0.19 - i * 0.018, 0.20 - i * 0.012, 0.97, a);
     }
-    for (let i = 0; i < crownY.length - 1; i++) for (let j = 0; j < sides; j++) {
-      const a = topBase + i * (sides + 1) + j, b = a + sides + 1;
-      leaf.ix.push(a, b, b + 1, a, b + 1, a + 1);
-    }
-    for (let j = 0; j < 4; j++) {
-      const a = j * TAU / 4 + 0.65, direction = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
-      bough(axis(2.965 + j % 2 * 0.020), direction, new THREE.Vector3(-direction.z, 0, direction.x),
-        0.19 + j % 2 * 0.025, 0.13, 1.03, j * 1.9);
-    }
+    // 將最後一簇沿幹軸豎起：有圓肩，不是一根長尖刺。
+    const tipOrigin = axis(2.91), tipDir = new THREE.Vector3(0, 1, 0);
+    clump(tipOrigin, tipDir, new THREE.Vector3(1, 0, 0), 0.39, 0.095, 0.075, 1.02, 0.7);
     function finish(bucket, material, name, customDepth) {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(bucket.p, 3));
@@ -222,7 +163,7 @@
     });
     return group;
   }
-  I.PROPMODELS['pine_a'] = (THREE, kit) => pine(THREE, kit, { name: 'pine-a-slender', seed: 173, layers: 7, branches: [6, 6, 6, 5, 5, 4, 3], spread: 0.78, lean: 0.045 });
-  I.PROPMODELS['pine_b'] = (THREE, kit) => pine(THREE, kit, { name: 'pine-b-broad', seed: 619, layers: 7, branches: [7, 7, 7, 6, 6, 5, 4], spread: 1.00, lean: -0.035 });
-  I.PROPMODELS['pine_c'] = (THREE, kit) => pine(THREE, kit, { name: 'pine-c-leaning', seed: 1201, layers: 7, branches: [6, 6, 6, 6, 5, 5, 4], spread: 0.87, lean: 0.27 });
+  I.PROPMODELS['pine_a'] = (THREE, kit) => pine(THREE, kit, { name: 'pine-a-slender', seed: 173, layers: 7, branches: [6, 6, 6, 5, 5, 4, 3], spread: 0.75, lean: 0.045 });
+  I.PROPMODELS['pine_b'] = (THREE, kit) => pine(THREE, kit, { name: 'pine-b-broad', seed: 619, layers: 7, branches: [7, 7, 7, 6, 6, 5, 4], spread: 0.97, lean: -0.035 });
+  I.PROPMODELS['pine_c'] = (THREE, kit) => pine(THREE, kit, { name: 'pine-c-leaning', seed: 1201, layers: 7, branches: [6, 6, 6, 6, 5, 5, 4], spread: 0.87, lean: 0.23 });
 })(window);

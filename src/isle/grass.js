@@ -7,6 +7,7 @@ import { blocked, STEP_STONES, onRoad } from './props.js';
 import { topNdc } from './props3d.js';
 import { S } from './state.js';
 import { ULTRA } from './perf.js';
+import { current as seasonNow } from './seasons.js';
 
 let seed = 11;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -79,8 +80,55 @@ byKey.forEach((list, k) => {
   chunks.push(ch); scene.add(im);
 });
 mesh = chunks[0] ? chunks[0].im : null;
+bloomInit();
 refresh();
 fringe(mat);
+}
+/* v7.6 夢幻風：一部分草叢開出小花（成片聚集、群間留草），遠看是參考圖那種撒滿粉白小花的草地。
+   花頭自己一組（16 公尺一塊），用和野花同一套風吹與玩家推開；位置用座標雜湊，不動草叢的亂數與位置 */
+const BLOOM = { spring: ['#f4a8c8', '#f4a8c8', '#f7c6d9', '#fff3e6', '#fff3e6', '#c9b2ec'], summer: ['#ffffff', '#fff3e6', '#a9c8f0', '#c9b2ec', '#ffffff', '#cfe6f4'], autumn: ['#fbefdc', '#d48fae', '#c9b2ec', '#eec67a', '#fbefdc', '#d48fae'] };
+const blooms = [], BCH = 16;
+let bloomSeason = '';
+/** 一朵小花（直徑約 13 公分）：五片往上翹的花瓣圍成淺杯（從側面低角度、從上面看都是一朵），花心淡黃、一根細莖；共 11 個三角形。
+   只有花瓣（aTint = 1）染上這一季的花色，花心與莖維持頂點色 */
+function bloomGeo() {
+  const P = [], Cc = [], Nn = [], A = [], w = new THREE.Color('#ffffff'), core = new THREE.Color('#ffd98a'), stem = new THREE.Color('#5d8a34'), H = 0.25, r = 0.064;
+  const push = (x, y, z, c, t) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); Nn.push(0, 1, 0); A.push(t); };
+  const at = (a, d) => [Math.cos(a) * d, H + d * 0.62, Math.sin(a) * d];   // 花瓣往外越高：淺杯
+  for (let i = 0; i < 5; i++) {
+    const a = i * 1.2566, L = at(a - 0.36, r * 0.55), T = at(a, r), Rr = at(a + 0.36, r * 0.55);
+    push(0, H, 0, core, 0); push(...L, w, 1); push(...T, w, 1);
+    push(0, H, 0, core, 0); push(...T, w, 1); push(...Rr, w, 1);
+  }
+  push(-0.005, 0, 0, stem, 0); push(0.005, 0, 0, stem, 0); push(0, H, 0, stem, 0);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3)); g.setAttribute('aTint', new THREE.Float32BufferAttribute(A, 1));
+  return g;
+}
+function bloomInit() {
+  const geo = bloomGeo(), mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide }), byKey = new Map();
+  mat.defines = { TA_FLOWERTINT: '', TA_BLOOM: '' }; bend(mat, 'flower');
+  const h = (x, z, k) => Math.abs(Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453) % 1;
+  spots.forEach(p => {
+    const f = Math.sin(p.x * 0.37 + 1.3) * Math.sin(p.z * 0.29 - 0.7) * 0.6 + Math.sin((p.x - p.z) * 0.17 + 2.1) * 0.4;   // 一片片的花：雜訊高的地方七成五的草叢開花，其他地方兩成
+    const on = THREE.MathUtils.smoothstep(f, 0, 0.7); if (h(p.x, p.z, 1) > 0.2 + 0.55 * on) return;
+    for (let j = 0, n = 1 + (h(p.x, p.z, 2) < 0.3 + on * 0.4) + (h(p.x, p.z, 13) < on * 0.4); j < n; j++) {   // 花海中間一叢兩三朵
+      const a = h(p.x, p.z, 3 + j) * 6.28 + j * 2.1, d = (0.03 + h(p.x, p.z, 5 + j) * 0.12) * p.s, x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
+      const k = Math.floor(x / BCH) + ',' + Math.floor(z / BCH); if (!byKey.has(k)) byKey.set(k, []);
+      byKey.get(k).push({ x, z, tile: p.tile, s: p.s * (0.85 + h(p.x, p.z, 7 + j) * 0.3), r: a * 3.1, t: h(p.x, p.z, 9 + j) - 0.5, c: Math.floor(h(p.x, p.z, 11 + j) * 6) });
+    }
+  });
+  byKey.forEach(list => {
+    for (let i = list.length - 1; i > 0; i--) { const j = Math.floor((Math.abs(Math.sin(i * 12.9898 + list.length * 78.233)) * 43758.5453 % 1) * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }   // 打亂：遠處少畫的是隨機的一部分
+    const im = new THREE.InstancedMesh(geo, mat, list.length); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false;
+    let x = 0, z = 0; list.forEach(b => { x += b.x; z += b.z; });
+    blooms.push({ im, list, x: x / list.length, z: z / list.length, y: groundAt(x / list.length, z / list.length) }); scene.add(im);
+  });
+}
+/** 換季：花色換成這一季的色盤（冬天草縮進雪裡，花也收起來） */
+function bloomTint(s) {
+  bloomSeason = s; const pal = BLOOM[s]; if (!pal) return;
+  blooms.forEach(ch => { ch.list.forEach((b, i) => ch.im.setColorAt(i, col.set(pal[b.c]))); ch.im.instanceColor.needsUpdate = true; });
 }
 /** 崖頂垂草：沿著懸崖上緣一叢叢往外、往下垂的草，偶爾一條長長的藤，打散崖頂筆直的線條 */
 function fringe(mat) {
@@ -116,21 +164,28 @@ export function refresh() {
     });
     ch.im.instanceMatrix.needsUpdate = true; if (ch.im.instanceColor) ch.im.instanceColor.needsUpdate = true;
   });
+  blooms.forEach(ch => {
+    ch.list.forEach((b, i) => { m4.compose(v.set(b.x, groundAt(b.x, b.z) - 0.02, b.z), q.setFromEuler(e.set(b.t * 0.6, b.r, 0)), sc.setScalar(d[b.tile] ? 0 : b.s)); ch.im.setMatrixAt(i, m4); });
+    ch.im.instanceMatrix.needsUpdate = true;
+  });
 }
 /* 每格：畫面外、沉到地平線下的草塊不畫（用和著色器一樣的滾筒彎曲把塊的中心投影到畫面上）；
    遠處的草塊只畫一部分（塊內順序已打亂，少畫的是隨機的一部分）——依草葉在畫面上有幾個像素高決定，畫面看得出一根根草的距離都是全部的草 */
 const vC = new THREE.Vector3();
 export function cull() {
   const F = U.uBendF.value, K = U.uCurve.value, P = camera.projectionMatrix.elements, fx = P[0], fy = P[5], M = camera.matrixWorldInverse, R = CH * 0.75 + 0.4, pxK = 0.3 * fy * renderer.domElement.height * 0.5;   // 0.3 公尺高的草葉在深度 1 時有幾個像素
-  for (const ch of chunks) {
+  const seen = (ch, R) => {   // 這一塊在畫面上的深度（看不到是 -1）
     vC.set(ch.x, ch.y + 0.2, ch.z).applyMatrix4(M);
-    const depth = -vC.z; if (depth < -R) { ch.im.visible = false; continue; }
+    const depth = -vC.z; if (depth < -R) return -1;
     const bz = Math.max(depth - F, 0); vC.y -= bz * bz * K;
     const d = Math.max(depth, 0.5), rx = R * fx / d + 0.05, ry = R * fy / d + 0.05, x = fx * vC.x / d, y = fy * vC.y / d;
     const on = Math.abs(x) < 1 + rx && Math.abs(y) < 1 + ry && !(depth - R > HZ.d && topNdc(vC.y + bz * bz * K, depth, 0.6, R, F, K, fy) < HZ.y - 0.015);   // 比地平線遠、又整塊（近端彎得比較少，要另外算）在地平線下：被彎下去的海面擋住
-    ch.im.visible = on;
-    if (on) { const px = pxK / Math.max(depth, 1); ch.im.count = Math.max(1, Math.round(ch.list.length * (px > (ULTRA ? 12 : 7) ? 1 : px > (ULTRA ? 6 : 3.5) ? 0.6 : 0.35))); }   // 極省電：近一點就開始少畫
-  }
+    return on ? Math.max(depth, 1) : -1;
+  };
+  const share = depth => { const px = pxK / depth; return px > (ULTRA ? 12 : 7) ? 1 : px > (ULTRA ? 6 : 3.5) ? 0.6 : 0.35; };   // 極省電：近一點就開始少畫
+  for (const ch of chunks) { const depth = seen(ch, R); ch.im.visible = depth > 0; if (depth > 0) ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth))); }
+  const sn = U.uSnow.value > 0.3 ? 'winter' : seasonNow(); if (sn !== bloomSeason) bloomTint(sn);
+  for (const ch of blooms) { const depth = BLOOM[bloomSeason] ? seen(ch, BCH * 0.75 + 0.4) : -1; ch.im.visible = depth > 0; if (depth > 0) ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth))); }
 }
 export const count = () => spots.length;
 let pend = 0;

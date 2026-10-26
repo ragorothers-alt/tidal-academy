@@ -8,8 +8,42 @@
   const I = (root.TA = root.TA || {}).ISLE = root.TA.ISLE || {};
   I.LMMODELS = I.LMMODELS || {};
 
+  // 小型、實體花葉；只在原輪廓內的指定基座／外緣生長，不佔走道。
+  function dressLandmark(THREE, kit, g, paths, flowers, flowerColor = '#f3bdd2') {
+    const bins = [[], []], V = p => new THREE.Vector3(...p);
+    const add = (geo, bin, p, scale, ry = 0) => {
+      if (scale) geo.scale(...scale); geo.rotateY(ry); geo.translate(...p);
+      const raw = geo.index ? geo.toNonIndexed() : geo;
+      if (raw !== geo) geo.dispose(); bins[bin].push(raw);
+    };
+    for (const pts of paths) {
+      const curve = new THREE.CatmullRomCurve3(pts.map(V));
+      add(new THREE.TubeGeometry(curve, 8, .009, 4, false), 0, [0,0,0]);
+      for (let j = 0; j < 6; j++) {
+        const p = curve.getPoint((j + .5) / 6), side = j % 2 ? 1 : -1;
+        add(new THREE.OctahedronGeometry(1), 0, [p.x + side * .035, p.y, p.z], [.065,.025,.035], side * .6);
+      }
+    }
+    for (const [x,y,z] of flowers) {
+      for (let j = 0; j < 5; j++) {
+        const a = j * Math.PI * 2 / 5;
+        add(new THREE.SphereGeometry(1,4,2), 1, [x + .035*Math.cos(a),y+.01,z+.035*Math.sin(a)], [.038,.025,.038]);
+      }
+      for (const side of [-1,1]) add(new THREE.OctahedronGeometry(1), 0, [x+side*.037,y-.035,z], [.065,.018,.034], side*.7);
+    }
+    const mats = [kit.mat('#9fb994',{roughness:.94}),kit.mat(flowerColor,{roughness:.88})];
+    bins.forEach((geos,i) => {
+      if (!geos.length) return;
+      const positions=[],normals=[];
+      for (const geo of geos) {positions.push(...geo.attributes.position.array);normals.push(...geo.attributes.normal.array);geo.dispose();}
+      const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+      const mesh=new THREE.Mesh(geo,mats[i]);mesh.name=i?'landmark-flowers':'landmark-leaves';mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);
+    });
+  }
+
+
 I.LMMODELS['fountain']=function(THREE,kit){const g=new THREE.Group();g.name='MODEL';
-const stone=kit.mat('#f3efe6',{roughness:.85},'stone'),shade=kit.mat('#d8cbb7',{roughness:.9},'stone'),blue=kit.mat('#3e5a8c',{roughness:.65},'roof'),navy=kit.mat('#1f2c55',{roughness:.55}),gold=kit.mat('#d8b45a',{roughness:.35,metalness:.65}),wood=kit.mat('#8f6040',{roughness:.75});const bins=new Map();
+const stone=kit.mat('#efe3d1',{roughness:.85},'stone'),shade=kit.mat('#c8bdd1',{roughness:.9},'stone'),blue=kit.mat('#ad9abd',{roughness:.65},'roof'),navy=kit.mat('#9186a8',{roughness:.55}),gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),wood=kit.mat('#cda67e',{roughness:.8},'wood');const bins=new Map();
 function put(geo,mat,name,x=0,y=0,z=0,rx=0,ry=0,rz=0){const mx=new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1));geo.applyMatrix4(mx);const key=name+'-'+mat.uuid;if(!bins.has(key))bins.set(key,{mat,name,geos:[]});bins.get(key).geos.push(geo);}
 function flush(){for(const {mat,name,geos}of bins.values()){let pos=[],nor=[],uv=[],idx=[],off=0;for(const a of geos){const p=a.getAttribute('position'),n=a.getAttribute('normal'),u=a.getAttribute('uv');pos.push(...p.array);nor.push(...n.array);uv.push(...u.array);const ii=a.index?Array.from(a.index.array):Array.from({length:p.count},(_,i)=>i);for(const i of ii)idx.push(i+off);off+=p.count;a.dispose();}const a=new THREE.BufferGeometry();a.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));a.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));a.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));a.setIndex(idx);const m=new THREE.Mesh(a,mat);m.name=name;m.castShadow=true;m.receiveShadow=true;g.add(m);}return g;}
 function box(w,h,d,mat,name,x,y,z,rz=0){const b=Math.min(.018,w*.12,h*.12,d*.12),sh=new THREE.Shape();sh.moveTo(-w/2+b,-h/2+b);sh.lineTo(w/2-b,-h/2+b);sh.lineTo(w/2-b,h/2-b);sh.lineTo(-w/2+b,h/2-b);sh.closePath();const gg=new THREE.ExtrudeGeometry(sh,{depth:d-2*b,bevelEnabled:true,bevelSize:b,bevelThickness:b,bevelSegments:1});gg.translate(0,0,-d/2+b);put(gg,mat,name,x,y,z,0,0,rz);}
@@ -21,8 +55,8 @@ function diamond(x,y,z,w,h,mat,name){profile([[x,y+h/2],[x+w/2,y],[x,y-h/2],[x-w
 function crescent(x,y,z,r,mat,name){const sh=new THREE.Shape();sh.moveTo(x+.6*r,y+.8*r);sh.bezierCurveTo(x-1.35*r,y+1.04*r,x-1.35*r,y-1.04*r,x+.72*r,y-.7*r);sh.bezierCurveTo(x-.5*r,y-.63*r,x-.53*r,y+.28*r,x+.6*r,y+.8*r);const gg=new THREE.ExtrudeGeometry(sh,{depth:.035,bevelEnabled:true,bevelSize:.009,bevelThickness:.008,bevelSegments:1,curveSegments:22});gg.translate(0,0,z);put(gg,mat,name);}
 function star(x,y,z,r,mat,name){const pts=[];for(let i=0;i<8;i++){const a=i*Math.PI/4;const rr=i%2?r*.3:r;pts.push([x+Math.sin(a)*rr,y+Math.cos(a)*rr]);}profile(pts,.03,mat,name,z);}
 
-cyl(1.57,1.64,.14,shade,'basin',0,.07,0,64);ring(1.59,1.36,.31,stone,'basin',.285);ring(1.625,1.34,.055,stone,'pool-coping',.465);ring(1.59,1.39,.035,navy,'navy-rim',.504);ring(1.61,1.59,.027,gold,'gold-rim-line',.507);ring(1.39,1.36,.025,gold,'gold-rim-line',.507);
-const water=kit.mat('#a0dfe7',{transparent:true,opacity:.75,roughness:.1});cyl(1.37,1.37,.028,water,'water',0,.359,0,64);
+cyl(1.57,1.64,.14,shade,'basin',0,.07,0,64);ring(1.59,1.36,.31,stone,'basin',.285);put(new THREE.LatheGeometry([[1.34,-.0275],[1.61,-.0275],[1.625,-.0125],[1.625,.0125],[1.61,.0275],[1.34,.0275],[1.34,-.0275]].map(p=>new THREE.Vector2(...p)),64),stone,'pool-coping',0,.465,0);ring(1.59,1.39,.035,navy,'navy-rim',.504);ring(1.61,1.59,.027,gold,'gold-rim-line',.507);ring(1.39,1.36,.025,gold,'gold-rim-line',.507);
+const water=kit.mat('#abd0ce',{transparent:true,opacity:.72,depthWrite:false,roughness:.28});cyl(1.37,1.37,.028,water,'water',0,.359,0,64);
 cyl(.52,.56,.11,gold,'pedestal-step',0,.385,0);cyl(.46,.51,.095,shade,'pedestal-step',0,.46,0);cyl(.43,.43,.54,stone,'pedestal',0,.765,0);cyl(.46,.46,.08,stone,'pedestal',0,1.055,0);cyl(.35,.43,.055,gold,'pedestal-cap',0,1.122,0);cyl(.2,.3,.085,navy,'pedestal-cap',0,1.17,0);cyl(.17,.22,.075,gold,'pedestal-cap',0,1.2125,0);
 // A fixed meridian carries two nested, independently pivoted armillary bands.
 // Local Y is the polar shaft; the equator is normal to it, the ecliptic is oblique.
@@ -50,21 +84,22 @@ for(let i=0;i<36;i++){
  put(new THREE.BoxGeometry(.009,l,.008),navy,'armillary',Math.sin(a)*(.79-l/2),cy+Math.cos(a)*(.79-l/2),.039,0,0,-a);
 }
 for(const s of [-1,1])put(new THREE.CylinderGeometry(.023,.023,.018,8),gold,'armillary',s*.755,cy,.046,Math.PI/2);
-const crystal=kit.mat('#6eaee6',{roughness:.18,metalness:.05,emissive:'#7fc8ff',emissiveIntensity:.9});// A faceted crystal with a real axial bore; the spindle never crosses a solid face.
+const crystal=kit.mat('#b7a4c7',{roughness:.42,metalness:.02,emissive:'#d5c7e6',emissiveIntensity:.18});// A faceted crystal with a real axial bore; the spindle never crosses a solid face.
 let cg=new THREE.LatheGeometry([[.055,-.45],[.105,-.45],[.33,-.28],[.44,0],[.33,.28],[.105,.45],[.055,.45],[.055,-.45]].map(v=>new THREE.Vector2(...v)),8);cg=cg.toNonIndexed();cg.computeVertexNormals();cg.rotateZ(-tilt);cg.translate(0,cy,0);put(cg,crystal,'crystal');
 for(let i=0;i<4;i++){const a=i*Math.PI/2,xx=Math.sin(a),zz=Math.cos(a);tube([[xx*.32,1.105,zz*.32],[xx*.69,1.25,zz*.69],[xx*.91,1.76,zz*.91],[xx*.85,1.94,zz*.85]],.024,gold,'gold-spouts',16);box(.13,.15,.13,gold,'gold-spouts',xx*.85,1.97,zz*.85);tube([[xx*.86,1.96,zz*.86],[xx*1.01,1.79,zz*1.01],[xx*1.16,1.13,zz*1.16],[xx*1.2,.385,zz*1.2]],.037,water,'falling-streams',22);}
 
-const pale=kit.mat('#d8edf2',{roughness:.16,transparent:true,opacity:.72});
+const pale=kit.mat('#d9e5df',{roughness:.3,transparent:true,opacity:.54,depthWrite:false});
 for(let i=0;i<4;i++){const a=Math.PI/4+i*Math.PI/2,xx=Math.sin(a),zz=Math.cos(a),x=xx*1.55,z=zz*1.55;box(.2,.15,.2,shade,'rim-bevel',x,.175,z);box(.17,.24,.17,stone,'rim-bevel',x,.365,z);box(.2,.055,.2,stone,'rim-bevel',x,.51,z);const cg=new THREE.ConeGeometry(.12,.068,4);put(cg,stone,'rim-bevel',x,.566,z,0,Math.PI/4);const m=new THREE.Matrix4().makeRotationY(a);const dg=new THREE.OctahedronGeometry(.07,0);dg.scale(.65,1.5,.35);dg.applyMatrix4(m);put(dg,gold,'pier-diamond',x+xx*.103,.363,z+zz*.103);}
 for(let i=0;i<8;i++){const a=i*Math.PI/4,xx=Math.sin(a),zz=Math.cos(a);const geo=new THREE.OctahedronGeometry(.045,0);geo.scale(1,.28,1);put(geo,gold,'gold-rim-line',xx*1.49,.533,zz*1.49);}
 // Separate geometry for the central crescent emblem and raised plinth borders.
 crescent(0,.76,.439,.17,gold,'pedestal-crescent');star(.07,.795,.482,.07,gold,'pedestal-crescent');
 for(let i=0;i<4;i++){const a=i*Math.PI/2;const x=Math.sin(a)*1.2,z=Math.cos(a)*1.2;for(const r of [.105,.19]){const rr=new THREE.TorusGeometry(r,.009,5,24);put(rr,pale,'water-ripples',x,.383,z,Math.PI/2);}for(let j=0;j<3;j++){const aa=a+j*2.1;put(new THREE.SphereGeometry(.017,5,4),pale,'water-ripples',x+Math.sin(aa)*.095,.41+j*.025,z+Math.cos(aa)*.095);}}
 
-const stoneLight=kit.mat('#eee7d8',{roughness:.86},'stone');for(let row=0;row<2;row++)for(let i=0;i<20;i++){const aa=i*Math.PI/10+(row%2)*Math.PI/20;const geo=new THREE.CylinderGeometry(1.598,1.598,.127,4,1,true,aa+.004,Math.PI/10-.008);put(geo,(i+row)%3===0?stoneLight:stone,'surface-seams',0,.195+row*.137,0);}const result=flush();result.position.y=.00001;return result;};
+const stoneLight=kit.mat('#e8decf',{roughness:.86},'stone');for(let row=0;row<2;row++)for(let i=0;i<20;i++){const aa=i*Math.PI/10+(row%2)*Math.PI/20;const geo=new THREE.CylinderGeometry(1.598,1.598,.127,4,1,true,aa+.004,Math.PI/10-.008);put(geo,(i+row)%3===0?stoneLight:stone,'surface-seams',0,.195+row*.137,0);}const result=flush();result.position.y=.00001;return result;};
+
 
 I.LMMODELS['gate']=function(THREE,kit){const g=new THREE.Group();g.name='MODEL';
-const stone=kit.mat('#f3efe6',{roughness:.85},'stone'),shade=kit.mat('#d8cbb7',{roughness:.9},'stone'),blue=kit.mat('#3e5a8c',{roughness:.65},'roof'),navy=kit.mat('#1f2c55',{roughness:.55}),gold=kit.mat('#d8b45a',{roughness:.35,metalness:.65}),wood=kit.mat('#8f6040',{roughness:.75});const bins=new Map();
+const stone=kit.mat('#efe3d1',{roughness:.85},'stone'),shade=kit.mat('#c8bdd1',{roughness:.9},'stone'),blue=kit.mat('#ad9abd',{roughness:.65},'roof'),navy=kit.mat('#9186a8',{roughness:.55}),gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),wood=kit.mat('#cda67e',{roughness:.8},'wood');const bins=new Map();
 function put(geo,mat,name,x=0,y=0,z=0,rx=0,ry=0,rz=0){const mx=new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1));geo.applyMatrix4(mx);const key=name+'-'+mat.uuid;if(!bins.has(key))bins.set(key,{mat,name,geos:[]});bins.get(key).geos.push(geo);}
 function flush(){for(const {mat,name,geos}of bins.values()){let pos=[],nor=[],uv=[],idx=[],off=0;for(const a of geos){const p=a.getAttribute('position'),n=a.getAttribute('normal'),u=a.getAttribute('uv');pos.push(...p.array);nor.push(...n.array);uv.push(...u.array);const ii=a.index?Array.from(a.index.array):Array.from({length:p.count},(_,i)=>i);for(const i of ii)idx.push(i+off);off+=p.count;a.dispose();}const a=new THREE.BufferGeometry();a.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));a.setAttribute('normal',new THREE.Float32BufferAttribute(nor,3));a.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));a.setIndex(idx);const m=new THREE.Mesh(a,mat);m.name=name;m.castShadow=true;m.receiveShadow=true;g.add(m);}return g;}
 function box(w,h,d,mat,name,x,y,z,rz=0){const b=Math.min(.018,w*.12,h*.12,d*.12),sh=new THREE.Shape();sh.moveTo(-w/2+b,-h/2+b);sh.lineTo(w/2-b,-h/2+b);sh.lineTo(w/2-b,h/2-b);sh.lineTo(-w/2+b,h/2-b);sh.closePath();const gg=new THREE.ExtrudeGeometry(sh,{depth:d-2*b,bevelEnabled:true,bevelSize:b,bevelThickness:b,bevelSegments:1});gg.translate(0,0,-d/2+b);put(gg,mat,name,x,y,z,0,0,rz);}
@@ -83,7 +118,7 @@ for(const z of [-.76,.76]){tube(Array.from({length:33},(_,i)=>{const x=-2.88+5.7
 const disc=new THREE.CylinderGeometry(.34,.34,.07,32);put(disc,navy,'crest-disc',0,3.96,.83,Math.PI/2);put(new THREE.TorusGeometry(.345,.035,8,48),gold,'crest-rim',0,3.96,.88);crescent(-.04,3.96,.91,.235,gold,'crest-crescent');star(.075,4.03,.94,.11,gold,'crest-star');
 const glass=kit.win();for(const side of [-1,1]){const x=2.22*side,z=.65;box(.2,.38,.06,gold,'lantern-mount',x,2.48,.4);tube([[x,2.6,.4],[x,2.65,.65],[x,2.5,z]],.025,gold,'lantern-mount',10);cyl(.06,.06,.16,gold,'lantern-frame',x,2.48,z,8);cyl(.16,.23,.18,gold,'lantern-frame',x,2.31,z,4);cyl(.17,.15,.37,glass,'lantern-core',x,2.04,z,4);cyl(.2,.2,.055,gold,'lantern-frame',x,1.83,z,8);cyl(.07,.17,.13,gold,'lantern-frame',x,1.75,z,8);for(let i=0;i<4;i++){const a=Math.PI/4+i*Math.PI/2;box(.027,.4,.027,gold,'lantern-frame',x+.15*Math.sin(a),2.05,z+.15*Math.cos(a));}}
 
-const lightBlue=kit.mat('#5574a4',{roughness:.64},'roof');
+const lightBlue=kit.mat('#b7a4c7',{roughness:.64},'roof');
 // Continuous timber gables close the head assembly above the stone arch.
 const gable=[];for(let i=0;i<=30;i++){const x=-2.35+4.7*i/30;gable.push([x,roofY(x)-.11]);}gable.push([2.35,3.35]);for(let i=24;i>=0;i--){const x=-1.88+3.76*i/24;gable.push([x,3.35+.4*Math.sqrt(Math.max(0,1-(x/1.88)**2))]);}gable.push([-2.35,3.35]);for(const z of [-.45,.45])profile(gable,.1,wood,'gable-timber',z);
 for(let side of [-1,1])for(let row=0;row<5;row++)for(let col=0;col<8;col++){const xa=side*(.04+col*.345),xb=side*(.04+(col+1)*.345-.016);const min=Math.min(xa,xb),max=Math.max(xa,xb),pts=[[min,roofY(min)+.014],[max,roofY(max)+.014],[max,roofY(max)+.05],[min,roofY(min)+.05]];profile(pts,.274,(row+col)%3===0?lightBlue:blue,'roof-tile-bands',-.6+row*.3);}
@@ -91,7 +126,7 @@ for(const side of [-1,1]){const x=2.22*side;box(.19,1.4,.025,gold,'navy-inlay-fr
 // Cap the three roof crests with short brass finials.
 for(const x of [-2.65,0,2.65]){const y=roofY(x)+.055;box(.19,.09,.22,gold,'roof-finials',x,y+.045,0);cyl(.055,.09,.08,gold,'roof-finials',x,y+.12,0,8);const h=x===0?.23:.2;put(new THREE.OctahedronGeometry(.11,0),gold,'roof-finials',x,y+.23,0,0,Math.PI/4);}
 for(let i=1;i<16;i++){const x=-1.88+3.76*i/16,y=3.18+.4*Math.sqrt(Math.max(0,1-(x/1.88)**2));box(.012,.17,.615,shade,'arch-seams',x,y,0,-Math.atan2(-.4*x/1.88**2,Math.sqrt(Math.max(.01,1-(x/1.88)**2))));}
-const result=flush();result.position.y=.00001;return result;};
+const result=flush();result.position.y=.00001;dressLandmark(THREE,kit,result,[[[2.47,3.15,.44],[2.50,2.72,.44],[2.45,2.16,.44]],[[-2.47,3.05,.44],[-2.50,2.78,.44],[-2.46,2.54,.44]]],[[2.49,3.02,.46],[2.50,2.86,.46],[2.48,2.70,.46],[2.48,2.54,.46],[2.46,2.37,.46],[-2.49,3.00,.46],[-2.50,2.84,.46],[-2.48,2.68,.46]],'#cfbee8');return result;};
 
 I.LMMODELS['bridge']=function(THREE,kit){
   'use strict';
@@ -99,7 +134,7 @@ I.LMMODELS['bridge']=function(THREE,kit){
   const g=new THREE.Group();g.name='tidal-ivory-arch-bridge';
   const batches=new Map(),materials=new Map(),palette=stage>=3;
   const mat=(color,opts={},kind)=>{const key=JSON.stringify([color,opts,kind]);if(!materials.has(key))materials.set(key,kit.mat(palette?color:'#d9cfbc',palette?opts:{roughness:.9},kind));return materials.get(key);};
-  const M={stone:mat('#f0e4ce',{roughness:.89},'stone'),light:mat('#f7eddb',{roughness:.86},'stone'),shade:mat('#d9c9ae',{roughness:.92},'stone'),mortar:mat('#aa9e88',{roughness:.97},'stone'),blue:mat('#314c73',{roughness:.77},'stone'),blue2:mat('#405d83',{roughness:.74},'stone'),gold:mat('#d5ac59',{roughness:.37,metalness:.7}),goldDark:mat('#967338',{roughness:.47,metalness:.63}),roof:mat('#233858',{roughness:.73},'roof'),roof2:mat('#3e5a80',{roughness:.7},'roof'),core:palette?kit.win():null};
+  const M={stone:mat('#efe3d1',{roughness:.89},'stone'),light:mat('#f0e5d5',{roughness:.86},'stone'),shade:mat('#d8cfce',{roughness:.92},'stone'),mortar:mat('#c8bdd1',{roughness:.97},'stone'),blue:mat('#a49bb5',{roughness:.77},'stone'),blue2:mat('#b7a4c7',{roughness:.74},'stone'),gold:mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),goldDark:mat('#b99b80',{roughness:.4,metalness:0.6},'metal'),roof:mat('#9186a8',{roughness:.73},'roof'),roof2:mat('#ad9abd',{roughness:.7},'roof'),core:palette?kit.win():null};
   if(!M.core)M.core=M.light;
   const ids=new Map(Object.values(M).map((m,i)=>[m,i]));
   const deckY=x=>.02+.45*Math.sin(Math.PI*(x+3.2)/6.4);
@@ -110,8 +145,8 @@ I.LMMODELS['bridge']=function(THREE,kit){
     if(bevel>0){const b=Math.min(bevel,w*.2,h*.2,d*.2),s=new THREE.Shape(),a=w/2-b,c=h/2-b;s.moveTo(-a,-c);s.lineTo(a,-c);s.lineTo(a,c);s.lineTo(-a,c);s.closePath();const geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:1,steps:1,curveSegments:1});place(geo,m,part,x,y,z-(d-2*b)/2);}
     else place(new THREE.BoxGeometry(w,h,d),m,part,x,y,z);
   }
-  function profile(x0,x1,upper,lower,z0,z1,m,part,n=8){
-    const s=new THREE.Shape();s.moveTo(x0,upper(x0));for(let i=1;i<=n;i++){const x=x0+(x1-x0)*i/n;s.lineTo(x,upper(x));}for(let i=n;i>=0;i--){const x=x0+(x1-x0)*i/n;s.lineTo(x,lower(x));}s.closePath();place(new THREE.ExtrudeGeometry(s,{depth:z1-z0,bevelEnabled:false,steps:1,curveSegments:1}),m,part,0,0,z0);
+  function profile(x0,x1,upper,lower,z0,z1,m,part,n=8,b=0){
+    x0+=b;x1-=b;const s=new THREE.Shape();s.moveTo(x0,upper(x0)-b);for(let i=1;i<=n;i++){const x=x0+(x1-x0)*i/n;s.lineTo(x,upper(x)-b);}for(let i=n;i>=0;i--){const x=x0+(x1-x0)*i/n;s.lineTo(x,lower(x)+b);}s.closePath();place(new THREE.ExtrudeGeometry(s,{depth:z1-z0-2*b,bevelEnabled:b>0,bevelSize:b,bevelThickness:b,bevelSegments:1,steps:1,curveSegments:1}),m,part,0,0,z0+b);
   }
   function rod(a,b,r,m,part,n=7,rTop=r){const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),dir=B.clone().sub(A),geo=new THREE.CylinderGeometry(rTop,r,dir.length(),n,1);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize()));geo.translate(...A.add(B).multiplyScalar(.5).toArray());add(geo,m,part);}
   function cyl(x,y,z,rt,rb,h,m,part,n=8){place(new THREE.CylinderGeometry(rt,rb,h,n,1),m,part,x,y,z);}
@@ -160,7 +195,7 @@ I.LMMODELS['bridge']=function(THREE,kit){
       for(let i=0;i<12;i++){
         const x0=-2.85+i*.475+.006,x1=x0+.463;
         profile(x0,x1,x=>deckY(x)+.515,x=>deckY(x)+.105,z0-.001,z1+.001,i%4===0?M.light:M.stone,'parapets',4);
-        profile(x0-.004,x1+.004,x=>deckY(x)+.625,x=>deckY(x)+.525,side<0?-1.493:1.205,side<0?-1.205:1.493,i%3===0?M.light:M.stone,'parapets',4);
+        profile(x0-.004,x1+.004,x=>deckY(x)+.625,x=>deckY(x)+.525,side<0?-1.493:1.205,side<0?-1.205:1.493,i%3===0?M.light:M.stone,'parapets',2,.012);
       }
       profile(-2.83,2.83,x=>deckY(x)+.525,x=>deckY(x)+.49,side<0?-1.436:1.431,side<0?-1.431:1.436,M.blue,'parapets',64);
       // Dark blue spandrel and separately laid limestone voussoirs.
@@ -200,6 +235,10 @@ I.LMMODELS['bridge']=function(THREE,kit){
     const fin=new THREE.ConeGeometry(.034,.105,6);place(fin,M.gold,part,x,base+.896,z);
     cyl(x,base+.858,z,.026,.025,.045,M.gold,part,7);
   }
+  for(const [x,z]of[[-2.38,-1.35],[2.38,1.35]]) {
+    box(x,deckY(x)+.707,z,.38,.16,.24,M.light,'parapets',.018);
+  }
+  dressLandmark(THREE,kit,g,[],[-2.38,2.38].flatMap((x,i)=>[-.10,0,.10].map(dx=>[x+dx,deckY(x)+.84,(i?1:-1)*1.35])));
   // Preserve position, normal and UV channels while batching only within semantic parts.
   const groups=new Map();
   for(const b of batches.values()){
@@ -221,7 +260,7 @@ I.LMMODELS['stairs'] = function stairsFactory(THREE,kit){
   const g=new THREE.Group();g.name='stairs';
   const level=7,mats={},batches=new Map();
   function mat(id,color,opts,kind){return mats[id]||(mats[id]=kit.mat(level<3?'#d5cdbb':color,opts||{},kind));}
-  const M={stone:mat('stone','#e9e0ce',{roughness:.9},'stone'),light:mat('light','#f0e8d8',{roughness:.87},'stone'),shade:mat('shade','#c8b99c',{roughness:.94},'stone'),seam:mat('seam','#a99b80',{roughness:1}),navy:mat('navy','#29436c',{roughness:.7}),gold:mat('gold','#d5ac57',{roughness:.3,metalness:.72}),wood:mat('wood','#a9774c',{roughness:.8},'wall'),wood2:mat('wood2','#b98656',{roughness:.79},'wall'),dark:mat('dark','#705039',{roughness:.87},'wall'),rope:mat('rope','#d9c69a',{roughness:.96}),glass:kit.win()};
+  const M={stone:mat('stone','#efe3d1',{roughness:.9},'stone'),light:mat('light','#f0e5d5',{roughness:.87},'stone'),shade:mat('shade','#d1c5ca',{roughness:.94},'stone'),seam:mat('seam','#b9aebc',{roughness:1}),navy:mat('navy','#a69ab7',{roughness:.7}),gold:mat('gold','#e8c48b',{roughness:.4,metalness:0.6},'metal'),wood:mat('wood','#cda67e',{roughness:.8},'wood'),wood2:mat('wood2','#d7b38c',{roughness:.8},'wood'),dark:mat('dark','#947b7b',{roughness:.8},'wood'),rope:mat('rope','#e3d2b6',{roughness:.96}),glass:kit.win()};
   function add(geo,m,name){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!geo.getAttribute('uv')){const p=geo.getAttribute('position'),u=new Float32Array(p.count*2);for(let i=0;i<p.count;i++){u[i*2]=p.getX(i);u[i*2+1]=p.getY(i)+p.getZ(i);}geo.setAttribute('uv',new THREE.BufferAttribute(u,2));}const k=(level<7?name+':':'')+Object.values(M).indexOf(m);if(!batches.has(k))batches.set(k,{m,name,geos:[]});batches.get(k).geos.push(geo.index?geo.toNonIndexed():geo);}
   function tf(geo,x,y,z,rx=0,ry=0,rz=0){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));}
   function box(x,y,z,w,h,d,m,name,rx=0,ry=0,rz=0){add(tf(new THREE.BoxGeometry(w,h,d),x,y,z,rx,ry,rz),m,name);}
@@ -246,7 +285,7 @@ I.LMMODELS['stairs'] = function stairsFactory(THREE,kit){
   // Twelve horizontal noses lie on y=-z/3; first tread is a plane at ground datum.
   for(let i=0;i<12;i++){const y=i/6,z=-i*.5;
    if(i===0){const geo=new THREE.PlaneGeometry(2,.5);geo.rotateX(-Math.PI/2);geo.translate(0,0,-.25);add(geo,M.light,'flight');}
-   else box(0,y/2,z-.25,2,y,.5,i%3===1?M.light:M.stone,'flight');
+   else rounded(0,y/2,z-.25,2,y,.5,i%3===1?M.light:M.stone,'flight',.02);
    if(level>=4&&i>0){const xx=(i%3-1)*.47;box(xx,y-.001,z-.255,.006,.002,.43,M.shade,'tread-joints');}
   }
   box(0,1,-6.2,2,2,.4,M.light,'flight');
@@ -284,7 +323,7 @@ I.LMMODELS['pier'] = function pierFactory(THREE,kit){
   const g=new THREE.Group();g.name='pier';
   const level=7,mats={},batches=new Map();
   function mat(id,color,opts,kind){return mats[id]||(mats[id]=kit.mat(level<3?'#d5cdbb':color,opts||{},kind));}
-  const M={stone:mat('stone','#e9e0ce',{roughness:.9},'stone'),light:mat('light','#f0e8d8',{roughness:.87},'stone'),shade:mat('shade','#c8b99c',{roughness:.94},'stone'),seam:mat('seam','#a99b80',{roughness:1}),navy:mat('navy','#29436c',{roughness:.7}),gold:mat('gold','#d5ac57',{roughness:.3,metalness:.72}),wood:mat('wood','#a9774c',{roughness:.8},'wall'),wood2:mat('wood2','#b98656',{roughness:.79},'wall'),dark:mat('dark','#705039',{roughness:.87},'wall'),rope:mat('rope','#d9c69a',{roughness:.96}),glass:kit.win()};
+  const M={stone:mat('stone','#efe3d1',{roughness:.9},'stone'),light:mat('light','#f0e5d5',{roughness:.87},'stone'),shade:mat('shade','#d1c5ca',{roughness:.94},'stone'),seam:mat('seam','#b9aebc',{roughness:1}),navy:mat('navy','#a69ab7',{roughness:.7}),gold:mat('gold','#e8c48b',{roughness:.4,metalness:0.6},'metal'),wood:mat('wood','#cda67e',{roughness:.8},'wood'),wood2:mat('wood2','#d7b38c',{roughness:.8},'wood'),dark:mat('dark','#947b7b',{roughness:.8},'wood'),rope:mat('rope','#e3d2b6',{roughness:.96}),glass:kit.win()};
   function add(geo,m,name){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!geo.getAttribute('uv')){const p=geo.getAttribute('position'),u=new Float32Array(p.count*2);for(let i=0;i<p.count;i++){u[i*2]=p.getX(i);u[i*2+1]=p.getY(i)+p.getZ(i);}geo.setAttribute('uv',new THREE.BufferAttribute(u,2));}const k=(level<7?name+':':'')+Object.values(M).indexOf(m);if(!batches.has(k))batches.set(k,{m,name,geos:[]});batches.get(k).geos.push(geo.index?geo.toNonIndexed():geo);}
   function tf(geo,x,y,z,rx=0,ry=0,rz=0){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));}
   function box(x,y,z,w,h,d,m,name,rx=0,ry=0,rz=0){add(tf(new THREE.BoxGeometry(w,h,d),x,y,z,rx,ry,rz),m,name);}
@@ -326,6 +365,7 @@ I.LMMODELS['pier'] = function pierFactory(THREE,kit){
    for(const z of [.35,2.25,4.15,6.1]){
     rounded(side*1.34,-.63,z,.3,1.94,.32,M.dark,'piles',.018);
     rounded(side*1.34,-1.49,z,.34,.22,.36,M.stone,'piles',.014);
+    rounded(side*1.34,-.27,z,.306,.14,.326,M.shade,'tide-bands',.012);
     if(level>=1){beam([side*1.34,-1.15,z],[side*1.34,.11,z+Math.min(.72,6.3-z)],.085,M.dark,'braces',4);beam([side*1.34,-1.15,z],[side*1.34,.11,z-Math.min(.6,z-.12)],.085,M.dark,'braces',4);}
    }
    if(level>=1)for(const z of [.7,5.7]){

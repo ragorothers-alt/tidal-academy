@@ -6,12 +6,19 @@
   const I = TA.ISLE = TA.ISLE || {};
   I.BLDMODELS = I.BLDMODELS || {};
 
+
   I.BLDMODELS['shop'] = function tidalShop(THREE,kit) {
   'use strict';
   const g=new THREE.Group(); g.name='tidal-crescent-shop'; g.userData.sign=[-.53,2.16,1.66];
   const mats=new Map(), batches=new Map();
   const mat=(color,opts={},kind=undefined)=>{const k=kind+color+JSON.stringify(opts);if(!mats.has(k))mats.set(k,kit.mat(color,opts,kind));return mats.get(k);};
-  const M={stone:mat('#e8dfca',{roughness:.9},'stone'),stone2:mat('#d2c5aa',{roughness:.94},'stone'),mortar:mat('#b4a78d',{roughness:1},'stone'),plaster:mat('#f0e8d7',{roughness:.92},'stone'),wood:mat('#795138',{roughness:.83},'wall'),woodLight:mat('#aa7950',{roughness:.79},'wall'),woodDark:mat('#4d392c',{roughness:.9},'wall'),roof:mat('#324f78',{roughness:.72},'roof'),roof2:mat('#42618a',{roughness:.69},'roof'),roof3:mat('#263e63',{roughness:.76},'roof'),gold:mat('#d4ab59',{roughness:.39,metalness:.65}),red:mat('#c96953',{roughness:.91}),cream:mat('#f5e6c9',{roughness:.94}),leaf:mat('#4d6b43',{roughness:.95}),leaf2:mat('#718853',{roughness:.94}),fruitRed:mat('#c6543d',{roughness:.58}),fruitGold:mat('#e6b84e',{roughness:.58}),blue:mat('#326494',{roughness:.36,metalness:.12}),pot:mat('#ae7754',{roughness:.9},'stone'),glow:mat('#ffe0a1',{roughness:.32,emissive:'#ffc56a',emissiveIntensity:.4}),glass:kit.win()};
+  // Shared finishes: smooth cream plaster, actual limestone feet, honey timber and lilac slate.
+  const plaster=mat('#f0e5d5',{roughness:.92},'plaster'),stone=mat('#e8decf',{roughness:.94},'stone');
+  const wood=mat('#cda67e',{roughness:.8},'wood'),woodDark=mat('#947b7b',{roughness:.8},'wood');
+  const roof=mat('#ad9abd',{roughness:.78},'roof'),gold=mat('#e8c48b',{roughness:.4,metalness:0.6},'metal');
+  const rose=mat('#e6b8bf',{roughness:.94}),cream=mat('#fff0d4',{roughness:.94}),foliage=mat('#9fb994',{roughness:.94}),glass=kit.win();
+  const canopyRose=mat('#e6b8bf',{roughness:.94},'fabric'),canopyCream=mat('#fff0d4',{roughness:.94},'fabric'),potRose=mat('#e6b8bf',{roughness:.94},'ceramic');
+  const M={stone,stone2:stone,mortar:stone,plaster,wood,woodLight:wood,woodDark,roof,roof2:roof,roof3:roof,gold,red:rose,cream,canopyRose,canopyCream,leaf:foliage,leaf2:foliage,fruitRed:rose,fruitGold:cream,blue:roof,pot:potRose,glow:glass,glass};
   const materialId=new Map(Object.values(M).map((m,i)=>[m,i]));
   function add(geo,m,name='detail'){if(!geo.getAttribute('normal'))geo.computeVertexNormals();const key=name==='main-wall'?name:name==='main-frame'?'main-frame':String(materialId.get(m));if(!batches.has(key))batches.set(key,{m,geos:[],name:name==='main-wall'?name:name==='main-frame'?name:'shop-detail-'+key});batches.get(key).geos.push(geo.index?geo.toNonIndexed():geo);}
   function tf(geo,x,y,z,rx=0,ry=0,rz=0){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));}
@@ -74,7 +81,7 @@
   for(let i=0;i<3;i++){const h=.075*(i+1),z=1.92-i*.18;box(.79,h/2,z,1.1,h,.32,M.stone);box(.79,h+.008,z+.01,1.12,.025,.33,i%2?M.stone2:M.stone);}box(.79,.244,1.52,.72,.012,.3,M.roof3);star(.79,.255,1.64,.065,Math.PI/2);
   // Red and ivory striped curved canopy with scalloped hanging edge.
   const awX=-.78,awW=1.9,nstripe=10;
-  for(let i=0;i<nstripe;i++){const x0=awX-awW/2+i*awW/nstripe,x1=x0+awW/nstripe-.004,m=i%2?M.cream:M.red;for(let j=0;j<5;j++){let t0=j/5,t1=(j+1)/5;const f=t=>[1.45+t*.62,1.88-.13*t-.12*t*t];let p=f(t0),q=f(t1);quad([x0,p[1],p[0]],[x1,p[1],p[0]],[x1,q[1],q[0]],[x0,q[1],q[0]],m,.014);}const pts=[[-awW/nstripe/2,0],[awW/nstripe/2,0],[awW/nstripe/2,-.095]];for(let j=0;j<=8;j++){let a=j*Math.PI/8;pts.push([Math.cos(a)*awW/nstripe/2,-.095-Math.sin(a)*.06]);}shape(pts,.025,(x0+x1)/2,1.63,2.06,m);}
+  for(let i=0;i<nstripe;i++){const x0=awX-awW/2+i*awW/nstripe,x1=x0+awW/nstripe-.004,m=i%2?M.canopyCream:M.canopyRose;for(let j=0;j<5;j++){let t0=j/5,t1=(j+1)/5;const f=t=>[1.45+t*.62,1.88-.13*t-.12*t*t];let p=f(t0),q=f(t1);quad([x0,p[1],p[0]],[x1,p[1],p[0]],[x1,q[1],q[0]],[x0,q[1],q[0]],m,.014);}const pts=[[-awW/nstripe/2,0],[awW/nstripe/2,0],[awW/nstripe/2,-.095]];for(let j=0;j<=8;j++){let a=j*Math.PI/8;pts.push([Math.cos(a)*awW/nstripe/2,-.095-Math.sin(a)*.06]);}shape(pts,.025,(x0+x1)/2,1.63,2.06,m);}
   beam([-1.76,1.64,2.04],[.22,1.64,2.04],.025,M.gold);for(const x of [-1.75,.21]){beam([x,1.92,1.4],[x,1.64,2.04],.025,M.gold);sphere(x,1.64,2.04,.054,M.gold);}
   // Fruit crates and shop shelving add depth below the display glazing.
   function crate(x,z,w=.7){box(x,.37,z,w,.36,.4,M.woodDark);for(const s of [-1,1])for(let r=0;r<3;r++)box(x,.235+r*.115,z+s*.21,w,.09,.035,r%2?M.woodLight:M.wood);for(const q of [-1,1])box(x+q*(w/2-.045),.38,z+.224,.07,.4,.05,M.woodLight);beam([x-w/2+.04,.21,z+.26],[x+w/2-.04,.56,z+.26],.026,M.woodLight);for(let i=0;i<4;i++)for(let j=0;j<2;j++){const xx=x-w*.33+i*w*.22,zz=z-.105+j*.19;const mm=(i+j)%3?M.fruitGold:M.fruitRed;sphere(xx,.59+Math.sin(i*2+j)*.018,zz,.08,mm,1,.92,1);beam([xx,.658,zz],[xx+.007,.695,zz],.006,M.woodDark);} }
@@ -92,6 +99,8 @@
   function pot(x,z,h=.28){add(tf(new THREE.CylinderGeometry(.145,.11,h,10),x,.22+h/2,z),M.pot);add(tf(new THREE.TorusGeometry(.145,.02,5,10),x,.22+h,z,Math.PI/2),M.stone2);for(let i=0;i<5;i++){let a=i*2.4;leaf(x+Math.cos(a)*.1,.22+h+.13+Math.sin(i)*.025,z+Math.sin(a)*.09,a,i%2?M.leaf:M.leaf2);if(i%2===0){let fx=x+Math.cos(a)*.11,fy=.22+h+.24,fz=z+Math.sin(a)*.11;for(let k=0;k<5;k++)sphere(fx+Math.cos(k*1.256)*.034,fy+Math.sin(k*1.256)*.034,fz,.028,M.cream,1,1,.4);sphere(fx,fy,fz+.015,.019,M.fruitGold);}}}
   box(1.52,.11,1.5,.35,.22,.35,M.stone);pot(1.52,1.5,.3);pot(-1.59,1.22,.35);pot(-1.49,-1.14,.27);
   const vinePts=[[1.65,.28,1.32],[1.68,.66,1.35],[1.6,.99,1.37],[1.69,1.34,1.34],[1.61,1.66,1.37],[1.65,2.14,1.32]];pathTube(vinePts,.015,M.woodDark,28);for(let i=0;i<21;i++){let y=.37+i*.082,x=1.65+Math.sin(i*1.1)*.055,s=i%2?1:-1;leaf(x+s*.075,y,1.38,s*.67,i%3?M.leaf:M.leaf2);}
+  // Three light wisteria clusters share the awning's rose finish; no extra material or light.
+  for(let j=0;j<3;j++)for(let k=0;k<3;k++)sphere(1.70+j*.045,1.94-k*.10-j*.055,1.39+j*.016,.055-k*.009,M.red,.78,1.2,.7);
   for(const side of [-1,1])for(let i=0;i<5;i++){const z=-1.04+i*.48;beam([side*1.63,2.16,z],[side*1.81,2.3,z],.044,M.wood);}
   // Merge same-material geometry into a small set of static draw calls.
   for(const b of batches.values()){let count=0;for(const geo of b.geos)count+=geo.attributes.position.count;const pos=new Float32Array(count*3),nor=new Float32Array(count*3);let offset=0;for(const geo of b.geos){pos.set(geo.attributes.position.array,offset);nor.set(geo.attributes.normal.array,offset);offset+=geo.attributes.position.array.length;geo.dispose();}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));geo.setAttribute('normal',new THREE.BufferAttribute(nor,3));geo.computeBoundingSphere();const mesh=new THREE.Mesh(geo,b.m);mesh.name=b.name;mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);}
@@ -107,15 +116,15 @@
   root.userData.sign=[0,2.48,1.16];
   const TAU=Math.PI*2,cache=new Map(),buckets=new Map();
   const mat=(color,opts={},kind)=>{const key=JSON.stringify([color,opts,kind]);if(!cache.has(key))cache.set(key,kit.mat(color,opts,kind));return cache.get(key);};
-  const stone=[mat('#f0dec1',{roughness:.87},'stone'),mat('#e7d4b5',{roughness:.9},'stone'),mat('#f6e7ce',{roughness:.84},'stone'),mat('#dfc9a8',{roughness:.91},'stone')];
-  const dark=mat('#a89b85',{roughness:.98},'stone'),navy=[mat('#30496c',{roughness:.82},'stone'),mat('#3d5779',{roughness:.82},'stone')];
-  const roof=[mat('#273d5f',{roughness:.78},'roof'),mat('#334e73',{roughness:.8},'roof'),mat('#405d83',{roughness:.77},'roof')];
-  const gold=mat('#d2a24e',{roughness:.35,metalness:.7}),goldShade=mat('#997135',{roughness:.48,metalness:.62});
-  const wood=mat('#715036',{roughness:.87},'wall'),woodDark=mat('#493525',{roughness:.92},'wall');
-  const crystal=mat('#287bd1',{roughness:.23,metalness:.1,emissive:'#7fc8ff',emissiveIntensity:.8});
-  const crystalLight=mat('#bceaff',{roughness:.24,metalness:.1,emissive:'#7fc8ff',emissiveIntensity:.8});
-  const pane=kit.win();pane.color.set('#5388b1');pane.transparent=true;pane.opacity=.9;
-  const lanternGlass=kit.win();lanternGlass.transparent=true;lanternGlass.opacity=.18;lanternGlass.depthWrite=false;lanternGlass.side=THREE.DoubleSide;
+  const plaster=mat('#f0e5d5',{roughness:.92},'plaster'),limestone=mat('#e8decf',{roughness:.94},'stone');
+  const stone=[limestone,limestone,limestone,limestone],dark=limestone;
+  const slate=mat('#ad9abd',{roughness:.8},'roof'),navy=[slate,slate],roof=[slate,slate,slate];
+  const gold=mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),goldShade=mat('#b9a184',{roughness:.4,metalness:0.6},'metal');
+  const wood=mat('#cda67e',{roughness:.8},'wood'),woodDark=mat('#947b7b',{roughness:.8},'wood');
+  const crystal=mat('#f4c994',{roughness:.3,emissive:'#ffd39d',emissiveIntensity:.28}),crystalLight=crystal;
+  const pane=kit.win();
+  // Glass shells must not mutate kit.win(): it is shared by every building window.
+  const lanternGlass=mat('#e8deef',{roughness:.18,metalness:.1,transparent:true,opacity:.14,depthWrite:false,side:THREE.DoubleSide},'glass');
   function push(g,m,name){if(g.index){const a=g.toNonIndexed();g.dispose();g=a;}const key=name+'|'+m.uuid;if(!buckets.has(key))buckets.set(key,{name,m,list:[]});buckets.get(key).list.push(g);}
   function place(g,m,name,pos=[0,0,0],rot=[0,0,0]){g.rotateX(rot[0]);g.rotateY(rot[1]);g.rotateZ(rot[2]);g.translate(...pos);push(g,m,name);}
   function cyl(rt,rb,h,m,name,pos,n=32){place(new THREE.CylinderGeometry(rt,rb,h,n,1),m,name,pos);}
@@ -142,12 +151,10 @@
     for(let i=0;i<24;i++){const a=i*TAU/24+(layer%2)*TAU/48;sector(.68,ro,y,.1,a+.004,TAU/24-.008,stone[(i+layer*3)%4],'circular-base',3);}
   }
   cyl(.91,.98,.12,stone[0],'stone-base',[0,.425,0],48);
-  // Recessed mortar core with discrete, slightly separated staggered ashlar blocks.
-  cyl(radius(4.65)-.014,radius(.45)-.014,4.2,dark,'tower-body-core',[0,2.55,0],48);
-  for(let course=0;course<18;course++){
-    const y=.45+course*.232,h=.224,ri=radius(y)-.12,ro=radius(y),rt=radius(y+h),band=(y>.62&&y<.95)||(y>2.5&&y<2.83);
-    for(let j=0;j<18;j++){const a=j*TAU/18+(course%2)*TAU/36;sector(ri,ro,y,h,a+.0038,TAU/18-.0076,band?navy[(course+j)%2]:stone[(j*7+course*3)%4],'tower-body',3,rt);}
-  }
+  // Continuous tapered plaster avoids dense ashlar seams. Only two quiet lilac belts.
+  cyl(radius(4.65)-.014,radius(.45)-.014,4.2,plaster,'tower-body-core',[0,2.55,0],48);
+  cyl(radius(4.65),radius(.45),4.2,plaster,'tower-body',[0,2.55,0],48);
+  for(const y of [.78,2.66])cyl(radius(y+.08)+.008,radius(y-.08)+.008,.16,slate,'tower-belts',[0,y,0],48);
   // Concentric carved collars at base and under lantern balcony.
   cyl(.895,.915,.09,stone[2],'tower-collars',[0,.53,0],48);
   cyl(.76,.77,.095,stone[2],'tower-collars',[0,4.55,0],48);

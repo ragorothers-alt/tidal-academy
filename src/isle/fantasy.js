@@ -11,30 +11,264 @@ import { loadModel } from './actors.js';
 import { MODEL_IDS } from './model-list.js';
 
 const READY = new Set(MODEL_IDS);
-const hazeU = { uHaze: { value: new THREE.Color('#cfe6ff') }, uDens: { value: 0.0024 }, uHazeMax: { value: 0.38 }, uFront: { value: new THREE.Color(0.5, 0.5, 0.5) } };
+const hazeU = { uHaze: { value: new THREE.Color('#cfe6ff') }, uDens: { value: 0.0024 }, uHazeMax: { value: 0.38 }, uFront: { value: new THREE.Color(0.5, 0.5, 0.5) }, uFarNight: { value: 0 }, uFarDay: { value: 1 } };
 
-/** 遠景材質：不吃場景霧，改在畫面輸出前依距離混入天空色 */
-function farMat(m, dens, fill, roofs) {
+/** 保留原 Tripo UV／手繪貼圖；語意來自原貼圖色與模型高度，不把牆頂用斜率一律染藍。 */
+function farMat(m, dens, fill, roofs, backdrop = true) {
   m.fog = false;
-  if (m.map && m.emissive) { m.emissive.set('#ffffff'); m.emissiveMap = m.map; m.userData.fill = fill ?? 0.5; m.emissiveIntensity = m.userData.fill; fills.push(m); }   // 遠方的物件背光面也看得出顏色（假的環境反射光，晚上調暗）
-  const dU = { value: dens || 1 }, yR = { value: new THREE.Vector2(0, 1) }, fK = { value: roofs ? 0.72 : 1 };   // fK：正面補光的倍數（城堡少一點，不會洗成一片奶白）
-  if (roofs && roofs.isBufferGeometry) { roofs.computeBoundingBox(); yR.value.set(roofs.boundingBox.min.y, roofs.boundingBox.max.y); }   // roofs 傳入網格：屋頂只在模型的上半部（尖塔），下面平台的邊不算
+  const source = !!m.map, detail = !!m.userData.farDetail;
+  if (source && m.emissive) { m.emissive.set('#ffffff'); m.emissiveMap = m.map; m.userData.fill = fill ?? 0.5; fills.push(m); }
+  const u = { uDensK: { value: dens || 1 }, uFrontK: { value: roofs ? 0.78 : 0.9 } };
   m.onBeforeCompile = sh => {
-    Object.assign(sh.uniforms, hazeU, { uDensK: dU, uYR: yR, uFrontK: fK });
-    sh.vertexShader = 'varying float vFarD; varying float vRelY; uniform vec2 uYR;\n' + sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vFarD = -mvPosition.z; vRelY = (position.y - uYR.x) / max(uYR.y - uYR.x, 1e-4);');
-    sh.fragmentShader = 'uniform vec3 uHaze; uniform float uDens; uniform float uDensK; uniform float uHazeMax; uniform vec3 uFront; uniform float uFrontK; varying float vFarD; varying float vRelY;\n' +
-      sh.fragmentShader.replace('#include <normal_fragment_maps>', roofs ? `#include <normal_fragment_maps>
-  // 城堡的貼圖全是白色：用面的斜度分出屋頂——尖塔的圓錐屋頂是斜面，牆是垂直面、平台是水平面（城堡拉高了兩倍，屋頂很陡）
-  float gUp = dot(normalize(normal), normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
-  float gRoof = max(smoothstep(0.05, 0.16, gUp) * smoothstep(0.97, 0.88, gUp) * smoothstep(0.42, 0.55, vRelY), smoothstep(0.76, 0.9, vRelY) * 0.85);   // v6.93：尖塔非常陡（法線幾乎水平），斜度分不出來——城堡最上面一段直接算屋頂` : '#include <normal_fragment_maps>').replace('#include <opaque_fragment>', `float fFront = max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0), fUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)) * 0.5 + 0.5;
-  outgoingLight += diffuseColor.rgb * uFront * uFrontK * (0.25 + 0.75 * fFront * fFront) * (0.45 + 0.55 * fUp);   // 正面補光：保留明暗的立體感（取代整片均勻的自發光）
-  { float fl = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)); outgoingLight = max(mix(vec3(fl), outgoingLight, 1.1), 0.0); }   // v7.6：1.3 → 1.1
-#include <opaque_fragment>`).replace('#include <opaque_fragment>', roofs ? `outgoingLight = mix(outgoingLight * vec3(0.92, 0.86, 1.0), outgoingLight, smoothstep(0.15, 0.75, fFront));   // v7.6：側面是淡紫（以前偏冷藍灰）   // v6.93：側面偏冷（象牙白的受光面和藍紫的側面分開，看得出體積）
-  outgoingLight = mix(outgoingLight, vec3(0.34, 0.36, 0.7) * min(dot(outgoingLight, vec3(0.3, 0.59, 0.11)), 1.1), gRoof);   // v7.6：屋頂是淡藍紫（以前飽和的藍）   // 屋頂換成藍色（依亮度，但上限壓低：城堡很亮，用乘的會被色調映射洗回白色）   // 屋頂染成藍色（打光之後再染，才不會被強光洗白）
-#include <opaque_fragment>` : '#include <opaque_fragment>').replace('#include <tonemapping_fragment>', 'gl_FragColor.rgb = mix(gl_FragColor.rgb, uHaze, clamp(1.0 - exp(-vFarD * uDens * uDensK), 0.0, uHazeMax));\n#include <tonemapping_fragment>');
+    Object.assign(sh.uniforms, hazeU, u);
+    sh.vertexShader = `varying float vFarD;
+${source ? 'attribute float aFarKind; varying float vFarKind;' : ''}
+${detail ? 'attribute float aFarGlow; varying float vFarGlow;' : ''}
+` + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+  vFarD = -mvPosition.z;
+${source ? 'vFarKind = aFarKind;' : ''}
+${detail ? 'vFarGlow = aFarGlow;' : ''}`);
+    sh.fragmentShader = `uniform vec3 uHaze; uniform float uDens; uniform float uDensK; uniform float uHazeMax;
+uniform vec3 uFront; uniform float uFrontK; uniform float uFarNight; uniform float uFarDay; varying float vFarD;
+${source ? 'varying float vFarKind;' : ''}
+${detail ? 'varying float vFarGlow;' : ''}
+` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+${source ? `
+  vec3 paint = diffuseColor.rgb;
+  float paintL = dot(paint, vec3(0.3, 0.59, 0.11));
+  // 乘色＋提亮：逐像素保留原筆觸，不以單一紫灰填平；草苔、水帶先排除。
+  float leaf = smoothstep(0.015, 0.10, paint.g - max(paint.r, paint.b));
+  float water = smoothstep(0.025, 0.14, min(paint.g, paint.b) - paint.r)
+    * smoothstep(0.18, 0.50, paintL);
+  if (vFarKind > 0.5 && vFarKind < 1.5) water = max(water,
+    smoothstep(0.58, 0.82, paintL) * smoothstep(-0.02, 0.04, min(paint.g, paint.b) - paint.r));
+  float daylight = (1.0 - uFarNight);
+  if (vFarKind < 0.5) diffuseColor.rgb = (paint * vec3(1.52, 1.24, 1.30) + vec3(0.24, 0.20, 0.21)) * (1.0 + uFarDay * 0.95);
+  else if (vFarKind < 1.5) diffuseColor.rgb = paint * vec3(1.45, 1.10, 2.45) + vec3(0.20, 0.15, 0.32);
+  else if (vFarKind < 2.5) diffuseColor.rgb = paint * vec3(1.28, 1.18, 2.10) + vec3(0.24, 0.20, 0.50);
+  else if (vFarKind < 3.5) diffuseColor.rgb = paint * vec3(1.12, 1.30, 0.94) + vec3(0.075, 0.12, 0.025);
+  else diffuseColor.rgb = paint * vec3(1.55, 1.03, 1.65) + vec3(0.34, 0.19, 0.36);
+  diffuseColor.rgb = mix(diffuseColor.rgb, paint * vec3(1.12, 1.30, 0.94) + vec3(0.075, 0.12, 0.025), leaf);
+  diffuseColor.rgb = mix(diffuseColor.rgb, paint * vec3(1.10, 1.14, 1.20) + vec3(0.35, 0.42, 0.50), water);
+  // 夜間保留原有輪廓照度，提亮只隨日光漸入，暖窗仍使用獨立發光通道。
+  diffuseColor.rgb *= mix(0.66, 1.0, daylight);
+` : ''}`)
+      .replace('#include <opaque_fragment>', `
+  float fFront = max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0);
+  float fUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)) * 0.5 + 0.5;
+  outgoingLight += diffuseColor.rgb * uFront * uFrontK * (0.25 + 0.75 * fFront * fFront) * (0.45 + 0.55 * fUp);
+  outgoingLight *= mix(vec3(0.88, 0.82, 1.0), vec3(1.0), smoothstep(0.15, 0.8, fFront));
+${detail ? 'outgoingLight += vFarGlow * vec3(1.0, 0.54, 0.20) * (0.10 + uFarNight * 1.05);' : ''}
+#include <opaque_fragment>`)
+      .replace('#include <tonemapping_fragment>', `
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, uHaze, clamp(1.0 - exp(-vFarD * uDens * uDensK), 0.0, uHazeMax));
+#include <tonemapping_fragment>`);
+    if (backdrop) {
+      // 遠景自帶大氣，保留深度寫入與前後排序，使用後製既有 sky 深度帶避免第二次高度霧。
+      // 僅遠島／城堡／遠橋；近景、相機、後製參數都不動。600m內約0.37m深度精度。
+      sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n if (vFarD > 30.0) gl_FragDepth = 0.999901 + clamp(vFarD / 600.0, 0.0, 0.99) * 0.000098;');
+    }
   };
-  m.customProgramCacheKey = () => roofs ? 'far1r' : 'far1';
+  m.customProgramCacheKey = () => `far-painted-v3:${source}:${detail}:${!!roofs}:${backdrop}`;
   return m;
+}
+
+/** Sprite／星環也使用相同深度帶，讓後方的環與看板真正被城堡遮擋。 */
+function backdropMaterial(m) {
+  const previous = m.onBeforeCompile;
+  m.onBeforeCompile = sh => {
+    previous.call(m, sh);
+    sh.vertexShader = 'varying float vBackdropD;\n' + sh.vertexShader;
+    if (sh.vertexShader.includes('#include <project_vertex>')) sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n vBackdropD = -mvPosition.z;');
+    else sh.vertexShader = sh.vertexShader.replace('gl_Position = projectionMatrix * mvPosition;', 'vBackdropD = -mvPosition.z; gl_Position = projectionMatrix * mvPosition;');
+    sh.fragmentShader = 'varying float vBackdropD;\n' + sh.fragmentShader.replace(/}\s*$/, 'if (vBackdropD > 30.0) gl_FragDepth = 0.999901 + clamp(vBackdropD / 600.0, 0.0, 0.99) * 0.000098;\n}');
+  };
+  m.customProgramCacheKey = () => 'far-sprite-depth-v2'; return m;
+}
+
+// 一次性三角形語意標記，不動原模型資料；同款島的幾何／材質共用。
+const paintedGeometry = new WeakMap();
+function preparePaint(mesh, castle) {
+  const original = mesh.geometry;
+  if (paintedGeometry.has(original)) { mesh.geometry = paintedGeometry.get(original); return; }
+  const g = original.index ? original.toNonIndexed() : original.clone();
+  g.computeBoundingBox();
+  const p = g.attributes.position, uv = g.attributes.uv, H = g.boundingBox.max.y - g.boundingBox.min.y;
+  const img = mesh.material.map?.image, cv = document.createElement('canvas');
+  cv.width = img?.width || 1; cv.height = img?.height || 1;
+  const c = cv.getContext('2d', { willReadFrequently: true }); if (img) c.drawImage(img, 0, 0);
+  const pix = c.getImageData(0, 0, cv.width, cv.height).data, kinds = new Float32Array(p.count);
+  for (let i = 0; i < p.count; i += 3) {
+    let r = 0, b = 0, green = 0, y = 0;
+    for (let j = 0; j < 3; j++) {
+      const n = i + j, x = uv ? Math.min(cv.width - 1, Math.max(0, Math.floor(uv.getX(n) * cv.width))) : 0;
+      const v = uv ? (mesh.material.map.flipY ? 1 - uv.getY(n) : uv.getY(n)) : 0;
+      const k = (Math.min(cv.height - 1, Math.max(0, Math.floor(v * cv.height))) * cv.width + x) * 4;
+      r += pix[k]; green += pix[k + 1]; b += pix[k + 2]; y += (p.getY(n) - g.boundingBox.min.y) / H / 3;
+    }
+    let kind = castle ? 0 : 1;
+    if (castle && y < 0.40) kind = 1;
+    if (green > r * 1.07 && green > b * 1.06) kind = 3;
+    if (castle && y > 0.43 && b > r * 1.06 && b > green * 0.98) kind = p.getX(i) > 0.08 ? 4 : 2;
+    kinds.fill(kind, i, i + 3);
+  }
+  g.setAttribute('aFarKind', new THREE.BufferAttribute(kinds, 1));
+  // 只在語意邊界拆點；其餘還原原 GLB 的索引共用，保持逐三角形分色完全相同。
+  if (original.index) {
+    const remap = new Map(), refs = [], index = new Uint32Array(p.count);
+    for (let i = 0; i < p.count; i++) {
+      const key = original.index.getX(i) * 5 + kinds[i];
+      if (!remap.has(key)) { remap.set(key, refs.length); refs.push(i); }
+      index[i] = remap.get(key);
+    }
+    for (const name of Object.keys(g.attributes)) {
+      const attribute = g.attributes[name], data = new attribute.array.constructor(refs.length * attribute.itemSize);
+      for (let i = 0; i < refs.length; i++) for (let k = 0; k < attribute.itemSize; k++) data[i * attribute.itemSize + k] = attribute.array[refs[i] * attribute.itemSize + k];
+      g.setAttribute(name, new THREE.BufferAttribute(data, attribute.itemSize, attribute.normalized));
+    }
+    g.setIndex(new THREE.BufferAttribute(index, 1));
+  }
+  paintedGeometry.set(original, g); mesh.geometry = g;
+}
+
+/* W21b：所有新增花藤、窗框、塔與拱廊合在一個有頂點色的批次。
+   原 GLB／原 UV／原貼圖／原輪廓完整保留，新增量不取代原塔群。 */
+function detailBuilder() {
+  const p = [], n = [], c = [], e = [], col = new THREE.Color();
+  return {
+    add(geo, x, y, z, sx, sy, sz, color, glow = 0, turn = 0) {
+      const g = geo.index ? geo.toNonIndexed() : geo.clone();
+      const M = new THREE.Matrix4().makeRotationY(turn).scale(new THREE.Vector3(sx, sy, sz)).setPosition(x, y, z);
+      g.applyMatrix4(M); col.set(color);
+      const P = g.attributes.position, N = g.attributes.normal;
+      for (let i = 0; i < P.count; i++) {
+        p.push(P.getX(i), P.getY(i), P.getZ(i)); n.push(N.getX(i), N.getY(i), N.getZ(i));
+        c.push(col.r, col.g, col.b); e.push(glow);
+      }
+      g.dispose(); geo.dispose();
+    },
+    mesh(name) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(n, 3));
+      g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); g.setAttribute('aFarGlow', new THREE.Float32BufferAttribute(e, 1));
+      g.computeBoundingSphere();
+      const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 }); mat.userData.farDetail = true;
+      const m = new THREE.Mesh(g, mat); m.name = name; return m;
+    },
+  };
+}
+const PEARL = '#fff1f3', LAVENDER = '#b7a7ed', ROSE = '#edb0dc', MINT = '#a7c780', IVORY = '#fff1de';
+function ellipsoid(b, x, y, z, sx, sy, sz, color) { b.add(new THREE.SphereGeometry(1, sx > 0.025 ? 8 : 6, sx > 0.025 ? 6 : 4), x, y, z, sx, sy, sz, color); }
+function turret(b, x, y, z, r, h, pink) {
+  b.add(new THREE.CylinderGeometry(r * 0.82, r, h, 10), x, y + h / 2, z, 1, 1, 1, PEARL);
+  for (const level of [0.08, 0.72, 0.98]) b.add(new THREE.CylinderGeometry(r * 1.16, r * 1.16, h * 0.04, 10), x, y + h * level, z, 1, 1, 1, IVORY);
+  b.add(new THREE.ConeGeometry(r * 1.38, h * 0.6, 12), x, y + h * 1.30, z, 1, 1, 1, pink ? ROSE : LAVENDER);
+  b.add(new THREE.ConeGeometry(r * 0.12, h * 0.16, 6), x, y + h * 1.65, z, 1, 1, 1, '#e8c48b');
+  for (const a of [0, Math.PI / 2, Math.PI, Math.PI * 1.5]) {
+    b.add(new THREE.BoxGeometry(r * 0.32, h * 0.19, r * 0.08), x + Math.sin(a) * r * 0.94, y + h * 0.58, z + Math.cos(a) * r * 0.94, 1, 1, 1, '#735c83', 0, a);
+    b.add(new THREE.BoxGeometry(r * 0.18, h * 0.13, r * 0.10), x + Math.sin(a) * r * 0.98, y + h * 0.58, z + Math.cos(a) * r * 0.98, 1, 1, 1, '#eebf86', 1, a);
+  }
+}
+function blossom(b, x, y, z, r, seed) {
+  b.add(new THREE.CylinderGeometry(r * 0.09, r * 0.15, r * 1.5, 6), x, y + r * 0.65, z, 1, 1, 1, '#ac8794');
+  for (let i = 0; i < 7; i++) {
+    const a = i * 2.4 + seed, rr = i ? r * 0.52 : 0;
+    ellipsoid(b, x + Math.cos(a) * rr, y + r * (1.45 + (i % 3) * 0.2), z + Math.sin(a) * rr,
+      r * (0.7 + i % 2 * 0.14), r * 0.50, r * 0.65, ['#f3bdd2', '#f9dce5', '#cfbee8'][i % 3]);
+  }
+}
+function vine(b, x, y, z, length, phase) {
+  const pts = [];
+  for (let i = 0; i <= 7; i++) pts.push(new THREE.Vector3(x + Math.sin(i * 0.7 + phase) * length * 0.055, y - i / 7 * length, z + Math.cos(i * 0.8 + phase) * length * 0.035));
+  b.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 10, length * 0.011, 4, false), 0, 0, 0, 1, 1, 1, '#83ac64');
+  for (let i = 0; i < 9; i++) {
+    const v = pts[Math.min(7, Math.floor(i * 7 / 8))], side = i % 2 ? 1 : -1;
+    b.add(new THREE.IcosahedronGeometry(1, 0), v.x + side * length * 0.028, v.y, v.z, length * 0.039, length * 0.022, length * 0.019, i % 3 ? '#b7d888' : '#fff0f6');
+    if (i % 3 === 0) b.add(new THREE.IcosahedronGeometry(1, 0), v.x, v.y - length * 0.04, v.z, length * 0.028, length * 0.055, length * 0.023, '#edc2d8');
+  }
+}
+function modelRay(model) {
+  model.updateMatrixWorld(true);
+  const meshes = []; model.traverse(o => { if (o.isMesh) meshes.push(o); });
+  const ray = new THREE.Raycaster();
+  return (x, y, z, dx, dy, dz, filter) => {
+    ray.set(new THREE.Vector3(x, y, z), new THREE.Vector3(dx, dy, dz).normalize());
+    return ray.intersectObjects(meshes, false).find(h => !filter || filter(h));
+  };
+}
+function castleDetails(model) {
+  const b = detailBuilder(), ray = modelRay(model);
+  // 四面各自按樓層找原牆表面；窗框、窗芯都有厚度，而非隨機灑在岩底的光點。
+  let windows = 0;
+  for (let level = 0; level < 5; level++) for (let i = 0; i < 24; i++) {
+    const a = i / 24 * Math.PI * 2, sx = Math.sin(a), sz = Math.cos(a), y = 0.43 + level * 0.046;
+    const h = ray(sx * 1.1, y, sz * 1.1, -sx, 0, -sz, hit => Math.abs(hit.face.normal.y) < 0.42);
+    if (!h || h.point.length() > 1.05) continue;
+    const v = h.point.clone().addScaledVector(new THREE.Vector3(sx, 0, sz), 0.0024), w = level > 4 ? 0.006 : 0.008;
+    const shape = new THREE.Shape(); shape.moveTo(-w, -w * 1.5); shape.lineTo(w, -w * 1.5); shape.lineTo(w, w * 0.35); shape.absarc(0, w * 0.35, w, 0, Math.PI, false); shape.closePath();
+    b.add(new THREE.ExtrudeGeometry(shape, { depth: 0.002, bevelEnabled: false, curveSegments: 5 }), v.x, v.y, v.z, 1, 1, 1, '#8c6b94', 0, a);
+    b.add(new THREE.ExtrudeGeometry(shape, { depth: 0.0025, bevelEnabled: false, curveSegments: 5 }), v.x + sx * 0.002, v.y, v.z + sz * 0.002, 0.68, 0.78, 1, '#f3c491', 0.78 + i % 3 * 0.11, a);
+    windows++;
+  }
+  // 原城本來已有細高尖塔，新增低一級的六座庭院小塔與鏤空拱廊，讓層次向島緣展開。
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6 * Math.PI * 2) + 0.25, x = Math.sin(a) * 0.30, z = Math.cos(a) * 0.17;
+    const h = ray(x, 1.1, z, 0, -1, 0, hit => hit.point.y < 0.53 && hit.face.normal.y > 0.35);
+    if (h) turret(b, x, h.point.y, z, 0.013, 0.070 + i % 3 * 0.013, i % 2);
+  }
+  // 花樹與藤蔓都以原表面為根，不覆蓋原岩層。
+  for (let i = 0; i < 15; i++) {
+    const a = i * 2.39996, x = Math.sin(a) * (0.28 + i % 3 * 0.04), z = Math.cos(a) * 0.21;
+    const h = ray(x, 1.05, z, 0, -1, 0, hit => hit.point.y < 0.49 && hit.face.normal.y > 0.2);
+    if (h) blossom(b, x, h.point.y, z, 0.016 + i % 3 * 0.004, i);
+  }
+  for (let i = 0; i < 20; i++) {
+    const a = i / 20 * Math.PI * 2, sx = Math.sin(a), sz = Math.cos(a);
+    const h = ray(sx, 0.33 + i % 3 * 0.012, sz, -sx, 0, -sz);
+    if (h) vine(b, h.point.x + sx * 0.005, h.point.y, h.point.z + sz * 0.005, 0.085 + i % 4 * 0.024, i);
+  }
+  const m = b.mesh('far:castle-gardens-windows'); m.userData.windows = windows; model.add(m);
+}
+function isleDetails(model, variant) {
+  const b = detailBuilder(), ray = modelRay(model);
+  // 不動原草頂、樹與瀑布：花樹＋小屋／單塔各有深度，三款有不同天空剪影。
+  const spots = [[-0.22, -0.12], [0.18, -0.12], [-0.09, 0.18], [0.24, 0.12]];
+  for (let i = 0; i < 3; i++) {
+    const [x, z] = spots[(i + variant) % spots.length], h = ray(x, 1.1, z, 0, -1, 0, hit => hit.point.y < 0.85 && hit.face.normal.y > 0.25);
+    if (h) blossom(b, x, h.point.y, z, 0.048 + (i % 2) * 0.009, variant + i);
+  }
+  const x = variant === 1 ? -0.10 : 0.06, z = variant === 2 ? 0.12 : -0.04;
+  const h = ray(x, 1.1, z, 0, -1, 0, hit => hit.point.y < 0.83 && hit.face.normal.y > 0.25);
+  if (h) {
+    if (variant === 1) turret(b, x, h.point.y, z, 0.033, 0.105, true);
+    else {
+      const y = h.point.y;
+      b.add(new THREE.BoxGeometry(0.115, 0.073, 0.09), x, y + 0.036, z, 1, 1, 1, PEARL);
+      const roof = new THREE.CylinderGeometry(0, 0.1, 0.066, 4); roof.rotateY(Math.PI / 4);
+      b.add(roof, x, y + 0.100, z, 1, 1, 0.85, LAVENDER);
+      for (const side of [-1, 1]) for (const wx of [-0.032, 0.032]) b.add(new THREE.BoxGeometry(0.018, 0.028, 0.003), x + wx, y + 0.042, z + side * 0.046, 1, 1, 1, '#f5c68e', 0.9);
+      turret(b, x + 0.062, y, z, 0.019, 0.10, true);
+    }
+  }
+  for (let i = 0; i < 13; i++) {
+    const a = i / 13 * Math.PI * 2, sx = Math.sin(a), sz = Math.cos(a), y = 0.62 + i % 3 * 0.024;
+    const h = ray(sx, y, sz, -sx, 0, -sz);
+    if (h) vine(b, h.point.x + sx * 0.008, y, h.point.z + sz * 0.008, 0.12 + i % 4 * 0.037, i);
+  }
+  model.add(b.mesh('far:isle-blossoms-cottage-' + variant));
+}
+const dressed = new WeakMap();
+function dressedModel(model, castle, variant = 0) {
+  let variants = dressed.get(model); if (!variants) { variants = new Map(); dressed.set(model, variants); }
+  const key = castle ? 'castle' : variant;
+  if (!variants.has(key)) {
+    const g = model.clone(true);
+    g.traverse(o => { if (o.isMesh) preparePaint(o, castle); });
+    if (castle) castleDetails(g); else isleDetails(g, variant);
+    // 額外幾何不參與 place 的原始 bounds 計算，保留原世界大小與中心。
+    variants.set(key, g);
+  }
+  return variants.get(key);
 }
 
 /* 遠景的配置：方位角（0 = 北方 -Z，順時針）、離島中心的水平距離、底部在畫面地平線上方多少（NDC，畫面高度 = 2）、大小 */
@@ -66,15 +300,21 @@ const puffCol = new THREE.Color(), WHITE = new THREE.Color(1, 1, 1), NO_HIT = ()
 /* 瀑布：從浮空島邊緣垂下的細長水流（面向鏡頭的貼圖）。水紋貼圖往下捲動，另一張不動的透明度貼圖讓上端細、下端散成水霧 */
 const fallTex = (() => {
   const cv = document.createElement('canvas'); cv.width = 32; cv.height = 128; const c = cv.getContext('2d');
-  c.fillStyle = '#cfefff'; c.fillRect(0, 0, 32, 128);
-  for (let i = 0; i < 40; i++) { const x = Math.random() * 32, w = 1 + Math.random() * 2.5, y = Math.random() * 128, h = 20 + Math.random() * 60; c.fillStyle = `rgba(255,255,255,${0.4 + Math.random() * 0.6})`; c.fillRect(x, y, w, h); c.fillRect(x, y - 128, w, h); }
+  c.fillStyle = '#e4f4ff'; c.fillRect(0, 0, 32, 128);
+  for (let i = 0; i < 19; i++) { const x = Math.random() * 32, w = 1 + Math.random() * 2.5, y = Math.random() * 128, h = 20 + Math.random() * 60; c.fillStyle = `rgba(255,255,255,${0.18 + Math.random() * 0.32})`; c.fillRect(x, y, w, h); c.fillRect(x, y - 128, w, h); }
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
 const fallAlpha = (() => {
   const cv = document.createElement('canvas'); cv.width = 32; cv.height = 128; const c = cv.getContext('2d'), d = c.createImageData(32, 128);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 32; x++) {
-    const v = y / 127, spread = 0.18 + v * 0.3, e = Math.abs(x / 31 - 0.5);   // v：0 在上、1 在下；越往下越寬、越淡
-    const a = (1 - THREE.MathUtils.smoothstep(e, spread * 0.45, spread)) * THREE.MathUtils.smoothstep(v, 0, 0.05) * (1 - THREE.MathUtils.smoothstep(v, 0.55, 1)) * 0.95, i = (y * 32 + x) * 4;
+    const v = y / 127, u = x / 31;
+    let a = 0;
+    for (let lane = 0; lane < 3; lane++) {
+      const end = [0.97, 0.73, 0.86][lane], center = [0.31, 0.53, 0.69][lane] + Math.sin(v * 5 + lane * 2) * v * 0.014;
+      const width = [0.075, 0.034, 0.024][lane] * (0.72 + v * 0.7);
+      a = Math.max(a, (1 - THREE.MathUtils.smoothstep(Math.abs(u - center), width * 0.3, width)) * (1 - THREE.MathUtils.smoothstep(v, end * 0.62, end)));
+    }
+    a *= THREE.MathUtils.smoothstep(v, 0, 0.018) * 0.97; const i = (y * 32 + x) * 4;
     d.data[i] = d.data[i + 1] = d.data[i + 2] = Math.round(a * 255); d.data[i + 3] = 255;
   }
   c.putImageData(d, 0, 0); const t = new THREE.CanvasTexture(cv); return t;
@@ -82,14 +322,18 @@ const fallAlpha = (() => {
 const falls = [];
 
 function place(model, cfg, dens) {
-  const g = new THREE.Group(), m = model.clone(true);
-  m.traverse(o => { if (o.isMesh) { o.material = farMat(o.material.clone(), dens, cfg.fill, cfg.roofs && o.geometry); o.castShadow = o.receiveShadow = false; o.frustumCulled = true; } });   // 遠景不彎曲：three.js 的視錐剔除是對的，轉到畫面外就不畫
-  const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
+  const g = new THREE.Group(), m = dressedModel(model, cfg === CASTLE, cfg.variant || 0).clone(true);
+  g.name = cfg === CASTLE ? "far:castle" : cfg.satellite ? "far:satellite" : "far:isle";
+  // 原模型有拱廊的庭院正立面朝向主島；量體與原有外接橋的位置不變。
+  if (cfg === CASTLE) m.rotation.y = Math.PI;
+  m.traverse(o => { if (o.isMesh) { o.material = sharedFarMaterial(o.material, dens, cfg.fill, cfg.roofs && o.geometry); o.castShadow = o.receiveShadow = false; o.frustumCulled = true; } });   // 遠景不彎曲：three.js 的視錐剔除是對的，轉到畫面外就不畫
+  const box = new THREE.Box3().setFromObject(model), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3());
   const k = cfg.size / Math.max(size.x, size.z), ky = k * (cfg.tall || 1); m.scale.set(k, ky, k); m.position.set(-ctr.x * k, -ctr.y * ky, -ctr.z * k); size.y *= (cfg.tall || 1);   // tall：拉高（城堡的尖塔更細長）
   g.add(m); g.rotation.y = cfg.az + Math.PI;   // 正面朝向島
-  const n = cfg === CASTLE ? 3 : cfg.fall ? 0 : 4;   // 有瀑布的小島不圍雲霧，輪廓乾淨
+  const n = cfg.satellite ? 0 : cfg === CASTLE ? 3 : cfg.fall ? 0 : 4;   // 有瀑布的小島不圍雲霧，輪廓乾淨
   for (let i = 0; i < n; i++) {   // 底部一圈雲霧
-    const sm = new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: cfg === CASTLE ? 0.4 : 0.85 });
+    const sm = new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: cfg === CASTLE ? 0.24 : 0.6 });
+    backdropMaterial(sm);
     const sp = new THREE.Sprite(sm), a = i / n * Math.PI * 2 + Math.random() * 0.6, w = cfg.size * (0.55 + Math.random() * 0.35);
     sp.scale.set(w, w * 0.55, 1); sp.position.set(Math.cos(a) * cfg.size * 0.42, -size.y * k * (0.18 + Math.random() * 0.22), Math.sin(a) * cfg.size * 0.42);
     g.add(sp); puffs.push(sm); skirts.push({ sp, w, k: i % 2 ? 0 : 3 });
@@ -97,13 +341,14 @@ function place(model, cfg, dens) {
   let fall = null;
   if (cfg.fall) {   // 瀑布不跟著島自轉，每格放在島朝向鏡頭的那一側
     const fm = new THREE.SpriteMaterial({ map: fallTex, alphaMap: fallAlpha, transparent: true, depthWrite: false, fog: false });
+    backdropMaterial(fm);
     const sp = new THREE.Sprite(fm), L = size.y * k * 1.35; sp.center.set(0.5, 1); sp.scale.set(cfg.size * 0.17, L, 1); sp.raycast = NO_HIT;   // 從島緣流下、往下散進空氣裡
-    const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.25 })); mist.scale.set(cfg.size * 0.22, cfg.size * 0.1, 1); mist.raycast = NO_HIT;
-    scene.add(sp, mist); puffs.push(mist.material); fall = { sp, mist, L, fm }; falls.push(fall);
+    const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.25 })); backdropMaterial(mist.material); mist.scale.set(cfg.size * 0.22, cfg.size * 0.1, 1); mist.raycast = NO_HIT;
+    scene.add(sp, mist); puffs.push(mist.material); fall = { sp, mist, L, fm, profile: waterfallProfile(g, cfg.size, size.y * k / 2) }; falls.push(fall);
   }
-  if (cfg === CASTLE) { aqueducts(g, cfg.size, size.y * k / 2); addLights(g, 22, 0.3, 0.82, 2.0); } else addLights(g, cfg.fall ? 8 : 11, 0.66, 1.0, 1.8);
+  if (cfg === CASTLE) { aqueducts(g, cfg.size, size.y * k / 2); addLights(g, 8, 0.3, 0.82, 1.25); } else if (!cfg.satellite) addLights(g, 4, 0.66, 1.0, 1.0);
   g.traverse(o => { o.raycast = NO_HIT; });   // 遠景不擋鏡頭碰撞與點擊
-  scene.add(g); far.push({ g, ...cfg, half: size.y * k / 2, ph: Math.random() * 6.28, spin: cfg.spin || 0, fall });
+  scene.add(g); far.push({ g, ...cfg, half: size.y * k / 2, deck: size.y * k * 0.23, ph: Math.random() * 6.28, spin: cfg.spin || 0, fall });
 }
 
 /* 水道橋：城堡兩側往外伸出的多拱石橋（參考插畫裡連著懸崖與城堡的那種），末端斷在雲霧裡。
@@ -124,23 +369,20 @@ function shadeY(geo, y0, y1, lo) {
   geo.setAttribute('color', new THREE.BufferAttribute(C, 3)); return geo;
 }
 function aqueducts(g, size, half) {
-  // 受光的正面是暖白石，拱圈內側、橋墩側面是偏冷的陰影色（從城堡這個距離看，明暗就靠這兩種面分開）
-  const mat = farMat(new THREE.MeshStandardMaterial({ color: '#c4b8a4', roughness: 0.92, vertexColors: true }), 0.5), shade = farMat(new THREE.MeshStandardMaterial({ color: '#545064', roughness: 0.95, vertexColors: true }), 0.5);   // 霧少一點：暗面不會被空氣洗成白色
-  const trim = farMat(new THREE.MeshStandardMaterial({ color: '#d9c48e', roughness: 0.6, metalness: 0.3 }), 0.32);
-  const boxMats = [shade, shade, mat, shade, mat, mat];   // BoxGeometry 的六個面：左右側是陰影色，頂與前後是受光色
+  const b = detailBuilder();
   [-1, 1].forEach(sd => {
     const L = size * (sd < 0 ? 0.7 : 0.95), H = half * 0.26, n = sd < 0 ? 4 : 5, D = size * 0.06, w = L / n;
-    const [low] = aqueductGeo(L, H, n, D), [up, cap] = aqueductGeo(L, H * 0.42, n * 2, D * 0.85);   // 兩層拱：下層大拱、上層兩倍數量的小拱（像羅馬水道橋）
-    up.translate(0, H * 0.42, 0); cap.translate(0, H * 0.42, 0);
-    const piers = []; for (let i = 0; i <= n; i++) { const b = new THREE.BoxGeometry(w * 0.3, H, D * 1.35); b.translate(-L / 2 + w * i, -H / 2, 0); piers.push(b); }   // 突出的橋墩：前後各凸出一點，遠看才有直向的明暗
-    const band = new THREE.BoxGeometry(L, H * 0.035, D * 1.04); band.translate(0, H * 0.42 - H * 0.02, 0);   // 簷口下的一條陰影
-    [low, up, band, ...piers].forEach(geo => shadeY(geo, -H, H * 0.5, 0.62));
+    const [low] = aqueductGeo(L, H, n, D), [up, cap] = aqueductGeo(L, H * 0.42, n * 2, D * 0.85);
     const y = -half * (sd < 0 ? 0.22 : 0.3), x = sd * (size * 0.38 + L / 2);
-    [new THREE.Mesh(low, [mat, shade]), new THREE.Mesh(up, [mat, shade]), new THREE.Mesh(band, shade), ...piers.map(geo => new THREE.Mesh(geo, boxMats)), new THREE.Mesh(cap, trim)]   // ExtrudeGeometry：第 0 組是正背面、第 1 組是拱圈內側與側面
-      .forEach(m => { m.position.set(x, y, size * 0.05); m.castShadow = m.receiveShadow = false; g.add(m); });
-    const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.75 }));   // 斷在雲裡
-    mist.scale.set(size * 0.5, size * 0.28, 1); mist.position.set(sd * (size * 0.38 + L * 0.98), y - H * 0.55, size * 0.05); g.add(mist); puffs.push(mist.material);
+    b.add(low, x, y, size * 0.05, 1, 1, 1, '#c5b0cb');
+    b.add(up, x, y + H * 0.42, size * 0.05, 1, 1, 1, '#e4cedb');
+    b.add(cap, x, y + H * 0.42, size * 0.05, 1, 1, 1, '#e5c9bc');
+    b.add(new THREE.BoxGeometry(L, H * 0.035, D * 1.04), x, y + H * 0.40, size * 0.05, 1, 1, 1, '#a48ab7');
+    for (let i = 0; i <= n; i++) b.add(new THREE.BoxGeometry(w * 0.3, H, D * 1.35), x - L / 2 + w * i, y - H / 2, size * 0.05, 1, 1, 1, '#cbb6d0');
+    const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.35 }));
+    backdropMaterial(mist.material); mist.scale.set(size * 0.5, size * 0.28, 1); mist.position.set(sd * (size * 0.38 + L * 0.98), y - H * 0.55, size * 0.05); g.add(mist); puffs.push(mist.material);
   });
+  const m = b.mesh('far:aqueducts'); m.material = farMat(m.material, 0.36 / FAR_K); g.add(m);
 }
 
 /* 夜裡的燈火：島上的小窗、燈籠與城堡的窗戶。在模型表面挑點（島取上面三成、城堡取中段到尖塔下），沿法線往外推一點放小光點 */
@@ -165,30 +407,27 @@ function addLights(g, n, y0, y1, size, src) {   // src：在哪個模型上挑�
     g.add(sp); lights.push({ sm, sp, ph: Math.random() * 6.28 }); made++;
   }
 }
-/** 有瀑布或標了 temple 的小浮空島頂上各蓋一座小小的白色塔樓（城堡模型縮小），像目標畫面裡島上的神殿 */
+/** 保留島頂神殿語意，使用有層檐、雙色尖頂與真窗的單塔，避免複製整座主城。 */
 function towers(model) {
   far.filter(o => o.fall || o.temple).forEach((o, i) => {
-    const m = model.clone(true);
-    m.traverse(x => { if (x.isMesh) { x.material = farMat(x.material.clone(), 0.65 / FAR_K, 0.16, x.geometry); x.castShadow = x.receiveShadow = false; x.frustumCulled = true; x.raycast = NO_HIT; } });
-    const box = new THREE.Box3().setFromObject(m), sz = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
-    const k = o.size * 0.32 / Math.max(sz.x, sz.z), ky = k * 1.6;
-    m.scale.set(k, ky, k); m.position.set(-c.x * k + (i ? -1 : 1) * o.size * 0.12, o.half * 0.72 - box.min.y * ky, -c.z * k);   // 立在島頂偏一側
+    const b = detailBuilder(); turret(b, 0, 0, 0, o.size * 0.040, o.size * (i ? 0.17 : 0.20), i % 2);
+    const m = b.mesh('far:temple'); m.material = farMat(m.material, 0.52 / FAR_K, 0.16);
+    m.position.copy(landAt(o, (i ? -1 : 1) * o.size * 0.12, -o.size * 0.20)); m.raycast = NO_HIT;
     o.g.add(m);
-    addLights(o.g, 4, 0.2, 0.8, 0.9, m);
   });
 }
 
 /* ---------- 白鳥：幾群繞著島飛，翅膀拍動、偶爾滑翔 ---------- */
 const birds = [];
 function makeBirds() {
-  const mat = farMat(new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#d8e6ff', emissiveIntensity: 0.35, side: THREE.DoubleSide, roughness: 0.8 }), 0.4);
-  const wingG = new THREE.BufferGeometry(); wingG.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.18, 0, 0, 0.22, 1.05, 0.05, -0.02, 0, 0, 0.22, 0.55, 0.02, 0.2, 1.05, 0.05, -0.02], 3)); wingG.computeVertexNormals();
-  const bodyG = new THREE.ConeGeometry(0.12, 0.85, 6); bodyG.rotateX(Math.PI / 2);
+  const mat = farMat(new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#d8e6ff', emissiveIntensity: 0.35, side: THREE.DoubleSide, roughness: 0.8 }), 0.4, undefined, undefined, false);
+  const wingG = new THREE.BufferGeometry(); wingG.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.18, 0, 0, 0.22, 1.05, 0.13, -0.08, 0, 0, 0.22, 0.55, -0.06, 0.2, 1.05, 0.13, -0.08], 3)); wingG.computeVertexNormals();
+  const bodyG = new THREE.SphereGeometry(0.14, 6, 4); bodyG.scale(1, 2.8, 1); bodyG.rotateX(Math.PI / 2);
   const flocks = [{ r: 46, h: 0.16, n: 5, sp: 0.04, ph: 0 }, { r: 62, h: 0.3, n: 4, sp: -0.03, ph: 2.4 }, { r: 40, h: 0.1, n: 3, sp: 0.05, ph: 4.1 }];   // h：在畫面地平線上方多少（NDC）
   flocks.forEach(f => {
     for (let i = 0; i < f.n; i++) {
       const b = new THREE.Group(), body = new THREE.Mesh(bodyG, mat), L = new THREE.Mesh(wingG, mat), R = new THREE.Mesh(wingG, mat);
-      R.scale.x = -1; b.add(body, L, R); b.scale.setScalar(0.9 + Math.random() * 0.4);
+      R.scale.x = -1; b.name = "far:bird"; b.add(body, L, R); b.scale.setScalar(0.9 + Math.random() * 0.4);
       b.traverse(o => { o.frustumCulled = cullable(o); o.raycast = NO_HIT; });
       scene.add(b);
       birds.push({ b, L, R, f, off: [(i % 3 - 1) * 1.6 + Math.random(), (Math.random() - 0.5) * 1.2, -Math.floor(i / 1.5) * 1.4], flap: Math.random() * 6.28, rate: 7 + Math.random() * 2 });
@@ -226,6 +465,7 @@ async function buildBg() {
   BG.forEach(c => {
     const t = texs[c.k]; if (!t) return;
     const m = new THREE.SpriteMaterial({ map: t.tex, transparent: true, depthWrite: false, fog: false });
+    backdropMaterial(m);
     const s = new THREE.Sprite(m); s.center.set(0.5, c.foot); s.scale.set(c.w, c.w * t.aspect, 1); s.raycast = NO_HIT; s.renderOrder = -2; s.visible = false;
     scene.add(s); bgs.push({ s, m, c });
   });
@@ -259,7 +499,7 @@ function updateBg(night, gold) {
    三層畫在 canvas 上的圖案（外圈符文與刻度、中圈星芒、內圈刻紋）各自慢慢轉；白天很淡、黃昏金色、夜裡藍白發光。
    永遠面向鏡頭、略微仰起成橢圓；加法混色、不寫深度，被城堡與雲擋住的地方自然看不到 */
 const ring = { g: null, layers: [], col: new THREE.Color() };
-const RING_DAY = new THREE.Color('#ffffff'), RING_DUSK = new THREE.Color('#ffd27a'), RING_NIGHT = new THREE.Color('#9fd2ff');
+const RING_DAY = new THREE.Color('#e4c6ec'), RING_DUSK = new THREE.Color('#ffd9ae'), RING_NIGHT = new THREE.Color('#bfc5f0');
 function ringTex(draw) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 1024; const c = cv.getContext('2d');
   c.translate(512, 512); c.strokeStyle = c.fillStyle = '#ffffff'; c.lineCap = c.lineJoin = 'round'; draw(c);
@@ -280,9 +520,9 @@ function makeRing() {
     if (r() < 0.5) { c.beginPath(); c.arc((r() - 0.5) * k * 0.7, (r() - 0.5) * k * 0.7, 3.5, 0, 7); c.fill(); }
   };
   const outer = ringTex(c => {
-    circ(c, 500, 7); circ(c, 474, 3); circ(c, 392, 3); circ(c, 378, 2);
-    for (let i = 0; i < 44; i++) { c.save(); c.rotate(i / 44 * Math.PI * 2); c.translate(0, -432); glyph(c, 30); c.restore(); }   // 符文帶
-    for (let i = 0; i < 144; i++) { c.save(); c.rotate(i / 144 * Math.PI * 2); c.fillRect(-1.6, -474, 3.2, i % 6 ? 9 : 20); c.restore(); }   // 外緣刻度
+    circ(c, 500, 9); circ(c, 474, 3); circ(c, 392, 3); circ(c, 378, 2);
+    for (let i = 0; i < 33; i++) { c.save(); c.rotate(i / 33 * Math.PI * 2); c.translate(0, -432); glyph(c, 30); c.restore(); }   // 符文帶
+    for (let i = 0; i < 108; i++) { c.save(); c.rotate(i / 108 * Math.PI * 2); c.fillRect(-1.6, -474, 3.2, i % 6 ? 9 : 20); c.restore(); }   // 外緣刻度
   });
   const star = ringTex(c => {
     circ(c, 362, 3); gram(c, 8, 3, 356, 3); gram(c, 6, 2, 300, 2.5); circ(c, 236, 2.5);
@@ -296,8 +536,9 @@ function makeRing() {
   });
   const halo = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 256; const c = cv.getContext('2d'), g = c.createRadialGradient(128, 128, 30, 128, 128, 128); g.addColorStop(0, 'rgba(255,255,255,0.0)'); g.addColorStop(0.62, 'rgba(255,255,255,0.18)'); g.addColorStop(0.8, 'rgba(255,255,255,0.32)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 256, 256); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; })();
   const g = new THREE.Group(), geo = new THREE.PlaneGeometry(1, 1);
-  [[halo, 1.12, 0, 0.25], [outer, 1, 0.012, 1], [star, 0.74, -0.022, 0.9], [inner, 0.42, 0.05, 0.85]].forEach(([map, k, spin, w]) => {
+  [[halo, 1.12, 0, 0.08], [outer, 1, 0.012, 1], [star, 0.74, -0.022, 0.9], [inner, 0.42, 0.05, 0.85]].forEach(([map, k, spin, w]) => {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    backdropMaterial(m.material);
     m.scale.setScalar(k); m.raycast = NO_HIT; m.renderOrder = -1; g.add(m); ring.layers.push({ m, spin, w });
   });
   g.scale.setScalar(78 * FAR_K); scene.add(g); ring.g = g;
@@ -311,16 +552,91 @@ function updateRing(dt, t, night) {
   ring.g.position.set(ringBase.x + dx / L * 45 * FAR_K, ringBase.y + (c ? c.half * 0.08 : 4 * FAR_K), ringBase.z + dz / L * 45 * FAR_K);
   ring.g.lookAt(camera.position); ring.g.rotateX(-0.24);   // 略微仰起：像斜掛在天上的橢圓
   const gold = Math.min(1, skyU.glow.value * 2);
+  hazeU.uFarDay.value = (1 - night) * (1 - gold * 0.85) * (1 - gloomK * 0.5);
   ring.col.copy(RING_DAY).lerp(RING_DUSK, gold).lerp(RING_NIGHT, night);
-  const op = ((0.065 + gold * 0.08) * (1 - night) + night * 0.17) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
+  const op = ((0.035 + gold * 0.035) * (1 - night) + night * 0.095) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
   ring.layers.forEach(o => { o.m.rotation.z += o.spin * dt; o.m.material.color.copy(ring.col); o.m.material.opacity = op * o.w * pulse; });
+}
+
+const farMaterialCache = new WeakMap();
+function sharedFarMaterial(source, dens, fill, roofs) {
+  let variants = farMaterialCache.get(source);
+  if (!variants) { variants = new Map(); farMaterialCache.set(source, variants); }
+  const key = `${dens}:${fill}:${!!roofs}`;
+  if (!variants.has(key)) variants.set(key, farMat(source.clone(), dens, fill, roofs));
+  return variants.get(key);
+}
+const SATELLITES = [
+  { az: -0.22, d: 112 * FAR_K, up: 0.75, size: 6.5 * FAR_K, spin: -0.008, satellite: true },
+  { az: 0.44, d: 121 * FAR_K, up: 0.80, size: 6.0 * FAR_K, spin: 0.007, satellite: true },
+];
+/** 在原 GLB 草頂上取固定的本地掛點；遠景平常不接受點擊，直接呼叫 Mesh.raycast 作建置時取樣。 */
+function landAt(o, x, z) {
+  o.g.updateWorldMatrix(true, true);
+  const point = new THREE.Vector3(x, o.half * 2, z).applyMatrix4(o.g.matrixWorld);
+  const ray = new THREE.Raycaster(point, new THREE.Vector3(0, -1, 0)), hits = [];
+  o.g.children[0].traverse(m => { if (m.isMesh && m.material.map) THREE.Mesh.prototype.raycast.call(m, ray, hits); });
+  hits.sort((a, b) => a.distance - b.distance);
+  const hit = hits.find(h => h.point.y - o.g.position.y < o.half * 0.9 && h.face.normal.y > 0.2);
+  if (hit) { const p = o.g.worldToLocal(hit.point.clone()); p.y += o.size * 0.004; return p; }
+  return new THREE.Vector3(x, o.deck, z);
+}
+/** 一次取樣64個原崖緣，動畫只插值，水源不鑽進旋轉的岩島裡。 */
+function waterfallProfile(g, size, half) {
+  g.updateWorldMatrix(true, true);
+  const result = [], inv = g.matrixWorld.clone().invert(), rotation = g.getWorldQuaternion(new THREE.Quaternion());
+  for (let i = 0; i < 64; i++) {
+    const a = i / 64 * Math.PI * 2, dir = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+    const from = dir.clone().multiplyScalar(size * 2); from.y = half * 0.15; from.applyMatrix4(g.matrixWorld);
+    const ray = new THREE.Raycaster(from, dir.clone().negate().applyQuaternion(rotation)), hits = [];
+    g.children[0].traverse(m => { if (m.isMesh && m.material.map) THREE.Mesh.prototype.raycast.call(m, ray, hits); }); hits.sort((a, b) => a.distance - b.distance);
+    const point = hits.length ? hits[0].point.clone().applyMatrix4(inv) : dir.clone().multiplyScalar(size * 0.43);
+    const r = Math.hypot(point.x, point.z), ground = landAt({ g, size, half, deck: half * 0.46 }, dir.x * r * 0.92, dir.z * r * 0.92);
+    // 原圖的樹冠也在同一網格；水源只到草崖高度，不讓向下取樣把瀑布掛到樹上。
+    result.push({ r, y: Math.min(ground.y, half * 0.35) });
+  }
+  return result;
+}
+const links = [], linkUp = new THREE.Vector3(0, 1, 0);
+function makeLinks() {
+  const b = detailBuilder(), [arch, cap] = aqueductGeo(1, 0.065, 5, 0.022);
+  b.add(arch, 0, 0, 0, 1, 1, 1, '#cfb8d4'); b.add(cap, 0, 0, 0, 1, 1, 1, '#f2dce5');
+  const template = b.mesh('far:bridge-stone'); template.material = farMat(template.material, 0.36 / FAR_K);
+  for (let i = 0; i < 2; i++) {
+    const a = far.find(o => o.az === ISLES[i].az), island = far.find(o => o.satellite && o.az === SATELLITES[i].az);
+    if (!a || !island) continue; a.linked = island.linked = true;
+    const g = new THREE.Group(); g.name = 'far:bridge'; g.matrixAutoUpdate = false; g.add(template.clone());
+    const dock = (o, other) => {
+      const dir = new THREE.Vector3(Math.sin(other.az) * other.d - Math.sin(o.az) * o.d, 0, -Math.cos(other.az) * other.d + Math.cos(o.az) * o.d).normalize();
+      o.g.updateWorldMatrix(true, true);
+      const local = dir.multiplyScalar(o.size * 0.29).applyAxisAngle(linkUp, -o.g.rotation.y);
+      return landAt(o, local.x, local.z);
+    };
+    const l = { g, a, b: island, da: dock(a, island), db: dock(island, a), A: new THREE.Vector3(), B: new THREE.Vector3(), X: new THREE.Vector3(), Y: new THREE.Vector3(), Z: new THREE.Vector3(), mid: new THREE.Vector3(), scale: new THREE.Vector3() };
+    g.userData.endpoints = { a: l.A, b: l.B };
+    g.userData.docks = { a: a.g, b: island.g, localA: l.da, localB: l.db };
+    g.traverse(o => { o.raycast = NO_HIT; o.castShadow = o.receiveShadow = false; }); scene.add(g); links.push(l);
+  }
+}
+function updateLinks(show, t) {
+  links.forEach(l => {
+    // 保留六座原島高度；衛星島共用其陸地高度帶，仍有獨立0.45m浮動。
+    l.b.g.position.y = l.a.g.position.y + l.da.y - l.db.y + Math.sin(t * 0.31 + l.b.ph) * 0.45;
+    l.a.g.updateWorldMatrix(true, false); l.b.g.updateWorldMatrix(true, false);
+    l.A.copy(l.da).applyMatrix4(l.a.g.matrixWorld); l.B.copy(l.db).applyMatrix4(l.b.g.matrixWorld);
+    l.X.subVectors(l.B, l.A); const L = l.X.length(); l.X.normalize();
+    l.Z.crossVectors(l.X, linkUp).normalize(); l.Y.crossVectors(l.Z, l.X).normalize(); l.mid.addVectors(l.A, l.B).multiplyScalar(0.5);
+    l.g.matrix.makeBasis(l.X, l.Y, l.Z).scale(l.scale.setScalar(L)).setPosition(l.mid);
+    l.g.matrixWorldNeedsUpdate = true; l.g.position.copy(l.mid);
+    l.g.visible = show && inCone(l.mid.x, l.mid.z, L * 0.6);
+  });
 }
 
 export function build() {
   makeRing();
-  const isles = READY.has('far_isle') ? loadModel('far_isle', 'none').then(gl => ISLES.forEach(c => place(gl.scene, c, 0.65 / FAR_K))).catch(e => console.warn('浮空島載入失敗：', e)) : Promise.resolve();
+  const isles = READY.has('far_isle') ? loadModel('far_isle', 'none').then(gl => [...ISLES, ...SATELLITES].forEach((c, i) => { c.variant = i % 3; place(gl.scene, c, 0.52 / FAR_K); })).catch(e => console.warn('浮空島載入失敗：', e)) : Promise.resolve();
   const castle = READY.has('far_castle') ? loadModel('far_castle', 'none').then(gl => { place(gl.scene, CASTLE, 0.32 / FAR_K); return gl; }).catch(e => console.warn('城堡載入失敗：', e)) : Promise.resolve();
-  Promise.all([isles, castle]).then(([, gl]) => { if (gl) towers(gl.scene); });
+  Promise.all([isles, castle]).then(([, gl]) => { if (gl) { towers(gl.scene); makeLinks(); } });
   // 島底的雲霧換成和積雲同一套手繪貼圖（低矮雲帶、小朵雲交錯）：輪廓清楚、有受光面，近看不再是一團模糊的漸層
   Promise.all([isles, castle, cumulus.painted()]).then(([, , pt]) => {
     if (!pt || pt.length < 4) return;
@@ -373,14 +689,15 @@ export function update(dt, t, night, show) {
   if (show !== visible) { visible = show; far.forEach(o => { o.g.visible = show; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = show; }); birds.forEach(o => { o.b.visible = show; }); if (ring.g) ring.g.visible = show; bgs.forEach(o => { o.s.visible = show; }); }
   if (show) { camera.updateMatrixWorld(); viewCone(); }
   cumulus.update(show, horizonNdc, yForNdc, skyU.glow.value * 2, night, dt, inCone);
-  if (!show) return;
+  if (!show) { updateLinks(false, t); return; }
+  hazeU.uFarNight.value = night;
   gloomK = gloom() * (1 - night * 0.5);
   hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + skyU.dawn.value * 0.06 - Math.min(1, skyU.glow.value * 2) * 0.03 + gloomK * 0.22;   // 清晨空氣多一點；陰雨天遠方淡進灰色的空氣。v7.4：黃金時段反而少一點（0.5 → 0.35）——太陽就在城堡後面，霧色是發亮的天色，以前塔群融成一片金白
   const gold = Math.min(1, skyU.glow.value * 2);
   fillCol.setRGB(1, 1, 1).lerp(GOLD, gold * 0.45).lerp(MOONLIT, night).lerp(RAINY, gloomK * 0.6);   // v6.93：黃昏的金色收一點（城堡不會融成一團黃白光）
   fills.forEach(m => { m.emissive.copy(fillCol); m.emissiveIntensity = m.userData.fill * 0.19 * (1 + night * 0.6); });   // v7.0：底光收一點，城堡、浮空島看得出受光面與背光面   // 一點均勻的底光，主要的亮度交給正面補光
   frontCol.copy(fillCol).lerp(COOLSIDE, gold * 0.55 * (1 - night));   // v7.4：黃金時段太陽多半在遠景後面（逆光）：朝向鏡頭的面是天空照著的冷色陰影，不是一片暖奶油
-  hazeU.uFront.value.copy(frontCol).multiplyScalar(0.5 * (1 - night * 0.3) * (1 - gold * 0.12));   // v7.6 夢幻風：逆光時朝鏡頭的面是珍珠粉紫（以前灰藍），城堡是粉白的剪影、不是一團灰影   // 黃金時段正面補光也少 18%，塔面才分得出明暗   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
+  hazeU.uFront.value.copy(frontCol).multiplyScalar(0.5 * (1 + night * 0.25) * (1 - gold * 0.12));   // v7.6 夢幻風：逆光時朝鏡頭的面是珍珠粉紫（以前灰藍），城堡是粉白的剪影、不是一團灰影   // 黃金時段正面補光也少 18%，塔面才分得出明暗   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar(1 - night * 0.55);
@@ -388,16 +705,20 @@ export function update(dt, t, night, show) {
   far.forEach(o => {
     const x = Math.sin(o.az) * o.d, z = -Math.cos(o.az) * o.d, on = inCone(x, z, (o.size || 60) * 0.8);
     o.g.visible = on; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = on;
-    if (!on) return;
+    if (!on && !o.linked) return;
     o.g.position.set(x, yForNdc(x, z, horizonNdc(x, z) + o.up) + o.half + Math.sin(t * 0.25 + o.ph) * 0.9, z);
     o.g.rotation.y += o.spin * dt;
     if (o.fall) {
-      const f = o.fall, cx = camera.position.x - x, cz = camera.position.z - z, l = Math.hypot(cx, cz) || 1, r = o.size * 0.4;
-      f.sp.position.set(x + cx / l * r + cz / l * r * 0.35, o.g.position.y + o.half * 0.72, z + cz / l * r - cx / l * r * 0.35);   // 島的前緣偏一側
+      const f = o.fall, cx = camera.position.x - x, cz = camera.position.z - z;
+      const angle = Math.atan2(cx, cz) + 0.18, a = ((angle - o.g.rotation.y) / (Math.PI * 2) % 1 + 1) % 1 * f.profile.length;
+      const i = Math.floor(a), k = a - i, p = f.profile[i], q = f.profile[(i + 1) % f.profile.length];
+      const r = THREE.MathUtils.lerp(p.r, q.r, k) + o.size * 0.006, y = THREE.MathUtils.lerp(p.y, q.y, k);
+      f.sp.position.set(x + Math.sin(angle) * r, o.g.position.y + y, z + Math.cos(angle) * r);
       f.mist.position.set(f.sp.position.x, f.sp.position.y - f.L * 0.62, f.sp.position.z);
       f.fm.map.offset.y = (t * 0.35) % 1; f.fm.color.copy(puffCol).lerp(WHITE, 0.3 * (1 - night)).multiplyScalar(1 - night * 0.55);   // 晚上的瀑布是月光下淡淡的藍灰
     }
   });
+  updateLinks(true, t);
   updateRing(dt, t, night);
   updateBg(night, gold);
   const flocks = new Set(birds.map(o => o.f));

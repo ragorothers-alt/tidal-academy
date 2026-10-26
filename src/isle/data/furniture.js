@@ -2008,28 +2008,28 @@
   ];
 
   I.WALLPAPER = [
-    { id: 'wp_ivory_wash', name: '奶油白牆', price: 900, c1: '#f5ecd9', c2: '#f0e3cf', pattern: 'plain' },
-    { id: 'wp_mint_stripe', name: '薄荷細條牆紙', price: 1400, c1: '#a9c8b2', c2: '#e8eee3', pattern: 'stripe' },
-    { id: 'wp_blue_dot', name: '霧藍小點牆紙', price: 1500, c1: '#a8c4d5', c2: '#e9eff0', pattern: 'dot' },
-    { id: 'wp_coral_check', name: '杏桃織格牆紙', price: 1600, c1: '#e4afa4', c2: '#f4ded6', pattern: 'check' },
-    { id: 'wp_lavender_stripe', name: '丁香直紋牆紙', price: 1400, c1: '#c4bad6', c2: '#efeaf3', pattern: 'stripe' },
-    { id: 'wp_wood_linen', name: '淺木拼板牆面', price: 1800, c1: '#c69a73', c2: '#e1c6aa', pattern: 'wood' },
-    { id: 'wp_cloud_tile', name: '雲白細磚牆紙', price: 1700, c1: '#e9e5dc', c2: '#c9d8d3', pattern: 'tile' },
-    { id: 'wp_sage_plain', name: '灰鼠尾草牆面', price: 1100, c1: '#c1cfc0', c2: '#e4e8df', pattern: 'plain' },
-    { id: 'wp_notebook_grid', name: '方格筆記牆紙', price: 2200, c1: '#f5ecd9', c2: '#a8c4d5', pattern: 'tile' },
-    { id: 'wp_blackboard', name: '黑板綠牆面', price: 2500, c1: '#536d61', c2: '#a9c8b2', pattern: 'plain' },
+    { id: 'wp_ivory_wash', name: '奶油白牆', price: 900, c1: '#f0e5d5', c2: '#e8decf', pattern: 'plain' },
+    { id: 'wp_mint_stripe', name: '薄荷細條牆紙', price: 1400, c1: '#dce5d8', c2: '#cedcc9', pattern: 'stripe' },
+    { id: 'wp_blue_dot', name: '霧藍小點牆紙', price: 1500, c1: '#dce3ec', c2: '#c5d2e3', pattern: 'dot' },
+    { id: 'wp_coral_check', name: '杏桃織格牆紙', price: 1600, c1: '#edd8d6', c2: '#e3cbc9', pattern: 'check' },
+    { id: 'wp_lavender_stripe', name: '丁香直紋牆紙', price: 1400, c1: '#e4dceb', c2: '#d5c8e0', pattern: 'stripe' },
+    { id: 'wp_wood_linen', name: '淺木拼板牆面', price: 1800, c1: '#ceaa83', c2: '#dbc1a3', pattern: 'wood' },
+    { id: 'wp_cloud_tile', name: '雲白細磚牆紙', price: 1700, c1: '#e8e4df', c2: '#d8dedb', pattern: 'tile' },
+    { id: 'wp_sage_plain', name: '灰鼠尾草牆面', price: 1100, c1: '#d5dfd2', c2: '#dce5d8', pattern: 'plain' },
+    { id: 'wp_notebook_grid', name: '方格筆記牆紙', price: 2200, c1: '#f0e5d5', c2: '#d7dbe3', pattern: 'tile' },
+    { id: 'wp_blackboard', name: '黑板綠牆面', price: 2500, c1: '#7f9e92', c2: '#93aea1', pattern: 'plain' },
   ];
 
   I.FLOORING = [
-    { id: 'fl_honey_oak', name: '蜂蜜淺橡木地板', price: 1600, c1: '#c69a73', c2: '#e1c5a7', pattern: 'wood' },
-    { id: 'fl_white_ash', name: '雲白梣木地板', price: 1800, c1: '#e7ded0', c2: '#cbbba5', pattern: 'wood' },
-    { id: 'fl_mint_tiles', name: '薄荷小磚地面', price: 1700, c1: '#a9c8b2', c2: '#e9eee4', pattern: 'tile' },
-    { id: 'fl_blue_tiles', name: '霧藍陶磚地面', price: 1800, c1: '#a8c4d5', c2: '#e1e9e9', pattern: 'tile' },
-    { id: 'fl_coral_check', name: '杏桃棋格地面', price: 1900, c1: '#e4afa4', c2: '#f5ecd9', pattern: 'check' },
-    { id: 'fl_lavender_plain', name: '丁香軟墊地面', price: 1400, c1: '#c4bad6', c2: '#e8e2ef', pattern: 'plain' },
-    { id: 'fl_sand_stripe', name: '沙色細紋地面', price: 1500, c1: '#e5d1b7', c2: '#f5ecd9', pattern: 'stripe' },
-    { id: 'fl_pebble_dot', name: '小石點點地毯', price: 1700, c1: '#d9dfd8', c2: '#a9c8b2', pattern: 'dot' },
-    { id: 'fl_slate_wood', name: '霧灰染木地板', price: 2100, c1: '#889a9f', c2: '#becbd0', pattern: 'wood' },
-    { id: 'fl_geometry_grid', name: '幾何方格研習地面', price: 2300, c1: '#f5ecd9', c2: '#a8c4d5', pattern: 'check' },
+    { id: 'fl_honey_oak', name: '蜂蜜淺橡木地板', price: 1600, c1: '#ceaa83', c2: '#dbc1a3', pattern: 'wood' },
+    { id: 'fl_white_ash', name: '雲白梣木地板', price: 1800, c1: '#e8decf', c2: '#dcd1c0', pattern: 'wood' },
+    { id: 'fl_mint_tiles', name: '薄荷小磚地面', price: 1700, c1: '#d5dfd2', c2: '#e3e8de', pattern: 'tile' },
+    { id: 'fl_blue_tiles', name: '霧藍陶磚地面', price: 1800, c1: '#cbd6e4', c2: '#dde3ec', pattern: 'tile' },
+    { id: 'fl_coral_check', name: '杏桃棋格地面', price: 1900, c1: '#e3cbc9', c2: '#f0e5d5', pattern: 'check' },
+    { id: 'fl_lavender_plain', name: '丁香軟墊地面', price: 1400, c1: '#d5c8e0', c2: '#ded4e7', pattern: 'plain' },
+    { id: 'fl_sand_stripe', name: '沙色細紋地面', price: 1500, c1: '#e5d7c7', c2: '#eee4d6', pattern: 'stripe' },
+    { id: 'fl_pebble_dot', name: '小石點點地毯', price: 1700, c1: '#e0e3db', c2: '#ccd8c7', pattern: 'dot' },
+    { id: 'fl_slate_wood', name: '霧灰染木地板', price: 2100, c1: '#adb8c5', c2: '#c4ccd6', pattern: 'wood' },
+    { id: 'fl_geometry_grid', name: '幾何方格研習地面', price: 2300, c1: '#eee4d6', c2: '#d9dce7', pattern: 'check' },
   ];
 })(typeof window !== 'undefined' ? window : globalThis);

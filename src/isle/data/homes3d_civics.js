@@ -6,20 +6,25 @@
     const g = new THREE.Group(); g.name = 'home-civics';
     const parts = new Map(), batches = new Map(); let part = 'foundation', parent = g;
     const M = {
-      plaster: kit.mat('#fbf3e4', { roughness: .93 }, 'stone'),
+      plaster: kit.mat('#fbf3e4', { roughness: .93 }, 'plaster'),
       stone: kit.mat('#c8bea7', { roughness: .95 }, 'stone'),
       cream: kit.mat('#eee0bd', { roughness: .86 }, 'stone'),
-      wood: kit.mat('#98704d', { roughness: .82 }, 'wall'),
-      honey: kit.mat('#bd9561', { roughness: .76 }, 'wall'),
-      dark: kit.mat('#554631', { roughness: .9 }, 'wall'),
+      wood: kit.mat('#98704d', { roughness: .82 }, 'wood'),
+      honey: kit.mat('#bd9561', { roughness: .76 }, 'wood'),
+      dark: kit.mat('#554631', { roughness: .9 }, 'wood'),
       roof: kit.mat('#e0b25a', { roughness: .86 }, 'roof'),
       roofLight: kit.mat('#edc477', { roughness: .80 }, 'roof'),
       roofDark: kit.mat('#b58b42', { roughness: .87 }, 'roof'),
-      brass: kit.mat('#d1a654', { roughness: .42, metalness: .62 }),
-      coral: kit.mat('#e6735c', { roughness: .88 }),
+      brass: kit.mat('#d1a654', { roughness: 0.42, metalness: 0.62 }, 'metal'),
+      coral: kit.mat('#e6735c', { roughness: .88 }, 'fabric'),
       leaf: kit.mat('#70834f', { roughness: .94 }),
       pink: kit.mat('#e9a8b6', { roughness: .91 }),
       lavender: kit.mat('#b3a0d0', { roughness: .91 }),
+      // Shared textile/paper swatches: preserve the cream masonry and flower colours.
+      fabricCream: kit.mat('#eee0bd', { roughness: .88 }, 'fabric'),
+      noteCoral: kit.mat('#e6735c', { roughness: .91 }, 'paper'),
+      noteCream: kit.mat('#eee0bd', { roughness: .91 }, 'paper'),
+      noteLavender: kit.mat('#b3a0d0', { roughness: .91 }, 'paper'),
       glass: kit.win()
     };
     function assembly(id) { part=id; parent=g; }
@@ -180,7 +185,7 @@
     assembly('roof-courses');hipTiles(0,2.94,0,2.40,2.10,1.55,.56,10);for(const x of [-1.05,1.05])gableTiles(x,3.98,1.02,.50,.43,.85,4,4);
     assembly('striped-awning');
     for(let j=0;j<18;j++){
-      const x=-2.23+j*.262,m=j%2?M.cream:M.coral;
+      const x=-2.23+j*.262,m=j%2?M.fabricCream:M.coral;
       slab([[x-.13,2.88,1.83],[x+.13,2.88,1.83],[x+.13,2.62,2.38],[x-.13,2.62,2.38]],m,.025);
       profile([[-.13,0],[.13,0],[.13,-.13],[.10,-.17],[-.10,-.17],[-.13,-.13]],.025,x,2.62,2.38,m);
     }
@@ -189,19 +194,19 @@
     for(let j=0;j<4;j++)round(-1.43,1.02,1.01+j*.15,1.04,.105,.143,j%2?M.honey:M.wood,.012);
     for(const x of [-1.81,-1.05])for(const s of [-1,1])beam([x,.47,1.28+s*.43],[x,.96,1.28-s*.12],.045,M.wood,6);
     for(const z of [.87,1.76]){round(-1.43,.72,z,1.17,.09,.22,M.honey,.015);for(const x of [-1.81,-1.05])beam([x,.47,z],[x,.70,z],.04,M.wood);}
-    box(-1.43,.62,1.29,.85,.07,.07,M.wood);box(-1.43,1.085,1.28,.20,.015,.63,M.coral);box(-1.43,1.09,1.28,.07,.016,.63,M.cream);
+    box(-1.43,.62,1.29,.85,.07,.07,M.wood);box(-1.43,1.085,1.28,.20,.015,.63,M.coral);box(-1.43,1.09,1.28,.07,.016,.63,M.fabricCream);
     add(new THREE.CylinderGeometry(.073,.058,.15,10),M.cream,-1.62,1.19,1.23);add(new THREE.TorusGeometry(.048,.012,5,10),M.cream,-1.52,1.18,1.23,0,Math.PI/2);for(const x of [-1.21,-1.40])add(new THREE.CylinderGeometry(.038,.034,.07,8),M.cream,x,1.145,1.40);
     assembly('swing-bench');
     for(let j=0;j<4;j++)round(1.43,.80,1.12+j*.12,1.02,.065,.105,j%2?M.honey:M.wood,.010);
     for(let j=0;j<4;j++)round(1.43,.98+j*.095,1.01,1.04,.076,.055,M.honey,.008);
     for(const x of [.88,1.98]){round(x,1.04,1.30,.075,.07,.67,M.wood,.010);for(const z of [1.09,1.53])beam([x,.80,z],[x,1.05,z],.021,M.wood,5);}
-    round(1.70,.99,1.27,.25,.29,.13,M.coral,.035);round(1.50,.95,1.26,.18,.23,.12,M.cream,.027);
+    round(1.70,.99,1.27,.25,.29,.13,M.coral,.035);round(1.50,.95,1.26,.18,.23,.12,M.fabricCream,.027);
     assembly('chain-hangers');
     for(const x of [.95,1.91])for(const z of [1.10,1.51]){
       beam([x,.85,z],[x,2.77,z],.012,M.dark,5);for(let j=0;j<11;j++)add(new THREE.TorusGeometry(.024,.006,4,7),M.brass,x,.89+j*.17,z,0,j%2?Math.PI/2:0);
     }
     assembly('bulletin-board');round(-.70,1.48,.84,.44,.70,.10,M.dark,.018);round(-.70,1.48,.90,.36,.62,.05,M.honey,.010);profile([[-.27,0],[.27,0],[0,.16]],.07,-.70,1.82,.82,M.wood);
-    assembly('paper-notes');for(let j=0;j<6;j++){const x=-.80+(j%2)*.18,y=1.26+Math.floor(j/2)*.19;box(x,y,.938,.13,.15,.012,j%3===0?M.coral:j%3===1?M.cream:M.lavender,0,0,(j%2-.5)*.10);ball(x,y+.058,.95,.013,M.brass,1,1,.45);}
+    assembly('paper-notes');for(let j=0;j<6;j++){const x=-.80+(j%2)*.18,y=1.26+Math.floor(j/2)*.19;box(x,y,.938,.13,.15,.012,j%3===0?M.noteCoral:j%3===1?M.noteCream:M.noteLavender,0,0,(j%2-.5)*.10);ball(x,y+.058,.95,.013,M.brass,1,1,.45);}
     assembly('balance-vane');
     beam([0,4.50,0],[0,5.20,0],.030,M.brass,8);add(new THREE.CylinderGeometry(.12,.16,.10,8),M.brass,0,4.58,0);ball(0,5.26,0,.07,M.brass);
     const balance=new THREE.Group();balance.name='anim:spin:y:0.18';balance.position.set(0,5.13,0);g.add(balance);parent=balance;
@@ -210,7 +215,7 @@
       for(const dz of [-.10,.10])beam([x,0,0],[x,-.34,dz],.009,M.brass,5);
       const q=new THREE.LatheGeometry([new THREE.Vector2(.01,0),new THREE.Vector2(.10,.018),new THREE.Vector2(.19,.074),new THREE.Vector2(.195,.09),new THREE.Vector2(.17,.08),new THREE.Vector2(.08,.04),new THREE.Vector2(.01,.025)],12);add(q,M.brass,x,-.43,0);
     }assembly('balance-vane');
-    assembly('deep-porch');round(0,.495,1.27,.87,.025,.51,M.coral,.008);box(0,.513,1.27,.74,.008,.39,M.cream);box(0,.518,1.27,.68,.009,.33,M.coral);
+    assembly('deep-porch');round(0,.495,1.27,.87,.025,.51,M.coral,.008);box(0,.513,1.27,.74,.008,.39,M.fabricCream);box(0,.518,1.27,.68,.009,.33,M.coral);
 
     // Material: warm gold/cream/coral stay within one shared 15-color palette.
     assembly('flowers-vines');

@@ -6,15 +6,15 @@
   I.BLDMODELS['home_player'] = function (THREE, kit) {
 const g = new THREE.Group(); g.name = 'home-player';
     const M = {
-      plaster: kit.mat('#f4e6d0', { roughness: 0.91, metalness: 0 }, 'stone'),
+      plaster: kit.mat('#f4e6d0', { roughness: 0.91, metalness: 0 }, 'plaster'),
       stone: kit.mat('#ded0ba', { roughness: 0.92, metalness: 0 }, 'stone'),
       stoneShade: kit.mat('#b5a28a', { roughness: 0.95, metalness: 0 }, 'stone'),
-      oak: kit.mat('#8b5a36', { roughness: 0.82, metalness: 0 }, 'wall'),
-      honey: kit.mat('#b07a4a', { roughness: 0.8, metalness: 0 }, 'wall'),
-      dark: kit.mat('#4b342d', { roughness: 0.9, metalness: 0 }, 'wall'),
+      oak: kit.mat('#8b5a36', { roughness: 0.82, metalness: 0 }, 'wood'),
+      honey: kit.mat('#b07a4a', { roughness: 0.8, metalness: 0 }, 'wood'),
+      dark: kit.mat('#4b342d', { roughness: 0.9, metalness: 0 }, 'wood'),
       roof: kit.mat('#9c4a3a', { roughness: 0.78, metalness: 0 }, 'roof'),
       roofShade: kit.mat('#b45c47', { roughness: 0.8, metalness: 0 }, 'roof'),
-      gold: kit.mat('#d4aa59', { roughness: 0.4, metalness: 0.65 }),
+      gold: kit.mat('#d4aa59', { roughness: 0.4, metalness: 0.65 }, 'metal'),
       leaf: kit.mat('#617747', { roughness: 0.92, metalness: 0 }),
       leafLight: kit.mat('#8c9d61', { roughness: 0.92, metalness: 0 }),
       pink: kit.mat('#e3a0b9', { roughness: 0.88, metalness: 0 }),
@@ -188,7 +188,8 @@ const g = new THREE.Group(); g.name = 'home-player';
     archWindow(-.85,.85,1.48,.68,1.25);
     archWindow(1.74,.90,-.35,.78,1.20,Math.PI/2);
     archWindow(-1.74,.90,-.35,.78,1.20,-Math.PI/2);
-    archWindow(-.70,3.32,-1.59,.60,1.46,Math.PI);archWindow(.66,3.32,-1.59,.60,1.46,Math.PI);
+    // Keep the rear pair clear of the central balcony door and its timber jambs.
+    archWindow(-.82,3.32,-1.59,.60,1.46,Math.PI);archWindow(.82,3.32,-1.59,.60,1.46,Math.PI);
     rectWindow(-.72,1.55,-1.60,.72,.97,Math.PI);
     part='entrance';
     profile(pointed(1.10,1.98),.08,.55,.44,1.49,M.stone);
@@ -197,6 +198,22 @@ const g = new THREE.Group(); g.name = 'home-player';
     box(.55,.49,1.81,1.05,.07,.33,M.stoneShade);
     // Rear balcony access is decorative; the game has one interaction anchor.
     box(.60,1.30,-1.65,.75,1.67,.10,M.oak);rectWindow(.60,1.53,-1.71,.42,.66,Math.PI);
+    // Upstairs rear access: closed leaf, matching pointed arch, shared warm glazing.
+    // Deck cap tops out at y=2.879; the sill sits on it, inside the outer rail.
+    profile(pointed(.74,1.80),.05,0,2.885,-1.70,M.dark,Math.PI);
+    profile(pointed(.68,1.76),.065,0,2.90,-1.75,M.oak,Math.PI);
+    profile(pointed(.57,1.65),.025,0,2.94,-1.819,M.honey,Math.PI);
+    profile(pointed(.38,.60),.018,0,3.74,-1.848,M.dark,Math.PI);
+    profile(pointed(.30,.52),.012,0,3.78,-1.871,M.glass,Math.PI);
+    box(0,4.00,-1.89,.025,.40,.025,M.oak);
+    box(0,3.96,-1.89,.29,.025,.025,M.oak);
+    for(const x of [-.17,0,.17])box(x,3.31,-1.849,.008,.59,.008,M.oak);
+    for(const y of [3.04,3.64])box(0,y,-1.855,.50,.055,.025,M.oak);
+    box(0,2.904,-1.75,.78,.05,.18,M.stoneShade);
+    for(const y of [3.18,3.59])box(.22,y,-1.875,.12,.035,.025,M.dark);
+    box(-.18,3.55,-1.879,.055,.105,.014,M.gold);
+    ring(-.18,3.51,-1.888,.045,.010,M.gold);
+    sphere(-.18,3.56,-1.887,.021,M.gold,1,1,1,6);
     part='doorhardware';ring(.77,1.20,1.77,.064,.013,M.gold);sphere(.77,1.28,1.77,.025,M.gold);
     for(const y of [.83,1.53]){box(.31,y,1.76,.27,.04,.025,M.dark);sphere(.22,y,1.78,.018,M.gold);}
     part='stairs';
@@ -295,7 +312,7 @@ const g = new THREE.Group(); g.name = 'home-player';
     // Pass 3: final shared palette, living flower boxes and attached wisteria.
     planter(-.64,3.21,1.74,.78);planter(.64,3.21,1.74,.78);
     planter(-.85,.77,1.74,.92);planter(1.95,.80,-.35,.86,Math.PI/2);
-    planter(-.70,3.23,-1.83,.76,Math.PI);planter(.66,3.23,-1.83,.76,Math.PI);
+    planter(-.82,3.23,-1.83,.76,Math.PI);planter(.82,3.23,-1.83,.76,Math.PI);
     vine(-1.78,3.54,2.03,1.23,.70);vine(2.03,3.54,-.92,.96,.51);vine(-1.78,3.54,-1.95,1.05,.65);
     part='flowerboxes';
     // A planted pocket replaces the reference dock, keeping the mailbox landing clear.

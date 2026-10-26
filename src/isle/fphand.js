@@ -57,6 +57,107 @@ function cutArm(gl) {
   return { geo, mat: sk.material, scale: hand.getWorldScale(new THREE.Vector3()).x };
 }
 const noRay = () => {};
+/** 只細分掌指色區；共用邊一併切開避免 T 接縫。保留外框尺寸，最高不超過 4k 三角形。 */
+function roundFingers(geo, skin) {
+  const P = geo.attributes.position, UV = geo.attributes.uv, C = geo.attributes.color, ids = Array.from(geo.index.array);
+  const pos = Array.from(P.array), uv = Array.from(UV.array), colors = Array.from(C.array), keys = [], points = new Map(), edges = new Map();
+  const V = i => new THREE.Vector3().fromBufferAttribute(P, i);
+  for (let i = 0; i < P.count; i++) {
+    const k = V(i).toArray().map(x => Math.round(x * 1e5)).join(','); keys.push(k);
+    if (!points.has(k)) points.set(k, { at: V(i), neighbors: new Set(), members: [] });
+    points.get(k).members.push(i);
+  }
+  const edgeKey = (a, b) => [keys[a], keys[b]].sort().join('/');
+  for (let t = 0; t < ids.length; t += 3) {
+    const tri = ids.slice(t, t + 3);
+    for (let j = 0; j < 3; j++) {
+      const a = tri[j], b = tri[(j + 1) % 3], c = tri[(j + 2) % 3], k = edgeKey(a, b);
+      points.get(keys[a]).neighbors.add(keys[b]); points.get(keys[b]).neighbors.add(keys[a]);
+      if (!edges.has(k)) edges.set(k, { a, b, opposite: [] });
+      edges.get(k).opposite.push(c);
+    }
+  }
+  const isSkin = i => Math.abs(C.getX(i) - skin.r) < 1e-5 && Math.abs(C.getY(i) - skin.g) < 1e-5;
+  const split = new Set([...edges].filter(([, e]) => isSkin(e.a) && isSkin(e.b)).map(([k]) => k));
+  let count = ids.length / 3;
+  for (let t = 0; t < ids.length; t += 3) for (let j = 0; j < 3; j++) if (split.has(edgeKey(ids[t + j], ids[t + (j + 1) % 3]))) count++;
+  if (count > 4000) return;
+  geo.computeBoundingBox(); const bounds = geo.boundingBox.clone();
+  // 輕量圓角只作用於獨立的展示網格；同位頂點一起移動，袖口仍與手腕接合。
+  for (const point of points.values()) {
+    const average = new THREE.Vector3(); for (const k of point.neighbors) average.add(points.get(k).at);
+    average.multiplyScalar(1 / Math.max(1, point.neighbors.size));
+    const delta = average.sub(point.at).multiplyScalar(isSkin(point.members[0]) ? 0.22 : 0.12).clampLength(0, 0.004);
+    for (const i of point.members) point.at.clone().add(delta).toArray(pos, i * 3);
+  }
+  const midpoint = (a, b) => {
+    if (!split.has(edgeKey(a, b))) return null;
+    const e = edges.get(edgeKey(a, b)), p = V(a).add(V(b)).multiplyScalar(0.5);
+    if (e.opposite.length === 2) p.multiplyScalar(0.75).addScaledVector(V(e.opposite[0]), 0.125).addScaledVector(V(e.opposite[1]), 0.125);
+    const index = pos.length / 3; p.toArray(pos, index * 3);
+    uv.push((UV.getX(a) + UV.getX(b)) / 2, (UV.getY(a) + UV.getY(b)) / 2);
+    colors.push((C.getX(a) + C.getX(b)) / 2, (C.getY(a) + C.getY(b)) / 2, (C.getZ(a) + C.getZ(b)) / 2);
+    return index;
+  };
+  const out = [];
+  for (let t = 0; t < ids.length; t += 3) {
+    const [a, b, c] = ids.slice(t, t + 3), ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+    if (ab != null && bc != null && ca != null) out.push(a, ab, ca, ab, b, bc, ca, bc, c, ab, bc, ca);
+    else if (ab != null && bc != null) out.push(ab, b, bc, a, ab, c, ab, bc, c);
+    else if (bc != null && ca != null) out.push(bc, c, ca, b, bc, a, bc, ca, a);
+    else if (ca != null && ab != null) out.push(ca, a, ab, c, ca, b, ca, ab, b);
+    else if (ab != null) out.push(a, ab, c, ab, b, c);
+    else if (bc != null) out.push(b, bc, a, bc, c, a);
+    else if (ca != null) out.push(c, ca, b, ca, a, b);
+    else out.push(a, b, c);
+  }
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3)); geo.setIndex(out);
+  geo.computeBoundingBox(); const next = geo.boundingBox, size = bounds.getSize(new THREE.Vector3()), nextSize = next.getSize(new THREE.Vector3()), v = new THREE.Vector3();
+  for (let i = 0; i < geo.attributes.position.count; i++) {
+    v.fromBufferAttribute(geo.attributes.position, i).sub(next.min);
+    for (const axis of ['x', 'y', 'z']) v[axis] *= size[axis] / Math.max(nextSize[axis], 1e-8);
+    v.add(bounds.min); geo.attributes.position.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.deleteAttribute('normal'); geo.computeVertexNormals(); geo.computeBoundingBox(); geo.computeBoundingSphere();
+}
+/** 只打磨切下的展示網格；來源骨架、權重、UV、三角形篩選與握持座標完全不動。 */
+function polishArm(geo, source) {
+  const mat = Array.isArray(source) ? source[0] : source, image = mat.map && mat.map.image;
+  const UV = geo.attributes.uv;
+  if (!image || !UV) return source;   // 沒有色區依據時保留原材質作後備。
+  try {
+    // 原 atlas 只用於一次性的色區辨識，畫面改用無貼圖的大色面；不把烘焙皺紋帶到近景。
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true }); ctx.drawImage(image, 0, 0, 64, 64);
+    const data = ctx.getImageData(0, 0, 64, 64).data, colors = new Float32Array(geo.attributes.position.count * 3);
+    const skin = new THREE.Color('#EACCC0'), sleeve = new THREE.Color('#AF9EBC'), trim = new THREE.Color('#F0E5D5');
+    for (let i = 0; i < geo.attributes.position.count; i++) {
+      const x = THREE.MathUtils.clamp(Math.floor(UV.getX(i) * 64), 0, 63), v = UV.getY(i);
+      const y = THREE.MathUtils.clamp(Math.floor((mat.map.flipY ? 1 - v : v) * 64), 0, 63), at = (y * 64 + x) * 4;
+      const r = data[at] / 255, g = data[at + 1] / 255, b = data[at + 2] / 255;
+      const isSkin = r > g * 1.06 && r > b * 1.035;
+      const c = isSkin ? skin : (Math.min(r, g, b) > 0.48 && Math.max(r, g, b) - Math.min(r, g, b) < 0.2 ? trim : sleeve);
+      c.toArray(colors, i * 3);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    roundFingers(geo, skin);
+  } catch (_) { return source; }
+  const P = geo.attributes.position, N = geo.attributes.normal;
+  const groups = new Map(), key = i => [P.getX(i), P.getY(i), P.getZ(i)].map(v => Math.round(v * 1e5)).join(',');
+  for (let i = 0; i < P.count; i++) { const k = key(i); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); }
+  // 跨 UV 與細分接縫平均法線，保留翻折袖口的銳角。
+  const n = new THREE.Vector3(), other = new THREE.Vector3(), sum = new THREE.Vector3(), normals = new Float32Array(N.array.length);
+  for (let i = 0; i < P.count; i++) {
+    n.fromBufferAttribute(N, i); sum.set(0, 0, 0);
+    for (const j of groups.get(key(i))) { other.fromBufferAttribute(N, j); if (n.dot(other) > 0.25) sum.add(other); }
+    sum.normalize().lerp(n, 0.18).normalize().toArray(normals, i * 3);
+  }
+  geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+  const soft = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0, side: mat.side });
+  soft.name = 'fp-peach-skin-lavender-sleeve';
+  return soft;
+}
 /** 鏡頭前的手：每幀在鏡頭擺好之後呼叫 update */
 export function createHand(player, scene) {
   const u = player.userData, root = new THREE.Group(), piv = new THREE.Group(), arm = new THREE.Group(), holder = new THREE.Group(), tip = new THREE.Object3D();
@@ -74,7 +175,7 @@ export function createHand(player, scene) {
     if (!built && o.active && o.show && u.gltf) {
       built = true; const a = cutArm(u.gltf);
       if (a) {
-        const m = new THREE.Mesh(a.geo, a.mat); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m);
+        const m = new THREE.Mesh(a.geo, polishArm(a.geo, a.mat)); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m);
         arm.scale.setScalar(a.scale); holder.position.copy(u.hand.position); holder.scale.copy(u.hand.scale);   // 工具和第三人稱一樣握在手骨頭上
       } else built = 'none';
     }

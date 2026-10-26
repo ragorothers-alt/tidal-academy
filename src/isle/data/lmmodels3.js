@@ -4,28 +4,103 @@
   'use strict';
   const I=(root.TA=root.TA||{}).ISLE=root.TA.ISLE||{};
   I.LMMODELS=I.LMMODELS||{};
-  I.LMMODELS.waterwheel=function(THREE,kit){
+
+  // 地標的細磨石／霧面瓦：保留原 kind、雪與地平線變形，只移除照片細節。
+  // 32² 程式顆粒讓同色材質共用，也讓 mergeStatic 保留這份局部表面設定。
+  let finishTexture;
+  function finishKit(THREE, kit) {
+    return Object.assign({}, kit, {mat(color, opts, kind) {
+      if (kind !== 'stone' && kind !== 'roof' && kind !== 'wall') return kit.mat(color, opts, kind);
+      if (!finishTexture) {
+        const data = new Uint8Array(32 * 32 * 4);
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+          const i = (y * 32 + x) * 4, v = 251 + ((x * 17 + y * 29 + x * y * 3) % 5);
+          data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255;
+        }
+        finishTexture = new THREE.DataTexture(data, 32, 32);
+        finishTexture.colorSpace = THREE.SRGBColorSpace;
+        finishTexture.wrapS = finishTexture.wrapT = THREE.RepeatWrapping;
+        finishTexture.magFilter = finishTexture.minFilter = THREE.LinearFilter;
+        finishTexture.needsUpdate = true;
+      }
+      const m = kit.mat(color, Object.assign({}, opts, {name: 'landmark-matte-v1'}), kind);
+      if (!m.userData.landmarkFinish) {
+        const compile = m.onBeforeCompile, cacheKey = m.customProgramCacheKey();
+        m.map = finishTexture;
+        m.onBeforeCompile = function(shader, renderer) {
+          compile.call(this, shader, renderer);
+          shader.fragmentShader = shader.fragmentShader
+            .replace(/triD\(uD0,[^;\n]*?,\s*gB\)/g, 'vec3(0.5)')
+            .replace(/triN\(uN0,[^;\n]*?,\s*gB\)/g, 'vec3(0.0)')
+            .replace('board * grain * (0.89 + lip * 0.11)', '(0.98 + (board * grain - 1.0) * 0.18)')
+            .replace('(0.86 + (1.0 - gap) * 0.1 + n_h(floor(p)) * 0.08) * (0.94 + c2 * 0.08)', '(0.985 + (1.0 - gap) * 0.01 + n_h(floor(p)) * 0.015)')
+            .replace('(0.74 + scal * 0.26) * (0.89 + edge * 0.11)', '(0.94 + scal * 0.06) * (0.97 + edge * 0.03)');
+        };
+        m.customProgramCacheKey = () => cacheKey + '-landmark-matte-v1';
+        m.userData.landmarkFinish = true; m.needsUpdate = true;
+      }
+      return m;
+    }});
+  }
+  // 木件按材質先合併；旋轉輪單獨處理。如此後續 mergeStatic 不會重建 wall 材質，
+  // 也不會把細木紋恢復成共用照片；wheel 的原點／層級／動畫軸保持不動。
+  function finishTimbers(THREE, g) {
+    const wheel = g.getObjectByName('wheel');
+    for (const scope of wheel ? [g, wheel] : [g]) {
+      scope.updateWorldMatrix(true,true);
+      const inv = new THREE.Matrix4().copy(scope.matrixWorld).invert(), bins = new Map();
+      scope.traverse(o => {
+        if (!o.isMesh || Array.isArray(o.material) || !['wall', 'wood'].includes(o.material.userData.kind)) return;
+        if (scope === g && wheel) {let p=o;while(p&&p!==wheel)p=p.parent;if(p===wheel)return;}
+        if (!bins.has(o.material)) bins.set(o.material,[]); bins.get(o.material).push(o);
+      });
+      for (const [mat, meshes] of bins) {
+        if (meshes.length < 2) continue;
+        const positions=[],normals=[],uv=[];
+        for (const mesh of meshes) {
+          const src=mesh.geometry, geo=src.index?src.toNonIndexed():src.clone();
+          geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv,mesh.matrixWorld));
+          const p=geo.attributes.position,n=geo.attributes.normal,u=geo.attributes.uv;
+          positions.push(...p.array);normals.push(...n.array);
+          if(u)uv.push(...u.array);else for(let i=0;i<p.count;i++)uv.push(p.getX(i),p.getY(i));
+          geo.dispose();src.dispose();mesh.parent.remove(mesh);
+        }
+        const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+        const mesh=new THREE.Mesh(geo,mat);mesh.name=meshes[0].name;mesh.castShadow=true;mesh.receiveShadow=true;scope.add(mesh);
+      }
+    }
+    return g;
+  }
+
+  I.LMMODELS.waterwheel=function(THREE,kit){ kit=finishKit(THREE,kit);
     const g=new THREE.Group();g.name='waterwheel';
     const V=(x,y,z)=>new THREE.Vector3(x,y,z),m={},batches=new Map();
     function mat(id,c,opts,kind){m[id]=kit.mat(c,opts||{},kind);}
-    mat('stone','#ebdfc5',{roughness:.92},'stone');
-    mat('stoneShade','#cdbd9d',{roughness:.96},'stone');
-    mat('wood','#986137',{roughness:.78},'wall');
-    mat('woodLight','#b7834b',{roughness:.75},'wall');
-    mat('woodDark','#60412d',{roughness:.88},'wall');
+    mat('stone','#efe3d1',{roughness:.92},'stone');
+    mat('stoneShade','#c8bdd1',{roughness:.96},'stone');
+    mat('plaster','#f0e5d5',{roughness:.94},'plaster');
+    mat('mortar','#d3c8c2',{roughness:1},'plaster');
+    mat('pebblePink','#e7d9d5',{roughness:.96},'stone');
+    mat('pebbleLavender','#dad2dd',{roughness:.96},'stone');
+    mat('leaf','#9fb994',{roughness:.92});
+    mat('moss','#7f9e92',{roughness:1});
+    mat('flower','#f3bdd2',{roughness:.88});
+    mat('wood','#cda67e',{roughness:.8},'wood');
+    mat('woodLight','#d7b38c',{roughness:.8},'wood');
+    mat('woodDark','#947b7b',{roughness:.8},'wood');
     // Repeatedly immersed rims/buckets stay wet; the inner spokes and upper flume stay dry.
-    for(const[id,c]of[['wood','#986137'],['woodLight','#b7834b'],['woodDark','#60412d']])
-      mat(id+'Wet',new THREE.Color(c).multiplyScalar(.80),{roughness:.44},'wall');
-    mat('roof','#355782',{roughness:.72},'roof');
-    mat('roofLight','#426a99',{roughness:.67},'roof');
-    mat('gold','#c69b50',{roughness:.35,metalness:.67});
-    mat('iron','#344359',{roughness:.43,metalness:.6});
+    for(const[id,c]of[['wood','#cda67e'],['woodLight','#d7b38c'],['woodDark','#947b7b']])
+      mat(id+'Wet',new THREE.Color(c).multiplyScalar(.91),{roughness:.8},'wood');
+    mat('roof','#ad9abd',{roughness:.72},'roof');
+    mat('roofLight','#b7a4c7',{roughness:.67},'roof');
+    mat('gold','#e8c48b',{roughness:.4,metalness:0.6},'metal');
+    mat('iron','#777a98',{roughness:.4,metalness:0.6},'metal');
     const flowOpts={transparent:true,side:THREE.DoubleSide,depthWrite:false,roughness:.20};
-    mat('flumeFlow','#3f8f9e',{...flowOpts,opacity:.83},'flow');
-    mat('raceFlow','#3b8393',{...flowOpts,opacity:.87},'flow');
-    mat('sheetFlow','#78b7c2',{...flowOpts,opacity:.66},'flow');
-    mat('sprayFlow','#b1d8db',{...flowOpts,opacity:.56},'flow');
-    mat('foam','#e2f2ed',{roughness:.45,transparent:true,opacity:.77,side:THREE.DoubleSide,depthWrite:false});
+    mat('flumeFlow','#8ebcba',{...flowOpts,opacity:.83},'flow');
+    mat('raceFlow','#83b1b5',{...flowOpts,opacity:.87},'flow');
+    mat('sheetFlow','#abd0ce',{...flowOpts,opacity:.66},'flow');
+    mat('sprayFlow','#c5dadb',{...flowOpts,opacity:.56},'flow');
+    mat('foam','#e8ece2',{roughness:.45,transparent:true,opacity:.77,side:THREE.DoubleSide,depthWrite:false});
     m.window=kit.win();
     function part(name,parent=g){const p=new THREE.Group();p.name=name;parent.add(p);return p;}
     function add(p,geo,id,pos,rot){
@@ -54,12 +129,36 @@
     function cylX(p,id,r,len,pos,segments=16){const geo=new THREE.CylinderGeometry(r,r,len,segments);geo.rotateZ(Math.PI/2);add(p,geo,id,pos);}
     function torusX(p,id,r,t,pos,segments=36){const geo=new THREE.TorusGeometry(r,t,4,Math.min(segments,24));geo.rotateY(Math.PI/2);add(p,geo,id,pos);}
     function tube(p,id,pts,r=.014,segments=16,sides=5){add(p,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(a=>V(...a))),segments,r,sides,false),id);}
+    // A shallow, rounded fieldstone: irregular eight-point outline, tucked edge and
+    // a softly crowned face. Forty-four triangles, including the buried back.
+    function pebble(p,id,w,h,d,pos,rot,seed=0){
+      const outline=[[-.50,-.26],[-.29,-.49],[.26,-.48],[.49,-.24],[.50,.23],[.28,.48],[-.28,.50],[-.48,.26]],vs=[],ix=[];
+      for(const [scale,z] of [[1,-d*.30],[.95,d*.25],[.70,d*.58]])for(let j=0;j<8;j++){
+        const [x,y]=outline[j],q=1+.065*Math.sin(seed*2.3+j*4.1);vs.push(x*w*scale*q,y*h*scale*q,z);
+      }
+      // Two eight-sided bands and two fans (six triangles per cap).
+      for(let k=0;k<2;k++)for(let j=0;j<8;j++){const a=k*8+j,b=k*8+(j+1)%8;ix.push(a,b,a+8,b,b+8,a+8);}
+      for(let j=1;j<7;j++){ix.push(0,j+1,j,16,16+j,17+j);}
+      const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vs,3));geo.setIndex(ix);geo.computeVertexNormals();add(p,geo,id,pos,rot);
+    }
+    function sprig(p,id,pos,sx=.09,sy=.045,sz=.035,rot){const geo=new THREE.SphereGeometry(1,5,3);geo.scale(sx,sy,sz);add(p,geo,id,pos,rot);}
+    // Rolled, six-sided tile with a crowned top and round-nosed downhill corners.
+    // Three rings cost 32 triangles; the underlay closes all staggered seams.
+    function tile(p,id,w,d,pos,s=1,rot){
+      const outline=[[-.5,-.5],[.30,-.5],[.5,-.29],[.5,.29],[.30,.5],[-.5,.5]],vs=[],ix=[];
+      for(const[scale,y]of[[.94,-.027],[1,.008],[.86,.044]])for(const[x,z]of outline)vs.push(s*x*w*scale,y,z*d*scale);
+      for(let k=0;k<2;k++)for(let j=0;j<6;j++){const a=k*6+j,b=k*6+(j+1)%6;ix.push(a,a+6,b,b,a+6,b+6);}
+      for(let j=1;j<5;j++)ix.push(0,j,j+1,12,13+j,12+j);
+      if(s<0)for(let i=0;i<ix.length;i+=3){const a=ix[i];ix[i]=ix[i+1];ix[i+1]=a;}
+      const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vs,3));geo.setIndex(ix);geo.computeVertexNormals();add(p,geo,id,pos,rot);
+    }
     function ringX(p,id,outer,inner,width,x,cy=0,cz=0,segments=32,start=0,end=Math.PI*2){
-      const vs=[],idx=[];
+      const vs=[],idx=[],rounded=id.startsWith('wood')&&outer-inner>.08,stride=rounded?8:4;
       for(let k=0;k<=segments;k++){const a=start+(end-start)*k/segments;
-        for(const [xx,r]of[[-width/2,inner],[-width/2,outer],[width/2,outer],[width/2,inner]])vs.push(x+xx,cy+r*Math.cos(a),cz+r*Math.sin(a));}
-      for(let k=0;k<segments;k++)for(let j=0;j<4;j++){const a=k*4+j,b=k*4+(j+1)%4,c=a+4,d=b+4;idx.push(a,c,b,b,c,d);}
-      if(end-start<Math.PI*2-.001){idx.push(0,1,2,0,2,3);const a=segments*4;idx.push(a,a+2,a+1,a,a+3,a+2);}
+        const b=Math.min(.018,(outer-inner)*.22,width*.22);
+        for(const [xx,r]of(rounded?[[-width/2,inner+b],[-width/2,outer-b],[-width/2+b,outer],[width/2-b,outer],[width/2,outer-b],[width/2,inner+b],[width/2-b,inner],[-width/2+b,inner]]:[[-width/2,inner],[-width/2,outer],[width/2,outer],[width/2,inner]]))vs.push(x+xx,cy+r*Math.cos(a),cz+r*Math.sin(a));}
+      for(let k=0;k<segments;k++)for(let j=0;j<stride;j++){const a=k*stride+j,b=k*stride+(j+1)%stride,c=a+stride,d=b+stride;idx.push(a,c,b,b,c,d);}
+      if(end-start<Math.PI*2-.001){for(let j=1;j<stride-1;j++){idx.push(0,j,j+1);const a=segments*stride;idx.push(a,a+j+1,a+j);}}
       const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vs,3));geo.setIndex(idx);geo.computeVertexNormals();add(p,geo,id);
     }
     const foundation=part('stone-foundations'),building=part('mill-masonry'),timbers=part('timber-frame'),roof=part('slate-roof'),facade=part('doors-windows-lantern'),bearing=part('fixed-axle-bearings'),flume=part('fixed-flume'),water=part('water-race');
@@ -79,35 +178,41 @@
     function archPath(cx,bottom,spring,r){const h=new THREE.Path();h.moveTo(cx-r,bottom);h.lineTo(cx-r,spring);h.absarc(cx,spring,r,Math.PI,0,true);h.lineTo(cx+r,bottom);h.closePath();return h;}
     function wallShell(umin,umax,z,side,hole){
       const s=new THREE.Shape();s.moveTo(umin,.35);s.lineTo(umax,.35);s.lineTo(umax,2.75);s.lineTo(umin,2.75);s.closePath();if(hole)s.holes.push(archPath(...hole));
-      const geo=new THREE.ExtrudeGeometry(s,{depth:.12,bevelEnabled:false,curveSegments:14});add(building,geo,'stoneShade',side?[.25,0,0]:[0,0,z],side?[0,-Math.PI/2,0]:null);
+      const geo=new THREE.ExtrudeGeometry(s,{depth:.12,bevelEnabled:false,curveSegments:14});add(building,geo,'plaster',side?[.25,0,0]:[0,0,z],side?[0,-Math.PI/2,0]:null);
     }
     wallShell(-1.18,1.18,0,true,[.57,1.13,2.00,.31]);
     wallShell(.25,2.35,1.06,false,[1.56,.35,1.70,.35]);
-    box(building,'stoneShade',2.1,2.40,.13,[1.30,1.55,-1.12]);
-    box(building,'stoneShade',.13,2.40,2.36,[2.28,1.55,0]);
-    // Courses are cut around the window and door, leaving the openings unobstructed.
-    function courses(side){
-      const umin=side?-1.18:.25,umax=side?1.18:2.35,c=side?.57:1.56,bot=side?1.12:.35,spring=side?2:1.7,r=side?.41:.45;
-      for(let row=0;row<8;row++){
-        const y=.35+row*.30,yt=y+.285;let intervals=[[umin,umax]];
-        if(yt>bot&&y<spring+r){const half=y<=spring?r:Math.sqrt(Math.max(0,r*r-(y-spring)**2));intervals=[[umin,c-half],[c+half,umax]];}
-        for(const[lo,hi]of intervals){if(hi-lo<.08)continue;const n=Math.max(1,Math.round((hi-lo)/.43));
-          for(let j=0;j<n;j++){const w=(hi-lo)/n-.012,u=lo+(j+.5)*(hi-lo)/n;const id=(row+j)%6===0?'stoneShade':'stone';
-            if(side)box(building,id,.145,.285,w,[.153,y+.1425,u],.017);
-            else box(building,id,w,.285,.145,[u,y+.1425,1.155],.017);
+    box(building,'plaster',2.1,2.40,.13,[1.30,1.55,-1.12]);
+    const broadWall=new THREE.Shape();broadWall.moveTo(-1.18,.35);broadWall.lineTo(1.18,.35);broadWall.lineTo(1.18,2.75);broadWall.lineTo(-1.18,2.75);broadWall.closePath();
+    for(const u of [-.57,.57])broadWall.holes.push(archPath(u,1.40,2.04,.28));
+    add(building,new THREE.ExtrudeGeometry(broadWall,{depth:.13,bevelEnabled:false,curveSegments:10}),'plaster',[2.215,0,0],[0,Math.PI/2,0]);
+    // Only the damp lower skirt is stone. Recessed mortar, uneven split lengths,
+    // varied heights and gently tilted crowns avoid a square / checkerboard wall.
+    function stoneSkirt(side,back=false){
+      const lo=side?-1.17:.27,hi=side?1.17:2.33,plane=side?(back?2.35:.13):(back?-1.19:1.18);
+      const rot=side?[0,back?Math.PI/2:-Math.PI/2,0]:[0,back?Math.PI:0,0];
+      const point=(u,y,d=0)=>side?[plane+(back?d:-d),y,u]:[u,y,plane+(back?-d:d)];
+      const spans=!side&&!back?[[lo,1.10],[2.02,hi]]:[[lo,hi]];
+      for(const[a,b]of spans){
+        if(side)box(building,'mortar',.065,.70,b-a,point((a+b)/2,.70));
+        else box(building,'mortar',b-a,.70,.065,point((a+b)/2,.70));
+        for(let row=0;row<3;row++){
+          let u=a,j=0;const cy=[.465,.705,.945][row];
+          while(u<b-.045){
+            const step=Math.min(b-u,.36+.20*(.5+.5*Math.sin(row*3.7+j*2.8+(back?1.7:.3)+(side?2:0))));
+            if(step<.07)break;
+            const seed=row*11+j*3+(side?7:0)+(back?19:0),h=.223+.029*Math.sin(seed*1.7),id=seed%5===0?'pebbleLavender':seed%3===0?'pebblePink':'stone';
+            pebble(building,id,step-.012,h,.13,point(u+step/2,cy+.016*Math.sin(seed),.015),[rot[0],rot[1],.045*Math.sin(seed*2)],seed);
+            if(row===0&&j%3===1)sprig(building,'moss',point(u+step*.55,cy-h*.35,.092),side?.017:step*.22,.025,side?step*.22:.017);
+            u+=step;j++;
           }
         }
       }
     }
-    courses(true);courses(false);
-    // Back/right courses remain visible during turntable inspection.
-    for(let row=0;row<8;row++)for(let j=0;j<5;j++){
-      box(building,'stone',.405,.285,.145,[.46+j*.42,.4925+row*.30,-1.145]);
-      box(building,(row+j)%7===0?'stoneShade':'stone',.145,.285,.455,[2.285,.4925+row*.30,-.94+j*.47]);
-    }
+    stoneSkirt(true);stoneSkirt(false);stoneSkirt(true,true);stoneSkirt(false,true);
     // The front and back gables are solid timber-and-plaster triangles under the ridge.
     const gs=new THREE.Shape();gs.moveTo(.25,2.74);gs.lineTo(2.35,2.74);gs.lineTo(1.30,4.00);gs.closePath();
-    for(const z of [-1.12,1.05])add(building,new THREE.ExtrudeGeometry(gs,{depth:.12,bevelEnabled:false}),'stone',[0,0,z]);
+    for(const z of [-1.12,1.05])add(building,new THREE.ExtrudeGeometry(gs,{depth:.12,bevelEnabled:false}),'plaster',[0,0,z]);
     // Gable roof slabs, to be overlaid by staggered shingle rows.
     const pitch=Math.atan2(1.21,1.34),slopeLen=Math.hypot(1.21,1.34);
     for(const s of [-1,1])box(roof,'roof',slopeLen,.10,2.91,[1.3+s*.67,3.40,0],0,[0,0,-s*pitch]);
@@ -132,10 +237,10 @@
       const a=k*Math.PI*2/16;
       for(let j=0;j<3;j++){
         const aa=a+(j-1)*.105,r=1.20+.045*(j-1)*(j-1);
-        box(wheel,j===1?'woodWet':'woodLightWet',.66,.07,.17,[0,r*Math.cos(aa),r*Math.sin(aa)],0,[aa,0,0]);
+        box(wheel,j===1?'woodWet':'woodLightWet',.66,.07,.17,[0,r*Math.cos(aa),r*Math.sin(aa)],.008,[aa,0,0]);
       }
       const aa=a-.15;
-      box(wheel,'woodWet',.68,.235,.055,[0,1.33*Math.cos(aa),1.33*Math.sin(aa)],0,[aa,0,0]);
+      box(wheel,'woodWet',.68,.235,.055,[0,1.33*Math.cos(aa),1.33*Math.sin(aa)],.008,[aa,0,0]);
     }
     // Stationary shaft passes through bored hubs and two real bearing supports.
     cylX(bearing,'woodDark',.105,2.52,[-.81,1.85,0],16);
@@ -174,17 +279,20 @@
     }
     // Form pass: overlapping blue slate courses and a real ridge, gable fascias and eaves.
     for(const s of [-1,1]){
-      for(let row=0;row<6;row++){
-        const t=(row+.36)/6,xx=1.3+s*(1.34-t*1.34),yy=2.79+t*1.21;
+      for(let row=0;row<5;row++){
+        const t=(row+.40)/5,xx=1.3+s*(1.34-t*1.34),yy=2.79+t*1.21;
         for(let col=0;col<8;col++){
           const zz=-1.27+col*.36+(row%2)*.035;
-          box(roof,(row+col)%4===0?'roofLight':'roof',.39,.065,.35,[xx,yy+.12+row*.012,zz],.018,[0,0,-s*pitch]);
+          tile(roof,(row+col)%5===0?'roofLight':'roof',.46,.36,[xx,yy+.12+row*.009+.003*Math.sin(col*3+row),zz],s,[0,0,-s*pitch]);
         }
       }
       box(timbers,'wood',.16,.17,2.98,[1.3+s*1.34,2.76,0],.014);
       for(const z of [-1.43,1.43])beam(timbers,'woodLight',[1.3,4.09,z],[1.3+s*1.43,2.70,z],.13,.16);
     }
-    for(let k=0;k<8;k++)box(roof,k%3?'roof':'roofLight',.27,.16,.355,[1.3,4.145,-1.26+k*.36],.018);
+    for(let k=0;k<8;k++){
+      const cap=new THREE.Shape();cap.moveTo(-.145,0);for(let j=0;j<=6;j++){const a=Math.PI-j*Math.PI/6;cap.lineTo(.145*Math.cos(a),.145*Math.sin(a));}cap.closePath();
+      add(roof,new THREE.ExtrudeGeometry(cap,{depth:.355,bevelEnabled:false}),k%3?'roof':'roofLight',[1.3,4.12,-1.4375+k*.36]);
+    }
     for(const z of [-1.18,1.18]){
       box(timbers,'wood',2.30,.16,.20,[1.30,2.76,z],.012);
       beam(timbers,'woodDark',[.24,2.74,z],[1.3,3.96,z],.09,.12);
@@ -196,26 +304,72 @@
       box(foundation,'stone',.29,.27,.30,[x,.465,z],.018);
       box(timbers,'woodLight',.24,.14,.25,[x,2.68,z],.012);
     }
+    // Exposed honey timbers sit above the wet stone skirt. Short knee braces
+    // leave calm plaster panels and keep every original door / axle aperture clear.
+    for(const z of [-1.205,1.205]){
+      for(const [a,b]of (z>0?[[.32,1.10],[2.02,2.30]]:[[.32,2.30]]))box(timbers,'wood',b-a,.10,.105,[(a+b)/2,1.08,z],.012);
+      beam(timbers,'woodLight',[.32,2.10,z],[.82,2.66,z],.085,.095);
+      beam(timbers,'woodLight',[2.28,2.16,z],[1.85,2.66,z],.085,.095);
+    }
+    for(const x of [.115,2.39]){
+      box(timbers,'wood',.10,.105,2.18,[x,1.08,0],.012);
+      // Narrow centre post on the broad wall; the wheel side retains its window.
+      if(x>2)box(timbers,'wood',.11,1.62,.12,[x,1.91,0],.012);
+      for(const z of [-1.12,1.12])beam(timbers,'woodLight',[x,2.12,z],[x,2.66,z-Math.sign(z)*.45],.09,.095);
+    }
     // Gold ridge point on a blue socket, with a continuous base touching the ridge cap.
     box(roof,'roof',.22,.18,.22,[1.30,4.13,1.24],.018);
     box(roof,'gold',.19,.055,.19,[1.30,4.235,1.24],.012);
     const finial=new THREE.ConeGeometry(.075,.23,4);add(roof,finial,'gold',[1.30,4.3775,1.24],[0,Math.PI/4,0]);
     // Arched stone window surround and warm recessed glazing.
     function filledArch(cx,bottom,spring,r){const s=new THREE.Shape();s.moveTo(cx-r,bottom);s.lineTo(cx+r,bottom);s.lineTo(cx+r,spring);s.absarc(cx,spring,r,0,Math.PI,false);s.closePath();return s;}
-    function archWedges(cx,spring,inner,outer,depth,pos,rot,count=9){
+    function archWedges(cx,spring,inner,outer,depth,pos,rot,count=9,id='stone'){
       for(let i=0;i<count;i++){
         const a=i*Math.PI/count+.012,b=(i+1)*Math.PI/count-.012,sh=new THREE.Shape();
         sh.moveTo(cx+inner*Math.cos(a),spring+inner*Math.sin(a));sh.lineTo(cx+outer*Math.cos(a),spring+outer*Math.sin(a));sh.lineTo(cx+outer*Math.cos(b),spring+outer*Math.sin(b));sh.lineTo(cx+inner*Math.cos(b),spring+inner*Math.sin(b));sh.closePath();
-        add(facade,new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false}),'stone',pos,rot);
+        add(facade,new THREE.ExtrudeGeometry(sh,{depth,bevelEnabled:false}),id,pos,rot);
       }
     }
     add(facade,new THREE.ShapeGeometry(filledArch(.57,1.14,2,.302),16),'window',[.139,0,0],[0,-Math.PI/2,0]);
-    archWedges(.57,2,.318,.425,.13,[.135,0,0],[0,-Math.PI/2,0]);
-    for(const z of [.199,.941])box(facade,'stone',.20,.88,.12,[.068,1.56,z],.015);
+    archWedges(.57,2,.318,.391,.10,[.135,0,0],[0,-Math.PI/2,0],9,'wood');
+    for(const z of [.218,.922])box(facade,'wood',.13,.88,.09,[.068,1.56,z],.015);
     box(facade,'stone',.30,.14,.91,[.04,1.09,.57],.018);
     box(facade,'woodDark',.075,.88,.047,[.105,1.57,.274]);box(facade,'woodDark',.075,.88,.047,[.105,1.57,.866]);
     box(facade,'woodLight',.075,1.145,.038,[.10,1.71,.57]);box(facade,'woodLight',.075,.045,.58,[.10,1.69,.57]);
     const archPts=[];for(let k=0;k<=20;k++){const a=k*Math.PI/20;archPts.push([.101,2+.303*Math.sin(a),.57+.303*Math.cos(a)]);}tube(facade,'woodDark',archPts,.026,20,5);
+    // Two recessed lights on the formerly blank broad wall, real apertures and
+    // deep wooden sills. Window material follows the existing day/night uniform.
+    for(const z of [-.57,.57]){
+      add(facade,new THREE.ShapeGeometry(filledArch(-z,1.415,2.04,.272),10),'window',[2.30,0,0],[0,Math.PI/2,0]);
+      archWedges(-z,2.04,.282,.335,.082,[2.33,0,0],[0,Math.PI/2,0],7,'wood');
+      for(const dz of [-.31,.31])box(facade,'wood',.105,.66,.065,[2.385,1.72,z+dz],.01);
+      box(facade,'woodDark',.075,.73,.026,[2.38,1.79,z]);
+      box(facade,'woodLight',.08,.036,.54,[2.39,1.87,z],.007);
+      box(facade,'woodLight',.27,.09,.78,[2.40,1.38,z],.015);
+    }
+    // Small wooden flower boxes; leaf mounds and five-petal blooms are geometry,
+    // shared with the corner climbing plant rather than individual materials.
+    function bloom(pos,r=.045,rot){
+      const vs=[],ix=[];
+      for(let j=0;j<5;j++){
+        const a=j*Math.PI*2/5,ca=Math.cos(a),sa=Math.sin(a),base=vs.length/3;
+        vs.push(ca*r*.45,sa*r*.45,.014);
+        for(let k=0;k<6;k++){const t=k*Math.PI/3,u=r*(.45+.53*Math.cos(t)),v=r*.34*Math.sin(t);vs.push(ca*u-sa*v,sa*u+ca*v,.004);}
+        for(let k=0;k<6;k++)ix.push(base,base+1+k,base+1+(k+1)%6);
+      }
+      const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(vs,3));geo.setIndex(ix);geo.computeVertexNormals();add(facade,geo,'flower',pos,rot);
+      sprig(facade,'gold',pos,r*.16,r*.16,r*.20,rot);
+    }
+    for(const [side,z] of [[-1,.57],[1,-.57],[1,.57]]){
+      const x=side>0?2.46:-.005,y=side>0?1.23:.97;
+      box(facade,'wood',.24,.18,.68,[x,y,z],.025);
+      for(const dy of [-.055,.055])box(facade,'woodLight',.255,.026,.70,[x,y+dy,z],.008);
+      for(let j=0;j<4;j++){
+        const zz=z-.24+j*.16;
+        sprig(facade,'leaf',[x,y+.13,zz],.105,.09,.13);
+        bloom([x+side*.10,y+.21+.022*Math.sin(j*3),zz],.052,[0,side*Math.PI/2,0]);
+      }
+    }
     // Front arched door, individually laid planks, iron straps and brass ring handle.
     add(facade,new THREE.ExtrudeGeometry(filledArch(1.56,.36,1.7,.344),{depth:.055,bevelEnabled:false,curveSegments:14}),'woodDark',[0,0,1.16]);
     for(let k=0;k<8;k++){
@@ -231,6 +385,22 @@
     }
     box(facade,'iron',.065,.17,.021,[1.72,1.09,1.269],.008);
     add(facade,new THREE.TorusGeometry(.062,.010,5,16),'gold',[1.72,1.065,1.304]);
+    // A small timber rain hood follows the door arch without changing its opening.
+    for(const s of [-1,1]){
+      box(facade,'wood',.58,.065,.43,[1.56+s*.26,2.23,1.31],.012,[0,0,-s*.28]);
+      for(let j=0;j<3;j++)tile(facade,j===1?'roofLight':'roof',.60,.145,[1.56+s*.26,2.285,1.17+j*.145],s,[0,0,-s*.28]);
+    }
+    for(const x of [1.12,2.00])beam(facade,'woodLight',[x,1.98,1.23],[x,2.19,1.48],.05,.06);
+    // Corner vine grows along plaster / wood, clear of both windows and the door.
+    for(const side of [0,1]){
+      const pts=[];for(let j=0;j<7;j++)pts.push([2.425+.018*Math.sin(j*1.8),.48+j*.32,.99-side*.14+.075*Math.sin(j*1.3)]);
+      tube(facade,'moss',pts,.008,12,3);
+      for(let j=0;j<10;j++){
+        const y=.59+j*.19,z=.99-side*.14+.075*Math.sin(j*.8),x=2.45+(j%2)*.008;
+        sprig(facade,'leaf',[x,y,z+(j%2?.045:-.055)],.018,.045,.072,[.45*(j%2?1:-1),0,0]);
+        if((j+side)%4===1)bloom([x+.025,y+.035,z],.043,[0,Math.PI/2,0]);
+      }
+    }
     // Corner hanging lantern, supported by a bent bracket and top ring.
     tube(facade,'gold',[[2.33,2.36,1.20],[2.54,2.36,1.30],[2.57,2.29,1.38]],.021,12,6);
     add(facade,new THREE.TorusGeometry(.041,.009,4,12),'gold',[2.57,2.26,1.38]);
@@ -331,6 +501,6 @@
     // The visible base, including race and lantern, is centered on the ground origin.
     const bounds=new THREE.Box3().setFromObject(g),cx=(bounds.min.x+bounds.max.x)/2,cz=(bounds.min.z+bounds.max.z)/2;
     for(const p of g.children){p.position.x-=cx;p.position.z-=cz;}
-    return g;
+    return finishTimbers(THREE,g);
   };
 })(typeof window!=='undefined'?window:globalThis);

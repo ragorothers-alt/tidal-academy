@@ -5,29 +5,15 @@
 (function (root) {
   const I = (root.TA = root.TA || {}).ISLE = root.TA.ISLE || {};
   I.BLDMODELS = I.BLDMODELS || {};
+
+
   I.BLDMODELS['hotel'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'hotel';
-    const M = {
-      stone: kit.mat('#eee4d0', { roughness: .9 }, 'stone'),
-      stoneAlt: kit.mat('#dfd0b6', { roughness: .94 }, 'stone'),
-      stoneLight: kit.mat('#f5eddd', { roughness: .86 }, 'stone'),
-      plaster: kit.mat('#f0e6d2', { roughness: .9 }, 'stone'),
-      wood: kit.mat('#895c3d', { roughness: .77 }),
-      woodDark: kit.mat('#62412e', { roughness: .85 }),
-      woodLight: kit.mat('#ad7b4f', { roughness: .73 }),
-      plank: kit.mat('#946842', { roughness: .8 }, 'wall'),
-      roof: kit.mat('#3d5685', { roughness: .66 }, 'roof'),
-      roofAlt: kit.mat('#496898', { roughness: .69 }, 'roof'),
-      roofLight: kit.mat('#5576a3', { roughness: .65 }, 'roof'),
-      roofDark: kit.mat('#2e4168', { roughness: .73 }, 'roof'),
-      navy: kit.mat('#25385c', { roughness: .9 }),
-      gold: kit.mat('#d6b15a', { roughness: .4, metalness: .7 }),
-      recess: kit.mat('#463b31', { roughness: .98 }),
-      glass: kit.win(),
-      leaf: kit.mat('#5c7947', { roughness: .88 }),
-      leafLight: kit.mat('#869658', { roughness: .88 }),
-      flower: kit.mat('#f3e7bc', { roughness: .87 })
-    };
+    const stone=kit.mat('#e8decf',{roughness:.94},'stone'),wood=kit.mat('#cda67e',{roughness:.8},'wood'),woodDark=kit.mat('#947b7b',{roughness:.8},'wood');
+    const roof=kit.mat('#b3a1c4',{roughness:.8},'roof'),leaf=kit.mat('#9fb994',{roughness:.94});
+    const M={stone,stoneAlt:stone,stoneLight:stone,plaster:kit.mat('#f0e5d5',{roughness:.92},'plaster'),wood,woodDark,woodLight:wood,plank:wood,
+      roof,roofAlt:roof,roofLight:roof,roofDark:roof,navy:kit.mat('#777a98',{roughness:.88}),
+      gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),recess:woodDark,glass:kit.win(),leaf,leafLight:leaf,flower:kit.mat('#f3bdd2',{roughness:.94})};
     const batches = new Map(), materialIds = new Map();
     Object.keys(M).forEach((k, i) => materialIds.set(M[k], i));
     const vec = a => new THREE.Vector3(a[0], a[1], a[2]);
@@ -136,7 +122,7 @@
     // Foundation and a recessed lower facade leave the arcade as real negative space.
     box('foundation',6.45,.22,5.35,[0,.11,-.02],M.stoneAlt,undefined,.025);
     box('foundation',6.28,.12,5.2,[0,.28,-.04],M.stone,undefined,.018);
-    box('lower-walls',6.05,2.43,4.26,[0,1.535,-.25],M.stone);
+    box('lower-walls',6.05,2.43,4.26,[0,1.535,-.25],M.plaster);
     box('upper-walls',6.05,2.02,4.26,[0,3.83,-.25],M.plaster);
     box('arcade-floor',6.34,.15,1.1,[0,.315,2.52],M.stoneLight,undefined,.012);
     for(let i=0;i<3;i++)box('entry-steps',2.3-i*.12,.12, .64-i*.16,[0,.06+i*.105,3.03-i*.12],i%2?M.stoneLight:M.stoneAlt,undefined,.014);
@@ -151,7 +137,7 @@
     box('arcade',6.38,.23,.65,[0,2.79,2.65],M.stone);
     // Stone blocks on the plinth and restrained masonry strips on the side walls.
     for(let side of [-1,1]) {
-      for(let j=0;j<6;j++)for(let i=0;i<5;i++)box('masonry-courses',.04,.28,.77,[side*3.04,.58+j*.37,-2.0+i*.83+(j%2)*.05],(i+j)%4===0?M.stoneLight:M.stoneAlt);
+      // Smooth plaster side walls; the corner footings remain real stone.
       for(let j=0;j<3;j++)box('masonry-courses',.48,.29,.48,[side*2.8,.65+j*.45,-2.16],j%2?M.stoneLight:M.stone);
     }
     // The continuous timber balcony is supported by the four stone piers.
@@ -263,13 +249,20 @@
     for(const x of [-.99,.99])lantern(x,2.13,3.02);
     for(const x of [-1.0,1.0])lantern(x,4.36,2.31);
     // Balcony planters remain sparse so that the front rail reads from a distance.
-    for(const x of [-2.2,2.2]) {
+    for(const x of [-2.2,0,2.2]) {
       box('planters',.81,.2,.31,[x,3.29,2.77],M.woodDark,undefined,.018);
       box('planters',.87,.07,.35,[x,3.4,2.77],M.woodLight,undefined,.012);
       for(let j=0;j<7;j++) {
         const xx=x-.33+j*.11, yy=3.48+Math.sin(j*1.7)*.035, zz=2.76+(j%2)*.1;
         sphere('planters',.15,[xx,yy,zz],j%3?M.leaf:M.leafLight,[1.2,.45,.75]);
         if(j%2===0) { sphere('planters',.055,[xx,yy+.075,zz+.04],M.gold,[.7,.7,.5]); for(let k=0;k<4;k++)sphere('planters',.047,[xx+Math.cos(k*Math.PI/2)*.058,yy+.08+Math.sin(k*Math.PI/2)*.045,zz+.055],M.flower,[1,.7,.55]); }
+      }
+    }
+    for(const x of [-2.45,2.45]){
+      box('planters',.65,.16,.28,[x,.38,2.20],M.woodDark,undefined,.018);
+      for(let j=0;j<3;j++){
+        sphere('planters',.15,[x+(j-1)*.17,.50,2.20],M.leaf,[1.1,.5,.8]);
+        sphere('planters',.09,[x+(j-1)*.17,.60+(j%2)*.025,2.23],M.flower,[1,.75,.7]);
       }
     }
     // Flat sign backing: game label is placed 0.05m in front of its navy face.
@@ -299,20 +292,10 @@
   I.BLDMODELS = I.BLDMODELS || {};
   I.BLDMODELS['camp'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'camp';
-    const M = {
-      canvas: kit.mat('#eee1c8', { roughness: .94 }),
-      shade: kit.mat('#d8c3a0', { roughness: .95 }),
-      wood: kit.mat('#8f6040', { roughness: .8 }, 'wall'),
-      light: kit.mat('#ba8756', { roughness: .78 }, 'wall'),
-      dark: kit.mat('#563a27', { roughness: .88 }, 'wall'),
-      gold: kit.mat('#d8b45a', { roughness: .4, metalness: .7 }),
-      rope: kit.mat('#c9aa7d', { roughness: .93 }),
-      stone: kit.mat('#c9c0ac', { roughness: .9 }, 'stone'),
-      stone2: kit.mat('#e3dac5', { roughness: .88 }, 'stone'),
-      flag: kit.mat('#304a7b', { roughness: .9 }),
-      fire: kit.mat('#ff9a3c', { roughness: .75, emissive: '#ff9a3c', emissiveIntensity: 1.2, transparent: true, opacity: .86 }),
-      glass: kit.win()
-    };
+    const wood=kit.mat('#cda67e',{roughness:.8},'wood'),stone=kit.mat('#e8decf',{roughness:.94},'stone');
+    const M={canvas:kit.mat('#fff0d4',{roughness:.94},'fabric'),shade:kit.mat('#b3a1c4',{roughness:.95},'fabric'),wood,light:wood,dark:kit.mat('#947b7b',{roughness:.8},'wood'),
+      gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),rope:wood,stone,stone2:stone,
+      flag:kit.mat('#e6b8bf',{roughness:.94}),fire:kit.mat('#ffd39d',{roughness:.75,emissive:'#ffbc83',emissiveIntensity:.45,transparent:true,opacity:.8}),glass:kit.win()};
     M.canvas.side = M.shade.side = M.flag.side = THREE.DoubleSide;
     const groups = {}, batches = new Map();
     function group(name) { if (!groups[name]) { const v = new THREE.Group(); v.name = name; g.add(v); groups[name] = v; } return groups[name]; }
@@ -326,7 +309,7 @@
       if (src !== geo) src.dispose(); geo.dispose();
     }
     function box(part, mat, x, y, z, w, h, d, rx, ry, rz) { add(new THREE.BoxGeometry(w, h, d), mat, part, x, y, z, rx, ry, rz); }
-    function ball(part, mat, x, y, z, r, sx, sy, sz) { add(new THREE.SphereGeometry(r, 10, 6), mat, part, x, y, z, 0, 0, 0, sx, sy, sz); }
+    function ball(part, mat, x, y, z, r, sx, sy, sz) { add(new THREE.SphereGeometry(r, part === 'camp-flowers' ? 6 : 10, part === 'camp-flowers' ? 3 : 6), mat, part, x, y, z, 0, 0, 0, sx, sy, sz); }
     function beam(part, mat, a, b, r, r2) { const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b), d = vb.clone().sub(va); const geo = new THREE.CylinderGeometry(r2 === undefined ? r : r2, r, d.length(), 8); geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize())); const c = va.add(vb).multiplyScalar(.5); add(geo, mat, part, c.x, c.y, c.z); }
     function tube(part, mat, points, radius, segs) { const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p))); add(new THREE.TubeGeometry(curve, segs || 16, radius, 5, false), mat, part); }
     function profile(part, mat, pts, depth, x, y, z, rx, ry, rz, bevel, centerDepth) { const s = new THREE.Shape(); s.moveTo(...pts[0]); pts.slice(1).forEach(p => s.lineTo(...p)); s.closePath(); const geo = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: !!bevel, bevelThickness: bevel || 0, bevelSize: bevel || 0, bevelSegments: 1, steps: 1, curveSegments: 16 }); if (centerDepth) geo.translate(0, 0, -depth / 2); add(geo, mat, part, x, y, z, rx, ry, rz); }
@@ -336,7 +319,7 @@
     // Two continuous canvas roof shells carry broad tension folds and darker rolled hems.
     const yAt = t => 1.91 - 1.85 * t - .065 * Math.sin(t * Math.PI);
     for (const side of [-1, 1]) {
-      meshSurface('tent', M.canvas, 10, 12, (u, v) => { const z = -.89 + u * 1.43, x = side * (1.25 * v + .018 * Math.sin(u * Math.PI * 6) * Math.sin(v * Math.PI)); return [x, yAt(v) + .018 * Math.sin(u * Math.PI * 6 + .6) * Math.sin(v * Math.PI), z]; });
+      meshSurface('tent', M.shade, 10, 12, (u, v) => { const z = -.89 + u * 1.43, x = side * (1.25 * v + .018 * Math.sin(u * Math.PI * 6) * Math.sin(v * Math.PI)); return [x, yAt(v) + .018 * Math.sin(u * Math.PI * 6 + .6) * Math.sin(v * Math.PI), z]; });
       tube('tent', M.shade, [[side * 1.25, .07, -.91], [side * 1.27, .065, -.3], [side * 1.25, .07, .55]], .036, 18);
       for (const z of [-.88, -.16, .53]) tube('tent', M.shade, [[0, 1.924, z], [side * .4, 1.29, z], [side * .85, .62, z], [side * 1.25, .07, z]], .012, 18);
       // The entrance flaps have a pulled-in waist, leaving an actual walk-through opening.
@@ -386,6 +369,12 @@
     add(new THREE.ConeGeometry(.183, .115, 4), M.gold, 'lantern', cx, .927, cz, 0, Math.PI / 4, 0, 1, 1, 1);
     ball('lantern', M.gold, cx, .994, cz, .037, 1, .6, 1);
     add(new THREE.TorusGeometry(.058, .012, 5, 16), M.gold, 'lantern', cx, 1.055, cz);
+    // Two low flower clusters sit beside the rear corners, clear of ropes and the sign.
+    for(const side of [-1,1])for(let j=0;j<3;j++){
+      const x=side*(1.15-j*.10),z=-.66+j*.08;
+      beam('camp-flowers',M.wood,[x,.03,z],[x,.18+j*.015,z],.012);
+      for(let k=0;k<4;k++)ball('camp-flowers',M.flag,x+Math.cos(k*Math.PI/2)*.05,.22+j*.015,z+Math.sin(k*Math.PI/2)*.05,.045,1,.65,1);
+    }
     // Blank flat board: game text overlays at the declared centre.
     const signPost = new THREE.CylinderGeometry(.041, .048, 1.13, 8);
     signPost.translate(-1.4, .565, .97);
@@ -408,26 +397,28 @@
   'use strict';
   const I=(root.TA=root.TA||{}).ISLE=root.TA.ISLE||{};
   I.BLDMODELS=I.BLDMODELS||{};
+
+
   I.BLDMODELS['diy']=function(THREE,kit){
     const STAGE=4,g=new THREE.Group();g.name='tidal-diy';
-    const M={wood:kit.mat('#8b5b3b',{roughness:.84},'wall'),woodLight:kit.mat('#b28351',{roughness:.8},'wall'),woodDark:kit.mat('#4f382a',{roughness:.95},'wall'),navy:kit.mat('#324e77',{roughness:.94}),gold:kit.mat('#d5ab58',{roughness:.44,metalness:.45}),steel:kit.mat('#6d7c8f',{roughness:.6,metalness:.25})};
-    if('diy'==='market'){delete M.navy;delete M.steel;M.stone=kit.mat('#e8dfca',{roughness:.94},'stone');M.stoneShade=kit.mat('#d5c7ad',{roughness:.96},'stone');M.red=kit.mat('#c86450',{roughness:.94});M.cream=kit.mat('#f3e5c9',{roughness:.96});M.fruitRed=kit.mat('#c9533d',{roughness:.62});M.fruitGold=kit.mat('#e2b64c',{roughness:.67});M.leaf=kit.mat('#67834c',{roughness:.88});}
+    const M={wood:kit.mat('#cda67e',{roughness:.8},'wood'),woodLight:kit.mat('#cda67e',{roughness:.8},'wood'),woodDark:kit.mat('#947b7b',{roughness:.8},'wood'),
+      navy:kit.mat('#ad9abd',{roughness:.94}),canopy:kit.mat('#ad9abd',{roughness:.94},'fabric'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),steel:kit.mat('#9194aa',{roughness:.4,metalness:0.6},'metal'),cream:kit.mat('#fff0d4',{roughness:.8},'wood')};
     const parts=new Map();
     function put(part,geo,mat){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!geo.getAttribute('uv'))geo.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute('position').count*2),2));if(!parts.has(part))parts.set(part,[]);parts.get(part).push({geo:geo.index?geo.toNonIndexed():geo,mat});}
     function tr(geo,x,y,z,rx=0,ry=0,rz=0){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));}
-    function box(part,x,y,z,w,h,d,mat,bevel=.007,rx=0,ry=0,rz=0){let geo;if(STAGE>=2&&bevel>0&&Math.min(w,h,d)>bevel*3){const b=Math.min(bevel,w/4,h/4,d/4),s=new THREE.Shape();s.moveTo(-w/2+b,-h/2+b);s.lineTo(w/2-b,-h/2+b);s.lineTo(w/2-b,h/2-b);s.lineTo(-w/2+b,h/2-b);s.closePath();geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:1,steps:1,curveSegments:1});geo.translate(0,0,-d/2+b);}else geo=new THREE.BoxGeometry(w,h,d);put(part,tr(geo,x,y,z,rx,ry,rz),mat);}
+    function box(part,x,y,z,w,h,d,mat,bevel=.007,rx=0,ry=0,rz=0){let geo;if(STAGE>=2&&bevel>0&&Math.min(w,h,d)>.10&&part==='frame'){const b=Math.min(bevel,w/4,h/4,d/4),s=new THREE.Shape();s.moveTo(-w/2+b,-h/2+b);s.lineTo(w/2-b,-h/2+b);s.lineTo(w/2-b,h/2-b);s.lineTo(-w/2+b,h/2-b);s.closePath();geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:1,steps:1,curveSegments:1});geo.translate(0,0,-d/2+b);}else geo=new THREE.BoxGeometry(w,h,d);put(part,tr(geo,x,y,z,rx,ry,rz),mat);}
     function beam(part,a,b,r,mat,r2=r,seg=6){const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),v=B.clone().sub(A),geo=new THREE.CylinderGeometry(r2,r,v.length(),seg);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));geo.translate(...A.clone().add(B).multiplyScalar(.5).toArray());put(part,geo,mat);}
     function sphere(part,x,y,z,r,mat,sx=1,sy=1,sz=1,segments=8,rings=5){const geo=new THREE.SphereGeometry(r,segments,rings);geo.scale(sx,sy,sz);put(part,tr(geo,x,y,z),mat);}
     function shape(part,points,depth,x,y,z,mat,rx=0,ry=0,rz=0){const s=new THREE.Shape();s.moveTo(...points[0]);for(let i=1;i<points.length;i++)s.lineTo(...points[i]);s.closePath();put(part,tr(new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false,steps:1,curveSegments:1}),x,y,z,rx,ry,rz),mat);}
     function tube(part,pts,r,mat,n=12){put(part,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),n,r,5,false),mat);}
     function sheet(part,points,mat){const geo=new THREE.BufferGeometry(),[a,b,c,d]=points;geo.setAttribute('position',new THREE.Float32BufferAttribute([...a,...c,...b,...a,...d,...c,...a,...b,...c,...a,...c,...d],3));geo.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,1,1,0,0,0,0,1,1,1,0,0,1,0,1,1,0,0,1,1,0,1],2));geo.computeVertexNormals();put(part,geo,mat);}
-    function stud(x,y,z,r=.023){sphere('fasteners',x,y,z,r,M.gold,1,1,.5,6,3);}
+    function stud(x,y,z,r=.023){sphere('fasteners',x,y,z,r,M.gold,1,1,.5,5,2);}
     function brace(part,a,b,width,depth,mat){const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),dir=B.clone().sub(A),geo=new THREE.BoxGeometry(width,dir.length(),depth);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir.normalize()));geo.translate(...A.clone().add(B).multiplyScalar(.5).toArray());put(part,geo,mat);}
         const W=1.78,D=.99;
     // Broad planked tabletop stays at the requested 0.85 meter working height.
-    for(let j=0;j<5;j++)box('bench',0,.797,-.4+j*.2,W,.106,.191,j%2?M.wood:M.woodLight,.01);
-    for(const x of [-.75,.75])for(const z of [-.38,.38]){box('frame',x,.39,z,.125,.78,.125,M.wood,.012);box('frame',x,.065,z,.2,.13,.2,M.woodDark,.008);if(STAGE>=1){box('fasteners',x,.075,z,.22,.12,.22,M.gold,.009);stud(x,.083,z+.115);}}
-    for(const z of [-.38,.38])box('frame',0,.66,z,1.6,.14,.105,M.wood,.01);
+    for(let j=0;j<5;j++)box('bench',0,.83,-.4+j*.2,W,.04,.191,M.woodLight,.006);
+    for(const x of [-.75,.75])for(const z of [-.38,.38]){box('frame',x,.405,z,.125,.81,.125,M.wood,.012);box('frame',x,.065,z,.2,.13,.2,M.woodDark,.008);if(STAGE>=1){box('fasteners',x,.075,z,.22,.12,.22,M.gold,.009);stud(x,.083,z+.115);}}
+    for(const z of [-.38,.38])box('frame',0,.745,z,1.6,.13,.105,M.wood,.01);
     for(const x of [-.75,.75])box('frame',x,.23,0,.1,.1,.85,M.wood,.007);
     box('frame',0,.22,-.38,1.57,.1,.1,M.wood,.008);
     if(STAGE>=1)for(const x of [-.75,.75])for(const z of [-.38,.38])brace('frame',[x,.3,z],[x-Math.sign(x)*.32,.69,z],.07,.07,M.wood);
@@ -436,9 +427,9 @@
     for(const z of [-.43,.43])box('frame',0,z<0?1.974:1.818,z,1.76,.07,.075,M.wood,.005);
     if(STAGE>=1)for(const x of [-.8,.8])for(const z of [-.43,.43])brace('frame',[x,1.57,z],[x-Math.sign(x)*.2,z<0?1.974:1.818,z],.065,.075,M.wood);
     const roofY=t=>2.08-.22*t-.055*Math.sin(t*Math.PI);
-    for(let j=0;j<6;j++){const t0=j/6,t1=(j+1)/6,y0=roofY(t0),y1=roofY(t1),z0=-.56+1.12*t0,z1=-.56+1.12*t1;sheet('canopy',[[-.96,y0,z0],[.96,y0,z0],[.96,y1,z1],[-.96,y1,z1]],M.navy);}
-    box('canopy',0,1.828,.561,1.92,.074,.025,M.navy,.003);
-    if(STAGE>=2){for(const x of [-.95,-.48,0,.48,.95])tube('canopy',Array.from({length:7},(_,j)=>[x,roofY(j/6)+.005,-.56+1.12*j/6]),.006,M.navy,12);for(const x of [-.8,-.26,.26,.8])box('fasteners',x,1.838,.579,.038,.07,.019,M.gold,.003);}
+    for(let j=0;j<6;j++){const t0=j/6,t1=(j+1)/6,y0=roofY(t0),y1=roofY(t1),z0=-.56+1.12*t0,z1=-.56+1.12*t1;sheet('canopy',[[-.96,y0,z0],[.96,y0,z0],[.96,y1,z1],[-.96,y1,z1]],M.canopy);}
+    box('canopy',0,1.828,.561,1.92,.074,.025,M.canopy,.003);
+    if(STAGE>=2){for(const x of [-.95,-.48,0,.48,.95])tube('canopy',Array.from({length:7},(_,j)=>[x,roofY(j/6)+.005,-.56+1.12*j/6]),.006,M.canopy,12);for(const x of [-.8,-.26,.26,.8])box('fasteners',x,1.838,.579,.038,.07,.019,M.gold,.003);}
     if(STAGE>=1){
       // Three planks make a short rear tool rack; tools hang forward of it.
       for(let j=0;j<3;j++)box('rack',0,1.19+j*.12,-.375,1.38,.11,.06,j%2?M.wood:M.woodLight,.006);
@@ -465,6 +456,10 @@
       for(const x of [-.76,-.4])stud(x,.917,.49,.019);
       box('workpieces',.33,.885,.11,.36,.065,.16,M.woodLight,.01,0,.12);box('workpieces',.31,.939,.11,.32,.04,.13,M.woodLight,.007,0,-.1);
     }
+    box('drawer',.25,.67,.12,.72,.19,.50,M.cream,0);
+    box('drawer',.25,.67,.385,.72,.18,.035,M.cream,0);
+    box('drawer',.25,.67,.412,.16,.025,.025,M.gold,0);
+    box('workpieces',.62,.885,.12,.18,.07,.19,M.cream,0,0,.16);
     if(STAGE>=4){for(let j=0;j<4;j++)box('seams',0,.852,-.3+j*.2,1.72,.002,.006,M.woodDark,0);for(const z of [-.43,.43])for(const x of [-.69,.69])stud(x,.82,z+.06,.018);}
     if(STAGE>=1){for(const x of [-.39,.39])box('sign',x,1.92,.49,.035,.22,.09,M.gold,.004);box('sign',0,2.01625,.524,1.045,.35625,.032,M.gold,.006);box('sign',0,2.01625,.544,1.0,.3125,.012,M.navy,.003);g.userData.sign=[0,2.01625,.6];}
 
@@ -480,13 +475,20 @@
   'use strict';
   const I=(root.TA=root.TA||{}).ISLE=root.TA.ISLE||{};
   I.BLDMODELS=I.BLDMODELS||{};
+
+
   I.BLDMODELS['market']=function(THREE,kit){
     const STAGE=4,g=new THREE.Group();g.name='tidal-market';
-    const M={wood:kit.mat('#8b5b3b',{roughness:.84},'wall'),woodLight:kit.mat('#b28351',{roughness:.8},'wall'),woodDark:kit.mat('#4f382a',{roughness:.95},'wall'),gold:kit.mat('#d5ab58',{roughness:.4,metalness:.65}),stone:kit.mat('#e8dfca',{roughness:.94},'stone'),stoneShade:kit.mat('#d5c7ad',{roughness:.96},'stone'),red:kit.mat('#c86450',{roughness:.94}),cream:kit.mat('#f3e5c9',{roughness:.96}),fruitRed:kit.mat('#c9533d',{roughness:.62}),fruitGold:kit.mat('#e2b64c',{roughness:.67}),leaf:kit.mat('#67834c',{roughness:.88})};
+    // Optional variant for a future placement integration; modelClone currently caches by key.
+    const variant=kit.marketVariant===1?1:0;
+    const wood=kit.mat('#cda67e',{roughness:.8},'wood'),stone=kit.mat('#e8decf',{roughness:.94},'stone'),cream=kit.mat('#fff0d4',{roughness:.94},'fabric');
+    const M={wood,woodLight:wood,woodDark:kit.mat('#947b7b',{roughness:.8},'wood'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),stone,stoneShade:stone,
+      red:kit.mat(variant?'#b3a1c4':'#e6b8bf',{roughness:.94},'fabric'),cream,
+      fruitRed:kit.mat('#d99a9b',{roughness:.94}),fruitGold:kit.mat('#fff0d4',{roughness:.94}),leaf:kit.mat('#9fb994',{roughness:.94})};
     const parts=new Map();
     function put(part,geo,mat){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!geo.getAttribute('uv'))geo.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute('position').count*2),2));if(!parts.has(part))parts.set(part,[]);parts.get(part).push({geo:geo.index?geo.toNonIndexed():geo,mat});}
     function tr(geo,x,y,z,rx=0,ry=0,rz=0){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));}
-    function box(part,x,y,z,w,h,d,mat,bevel=.007,rx=0,ry=0,rz=0){let geo;if(STAGE>=2&&bevel>0&&Math.min(w,h,d)>bevel*3){const b=Math.min(bevel,w/4,h/4,d/4),s=new THREE.Shape();s.moveTo(-w/2+b,-h/2+b);s.lineTo(w/2-b,-h/2+b);s.lineTo(w/2-b,h/2-b);s.lineTo(-w/2+b,h/2-b);s.closePath();geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:1,steps:1,curveSegments:1});geo.translate(0,0,-d/2+b);}else geo=new THREE.BoxGeometry(w,h,d);put(part,tr(geo,x,y,z,rx,ry,rz),mat);}
+    function box(part,x,y,z,w,h,d,mat,bevel=.007,rx=0,ry=0,rz=0){let geo;if(STAGE>=2&&bevel>0&&Math.min(w,h,d)>.12&&part==='frame'){const b=Math.min(bevel,w/4,h/4,d/4),s=new THREE.Shape();s.moveTo(-w/2+b,-h/2+b);s.lineTo(w/2-b,-h/2+b);s.lineTo(w/2-b,h/2-b);s.lineTo(-w/2+b,h/2-b);s.closePath();geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelThickness:b,bevelSize:b,bevelSegments:1,steps:1,curveSegments:1});geo.translate(0,0,-d/2+b);}else geo=new THREE.BoxGeometry(w,h,d);put(part,tr(geo,x,y,z,rx,ry,rz),mat);}
     function beam(part,a,b,r,mat,r2=r,seg=6){const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),v=B.clone().sub(A),geo=new THREE.CylinderGeometry(r2,r,v.length(),seg);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));geo.translate(...A.clone().add(B).multiplyScalar(.5).toArray());put(part,geo,mat);}
     function sphere(part,x,y,z,r,mat,sx=1,sy=1,sz=1,segments=8,rings=5){const geo=new THREE.SphereGeometry(r,segments,rings);geo.scale(sx,sy,sz);put(part,tr(geo,x,y,z),mat);}
     function shape(part,points,depth,x,y,z,mat,rx=0,ry=0,rz=0){const s=new THREE.Shape();s.moveTo(...points[0]);for(let i=1;i<points.length;i++)s.lineTo(...points[i]);s.closePath();put(part,tr(new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false,steps:1,curveSegments:1}),x,y,z,rx,ry,rz),mat);}
@@ -506,7 +508,7 @@
     function tray(x){box('trays',x,.985,.06,.63,.055,.69,M.woodDark,.006);for(const z of [-.29,.41]){for(let k=0;k<2;k++)box('trays',x,1.025+k*.08,z,.63,.071,.037,k?M.wood:M.woodLight,.005);for(const q of [-1,1]){box('trays',x+q*.281,1.064,z+.02,.058,.19,.045,M.woodLight,.004);if(z>0)for(const y of [1.02,1.11])stud(x+q*.281,y,z+.048,.013);}}for(const q of [-1,1])box('trays',x+q*.315,1.06,.06,.035,.18,.69,M.wood,.004);}
     function crate(x){box('lower-crates',x,.075,.07,.76,.05,.73,M.woodDark,.009);for(const z of [-.31,.45]){for(let k=0;k<3;k++)box('lower-crates',x,.15+k*.12,z,.76,.106,.035,k%2?M.woodLight:M.wood,.005);box('lower-crates',x-.255,.5,z,.25,.09,.035,M.woodLight,.005);box('lower-crates',x+.255,.5,z,.25,.09,.035,M.woodLight,.005);box('lower-crates',x,.543,z,.28,.025,.036,M.woodLight,.004);for(const q of [-1,1]){box('lower-crates',x+q*.35,.31,z+.02,.07,.48,.05,M.woodLight,.006);if(STAGE>=4&&z>0)for(const y of [.13,.44])stud(x+q*.35,y,z+.05,.014);}}for(const q of [-1,1])for(let k=0;k<4;k++)box('lower-crates',x+q*.39,.16+k*.12,.07,.038,.105,.75,k%2?M.wood:M.woodLight,.004);for(let j=0;j<4;j++)box('lower-crates',x,.557,-.22+j*.19,.78,.035,.177,M.wood,.004);}
     if(STAGE>=1){for(const x of [-.68,0,.68])tray(x);crate(-.43);crate(.43);
-      for(let zone=0;zone<3;zone++)for(let row=0;row<3;row++)for(let i=0;i<3;i++){const x=-.68+zone*.68+(i-1)*.165+(row%2)*.018,z=-.16+row*.205,y=1.155+(row===1?.024:0);if(zone===0){sphere('produce',x,y,z,.098,M.fruitRed,1,.9,1,8,5);beam('produce',[x,y+.074,z],[x+.009,y+.112,z],.009,M.woodDark,.006,5);}else if(zone===1){sphere('produce',x,y-.015,z,.086,M.fruitGold,1,1.1,1,8,5);sphere('produce',x+.005,y+.067,z,.05,M.fruitGold,.83,1.2,.83,7,4);beam('produce',[x+.005,y+.104,z],[x+.018,y+.14,z],.008,M.woodDark,.005,5);}else{sphere('produce',x,y,z,.102,M.leaf,1,.88,1,8,5);if(STAGE>=4){for(const q of [-1,1])sphere('produce',x+q*.038,y+.037,z+.025,.056,M.leaf,.8,1,.65,6,3);}}}
+      for(let zone=0;zone<3;zone++)for(let row=0;row<3;row++)for(let i=0;i<3;i++){const x=-.68+zone*.68+(i-1)*.165+(row%2)*.018,z=-.16+row*.205,y=1.155+(row===1?.024:0)+(variant?zone*.035:zone===1?.045:0);if(zone===0){sphere('produce',x,y,z,.098,M.fruitRed,1,.9,1,8,5);beam('produce',[x,y+.074,z],[x+.009,y+.112,z],.009,M.woodDark,.006,5);}else if(zone===1){sphere('produce',x,y-.015,z,.086,M.fruitGold,1,1.1,1,8,5);sphere('produce',x+.005,y+.067,z,.05,M.fruitGold,.83,1.2,.83,7,4);beam('produce',[x+.005,y+.104,z],[x+.018,y+.14,z],.008,M.woodDark,.005,5);}else{sphere('produce',x,y,z,.102,M.leaf,1,.88,1,8,5);if(STAGE>=4){for(const q of [-1,1])sphere('produce',x+q*.038,y+.037,z+.025,.056,M.leaf,.8,1,.65,6,3);}}}
     }
     if(STAGE>=4){for(let j=0;j<4;j++)box('seams',0,.951,-.325+j*.215,2.26,.002,.005,M.woodDark,0);for(const x of [-1.02,1.02])for(const z of [-.48,.48])box('feet',x,.211,z,.293,.011,.294,M.stoneShade,0);}
 

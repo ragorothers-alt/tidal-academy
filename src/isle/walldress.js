@@ -12,7 +12,9 @@ const ray = new THREE.Raycaster(), vO = new THREE.Vector3(), vD = new THREE.Vect
 /** 從牆外（朝外的方向 nx, nz）往牆打射線，回傳牆面上的點與距離 */
 function wallHit(g, x, y, z, nx, nz) {
   vO.set(x + nx * 3, y, z + nz * 3); vD.set(-nx, 0, -nz); ray.set(vO, vD); ray.far = 4.5;
-  const h = ray.intersectObject(g, true).find(h => h.object.isMesh && !h.object.material.transparent);
+  const h = ray.intersectObject(g, true).find(h => h.object.isMesh &&
+    !(Array.isArray(h.object.material) ? h.object.material.some(m => m.transparent) : h.object.material.transparent) &&
+    Math.abs(h.face.normal.clone().transformDirection(h.object.matrixWorld).y) < 0.35);
   return h ? { x: h.point.x, y: h.point.y, z: h.point.z, d: h.distance } : null;
 }
 const hash = (x, z) => { const s = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return s - Math.floor(s); };
@@ -24,16 +26,44 @@ const PLACE = { ivy_wall: [], ivy_drape: [], window_box: [], hanging_basket: [] 
 const put = (key, x, y, z, nx, nz, sx) => PLACE[key].push(new THREE.Matrix4().compose(new THREE.Vector3(x + nx * 0.012, y, z + nz * 0.012), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(nx, nz)), new THREE.Vector3(sx || 1, 1, 1)));   // sx：沿牆方向縮窄
 export const counts = () => Object.fromEntries(Object.entries(PLACE).map(([k, v]) => [k, v.length]));
 
+// Attachment clearance uses the complete factory geometry, including flower
+// crowns and trailing leaves. A fixed anchor/width test missed the window light.
+const BOUNDS = new Map();
+function plantBounds(key) {
+  if (!BOUNDS.has(key)) {
+    const box = new THREE.Box3();
+    for (const p of protoParts('PROPMODELS', key) || []) {
+      p.geo.computeBoundingBox(); box.union(p.geo.boundingBox.clone().applyMatrix4(p.local));
+    }
+    BOUNDS.set(key, box);
+  }
+  return BOUNDS.get(key);
+}
+
 function dress(g, doors) {
   const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3()), gy = groundAt(c.x, c.z), r = hash(c.x, c.z);
-  const wins = g.userData.glow.filter(e => e.kind === 'window');
-  const door = doors.find(d => d[0] > box.min.x - 0.4 && d[0] < box.max.x + 0.4 && d[1] > box.max.z - 0.6 && d[1] < box.max.z + 3.2);
-  const nearWin = (x, z, nx, nz, y0, y1, pad) => wins.some(w => w.nx === nx && w.nz === nz && Math.abs((nx ? w.z - z : w.x - x)) < w.w2 + pad && w.y1 > y0 && w.y0 < y1);
+  const wins = (g.userData.glow || []).filter(e => e.kind === 'window');
+  const home = homes.find(h => h.g === g);
+  const door = home ? home.door : doors.find(d => d && d[0] > box.min.x - 0.4 && d[0] < box.max.x + 0.4 && d[1] > c.z && d[1] < box.max.z + 3.2);
+  const occupied = [];
+  function attach(key, x, y, z, nx, nz, sx = 1) {
+    const b = plantBounds(key), u = nz ? x : z, direction = nz || -nx;
+    const lo = u + (direction > 0 ? b.min.x : -b.max.x) * sx, hi = u + (direction > 0 ? b.max.x : -b.min.x) * sx;
+    const y0 = y + b.min.y, y1 = y + b.max.y, plane = x * nx + z * nz;
+    if (b.isEmpty() || y0 < groundAt(x + nx * 0.25, z + nz * 0.25) - 0.07) return false;
+    if (wins.some(w => w.nx === nx && w.nz === nz && Math.abs(w.x * nx + w.z * nz - plane) < 0.7 &&
+      hi > (nz ? w.x : w.z) - w.w2 - 0.08 && lo < (nz ? w.x : w.z) + w.w2 + 0.08 && y1 > w.y0 - 0.06 && y0 < w.y1 + 0.06)) return false;
+    if (door && nz > 0 && hi > door[0] - 0.72 && lo < door[0] + 0.72 && y0 < gy + 2.45) return false;
+    if (occupied.some(o => o.nx === nx && o.nz === nz && Math.abs(o.plane - plane) < 0.7 && hi > o.lo - 0.08 && lo < o.hi + 0.08 && y1 > o.y0 && y0 < o.y1)) return false;
+    put(key, x, y, z, nx, nz, sx); occupied.push({ nx, nz, plane, lo, hi, y0, y1 }); return true;
+  }
   // 1. 窗台花箱：一樓的窗戶（最多三扇），花箱頂邊貼在窗框下緣
   wins.filter(w => w.y0 - groundAt(w.x, w.z) > 0.45 && w.y0 - groundAt(w.x, w.z) < 2.4 && w.w2 > 0.22 && !(door && w.nz > 0 && Math.abs(w.x - door[0]) < 0.9))
     .sort((a, b) => a.y0 - b.y0).slice(0, 3).forEach(w => {
-      const h = wallHit(g, w.x, w.y0 - 0.12, w.z, w.nx, w.nz); if (!h || h.d > 3.6) return;
-      put('window_box', h.x, w.y0 - 0.03, h.z, w.nx, w.nz);
+      const b = plantBounds('window_box'), y = w.y0 - 0.075 - b.max.y;
+      const h = wallHit(g, w.x, y - 0.1, w.z, w.nx, w.nz); if (!h || h.d > 3.6) return;
+      const sx = Math.min(1, (w.w2 * 2 + 0.06) / (b.max.x - b.min.x));
+      attach('window_box', h.x, y, h.z, w.nx, w.nz, sx);
     });
   // 牆面的實際範圍（建築的包圍盒含屋簷、台階，不是牆）：沿牆每 0.2 公尺打一條射線，最常出現的深度就是牆面
   const spans = {};
@@ -56,16 +86,22 @@ function dress(g, doors) {
     const cand = (door ? [door[0] + 0.85, door[0] - 0.85, door[0] + 1.25, door[0] - 1.25] : []).concat([front.u0 + 0.35, front.u1 - 0.35]);
     if (r < 0.5) cand.reverse();
     for (const bx of cand) {
-      if (bx < front.u0 + 0.2 || bx > front.u1 - 0.2 || nearWin(bx, 0, 0, 1, gy + 1.1, gy + 2.2, 0.15) || (door && Math.abs(bx - door[0]) < 0.6) || !onWall(front, bx, 0.15)) continue;
-      put('hanging_basket', bx, gy + 2.05, front.plane, 0, 1); break;
+      if (bx < front.u0 + 0.25 || bx > front.u1 - 0.25 || !onWall(front, bx, 0.23)) continue;
+      if (attach('hanging_basket', bx, gy + 2.05, front.plane, 0, 1)) break;
     }
   }
   // 3. 爬牆藤蔓：側牆靠前半段，從地面往上爬（避開那面牆上的窗）
   for (const side of r < 0.5 ? [1, -1] : [-1, 1]) {
-    const px = side > 0 ? box.max.x : box.min.x, pz = c.z + (box.max.z - c.z) * 0.35;
-    if (nearWin(px, pz, side, 0, gy, gy + 2.6, 0.75)) continue;
-    const h = wallHit(g, px, gy + 0.9, pz, side, 0); if (!h || h.d > 3.6) continue;
-    put('ivy_wall', h.x, gy - 0.03, h.z, side, 0); break;
+    const s = spans[side + ',0']; if (!s) continue;
+    let done = false;
+    const sx = [0.72, 0.86, 1][Math.floor(r * 3)];
+    for (const t of [0.18, 0.82, 0.35, 0.65, 0.5]) {
+      const u = s.u0 + (s.u1 - s.u0) * t;
+      if (!onWall(s, u, 0.69 * sx)) continue;
+      const h = wallHit(g, side > 0 ? box.max.x : box.min.x, gy + 0.9, u, side, 0); if (!h || h.d > 3.6) continue;
+      if (attach('ivy_wall', h.x, gy - 0.03, h.z, side, 0, sx)) { done = true; break; }
+    }
+    if (done) break;
   }
   // 4. 屋簷垂下的藤花：正面或側牆，從屋簷下緣垂下來；靠近窗戶時縮窄（不蓋住窗）。約七成的房子有
   if (r > 0.3) {
@@ -83,9 +119,11 @@ function dress(g, doors) {
           prev = y;
         }
         if (!eave || eave - gy < 1.9 || eave - gy > 3.7 || (door && s.nz && Math.abs(u - door[0]) < 1.1)) continue;   // 太高：掃到了山牆的三角形（不是屋簷）
-        let k = 1; while (k > 0.45 && nearWin(s.nz ? u : 0, s.nz ? 0 : u, s.nx, s.nz, eave - 1.4, eave, 0.85 * k)) k -= 0.15;   // 太靠近窗戶：縮窄一點再試
-        if (k <= 0.45 || !onWall(s, u, 0.85 * k * 0.8)) continue;
-        put('ivy_drape', s.nz ? u : s.plane, eave + 0.02, s.nz ? s.plane : u, s.nx, s.nz, k); done = true; break;
+        for (const k of [1, 0.85, 0.7, 0.55]) {
+          if (!onWall(s, u, 0.85 * k)) continue;
+          if (attach('ivy_drape', s.nz ? u : s.plane, eave + 0.02, s.nz ? s.plane : u, s.nx, s.nz, k)) { done = true; break; }
+        }
+        if (done) break;
       }
     }
   }

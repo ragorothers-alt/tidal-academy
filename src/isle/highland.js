@@ -26,23 +26,31 @@ function bamboo(x, z, s) {
   }
   g.traverse(o => { o.frustumCulled = cullable(o); }); g.userData.prop = { id: 'prop_bamboo', h: 3.4 * s }; scene.add(g); colliders.push({ x, z, r: 0.45 * s });
 }
-/* ---------- 瀑布：高地池塘東緣落到下方水潭，水流條紋往下流、底部白色水花與水霧 ---------- */
-const fallU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uNight: { value: 0 } };
+/* ---------- 瀑布：三條有厚度的弧面水流；同一材質／網格合併相鄰格，消除格線 ---------- */
+const fallU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uNight: { value: 0 },
+  uBody: { value: new THREE.Color('#C9E9E5') }, uFoam: { value: new THREE.Color('#F1F0F3') }, uShade: { value: new THREE.Color('#BDD2E4') } };
 const fallMat = new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: fallU,
-  vertexShader: `uniform float uCurve; uniform float uBendF; varying vec2 vUv; varying vec3 vW;
-    void main(){ vUv = uv; vW = (modelMatrix * vec4(position, 1.0)).xyz; vec4 mv = modelViewMatrix * vec4(position, 1.0); float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `uniform float uTime; uniform float uNight; varying vec2 vUv; varying vec3 vW;
+  transparent: true, depthWrite: false, side: THREE.FrontSide, uniforms: fallU,
+  vertexShader: `uniform float uCurve; uniform float uBendF; varying vec2 vUv; varying vec3 vW; varying vec3 vNormal;
+    void main(){ vUv = uv; vW = (modelMatrix * vec4(position, 1.0)).xyz; vNormal = mat3(modelMatrix) * normal;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0); float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve; gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform float uTime; uniform float uNight; uniform vec3 uBody; uniform vec3 uFoam; uniform vec3 uShade;
+    varying vec2 vUv; varying vec3 vW; varying vec3 vNormal;
     float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
     void main(){
-      float x = vW.z * 3.0 + vW.x * 3.0, y = vUv.y;
-      float streak = n(vec2(x * 2.5, y * 3.0 + uTime * 2.2)) * 0.6 + n(vec2(x * 6.0, y * 7.0 + uTime * 3.4)) * 0.4;
-      vec3 deep = vec3(0.32, 0.72, 0.86), white = vec3(0.96, 0.99, 1.0);
-      vec3 c = mix(deep, white, smoothstep(0.45, 0.85, streak));
-      c = mix(c, white, smoothstep(0.82, 1.0, y) * 0.7 + smoothstep(0.18, 0.0, y) * 0.8);   // 上緣的水唇、底部的白色水花
-      float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-      gl_FragColor = vec4(c * mix(1.0, 0.45, uNight), (0.72 + streak * 0.25) * edge);
+      float y = vUv.y, x = vW.z * 2.6;
+      float streak = n(vec2(x, y * 3.2 + uTime * 1.8)) * 0.65 + n(vec2(x * 2.1, y * 5.0 + uTime * 2.4)) * 0.35;
+      float lip = smoothstep(0.83, 0.99, y), foot = 1.0 - smoothstep(0.02, 0.17, y);
+      vec3 c = mix(uShade, uBody, 0.50 + streak * 0.42);
+      c = mix(c, uFoam, smoothstep(0.57, 0.88, streak) * 0.35 + lip * 0.22 + foot * 0.27);
+      c *= (0.90 + max(normalize(vNormal).y, 0.0) * 0.10) * mix(1.0, 0.40, uNight);
+      float edge = 0.22 + 0.78 * smoothstep(0.0, 0.075, vUv.x) * (1.0 - smoothstep(0.925, 1.0, vUv.x));
+      float fade = smoothstep(0.0, 0.05, y);
+      float shell = mix(0.28, 1.0, smoothstep(-0.25, 0.25, vNormal.x));
+      gl_FragColor = vec4(c, (0.48 + streak * 0.18) * edge * fade * shell);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
     }`
 });
 const mistPts = [], MIST = 70;
@@ -51,22 +59,60 @@ function buildFalls() {
   const segs = [];
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (T(x, z) === 6 && T(x + 1, z) === 3) segs.push([x + 1 - C, z - C]);
   if (!segs.length) return;
-  segs.sort((a, b) => a[1] - b[1]);
-  const top = WATER_Y[6] + 0.04, bot = WATER_Y[3];
-  segs.forEach(([X, Z]) => {
-    // 一格一片，上緣往外凸一點（水從池塘邊緣湧出來）
-    const g = new THREE.PlaneGeometry(1.02, top - bot, 1, 8); const p = g.attributes.position;
-    for (let i = 0; i < p.count; i++) { const k = (p.getY(i) + (top - bot) / 2) / (top - bot); p.setZ(i, Math.sin(k * Math.PI * 0.5) * 0.22 * k); }
-    g.rotateY(Math.PI / 2); const m = new THREE.Mesh(g, fallMat); m.position.set(X + 0.08, (top + bot) / 2, Z + 0.5); m.renderOrder = 3; m.frustumCulled = false; scene.add(m);
-    mistPts.push([X + 0.4, bot + 0.05, Z + 0.5]);
+  segs.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const runs = [];
+  segs.forEach(([x, z]) => { const last = runs[runs.length - 1]; if (last && last.x === x && last.z + last.width === z) last.width++; else runs.push({ x, z, width: 1 }); });
+  // 起點略沉入高池、末端沉入下潭，讓水唇與水面相交而不懸空。
+  const top = WATER_Y[6] - 0.01, bot = WATER_Y[3], positions = [], uvs = [], indices = [];
+  const rows = 10, cols = 4;
+  runs.forEach(({ x: X, z: Z, width }, run) => {
+    for (let lane = 0; lane < 3; lane++) {
+      const base = positions.length / 3, phase = run * 1.7 + lane * 2.1;
+      const center = Z + width * [0.17, 0.51, 0.83][lane], half = width * [0.20, 0.205, 0.19][lane];
+      for (let back = 0; back < 2; back++) for (let i = 0; i <= rows; i++) for (let j = 0; j <= cols; j++) {
+        const t = i / rows, u = j / cols, q = u * 2 - 1, wave = Math.sin(t * Math.PI);
+        const lip = Math.sin(Math.min(t / 0.18, 1) * Math.PI * 0.5);
+        const depth = lane * 0.045 * wave;
+        const px = X - 0.10 + lip * 0.18 + wave * 0.055 + depth + (1 - q * q) * wave * 0.025 - back * (0.035 + wave * 0.04);
+        const py = top - (top - bot + 0.05) * t + Math.sin(q * 2.2 + phase) * 0.008 * Math.pow(1 - t, 5);
+        const pz = center + q * half * (0.95 + Math.sin(t * 4.5 + phase) * 0.045) + Math.sin(t * 4 + phase) * wave * 0.035;
+        positions.push(px, py, pz); uvs.push(u, 1 - t);
+      }
+      const sheet = (rows + 1) * (cols + 1);
+      for (let back = 0; back < 2; back++) for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
+        const a = base + back * sheet + i * (cols + 1) + j, b = a + cols + 1;
+        if (back) indices.push(a, a + 1, b + 1, a, b + 1, b);
+        else indices.push(a, b, b + 1, a, b + 1, a + 1);
+      }
+      // 封閉兩側與頂／底：側視仍讀得到 3.5–7.5cm 厚度。
+      for (let i = 0; i < rows; i++) for (const j of [0, cols]) {
+        const a = base + i * (cols + 1) + j, b = a + cols + 1;
+        if (j === 0) indices.push(a, a + sheet, b + sheet, a, b + sheet, b);
+        else indices.push(a, b, b + sheet, a, b + sheet, a + sheet);
+      }
+      for (const i of [0, rows]) for (let j = 0; j < cols; j++) {
+        const a = base + i * (cols + 1) + j;
+        if (i === 0) indices.push(a, a + 1, a + 1 + sheet, a, a + 1 + sheet, a + sheet);
+        else indices.push(a, a + sheet, a + 1 + sheet, a, a + 1 + sheet, a + 1);
+      }
+    }
   });
-  // 水霧：瀑布底部慢慢升起、散開的白點
+  // 上下列朝 -Y、橫列朝 +Z；反轉索引使封閉水帶的正面朝外。
+  for (let i = 0; i < indices.length; i += 3) { const b = indices[i + 1]; indices[i + 1] = indices[i + 2]; indices[i + 2] = b; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(indices); g.computeVertexNormals(); g.computeBoundingSphere();
+  const fall = new THREE.Mesh(g, fallMat); fall.name = 'highland-waterfall'; fall.renderOrder = 3; fall.frustumCulled = false;
+  fall.userData.waterfall = { ribbons: runs.length * 3, runs: runs.length, triangles: indices.length / 3 }; scene.add(fall);
+  segs.forEach(([X, Z]) => mistPts.push([X + 0.13, bot + 0.035, Z + 0.5]));
+  // 小尺寸、低密度的細霧只停留在落水點附近，不再是升高的一排白球。
   const pos = new Float32Array(MIST * 3), seed = new Float32Array(MIST);
   for (let i = 0; i < MIST; i++) seed[i] = Math.random();
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const tex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 32; const c = cv.getContext('2d'); const gr = c.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(cv); })();
-  mist = new THREE.Points(geo, bend(new THREE.PointsMaterial({ map: tex, size: 0.55, transparent: true, opacity: 0.55, depthWrite: false, color: '#ffffff' })));
-  mist.userData = { pos, seed, geo }; mist.frustumCulled = false; mist.renderOrder = 4; scene.add(mist);
+  const tex = (() => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
+    const gr = c.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,0.40)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.16)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = gr; c.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(cv); })();
+  mist = new THREE.Points(geo, bend(new THREE.PointsMaterial({ map: tex, size: 0.26, transparent: true, opacity: 0.30, depthWrite: false, color: '#F1F0F3' })));
+  mist.name = 'highland-waterfall-mist'; mist.userData = { pos, seed, geo }; mist.frustumCulled = false; mist.renderOrder = 4; scene.add(mist);
 }
 /* ---------- 山頂的祠堂（v6.79 新島）：白石圓頂小亭，四根柱子，中間供著一顆發光的藍水晶 ---------- */
 function shrine(x, z) {
@@ -160,7 +206,7 @@ export function update(dt, t, night) {
   const { pos, seed, geo } = mist.userData;
   for (let i = 0; i < MIST; i++) {
     const s = seed[i], o = mistPts[i % mistPts.length], k = (t * 0.25 + s) % 1;
-    pos[i * 3] = o[0] + 0.2 + k * 0.9 * (0.5 + s); pos[i * 3 + 1] = o[1] + k * 1.2; pos[i * 3 + 2] = o[2] + (s - 0.5) * 1.6 + Math.sin(t + s * 9) * 0.1;
+    pos[i * 3] = o[0] + 0.04 + k * 0.27 * (0.5 + s); pos[i * 3 + 1] = o[1] + Math.sin(k * Math.PI * 0.5) * 0.38; pos[i * 3 + 2] = o[2] + (s - 0.5) * 0.75 + Math.sin(t + s * 9) * 0.06;
   }
-  geo.attributes.position.needsUpdate = true; mist.material.opacity = 0.45 * (1 - night * 0.5);
+  geo.attributes.position.needsUpdate = true; mist.material.opacity = 0.30 * (1 - night * 0.5);
 }

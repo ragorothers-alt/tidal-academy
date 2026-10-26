@@ -3,20 +3,65 @@
   const I = (root.TA = root.TA || {}).ISLE = root.TA.ISLE || {};
   I.PROPMODELS = I.PROPMODELS || {};
 
+  // Bake static pieces by shared material before props.js handles scene-level
+  // instances. Keep attachment objects and assembly groups at their old roots.
+  // The local paint pass retains each kit kind and its seasonal/bend hooks, but
+  // uses geometry and quiet procedural grain instead of photographic detail.
+  function finishPainted(THREE, group) {
+    group.updateMatrixWorld(true);
+    const batches = new Map(), removed = [], geometries = new Set(), inv = group.matrixWorld.clone().invert();
+    group.traverse(o => {
+      if (!o.isMesh) return;
+      const source = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry;
+      if (!source.attributes.normal) source.computeVertexNormals();
+      let batch = batches.get(o.material);
+      if (!batch) batches.set(o.material, batch = { name: o.name, positions: [], normals: [] });
+      for (let i = 0; i < (o.isInstancedMesh ? o.count : 1); i++) {
+        const matrix = new THREE.Matrix4();
+        if (o.isInstancedMesh) o.getMatrixAt(i, matrix);
+        matrix.premultiply(o.matrixWorld).premultiply(inv);
+        const geo = source.clone().applyMatrix4(matrix);
+        batch.positions.push(...geo.attributes.position.array); batch.normals.push(...geo.attributes.normal.array); geo.dispose();
+      }
+      if (source !== o.geometry) source.dispose();
+      removed.push(o); geometries.add(o.geometry);
+    });
+    removed.forEach(o => o.parent.remove(o)); geometries.forEach(g => g.dispose());
+    for (const [material, batch] of batches) {
+      if (material.userData.kind === 'wall' || material.userData.kind === 'stone') {
+        const compile = material.onBeforeCompile, cache = material.customProgramCacheKey.bind(material);
+        material.onBeforeCompile = function(shader, renderer) {
+          compile.call(this, shader, renderer);
+          shader.fragmentShader = shader.fragmentShader
+            .replace(/triD\(uD\d, qd?, gB\)/g, 'vec3(0.5)')
+            .replace(/triN\(uN\d, qd?, gB\)/g, 'vec3(0.0)');
+        };
+        material.customProgramCacheKey = () => cache() + '-painted-prop';
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(batch.normals, 3));
+      geo.computeBoundingBox(); geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, material); mesh.name = batch.name;
+      mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
+    }
+    return group;
+  }
+
   I.PROPMODELS['crystal_lamp'] = function (THREE, kit) {
     const root = new THREE.Group();
     root.name = 'crystal_lamp';
-    const stone = kit.mat('#f3efe6', { roughness: 0.84 }, 'stone');
-    const blue = kit.mat('#263b65', { roughness: 0.67, metalness: 0.08 });
-    const gold = kit.mat('#d8b45a', { roughness: 0.36, metalness: 0.65 });
-    const crystal = kit.mat('#69b7ed', { roughness: 0.22, metalness: 0.08, emissive: '#7fc8ff', emissiveIntensity: 0.9 });
-    const crystalLight = kit.mat('#bcecff', { roughness: 0.20, metalness: 0.03, emissive: '#7fc8ff', emissiveIntensity: 0.9 });
+    const stone = kit.mat('#F1E4D1', { roughness: 0.84 }, 'stone');
+    const blue = kit.mat('#CDA67E', { roughness:.8 }, 'wood');
+    const gold = kit.mat('#E8C48B', { roughness: .4, metalness: 0.6 },'metal');
+    const crystal = kit.mat('#BCA6CB', { roughness: 0.32, metalness: 0.03, emissive: '#D5BEDD', emissiveIntensity: 0.24 });
+    const crystalLight = kit.mat('#F3BDD2', { roughness: 0.30, metalness: 0.02, emissive: '#FFD39D', emissiveIntensity: 0.18 });
     const buckets = new Map();
     function put(name, mat, geo, x, y, z, ry) {
       geo.rotateY(ry || 0); geo.translate(x || 0, y || 0, z || 0);
       const g = geo.index ? geo.toNonIndexed() : geo;
-      let b = buckets.get(name);
-      if (!b) { b = { mat: mat, positions: [] }; buckets.set(name, b); }
+      let b = buckets.get(mat);
+      if (!b) { b = { name, mat: mat, positions: [] }; buckets.set(mat, b); }
       b.positions.push.apply(b.positions, g.attributes.position.array);
       if (g !== geo) g.dispose(); geo.dispose();
     }
@@ -38,7 +83,7 @@
     }
     put('base',stone,chamfer(.32,.065,.32,0,.006));
     put('base',stone,chamfer(.277,.039,.277,.06,.005));
-    put('pillar',stone,chamfer(.242,.255,.242,.085,.006,.86));
+    put('pillar',blue,chamfer(.242,.255,.242,.085,.006,.86));
     put('capital',stone,chamfer(.286,.045,.286,.325,.005));
     put('capital',stone,chamfer(.239,.036,.239,.366,.004));
     put('capital',stone,chamfer(.242,.025,.242,.437,.004));
@@ -80,21 +125,21 @@
     }
     for(let j=0;j<6;j++)facet(dark,[0,.505,0],p(rr[0],(j+1)%6),p(rr[0],j));
     for(const item of [['crystal',crystal,dark],['crystal-facets',crystalLight,light]]){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(item[2],3));put(item[0],item[1],g);}
-    for(const [name,b]of buckets){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(b.positions,3));g.computeVertexNormals();const m=new THREE.Mesh(g,b.mat);m.name=name;m.castShadow=true;m.receiveShadow=true;root.add(m);}
+    for(const b of buckets.values()){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(b.positions,3));g.computeVertexNormals();const m=new THREE.Mesh(g,b.mat);m.name=b.name;m.castShadow=true;m.receiveShadow=true;root.add(m);}
     const socket=new THREE.Object3D();socket.name='crystal-glow-socket';socket.position.set(0,.66,0);root.add(socket);
-    return root;
+    return finishPainted(THREE, root);
   };
 
   I.PROPMODELS['crates'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'cargo-crates';
-    const wood = kit.mat('#a96b3d', { roughness: .84 }, 'wall');
-    const frame = kit.mat('#ca8c50', { roughness: .78 }, 'wall');
-    const darkWood = kit.mat('#91572f', { roughness: .88 }, 'wall');
-    const iron = kit.mat('#35465f', { roughness: .54, metalness: .35 });
-    const gold = kit.mat('#d9ad5f', { roughness: .34, metalness: .55 });
-    const cloth = kit.mat('#e7d2aa', { roughness: 1 });
+    const wood = kit.mat('#B98E6B', { roughness:.8 }, 'wood');
+    const frame = kit.mat('#CDA67E', { roughness:.8 }, 'wood');
+    const darkWood = wood;
+    const iron = kit.mat('#9186A8', { roughness: .65, metalness: .22 });
+    const gold = kit.mat('#E8C48B', { roughness: .4, metalness: 0.6 },'metal');
+    const cloth = kit.mat('#F1E4D1', { roughness: 1 }, 'fabric');
     cloth.side = THREE.DoubleSide;
-    const rope = kit.mat('#aa8552', { roughness: .96 });
+    const rope = frame;
     function merged(parts) {
       const arrays = { position: [], normal: [], uv: [] };
       parts.forEach(source => {
@@ -229,6 +274,31 @@
       const tie=merged(pieces);tie.scale(scale,scale,scale);add(root,tie,name+'-tie',rope);
     }
     sack('sack-large',-.02,.255,1);sack('sack-small',.32,.345,.74);
+    // Optional deterministic arrangements for callers; the default footprint,
+    // group names and bottom origin stay unchanged. No random factory output.
+    const layout = ((Math.trunc(kit.cargoLayout || 0) % 3) + 3) % 3;
+    if (layout === 1) {
+      g.getObjectByName('crate-small').position.set(.48,0,.315);
+      g.getObjectByName('barrel').position.set(.44,0,-.18);
+      g.getObjectByName('sack-large').position.set(-.48,0,.29);
+      g.getObjectByName('sack-small').position.set(-.03,0,.34);
+    } else if (layout === 2) {
+      g.getObjectByName('crate-large').position.set(.37,0,-.17);
+      g.getObjectByName('crate-small').position.set(.47,0,.28);
+      g.getObjectByName('sack-large').position.set(-.10,0,.255);
+      g.getObjectByName('sack-small').position.set(-.39,0,.345);
+      g.getObjectByName('barrel').position.set(-.42,0,-.105);
+      g.getObjectByName('barrel').rotation.y = Math.PI / 10;
+    }
+    finishPainted(THREE, g);
+    if (layout) {
+      // All three arrangements share the existing placement/collision envelope.
+      const b = new THREE.Box3().setFromObject(g), size = b.getSize(new THREE.Vector3());
+      const scale = new THREE.Vector3(1.465845689252019 / size.x, 0.9100000262260437 / size.y, 1.0200000114738943 / size.z);
+      const fit = new THREE.Matrix4().makeScale(scale.x, scale.y, scale.z);
+      fit.setPosition(-0.7200000058114528 - b.min.x * scale.x, -b.min.y * scale.y, -0.490000009611249 - b.min.z * scale.z);
+      g.traverse(o => { if (o.isMesh) { o.geometry.applyMatrix4(fit); o.geometry.computeBoundingBox(); o.geometry.computeBoundingSphere(); } });
+    }
     return g;
   };
 
@@ -239,13 +309,13 @@
   I.PROPMODELS['boat'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'boat';
     const mats = {
-      ivory: kit.mat('#f4ead7', { roughness: .72 }, 'wall'),
-      blue: kit.mat('#496e9c', { roughness: .67 }, 'wall'),
-      wood: kit.mat('#a46d3f', { roughness: .74 }, 'wall'),
-      woodlight: kit.mat('#bf8953', { roughness: .67 }, 'wall'),
-      gold: kit.mat('#d9ad5d', { roughness: .36, metalness: .28 }),
-      dark: kit.mat('#6c472d', { roughness: .8 }, 'wall')
+      ivory: kit.mat('#F1E4D1', { roughness:.8 }, 'wood'),
+      blue: kit.mat('#BCA6CB', { roughness:.8 }, 'wood'),
+      wood: kit.mat('#B98E6B', { roughness:.8 }, 'wood'),
+      woodlight: kit.mat('#CDA67E', { roughness:.8 }, 'wood'),
+      gold: kit.mat('#E8C48B', { roughness: .4, metalness: 0.6 },'metal')
     };
+    mats.dark = mats.wood;
     const N = 48;
     function contour(t, sx, sz, y) {
       const c = Math.cos(t), q = Math.sin(t);
@@ -300,6 +370,21 @@
     const seatGeo = bevelBoard(.745,.055,.23,.008);
     put('seats', seatGeo, mats.woodlight,0,.315,-.42);
     put('seat-forward', seatGeo, mats.woodlight,0,.315,.42);
+    // Three solid U ribs follow the inner hull. They sit above the floor and
+    // below the seats; the original outer shell and bow envelope are retained.
+    for (const z of [-.68, 0, .68]) {
+      const width = .36 * Math.sqrt(1 - Math.pow(z / 1.10, 2));
+      const rib = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(-width,.365,z),new THREE.Vector3(-width*.82,.19,z),
+        new THREE.Vector3(0,.14,z),new THREE.Vector3(width*.82,.19,z),new THREE.Vector3(width,.365,z)
+      ]);
+      put('hull-rib-'+z,new THREE.TubeGeometry(rib,8,.014,5,false),mats.woodlight);
+    }
+    for (const side of [-1,1]) {
+      const socket = new THREE.TorusGeometry(.018,.006,5,10);
+      socket.rotateX(Math.PI/2);
+      put('oar-socket-'+side,socket,mats.gold,side*.438,.45,-.05);
+    }
     const bow = new THREE.Shape(); bow.moveTo(-.06,-.08); bow.quadraticCurveTo(-.15,.03,-.07,.13); bow.quadraticCurveTo(.0,.20,.09,.15); bow.quadraticCurveTo(-.015,.13,-.025,.045); bow.quadraticCurveTo(-.02,-.035,.065,-.045); bow.quadraticCurveTo(.025,-.11,-.06,-.08);
     const crescentGeo = new THREE.ExtrudeGeometry(bow,{depth:.036,bevelEnabled:true,bevelThickness:.006,bevelSize:.006,bevelSegments:2,curveSegments:10}); crescentGeo.rotateY(Math.PI/2); crescentGeo.translate(-.018,0,0);
     put('crescent',crescentGeo,mats.gold,0,.595,1.055);
@@ -337,7 +422,7 @@
       o.position.z=(o.position.z-zCenter)*zScale;
       if(o.isInstancedMesh)for(let i=0;i<o.count;i++){o.getMatrixAt(i,starMatrix);starMatrix.elements[14]*=zScale;o.setMatrixAt(i,starMatrix);}
     });
-    return g;
+    return finishPainted(THREE, g);
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);

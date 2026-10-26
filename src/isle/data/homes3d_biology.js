@@ -7,19 +7,19 @@
   I.BLDMODELS['home_biology'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'home-biology-sakura-garden';
     const M = {
-      plaster: kit.mat('#f3ead8', { roughness: .93 }, 'stone'),
+      plaster: kit.mat('#f3ead8', { roughness: .93 }, 'plaster'),
       stone: kit.mat('#c7b9a3', { roughness: .94 }, 'stone'),
       stoneLight: kit.mat('#e4d8c0', { roughness: .91 }, 'stone'),
-      wood: kit.mat('#8a5a3b', { roughness: .85 }, 'wall'),
-      honey: kit.mat('#b8824c', { roughness: .80 }, 'wall'),
-      dark: kit.mat('#543b30', { roughness: .94 }),
+      wood: kit.mat('#8a5a3b', { roughness: .85 }, 'wood'),
+      honey: kit.mat('#b8824c', { roughness: .80 }, 'wood'),
+      dark: kit.mat('#543b30', { roughness: .94 }, 'wood'),
       moss: kit.mat('#7d9a5c', { roughness: .96 }, 'roof'),
       mossLight: kit.mat('#9bb573', { roughness: .96 }),
       leaf: kit.mat('#526f43', { roughness: .96 }),
       pink: kit.mat('#f3b2c9', { roughness: .90 }, 'sakura'),
       rose: kit.mat('#e88fb2', { roughness: .90 }, 'sakura'),
       cream: kit.mat('#fff0cb', { roughness: .88 }),
-      brass: kit.mat('#d6ac60', { roughness: .39, metalness: .65 }),
+      brass: kit.mat('#d6ac60', { roughness: 0.39, metalness: 0.65 }, 'metal'),
       lavender: kit.mat('#a39bc9', { roughness: .92 }),
       carrot: kit.mat('#dd9255', { roughness: .92 }),
       glass: kit.win()

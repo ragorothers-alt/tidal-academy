@@ -41,6 +41,7 @@ import * as quizcup from './quizcup.js';
 import * as museum from './museum.js';
 import * as shopin from './shopin.js';
 import * as yuehome from './yuehome.js';
+import * as house from './house.js';
 import * as cram from './cram.js';
 import * as settings from './settings.js';
 import { ULTRA } from './perf.js';
@@ -90,7 +91,7 @@ import * as moon from './moon.js';
 import * as dream from './dream.js';
 import * as passport from './passport.js';
 /** 在神秘島或博物館裡（不在主島場景） */
-const elsewhere = () => trip.inside || museum.inside || dreamisle.inside || shopin.inside || yuehome.inside;
+const elsewhere = () => trip.inside || museum.inside || dreamisle.inside || shopin.inside || yuehome.inside || house.inside;
 import { drill, picker } from './drill.js';
 import { pickQ, pickQU, askQ, record, pick, dayKey } from './quiz.js';
 import * as figs from './figs.js';
@@ -239,7 +240,7 @@ shopin.init(player, shopV, {
   stock: () => dailyStock(), buy: f => buyShopItem(f), bought: () => shopBought()
 });
 const earthV = villagers.find(v => v.sid === 'earth');
-yuehome.init(player, earthV, {
+const YUE_HOOKS = {
   onExit: () => {
     roomHost = null; moveTo = null; nearDoor = null; nearV = null;
     const d = DOORS().find(x => x.v === earthV).door;
@@ -260,7 +261,10 @@ yuehome.init(player, earthV, {
       ]));
     } finally { ui.closeDialog(); talking = null; paintHud(); }
   }
-});
+};
+yuehome.init(player, earthV, YUE_HOOKS);
+house.init(player);
+const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS.notes, decor: () => houseDecor() };
 trip.init(player, () => { const x = PIER.x, z = PIER.z + PIER.len - 1.4; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
 spirit.init(player, () => skyU.night.value > 0.5);
 diy.init(player, myHome, { thumb: id => room.thumb(id), addStorage: (id, n) => room.addStorage(id, n) });
@@ -331,8 +335,8 @@ async function villagerTalk(v) {
   const ml = move.movedLine(v); if (ml) await ui.say(sp(v), ml + tail(v));
   const bl = gifts.isBirthday(v) && ((gifts.pref(v) || {}).lines || {}).birthday, pb = gifts.playerBirthday() && (I.PLAYER_BDAY || {})[v.sid];
   if (bl || pb) await ui.say(sp(v), pick(bl || [pb]) + tail(v)); else
-  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : room.inside && roomHost === v && !room.isOwn() ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || greetOf(v)) + tail(v));
-  if (weather.typhoon() && (room.inside || yuehome.inside) && roomHost === v) await typhoonTalk(v);
+  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || greetOf(v)) + tail(v));
+  if (weather.typhoon() && (room.inside || yuehome.inside || house.inside) && roomHost === v) await typhoonTalk(v);
   else if (weather.afterTyphoon()) { const s0 = S(); s0.afterTalk = s0.afterTalk && s0.afterTalk.d === dayKey() ? s0.afterTalk : { d: dayKey(), who: {} }; if (!s0.afterTalk.who[v.sid]) { s0.afterTalk.who[v.sid] = true; save(); await ui.say(sp(v), L5(v.sid, 'after', ['颱風過去了，大家都平安就好。'])); } }
   { const rem = planner.remind(v); if (rem) await ui.say(sp(v), rem); }
   await town.playBond(v, sp(v));
@@ -652,11 +656,11 @@ async function sleepMenu() {
   const go = await dreamisle.chooser(); void go;
 }
 function phoneDream() {
-  if (!room.inside || !room.isOwn() || roomHost) { ui.toast('回到自己家裡才能睡覺做夢（有床的話，也可以直接到床邊按 E）'); return; }
+  if (!(room.inside && room.isOwn() || house.inside && houseSid === 'player') || roomHost) { ui.toast('回到自己家裡才能睡覺做夢（有床的話，也可以直接到床邊按 E）'); return; }
   ui.closePanel(); talking = { name: 'dream' }; sleepMenu().finally(() => { talking = null; });
 }
 room.setBedHook(() => sleepMenu());
-dreamisle.init({ player, addStorage: (id, n) => room.addStorage(id, n), beforeEnter: () => { if (room.inside) room.exit(); }, villagers: () => villagers.filter(v => !v.shop && !v.guest), wake: () => { enterHome(); setTimeout(() => ui.toast('醒來了。夢境島會一直保留著，下次睡覺還能回去'), 800); } });
+dreamisle.init({ player, addStorage: (id, n) => room.addStorage(id, n), beforeEnter: () => { if (room.inside) room.exit(); if (house.inside) house.leave(); }, villagers: () => villagers.filter(v => !v.shop && !v.guest), wake: () => { enterHome(); setTimeout(() => ui.toast('醒來了。夢境島會一直保留著，下次睡覺還能回去'), 800); } });
 const appBase = n => n.replace(/（.*?）$/, '');   // 「信箱（5）」→「信箱」
 /** 一排 App 圖示（手機首頁與兩個學習入口共用）：點了記進「最近使用」，打開的面板左上角有返回鈕（back、label） */
 function appGrid(apps, back, label) {
@@ -905,7 +909,7 @@ addEventListener('keydown', e => {
   if (astro.isOpen() && !ui.panelOpen()) { astro.key(e); return; }
   if (photo.active() && !ui.panelOpen()) { photo.key(e); return; }
   if (dreamisle.inside && !ui.panelOpen() && dreamisle.key(e)) return;
-  if (elsewhere() && ['KeyG', 'KeyP', 'KeyF'].includes(e.code)) return;
+  if (elsewhere() && ['KeyG', 'KeyP', 'KeyF'].includes(e.code) && !(house.inside && e.code === 'KeyF')) return;
   if (ui.panelOpen()) {
     const isPhone = $('panelBox').classList.contains('phone');
     if (e.code === 'Tab' && !isPhone) {   // 練習遊戲等面板：Tab 用來在按鈕與滑桿之間移動，焦點不離開面板
@@ -926,7 +930,7 @@ addEventListener('keydown', e => {
   else if (e.code === 'KeyJ') { if (!e.repeat) doJump(); }
   else if (e.code === 'KeyI') openPockets();
   else if (e.code === 'KeyV' && !room.inside && !elsewhere()) toggleScenic();
-  else if (e.code === 'KeyF' && !room.inside && !elsewhere()) setFp(!fpOn);
+  else if (e.code === 'KeyF' && !room.inside && (!elsewhere() || house.inside)) setFp(!fpOn);
   else if (e.code === 'Home' && !room.inside && !elsewhere()) { zoom = 1; camYaw = 0; camV.tilt = 0; fpOn = false; saveCam(); ui.toast('回到預設視角'); }
   else if (e.code === 'KeyP' && !design.active() && !room.placing()) { life.cancel(); photo.toggle(room.inside); }
   else if (/^Digit[1-4]$/.test(e.code)) equip(TOOLS[+e.code.slice(5) - 1][0]);
@@ -942,6 +946,15 @@ function act() {
   if (museum.inside) { const mh = museum.handler(); if (mh) { talking = { name: 'museum' }; Promise.resolve(mh()).finally(() => { talking = null; ui.closeDialog(); }); } return; }
   if (shopin.inside) { const sh = shopin.handler(); if (sh) Promise.resolve(sh()).finally(() => paintHud()); return; }
   if (yuehome.inside) { const yh = yuehome.handler(); if (yh) Promise.resolve(yh()).finally(() => paintHud()); return; }
+  if (house.inside) {
+    const z = house.zone(); if (!z) return;
+    if (z.kind === 'host') { talk(house.hostNow()); return; }
+    if (z.kind === 'furn') { talking = { name: 'house' }; room.itemMenu(z.item).finally(() => { talking = null; ui.closeDialog(); house.refreshDecor(room.ownDecor()); paintHud(); }); return; }   // 自己家的家具：轉向、收起、床可以睡覺
+    if (z.kind === 'hook:decor') { houseDecor(); return; }
+    const fn = z.kind.startsWith('hook:') ? HOUSE_HOOKS[z.kind.slice(5)] : null, mine = houseSid === 'player';   // 玩家家：來作客的島民不會替你介紹你家的東西
+    if (fn) { Promise.resolve(fn(z.topic)).finally(() => paintHud()); return; }   // 岳家的圖鑑、湯、筆記自己管理對話狀態（湯會自己設 talking）
+    talking = { name: 'house' }; spotAct(z, mine ? null : house.hostNow(), mine ? null : houseSid).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); return;
+  }
   if (dreamisle.inside) { const dh = dreamisle.handler(); if (dh) { talking = { name: 'dreamisle' }; Promise.resolve(dh()).finally(() => { talking = null; }); } return; }
   if (trip.inside) { const th = trip.tripHandler(); if (th) { talking = { name: 'trip' }; Promise.resolve(th()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); } return; }
   if (room.inside) {
@@ -978,6 +991,12 @@ $('cv').addEventListener('pointerdown', e => {
 });
 /** 按下畫面。tap：在搖桿區域裡只是點一下（放開時才補做）——直接當成點擊，不開始拖曳轉視角 */
 function canvasDown(e, tap) {
+  if (house.inside) {   // 整棟室內：和島上一樣右鍵拖曳轉鏡頭、第一人稱拖曳轉頭、觸控點地板走過去
+    if (ui.cardOpen() || ui.dialogOpen()) { ui.tapAdvance(); return; }
+    if (e.button === 1 || e.button === 2) { camDrag = { x: e.clientX, y: e.clientY }; e.preventDefault(); return; }
+    if (e.button === 0 && (fpView() || e.pointerType !== 'mouse')) fpDrag = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, moved: false };
+    return;
+  }
   if ((e.button === 1 || e.button === 2) && !room.inside && !elsewhere() && !photo.active()) { camDrag = { x: e.clientX, y: e.clientY }; e.preventDefault(); return; }
   if (shopin.inside) { if (ui.cardOpen() || ui.dialogOpen()) ui.tapAdvance(); else { const p = shopin.pointerDown(e); if (p && e.pointerType !== 'mouse') moveTo = { x: p.x, z: p.z }; } return; }   // 觸控點地面走過去（室內）
   if (yuehome.inside) { if (ui.cardOpen() || ui.dialogOpen()) ui.tapAdvance(); else if (!ui.panelOpen()) { const p = yuehome.pointerDown(e); if (p && e.pointerType !== 'mouse') moveTo = { x: p.x, z: p.z }; } return; }
@@ -991,6 +1010,7 @@ function canvasDown(e, tap) {
 }
 /** 觸控點畫面：點到島民就走過去聊天，點到地面就走過去 */
 function tapAt(cx, cy) {
+  if (house.inside) { const p = house.pick(cx, cy); if (p) moveTo = { x: p.x, z: p.z }; return; }
   mouse.set(cx / innerWidth * 2 - 1, -(cy / innerHeight) * 2 + 1); ray.setFromCamera(mouse, camera);
   const hits = ray.intersectObjects(villagers.map(v => v.mesh), true);
   if (hits.length) { const v = villagers.find(v => isChild(v.mesh, hits[0].object)); if (v) { moveTo = { x: v.mesh.position.x, z: v.mesh.position.z, talk: v }; return; } }
@@ -1069,7 +1089,7 @@ let touchDown = () => false;
   $('pbCancel').onclick = e => { e.stopPropagation(); if (design.active()) design.stop(); else room.key({ code: 'Escape', preventDefault() {} }); };
 }
 $('cv').addEventListener('pointermove', e => { if (room.inside) room.pointerMove(e); });
-$('decorBtn').onclick = () => { if (room.inside) room.openDecor(); };
+$('decorBtn').onclick = () => { if (room.inside) room.openDecor(); else if (house.inside && houseSid === 'player') houseDecor(); };
 $('designBtn').onclick = () => { if (design.active()) design.stop(); else design.open(player, paintHud); };
 $('pocketBtn').onclick = () => openPockets();
 $('panel').addEventListener('pointerdown', e => { if (e.target.id === 'panel') ui.requestClose(); });   // 點面板外面：有離開確認的（模擬考）先問
@@ -1330,27 +1350,54 @@ function homeWithGifts(v, home) {
   return { home: h, shown };
 }
 function visit(v) {
-  const w = whereOf(v, hourOverride ?? nowHour());
-  if (w === 'sleep') { ui.toast(`……裡面傳來打呼聲。${v.name}已經睡了`); return; }
-  if (w !== 'home') { ui.toast(`${v.name}不在家，好像在外面散步`); return; }
+  const w = whereOf(v, hourOverride ?? nowHour()), away = w !== 'home';   // v7.6：主人不在家（或睡了）也能進去逛：門沒鎖，桌上留了紙條
   const home0 = v.guest ? v.roomLayout : (I.HOMES || {})[v.sid]; if (!home0) { ui.toast('門鎖著'); return; }
   const { home, shown } = v.guest ? { home: home0, shown: [] } : homeWithGifts(v, home0);
-  life.cancel(); moveTo = null; town.interrupt(v);
+  life.cancel(); moveTo = null; if (!away) town.interrupt(v);
+  const note = () => { if (away) setTimeout(() => ui.toast(w === 'sleep' ? `${v.name}睡著了……輕手輕腳地看看就好` : `${v.name}不在家。桌上留了紙條：「出去走走，自己坐喔！」`), 700); };
+  if (house.has(v.sid) && !v.guest) {   // v7.6：整棟室內（外觀怎樣、裡面就怎樣）
+    if (!away) { if (v.sitting) standVillager(v); v.sitGoal = null; }
+    roomHost = away ? null : v; nearDoor = null; nearV = null;
+    if (v.sid === 'earth') { const s0 = S(); s0.stats = s0.stats || {}; s0.stats.yueVisit = (s0.stats.yueVisit || 0) + 1; save(); }
+    const gifts = ((S().treasure || {})[v.sid] || []).map(id => room.furn(id)).filter(Boolean), yaw0 = camYaw, d = DOORS().find(x => x.v === v).door;
+    houseSid = v.sid;
+    house.enter(v.sid, { host: away ? null : v, gifts, onExit: () => {
+      roomHost = null; moveTo = null; nearDoor = null; nearV = null; houseSid = null; camYaw = yaw0;
+      if (!away) { const gy = ground(d[0], d[1]), spot = [[1, 0.6], [-1, 0.6], [0, 1.3]].map(([ox, oz]) => [d[0] + ox, d[1] + oz]).find(([x, z]) => walkable(x, z, gy, v.mesh)) || v.home; v.mesh.position.set(spot[0], ground(spot[0], spot[1]), spot[1]); v.target = v.home.slice(); }
+      player.position.set(d[0], ground(d[0], d[1] + 0.5), d[1] + 0.5); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud();
+    } });
+    camYaw = house.spawnYaw() + Math.PI; fpPitch = -0.05; note();
+    if (gifts.length && !away) setTimeout(() => { if (!house.inside || roomHost !== v) return; ui.emote(v.mesh, '💖', '#ff7b9c'); ui.bubble(v.mesh, `你送我的「${pick(gifts).name}」，我好好擺著喔！`, 3600); }, 900);
+    return;
+  }
   if (v.sid === 'earth' && !v.guest) {
-    if (v.sitting) standVillager(v); v.sitGoal = null;
-    roomHost = v; nearDoor = null; nearV = null;
+    if (!away) { if (v.sitting) standVillager(v); v.sitGoal = null; }
+    roomHost = away ? null : v; nearDoor = null; nearV = null;
     { const s0 = S(); s0.stats = s0.stats || {}; s0.stats.yueVisit = (s0.stats.yueVisit || 0) + 1; save(); }   // 拜訪過岳（「還沒試過的玩法」用）
     const gifts = ((S().treasure || {})[v.sid] || []).map(id => room.furn(id)).filter(Boolean);   // 岳的禮物架放得下全部禮物：不經過通用房間的找空位（那裡放不下的會被略過）
-    yuehome.enter(gifts);
-    if (gifts.length) setTimeout(() => { if (!yuehome.inside || roomHost !== v) return; ui.emote(v.mesh, '💖', '#ff7b9c'); ui.bubble(v.mesh, `你送我的「${pick(gifts).name}」，我好好擺著喔！`, 3600); }, 900);
+    yuehome.enter(gifts, { away }); note();
+    if (gifts.length && !away) setTimeout(() => { if (!yuehome.inside || roomHost !== v) return; ui.emote(v.mesh, '💖', '#ff7b9c'); ui.bubble(v.mesh, `你送我的「${pick(gifts).name}」，我好好擺著喔！`, 3600); }, 900);
     return;
+  }
+  if (away) {
+    roomHost = null;
+    room.enter(player, () => { scene.add(player); const d = DOORS().find(x => x.v === v).door; player.position.set(d[0], ground(d[0], d[1] + 0.4), d[1] + 0.4); player.rotation.y = 0; camPos.copy(player.position).add(camOff); }, { home, sid: v.sid });
+    note(); return;
   }
   roomHost = v;
   room.enter(player, () => { roomHost = null; scene.add(player); scene.add(v.mesh); const d = DOORS().find(x => x.v === v).door; const gy = ground(d[0], d[1]), spot = [[1, 0.6], [-1, 0.6], [0, 1.3]].map(([ox, oz]) => [d[0] + ox, d[1] + oz]).find(([x, z]) => walkable(x, z, gy, v.mesh)) || v.home; v.mesh.position.set(spot[0], ground(spot[0], spot[1]), spot[1]); v.target = v.home.slice(); player.position.set(d[0], ground(d[0], d[1] + 0.4), d[1] + 0.4);   /* 島民送到門旁邊，不和出門的玩家重疊 */ player.rotation.y = 0; camPos.copy(player.position).add(camOff); }, { home, sid: v.sid });
   room.scene.add(v.mesh); v.mesh.visible = true; v.mesh.position.set(0, 0, -1.2); v.mesh.rotation.y = 0;
   if (shown.length) setTimeout(() => { if (roomHost !== v) return; ui.emote(v.mesh, '💖', '#ff7b9c'); ui.bubble(v.mesh, `你送我的「${pick(shown).name}」，我好好擺著喔！`, 3600); }, 900);   // 珍惜你送的禮物
 }
-let roomHost = null;
+let roomHost = null, houseSid = null;
+/** v7.6：整棟室內的互動點（書桌複習三題、其他說一句這家的小故事）；主人在家由主人說（lines），不在家或在自己家是旁白（alone） */
+async function spotAct(s, host, subject) {
+  const own = !!host;
+  const who = own ? sp(host) : { name: s.name || s.label, color: '#a58bc9', voice: 300 };
+  const pool = own ? s.lines : s.alone || s.lines, lines = pool && pool.length ? pool : ['……'];
+  if (s.kind === 'study') { await ui.say(who, pick(lines)); ui.closeDialog(); await drill(who, picker(subject ? { mode: 'subject', subject } : { mode: 'mixed' }), 3, {}); return; }
+  await ui.say(who, pick(lines));
+}
 const libMesh = chibi(library.LIB()); libMesh.traverse(m => { m.frustumCulled = false; }); actors.dress(libMesh, 'library');
 const LIBHOST = { isLib: true, sid: 'library', mesh: libMesh };
 function enterLibrary() {
@@ -1494,13 +1541,36 @@ function enterHome() {
     if (I.FLOORING && I.FLOORING[0]) { s.papers.push(I.FLOORING[0].id); room.room().floor = I.FLOORING[0].id; }
     save(); setTimeout(() => ui.toast('歡迎回家！按 F 打開裝潢，把家具擺出來吧'), 600);
   }
+  const vis = villagers.find(x => x.sid === homevisit.pendingSid()), h = hourOverride ?? nowHour(), guestIn = vis && whereOf(vis, h) !== 'sleep';   // 今天邀請的客人已經在家裡等了
+  if (house.has('player')) {   // v7.6：整棟房子；「我的房間」裡是你擺的家具
+    if (guestIn) { town.interrupt(vis); roomHost = vis; }
+    houseSid = 'player'; const yaw0 = camYaw;
+    house.enter('player', { decor: room.ownDecor(), host: guestIn ? vis : null, onExit: () => {
+      if (roomHost) visitorLeave(roomHost, true); houseSid = null; moveTo = null; camYaw = yaw0;
+      const d = myHome.door; player.position.set(d[0], ground(d[0], d[1] + 0.4), d[1] + 0.4); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud();
+    } });
+    camYaw = house.spawnYaw() + Math.PI; fpPitch = -0.05;
+    if (guestIn) setTimeout(() => ui.toast(`${vis.name}來作客了！過去跟他打招呼吧`), 500);
+    return;
+  }
   room.enter(player, () => { if (roomHost) visitorLeave(roomHost, true); scene.add(player); const d = myHome.door; player.position.set(d[0], ground(d[0], d[1] + 0.4), d[1] + 0.4); player.rotation.y = 0; camPos.copy(player.position).add(camOff); });
-  // 今天邀請的客人已經在家裡等了
-  const vis = villagers.find(x => x.sid === homevisit.pendingSid()), h = hourOverride ?? nowHour();
-  if (vis && whereOf(vis, h) !== 'sleep') {
+  if (guestIn) {
     town.interrupt(vis); roomHost = vis; room.scene.add(vis.mesh); vis.mesh.visible = true; vis.mesh.position.set(1.2, 0, -0.8); vis.mesh.rotation.y = 0;
     setTimeout(() => ui.toast(`${vis.name}來作客了！過去跟他打招呼吧`), 500);
   }
+}
+/** 玩家家：切到「我的房間」的俯視佈置畫面；從房門走出來就回到整棟房子（站在房間入口） */
+function houseDecor() {
+  if (!house.inside || houseSid !== 'player') return;
+  const at = house.decorAt(), guest = roomHost, back = house.leave({ keep: true });
+  if (!at) { if (back) back(); return; }
+  roomHost = null;
+  room.enter(player, () => {
+    roomHost = guest;
+    house.enter('player', { decor: room.ownDecor(), host: guest, spawn: at, onExit: back });
+    camYaw = at[3] + Math.PI; fpPitch = -0.05;
+  });
+  setTimeout(() => { if (room.inside) room.openDecor(); }, 350);
 }
 /** 客人回家（或玩家離開房間時客人一起出門） */
 function visitorLeave(v, silent) {
@@ -1611,7 +1681,7 @@ let camYaw = camV.yaw, camDrag = null;
    鏡頭在角色眼睛的位置，拖曳畫面轉頭（左右轉向、上下看），WASD／搖桿照視線方向走，←→ 鍵轉向；聊天時自動看著對方。
    室內、博物館、神秘島、拍照與島嶼設計時暫時換回一般鏡頭。 */
 let fpOn = !!camV.fp, fpK = fpOn ? 1 : 0, fpPitch = -0.05, fpWheel = 0, fpWheelT = 0, fpDrag = null, fpFocus = 12, fpFocusW = 12, fpFocusT = 0, fpBack = 0, fpResync = false;
-const fpView = () => fpOn && started && !room.inside && !elsewhere() && !photo.active() && !design.active();
+const fpView = () => fpOn && started && !room.inside && (!elsewhere() || house.inside) && !photo.active() && !design.active();   // 住宅的整棟室內也能第一人稱
 const fpTmp = { h: new THREE.Vector3(), off: new THREE.Vector3(0, 1.1, 0), f: new THREE.Vector3(), e: new THREE.Vector3(), t: new THREE.Vector3(), p: new THREE.Vector3() };
 const fpHand = createHand(player, scene);   // 第一人稱時鏡頭右下角的手與工具
 const saveCam = () => { S().camView = { dist: zoom, yaw: camYaw, tilt: camV.tilt, fp: fpOn }; };
@@ -1627,15 +1697,15 @@ settings.hooks.fp = { get: () => fpOn, set: setFp };   // 設定頁的開關
 /** 第一人稱轉頭：拖曳的位移換成左右轉向與上下看 */
 function fpLook(dx, dy, touch) { const k = touch ? 0.0075 : 0.0055; camYaw -= dx * k; fpPitch = THREE.MathUtils.clamp(fpPitch - dy * k, -1.2, 1.2); }
 /** 視角與近裁切面：一般鏡頭 36°；第一人稱放寬（直式螢幕再寬一點），近裁切面拉近才不會貼著牆看穿過去。k：第一人稱的程度 */
-function fpLens(k) {
+function fpLens(k, nearIn) {   // nearIn：整棟室內的第三人稱鏡頭貼著牆，近裁切面也要近
   const a = camera.aspect > 0.2 ? camera.aspect : 1.6, wide = a >= 1.3 ? 60 : Math.min(88, 2 * Math.atan(Math.tan(Math.PI / 6) * 1.3 / a) * 180 / Math.PI);   // 視窗大小還是 0 時（aspect 是 NaN）先當成橫式
-  const fov = 36 + (wide - 36) * k, near = k > 0.5 ? 0.15 : 0.5;
+  const fov = 36 + (wide - 36) * k, near = k > 0.5 ? 0.15 : nearIn || 0.5;
   if (!(Math.abs(camera.fov - fov) <= 0.01) || camera.near !== near) { camera.fov = fov; camera.near = near; camera.updateProjectionMatrix(); }
   player.visible = k < 0.6;   // 鏡頭進到頭裡之前把自己藏起來
 }
 zoom = camV.dist;
 addEventListener('wheel', e => {
-  if (ui.panelOpen() || room.inside || elsewhere()) return;
+  if (ui.panelOpen() || room.inside || (elsewhere() && !house.inside)) return;
   if (!photo.active() && !design.active()) {   // 第一人稱：往後滾回到一般鏡頭；拉到最近後繼續往前滾就進入
     const now = performance.now(); if (now - fpWheelT > 450) fpWheel = 0; fpWheelT = now;
     if (fpOn) { if (e.deltaY > 0 && (fpWheel += e.deltaY) > 80) setFp(false); return; }
@@ -1765,6 +1835,25 @@ function jumpPose(dt) {
   jump.squash = Math.max(0, jump.squash - dt * 2.2);
   const k = Math.sin(jump.squash / 0.35 * Math.PI) * 0.18; b.scale.set(1 + k * 0.6, 1 - k, 1 + k * 0.6);
 }
+const houseHand = createHand(player, house.scene);   // 整棟室內的第一人稱手（室內是另一個場景）
+/** 整棟室內的每一格：天色跟著島上時間、第一人稱的過渡與手、互動提示 */
+function houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow) {
+  seasons.update(dt, t, { inside: true });
+  player.userData.umbrella.visible = false; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; v.tag.style.opacity = 0; });
+  const { golden } = applyTime(hourOverride ?? nowHour());
+  fpK += ((fpNow ? 1 : 0) - fpK) * Math.min(1, dt * 4.5); if (Math.abs(fpK - (fpNow ? 1 : 0)) < 0.003) fpK = fpNow ? 1 : 0;
+  fpLens(fpK, 0.12);
+  house.tick(dt, t, { ix, iz, len, moving, run, locked, night: skyU.night.value, golden, fpK, yaw: camYaw, pitch: fpPitch, tilt: camV.tilt, zoom });
+  if (!house.inside) return;
+  houseHand.update(dt, { active: fpK > 0.92, show: fpNow && !talking && !ui.dialogOpen() && !ui.cardOpen() && !ui.panelOpen(), camera, tool: player.userData.tool, umbrella: false, fishing: false, moving, run, yaw: camYaw, pitch: fpPitch, t });
+  photo.grab(renderer.domElement); memo.grab(renderer.domElement);
+  let pr = $('labels').querySelector('.prompt'); const h = !locked && house.hint();
+  if (h) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${h}`; const [x, y] = screenOf(player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
+  else if (pr) pr.remove();
+  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen());
+  $('actBtn').textContent = h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
+  hudT += dt; if (hudT > 2) { hudT = 0; paintHud(); }
+}
 function tick(fixed) {
   const dt = fixed || Math.min(0.05, clock.getDelta()); simT += dt; const t = simT;
   post.fx.hold = ui.answering();   // 作答中：背景不重畫（post.render 停在最後一格）
@@ -1778,12 +1867,13 @@ function tick(fixed) {
   if (fpNow && !locked) camYaw -= ((keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0)) * dt * 2.2;   // 第一人稱：←→ 轉向，A／D 橫移
   if (locked || life.fishing()) { ix = iz = 0; if (locked) moveTo = null; }
   if (ix || iz) moveTo = null;
-  if ((ix || iz) && camYaw && !room.inside && !elsewhere()) { const c = Math.cos(camYaw), s = Math.sin(camYaw), rx = ix * c + iz * s, rz = -ix * s + iz * c; ix = rx; iz = rz; }   // 鏡頭轉了，前後左右也跟著轉
+  if ((ix || iz) && camYaw && !room.inside && (!elsewhere() || house.inside)) { const c = Math.cos(camYaw), s = Math.sin(camYaw), rx = ix * c + iz * s, rz = -ix * s + iz * c; ix = rx; iz = rz; }   // 鏡頭轉了，前後左右也跟著轉
   if (moveTo) { const dx = moveTo.x - player.position.x, dz = moveTo.z - player.position.z, d = Math.hypot(dx, dz); if (d < (moveTo.talk ? 1.3 : 0.15)) { const v = moveTo.talk; moveTo = null; if (v) { player.rotation.y = Math.atan2(dx, dz); talk(v); } } else { ix = dx / d; iz = dz / d; if (fpNow && d > 0.6) camYaw = angLerp(camYaw, Math.atan2(-ix, -iz), Math.min(1, dt * 5)); } }   // 第一人稱點地面走過去：視線跟著轉過去
   if (sitting && !locked && (ix || iz)) standUp();
   if (sitting) { ix = iz = 0; moveTo = null; }
   const run = keys.ShiftLeft || keys.ShiftRight || joy.run, len = Math.hypot(ix, iz), moving = len > 0.01;
   { const away = room.inside || elsewhere(); if (away !== wasAway) { wasAway = away; moveTo = null; } if (!away && pendingMove) { pendingMove = false; move.apply(villagers); } }   // 跨日的搬家：在島上時才搬（不會在你拜訪時把房子搬走）   // 進出室內、離島：上一個場景點的目的地不能帶過去
+  if (house.inside) { houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow); return; }
   if (room.inside || elsewhere()) { seasons.update(dt, t, { inside: true }); fpK = 0; fpLens(0); fpResync = true; }   // 室內、博物館、神秘島不顯示島上的季節，也用一般鏡頭
   if (room.inside || elsewhere()) { player.userData.umbrella.visible = dreamisle.inside && dreamisle.raining() && !player.userData.tool; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; }); }   // 室內不撐傘（傘只在島上的每一格依雨勢更新，進門前在下雨就會一直撐著）；回到島上的下一格自動恢復
   if (room.inside) { roomTick(dt, t, ix, iz, len, moving, locked); return; }
@@ -2060,4 +2150,4 @@ scene.traverse(o => { o.frustumCulled = cullable(o); }); dropTinyShadows(scene);
 paintHud(); paintTools();
 requestAnimationFrame(frame);
 addEventListener('pagehide', () => { if (TA.importing) return; if (!room.inside && !elsewhere()) S().pos = [player.position.x, player.position.z]; TA.Store.flush(); });
-window.__isle = { yuehome, shopin, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };
+window.__isle = { yuehome, house, shopin, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };

@@ -6,20 +6,24 @@
     const g = new THREE.Group(); g.name = 'home-geography';
     const parts = new Map(), batches = new Map(); let part = 'foundation', parent = g;
     const M = {
-      plaster: kit.mat('#f2e8d6', { roughness: .93 }, 'stone'),
+      plaster: kit.mat('#f2e8d6', { roughness: .93 }, 'plaster'),
       stone: kit.mat('#c8bea7', { roughness: .95 }, 'stone'),
       cream: kit.mat('#eee0bd', { roughness: .86 }, 'stone'),
-      wood: kit.mat('#8b6a45', { roughness: .82 }, 'wall'),
-      honey: kit.mat('#bd9561', { roughness: .76 }, 'wall'),
-      dark: kit.mat('#554631', { roughness: .9 }, 'wall'),
+      wood: kit.mat('#8b6a45', { roughness: .82 }, 'wood'),
+      honey: kit.mat('#bd9561', { roughness: .76 }, 'wood'),
+      dark: kit.mat('#554631', { roughness: .9 }, 'wood'),
       roof: kit.mat('#6f9a5e', { roughness: .86 }, 'roof'),
       roofLight: kit.mat('#8aa86e', { roughness: .80 }, 'roof'),
       roofDark: kit.mat('#526f45', { roughness: .87 }, 'roof'),
-      brass: kit.mat('#d1a654', { roughness: .42, metalness: .62 }),
-      coral: kit.mat('#de8651', { roughness: .88 }),
+      brass: kit.mat('#d1a654', { roughness: 0.42, metalness: 0.62 }, 'metal'),
+      coral: kit.mat('#de8651', { roughness: .86 }, 'fabric'),
       leaf: kit.mat('#70834f', { roughness: .94 }),
       pink: kit.mat('#e9a8b6', { roughness: .91 }),
       lavender: kit.mat('#b3a0d0', { roughness: .91 }),
+      // Travel textiles share one roughness bucket; stone steps and roof tiles keep their finish.
+      travelCream: kit.mat('#eee0bd', { roughness: .86 }, 'fabric'),
+      travelGreen: kit.mat('#6f9a5e', { roughness: .86 }, 'fabric'),
+      travelShade: kit.mat('#526f45', { roughness: .86 }, 'fabric'),
       glass: kit.win()
     };
     function assembly(id) { part=id; parent=g; }
@@ -195,13 +199,13 @@
     const barrel=(off,len,r,m)=>{const q=new THREE.CylinderGeometry(r,r,len,12);q.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),axis));add(q,m,...mid.clone().addScaledVector(axis,off).toArray());};
     barrel(0,.55,.075,M.brass);barrel(-.31,.15,.035,M.dark);barrel(.26,.08,.10,M.brass);barrel(.306,.015,.080,M.dark);barrel(.315,.016,.065,M.glass);barrel(-.39,.045,.048,M.brass);
     assembly('rope-ladder');
-    for(const z of [-.47,.21]){tube([[2.29,.16,z],[2.33,1.70,z],[2.29,3.3,z],[2.26,4.56,z]],.024,M.cream,26);}
-    for(let j=0;j<14;j++){const y=.30+j*.30;beam([2.30,y,-.50],[2.30,y,.24],.039,M.wood,7);for(const z of [-.47,.21]){add(new THREE.TorusGeometry(.052,.012,4,8),M.cream,2.30,y,z,0,0,Math.PI/2);}}
+    for(const z of [-.47,.21]){tube([[2.29,.16,z],[2.33,1.70,z],[2.29,3.3,z],[2.26,4.56,z]],.024,M.travelCream,26);}
+    for(let j=0;j<14;j++){const y=.30+j*.30;beam([2.30,y,-.50],[2.30,y,.24],.039,M.wood,7);for(const z of [-.47,.21]){add(new THREE.TorusGeometry(.052,.012,4,8),M.travelCream,2.30,y,z,0,0,Math.PI/2);}}
     assembly('windsock');
     beam([2.15,4.52,-.70],[2.15,6.70,-.70],.031,M.wood,8);beam([2.15,6.70,-.70],[2.15,6.70,-.45],.025,M.honey);
-    tube([[2.15,6.70,-.45],[2.15,6.56,-.39],[2.15,6.48,-.34]],.012,M.cream,8);
+    tube([[2.15,6.70,-.45],[2.15,6.56,-.39],[2.15,6.48,-.34]],.012,M.travelCream,8);
     const wind=[[[2.15,6.48,-.34],.15],[[2.15,6.46,-.07],.135],[[2.15,6.43,.20],.11],[[2.15,6.38,.47],.08],[[2.15,6.32,.73],.044],[[2.15,6.30,.98],.015]];
-    for(let i=0;i<wind.length-1;i++){const A=wind[i][0],B=wind[i+1][0],v=new THREE.Vector3(...B).sub(new THREE.Vector3(...A)),q=new THREE.CylinderGeometry(wind[i+1][1],wind[i][1],v.length(),8,1,true);q.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));add(q,i%2?M.cream:M.coral,...new THREE.Vector3(...A).add(new THREE.Vector3(...B)).multiplyScalar(.5).toArray());}
+    for(let i=0;i<wind.length-1;i++){const A=wind[i][0],B=wind[i+1][0],v=new THREE.Vector3(...B).sub(new THREE.Vector3(...A)),q=new THREE.CylinderGeometry(wind[i+1][1],wind[i][1],v.length(),8,1,true);q.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));add(q,i%2?M.travelCream:M.coral,...new THREE.Vector3(...A).add(new THREE.Vector3(...B)).multiplyScalar(.5).toArray());}
     add(new THREE.TorusGeometry(.15,.018,5,12),M.brass,2.15,6.48,-.34);
     assembly('compass-vane');
     beam([1.40,6.68,-.15],[1.40,7.14,-.15],.028,M.brass,8);ball(1.40,6.83,-.15,.064,M.brass);
@@ -210,16 +214,16 @@
     profile([[.20,-.09],[.43,0],[.20,.09]],.025,0,0,0,M.brass);profile([[-.42,-.07],[-.30,0],[-.42,.07]],.025,0,0,0,M.brass);
     add(new THREE.TorusGeometry(.20,.018,5,16),M.brass,0,0,0,Math.PI/2);assembly('compass-vane');
     assembly('map-bunting');
-    const flagPts=[[-2.00,2.58,1.42],[-1.35,2.43,1.45],[-.68,2.40,1.45],[.02,2.45,1.45],[.60,2.59,1.42]];tube(flagPts,.013,M.cream,22);
-    for(let i=0;i<7;i++){const x=-1.86+i*.375,y=2.43+.11*Math.pow((i-3)/3,2);profile([[-.14,0],[.14,0],[0,-.25]],.014,x,y,1.46,i%2?M.roof:M.cream);beam([x-.05,y-.07,1.48],[x+.05,y-.14,1.48],.008,M.brass,4);beam([x-.05,y-.14,1.48],[x+.05,y-.07,1.48],.008,M.brass,4);}
+    const flagPts=[[-2.00,2.58,1.42],[-1.35,2.43,1.45],[-.68,2.40,1.45],[.02,2.45,1.45],[.60,2.59,1.42]];tube(flagPts,.013,M.travelCream,22);
+    for(let i=0;i<7;i++){const x=-1.86+i*.375,y=2.43+.11*Math.pow((i-3)/3,2);profile([[-.14,0],[.14,0],[0,-.25]],.014,x,y,1.46,i%2?M.travelGreen:M.travelCream);beam([x-.05,y-.07,1.48],[x+.05,y-.14,1.48],.008,M.brass,4);beam([x-.05,y-.14,1.48],[x+.05,y-.07,1.48],.008,M.brass,4);}
     assembly('field-crates');
     function crate(x,z,w,h){box(x,h/2+.03,z,w,h,.55,M.dark);for(let j=0;j<4;j++){const y=.09+j*(h-.09)/3;box(x,y,z+.29,w+.03,.075,.055,M.honey);box(x,y,z-.29,w+.03,.075,.055,M.wood);}for(const xx of [x-w/2,x+w/2]){box(xx,.03+h/2,z+.31,.055,h,.07,M.wood);box(xx,.03+h/2,z-.31,.055,h,.07,M.wood);}beam([x-w*.4,.10,z+.33],[x+w*.4,h-.04,z+.33],.024,M.wood);for(let j=0;j<6;j++){const xx=x+Math.sin(j*2.4)*w*.29,zz=z+Math.cos(j*1.7)*.18;ball(xx,h+.03,zz,.10,j%2?M.stone:M.cream,1,.7,1);if(j%2)ball(xx+.025,h+.12,zz,.06,M.leaf,1.4,.35,.6);}}
     crate(1.10,1.55,.58,.39);crate(1.83,1.45,.61,.54);
     assembly('backpack-staff');
-    round(-1.82,.51,1.41,.38,.61,.29,M.roof,.045);round(-1.82,.53,1.59,.27,.27,.09,M.roofDark,.025);round(-1.82,.81,1.46,.43,.14,.34,M.roof,.025);
+    round(-1.82,.51,1.41,.38,.61,.29,M.travelGreen,.045);round(-1.82,.53,1.59,.27,.27,.09,M.travelShade,.025);round(-1.82,.81,1.46,.43,.14,.34,M.travelGreen,.025);
     for(const x of [-1.95,-1.69]){box(x,.51,1.64,.035,.56,.02,M.honey);round(x,.53,1.66,.065,.08,.025,M.brass,.009);}
-    add(new THREE.CylinderGeometry(.107,.107,.42,10),M.cream,-1.82,.93,1.40,0,0,Math.PI/2);for(const x of [-1.97,-1.67])add(new THREE.TorusGeometry(.112,.014,4,10),M.honey,x,.93,1.40,0,Math.PI/2);
-    tube([[-2.15,.03,1.54],[-2.11,.72,1.52],[-2.07,1.37,1.50],[-2.13,1.48,1.50],[-2.23,1.43,1.50]],.030,M.wood,18);beam([-2.09,1.20,1.51],[-2.01,1.07,1.53],.012,M.cream);
+    add(new THREE.CylinderGeometry(.107,.107,.42,10),M.travelCream,-1.82,.93,1.40,0,0,Math.PI/2);for(const x of [-1.97,-1.67])add(new THREE.TorusGeometry(.112,.014,4,10),M.honey,x,.93,1.40,0,Math.PI/2);
+    tube([[-2.15,.03,1.54],[-2.11,.72,1.52],[-2.07,1.37,1.50],[-2.13,1.48,1.50],[-2.23,1.43,1.50]],.030,M.wood,18);beam([-2.09,1.20,1.51],[-2.01,1.07,1.53],.012,M.travelCream);
     assembly('hardware');for(const x of [.67,2.13])for(const y of [2.40,4.36]){box(x,y,.834,.22,.16,.035,M.dark);for(const dx of [-.065,.065])ball(x+dx,y,.86,.027,M.brass,1,1,.4);}
 
     // Material: sage roof, plaster, warm timber and restrained pink/lavender/cream blossoms.

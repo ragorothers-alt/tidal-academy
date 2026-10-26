@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { scene, bend, M, mesh, nightMats, lamps, leafGeo, mergedIco, canopyCards, cardMat, CARD_DEPTH, cullable } from './engine.js';
 import { register, unregister, registerAt } from './props3d.js';
 import { ULTRA } from './perf.js';
+import { roadPavers, plazaModel, homeClearance } from './plazamodels.js';
 import * as glow from './glow.js';
 import { current as seasonNow, auto as seasonAuto } from './seasons.js';
 import { N, C, T, tileAt as tileNow, groundAt, riverDist, FORD_Y, warp, tileOf, isBridge, BRIDGES, STAIRS } from './terrain.js';
@@ -91,7 +92,8 @@ export function woodSign(text, w, h, ink) {
   }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const face = M('#ffffff', { map: tex, roughness: 0.85 }), edge = M('#8a6a48', {}, 'wall');
-  const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.09), [edge, edge, edge, edge, face, face]); bend(face); box.castShadow = true; box.receiveShadow = true;
+  const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.05), [edge, edge, edge, edge, face, face]); bend(face); box.castShadow = true; box.receiveShadow = true;
+  [-1, 1].forEach(sd => { const rail = new THREE.Mesh(new THREE.BoxGeometry(w * 0.86, Math.min(0.06, h * 0.12), 0.025), edge); rail.position.set(0, sd * h * 0.29, -0.0375); box.add(rail); });
   return box;
 }
 function windowMat() { const m = M('#bfe8ff', { emissive: new THREE.Color('#ffcda6'), emissiveIntensity: 0, roughness: 0.12, metalness: 0.1 }, 'glass'); if (!nightMats.includes(m)) nightMats.push(m); return m; }
@@ -265,10 +267,11 @@ const mergedMat = m => { if (!MERGED_KIND.has(m.userData.kind)) return m; if (!M
 /** 只差在顏色的材質（同一種表面、同樣的粗糙度與金屬感、不發光、不透明、沒有貼圖）：顏色烘進頂點色，合成一個網格。
     程式化模型一棟有十幾二十種顏色，這樣一棟只剩幾次繪製。回傳分組的鍵；不能合併的回傳 null */
 const qR = r => Math.round(r * 5) / 5, qM = v => Math.round(v * 2) / 2;   // 粗糙度 0.2 一級、金屬感 0.5 一級：看不出差別，可以合併的多很多
+const qMK = m => m.userData.kind === 'metal' ? 0.8 : qM(m.metalness);   // v7.6 'metal' 種類（黃銅、銅、鐵）一律 0.8 合併：0.6–0.72 的黃銅四捨五入成 0.5 會顯得灰
 const colorKey = m => (m.isMeshStandardMaterial && !m.map && !m.transparent && !nightMats.includes(m) && m.emissive.getHex() === 0 && !KEEP_KIND.has(m.userData.kind))
-  ? [m.userData.kind || 'plain', qR(m.roughness), qM(m.metalness), m.side].join('|') : null;
+  ? [m.userData.kind || 'plain', qR(m.roughness), qMK(m), m.side].join('|') : null;
 const VC_MATS = new Map();
-const vcMat = (key, m) => { if (!VC_MATS.has(key)) VC_MATS.set(key, M('#ffffff', { vertexColors: true, roughness: qR(m.roughness), metalness: qM(m.metalness), side: m.side }, m.userData.kind === 'plain' ? undefined : m.userData.kind)); return VC_MATS.get(key); };
+const vcMat = (key, m) => { if (!VC_MATS.has(key)) VC_MATS.set(key, M('#ffffff', { vertexColors: true, roughness: qR(m.roughness), metalness: qMK(m), side: m.side }, m.userData.kind === 'plain' ? undefined : m.userData.kind)); return VC_MATS.get(key); };
 export function mergeStatic(g, noProxy) {   // noProxy：拿去做共用繪製零件的模型（protoParts）不做陰影替身
   g.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m4 = new THREE.Matrix4(), nm = new THREE.Matrix3(), buckets = new Map(), victims = [];
@@ -526,7 +529,7 @@ function stepGeo(seed) {
 }
 export const STEP_STONES = [];   // 踏石的位置與半徑（草叢避開石面，石頭邊緣乾淨）
 function stones(path) {
-  const geos = [0, 1, 2, 3].map(stepGeo), mats = ['#e8dcc0', '#ddd2bb', '#efe5cd'].map(c => M(c, {}, 'stone')), sg = new THREE.Group();   // 一條小路的踏石合併成幾個網格
+  const geos = [0, 1, 2, 3].map(stepGeo), mats = ['#ddcdbd', '#d3c4b9', '#e4d4c4'].map(c => M(c, {}, 'stone')), sg = new THREE.Group();   // 一條小路的踏石合併成幾個網格
   for (let i = 0; i < path.length - 1; i++) {
     const [a, b] = [path[i], path[i + 1]], d = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.floor(d / 0.85);
     for (let k = 0; k < n; k++) { const t = k / n, x = a[0] + (b[0] - a[0]) * t + (rnd() - 0.5) * 0.2, z = a[1] + (b[1] - a[1]) * t + (rnd() - 0.5) * 0.2; const tt = tileAt(x, z); if (tt === 3 || tt < 0 || tt === 4) continue; const m = mesh(geos[Math.floor(rnd() * 4)], mats[Math.floor(rnd() * 3)], x, groundAt(x, z) - 0.02, z, { noCast: true }); m.scale.set(1.1 + rnd() * 0.45, 1.3, 1.05 + rnd() * 0.4); m.rotation.set((rnd() - 0.5) * 0.06, rnd() * 6.28, (rnd() - 0.5) * 0.06); sg.add(m); STEP_STONES.push({ x, z, r: 0.33 * Math.max(m.scale.x, m.scale.z) }); }   // 大塊扁平的踏石，一半埋進土裡、微微傾斜
@@ -541,8 +544,9 @@ export const plots = [];
 /** 空地（新島民或搬遷用） */
 export function makePlot(x, z) {
   const y = groundAt(x, z), g = new THREE.Group(); g.position.set(x, y, z);
-  [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]].forEach(([dx, dz]) => g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), M('#c99a62'), dx, 0.25, dz)));
-  g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), M('#8a5a3b'), 0, 0.45, 1.6), mesh(new THREE.BoxGeometry(0.8, 0.45, 0.06), M('#f6e7c8'), 0, 0.95, 1.6));
+  [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]].forEach(([dx, dz]) => g.add(mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.5, 8), M('#d1ae84'), dx, 0.25, dz)));
+  g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), M('#8a5a3b'), 0, 0.45, 1.6), mesh(new THREE.BoxGeometry(0.8, 0.45, 0.05), M('#eee2d1'), 0, 0.95, 1.6));
+  [-0.15, 0.15].forEach(dy => g.add(mesh(new THREE.BoxGeometry(0.68, 0.055, 0.035), M('#d1ae84'), 0, 0.95 + dy, 1.557)));
   const sg = label('空地', '#c99a62', 0.7, 0.18); sg.position.set(0, 0.96, 1.64); g.add(sg);
   g.traverse(o => { o.frustumCulled = cullable(o); });
   const col = { x, z, r: 1.6 }; scene.add(g); colliders.push(col);
@@ -849,56 +853,36 @@ function paveTex(kind) {
   const gray = (v, a) => `rgba(${v | 0},${v | 0},${v | 0},${a == null ? 1 : a})`;
   let sd = kind.length * 977 + 13; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
   if (kind === 'stone') {
-    const rows = 5, rh = S2 / rows, fills = ['#f1e7d3', '#e9dcc2', '#f6eedd', '#e4d5ba', '#efe2c8', '#e8d9bd', '#f3e4cc'];
-    h.fillStyle = gray(70); h.fillRect(0, 0, S2, S2);
-    for (let y = 0; y < rows; y++) {
-      const L = 8 + r() * 22, R = S2 - 8 - r() * 22;   // 這一排最左、最右的石板伸到哪
-      c.fillStyle = '#a8946f'; c.fillRect(L + 3, y * rh, R - L - 6, rh);   // 石縫（只在石板之間）
-      h.fillStyle = gray(40); h.fillRect(L + 3, y * rh, R - L - 6, rh);
-      for (let s = 0; s < 14; s++) { c.fillStyle = `rgba(${96 + r() * 30},${118 + r() * 24},${62 + r() * 20},${0.25 + r() * 0.3})`; c.beginPath(); c.arc(L + r() * (R - L), y * rh + r() * rh, 1 + r() * 2.2, 0, 7); c.fill(); }   // 石縫裡的青苔
-      let x = L; const n = 2 + Math.floor(r() * 2), w0 = (R - L) / n;
-      while (x < R - 4) {
-        const w = Math.min(R - x, w0 * (0.7 + r() * 0.6)), x0 = x + 2.5, y0 = y * rh + 2.5, ww = w - 5, hh = rh - 5, rad = 7 + r() * 5;
-        const tone = r(), fk = r(), fill = fk < 0.7 ? fills[Math.floor(r() * fills.length)] : fk < 0.9 ? ['#dcdccf', '#d4d6ca', '#d9d8c8'][Math.floor(r() * 3)] : ['#d6c9a6', '#cfc19c'][Math.floor(r() * 2)];   // v7.5（Codex 第二輪 C4）：奶油石 70%、偏灰 20%、舊米色 10%
-        const worn = r() < 0.08, rings = worn ? 2 : 3 + Math.floor(r() * 4), step = 16 + r() * 14;   // 每塊的倒角深淺不同；少數磨得很平
-        c.fillStyle = fill; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
-        const g = c.createLinearGradient(x0, y0, x0 + ww, y0 + hh); g.addColorStop(0, 'rgba(255,255,255,.2)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(90,70,40,.14)');
-        c.fillStyle = g; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
-        if (tone < 0.3) { c.fillStyle = `rgba(150,128,96,${0.08 + r() * 0.1})`; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill(); }   // 幾塊顏色深一點、舊一點
-        c.strokeStyle = 'rgba(110,88,58,.28)'; c.lineWidth = 1.6; c.beginPath(); c.roundRect(x0 + 0.8, y0 + 0.8, ww - 1.6, hh - 1.6, rad); c.stroke();   // 邊緣磨圓的暗線
-        const blob = (g2, bx, by, br, col) => { const rg = g2.createRadialGradient(bx, by, 0, bx, by, br); rg.addColorStop(0, col); rg.addColorStop(1, col.replace(/[\d.]+\)$/, '0)')); g2.fillStyle = rg; g2.fillRect(bx - br, by - br, br * 2, br * 2); };   // 柔邊的斑：不會變成一圈圈的坑
-        c.save(); c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.clip();
-        for (let s = 0; s < 8; s++) blob(c, x0 + r() * ww, y0 + r() * hh, 4 + r() * 12, `rgba(${110 + r() * 50 | 0},${92 + r() * 36 | 0},${64 + r() * 20 | 0},${(0.05 + r() * 0.08).toFixed(3)})`);
-        c.restore();
-        for (let s = 0; s < 3; s++) { c.strokeStyle = `rgba(120,98,70,${0.12 + r() * 0.12})`; c.lineWidth = 0.6; c.beginPath(); const sx = x0 + r() * ww, sy = y0 + r() * hh; c.moveTo(sx, sy); c.lineTo(sx + (r() - 0.5) * 18, sy + (r() - 0.5) * 10); c.stroke(); }   // 細裂紋
-        // 高度：一圈圈往內縮、越內越高＝圓角倒角；整塊再隨機傾一點，石板不會一樣平
-        for (let i = 0; i < rings; i++) { h.fillStyle = gray(Math.min(240, 110 + i * step + (6 - rings) * 12)); h.beginPath(); h.roundRect(x0 + i * 1.1, y0 + i * 1.1, ww - i * 2.2, hh - i * 2.2, Math.max(2, rad - i)); h.fill(); }
-        if (worn) { c.fillStyle = 'rgba(255,250,236,.16)'; c.beginPath(); c.roundRect(x0 + ww * 0.2, y0 + hh * 0.2, ww * 0.6, hh * 0.6, rad); c.fill(); }   // 磨平的石面亮一點
-        const a = r() * 6.28, tg = h.createLinearGradient(x0 + ww / 2 - Math.cos(a) * ww / 2, y0 + hh / 2 - Math.sin(a) * hh / 2, x0 + ww / 2 + Math.cos(a) * ww / 2, y0 + hh / 2 + Math.sin(a) * hh / 2);
-        tg.addColorStop(0, gray(0, 0.1)); tg.addColorStop(1, gray(255, 0.1)); h.fillStyle = tg; h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.fill();
-        h.save(); h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.clip();
-        for (let s = 0; s < 12; s++) blob(h, x0 + r() * ww, y0 + r() * hh, 4 + r() * 10, gray(r() < 0.5 ? 0 : 255, (0.07 + r() * 0.07).toFixed(3)));   // 表面緩緩起伏
-        h.restore();
-        x += w;
-      }
+    c.fillStyle = '#c8c3b9'; c.fillRect(6, 0, S2 - 12, S2);
+    h.fillStyle = gray(128); h.fillRect(0, 0, S2, S2);
+  } else {
+    const base = kind === 'earth' ? '#d1bda5' : '#e2d0c0';   // v7.6：鋪面暗一點、帶粉（以前 #eee0c9 白天整片發白）
+    // 連續的四週期曲線取代8px橫條：邊緣0.2–0.4m碎草漸變，路心保持乾淨。
+    for (let y = 0; y < S2; y++) {
+      const a = y / S2 * Math.PI * 2, L = 7 + Math.sin(a * 3) * 3 + Math.cos(a * 7) * 2, R = S2 - 8 + Math.sin(a * 5 + 1) * 4;
+      const g = c.createLinearGradient(L, 0, R, 0);
+      g.addColorStop(0, 'rgba(180,198,166,0)'); g.addColorStop(0.07, '#b4c6a6'); g.addColorStop(0.16, base); g.addColorStop(0.84, base); g.addColorStop(0.94, '#b4c6a6'); g.addColorStop(1, 'rgba(180,198,166,0)');
+      c.fillStyle = g; c.fillRect(L, y, R - L, 1);
     }
-  } else {   // 土路、沙路：壓實的土（或細沙）＋小石子，兩側一樣參差
-    const base = kind === 'earth' ? ['#c9ae86', '#bfa27a', '#d2b893'] : ['#f1dfb6', '#ead6a8', '#f6e7c4'];
-    h.fillStyle = gray(120); h.fillRect(0, 0, S2, S2);
-    for (let y = 0; y < S2; y += 8) { const L = 6 + r() * 20, R = S2 - 6 - r() * 20; c.fillStyle = base[Math.floor(r() * 3)]; c.fillRect(L, y, R - L, 8); }
-    for (let s = 0; s < 260; s++) {
-      const px = 30 + r() * (S2 - 60), py = r() * S2, rad = 1 + r() * (kind === 'earth' ? 3.5 : 1.5);
-      c.fillStyle = kind === 'earth' ? `rgba(${150 + r() * 60},${130 + r() * 50},${100 + r() * 40},.8)` : 'rgba(200,175,130,.35)'; c.beginPath(); c.arc(px, py, rad, 0, 7); c.fill();
-      h.fillStyle = gray(kind === 'earth' ? 200 : 150, 0.8); h.beginPath(); h.arc(px, py, rad, 0, 7); h.fill();   // 小石子凸起來
+    h.fillStyle = gray(128); h.fillRect(0, 0, S2, S2);
+    for (let s = 0; s < 160; s++) {
+      const px = 28 + r() * (S2 - 56), py = r() * S2;
+      c.fillStyle = r() < 0.5 ? 'rgba(255,246,224,.08)' : 'rgba(150,130,114,.05)'; c.beginPath(); c.ellipse(px, py, 2 + r() * 6, 1 + r() * 2, 0, 0, 7); c.fill();
     }
-    if (kind === 'earth') for (let s = 0; s < 4; s++) { const px = 40 + r() * (S2 - 80); h.strokeStyle = gray(90, 0.5); h.lineWidth = 6; h.beginPath(); h.moveTo(px, 0); h.lineTo(px + (r() - 0.5) * 20, S2); h.stroke(); }   // 淺淺的車轍
+    // 三到五顆碎石聚群，不滿版撒芝麻。
+    for (let g = 0; g < 3; g++) { const px = (g % 2 ? 0.85 : 0.15) * S2, py = r() * S2;
+      for (let j = 0, n = 3 + Math.floor(r() * 3); j < n; j++) { const x = px + (r() - 0.5) * 16, y = py + (r() - 0.5) * 20; c.fillStyle = '#d8cebc'; c.beginPath(); c.ellipse(x, y, 1 + r() * 1.5, 0.7 + r(), r(), 0, 7); c.fill(); }
+    }
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
   PAVEN[kind] = normalFrom(hc, kind === 'stone' ? 2.2 : 1.4);
   return (PAVE[kind] = t);
 }
+let homeKeepout = () => false;
 function roads() {
-  const mat = k => { const map = paveTex(k); return bend(new THREE.MeshStandardMaterial({ map, normalMap: PAVEN[k], normalScale: new THREE.Vector2(0.75, 0.75), alphaTest: 0.5, roughness: 0.9 })); };   // v7.5：凹凸收到 75%（每塊都像一樣的厚餅）
+  homeKeepout = homeClearance(homes, PLAN, warp);
+  const stoneRows = []; let slabId = 0;
+  const mat = k => { const map = paveTex(k); return bend(new THREE.MeshStandardMaterial({ map, normalMap: PAVEN[k], normalScale: new THREE.Vector2(0.12, 0.12), alphaTest: 0.5, roughness: 0.9 })); };   // v7.5：凹凸收到 75%（每塊都像一樣的厚餅）
   const MAT = { stone: mat('stone'), earth: mat('earth'), sand: mat('sand') }, KIND = { stone: 'stone', address: 'stone', earth: 'earth', sand: 'sand' };
   const buf = new Map();
   let ri = 0;
@@ -919,7 +903,8 @@ function roads() {
       const mx = (pts[i][0] + pts[i + 1][0]) / 2, mz = (pts[i][1] + pts[i + 1][1]) / 2, [wx, wz] = warp(mx, mz), t = tileAt(wx, wz);
       if (t < 0 || t === 3 || t === 6 || t === 4 || t === 7 || isBridgeAt(wx, wz)) continue;
       const F = [-1, -0.5, 0, 0.5, 1], cols = F.map(f => [edge(i, f * r.w / 2), edge(i + 1, f * r.w / 2)]);
-      const vtx = ([px, pz]) => { const [qx, qz] = warp(px, pz); return [qx, groundAt(qx, qz) + lift, qz]; };
+      if (k === 'stone') stoneRows.push({ a: cols[0][0], b: cols[0][1], c: cols[4][1], d: cols[4][0], width: r.w, lift, id: slabId++ });
+      const vtx = ([px, pz]) => { const [qx, qz] = warp(px, pz); return [qx, groundAt(qx, qz) + lift - (k === 'stone' ? 0.026 : 0), qz]; };
       for (let j = 0; j < 4; j++) {
         const u0 = (F[j] + 1) / 2, u1 = (F[j + 1] + 1) / 2, a = vtx(cols[j][0]), b = vtx(cols[j][1]), cc = vtx(cols[j + 1][1]), d = vtx(cols[j + 1][0]);
         const up = (b[2] - a[2]) * (cc[0] - a[0]) - (b[0] - a[0]) * (cc[2] - a[2]) > 0;   // 三角形要逆時針（從上面看）才是正面，法線朝上、受光正確
@@ -931,8 +916,9 @@ function roads() {
   }
   buf.forEach((B, k) => {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(B.P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(B.UV, 2)); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, MAT[k]); m.receiveShadow = true; scene.add(m);
+    const m = new THREE.Mesh(geo, MAT[k]); m.name = 'w04-road-base-' + k; m.receiveShadow = true; scene.add(m);
   });
+  roadPavers(stoneRows, { groundAt, warp, plaza: PLAZA, clear: homeKeepout, clearGrass: (x, z, r) => STEP_STONES.push({ x, z, r }), scene, registerAt });
 }
 const isBridgeAt = (x, z) => { const [tx, tz] = tileOf(x, z); return isBridge(tx, tz); };
 /** 參考圖裡的小點綴：學院前庭的雕像、住宅區的水井、路口的指路牌、主街與學院步道兩側的水晶地燈、商店與碼頭的貨箱。
@@ -1013,28 +999,9 @@ function treeRing(x, z) {
 }
 /** 廣場的石板地：以廣場中心為圓心，一圈圈同心圓的石板（中央一枚星徽），外緣參差地融進草地 */
 function plazaPaving() {
-  const R = 6.6, cx = SITES.plaza.x, cz = SITES.plaza.z, cv = document.createElement('canvas'); cv.width = cv.height = 1024; const c = cv.getContext('2d'), K = 512 / R;
-  let sd = 71; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
-  const fills = ['#f1e7d3', '#e9dcc2', '#f6eedd', '#e6d8bd', '#efe2c8'];
-  c.translate(512, 512);
-  for (let ring = 0, r0 = 0.9; r0 < R; ring++) {
-    const w = ring % 3 === 2 ? 0.32 : 0.62, r1 = r0 + w, n = Math.max(6, Math.round(2 * Math.PI * (r0 + w / 2) / (ring % 3 === 2 ? 0.45 : 0.85))), off = r() * 6.28, edge = r1 > R - 0.9;
-    c.fillStyle = '#b9a687'; c.beginPath(); c.arc(0, 0, r1 * K, 0, 7); c.arc(0, 0, r0 * K, 0, 7, true); c.fill();
-    for (let i = 0; i < n; i++) {
-      if (edge && r() < 0.35) continue;   // 最外圈缺幾塊：邊緣參差
-      const a0 = off + i / n * Math.PI * 2 + 0.012, a1 = off + (i + 1) / n * Math.PI * 2 - 0.012;
-      c.fillStyle = ring % 3 === 2 ? '#d9c79f' : fills[Math.floor(r() * fills.length)];
-      c.beginPath(); c.arc(0, 0, (r1 - 0.03) * K, a0, a1); c.arc(0, 0, (r0 + 0.03) * K, a1, a0, true); c.fill();
-    }
-    r0 = r1;
-  }
-  c.fillStyle = '#d8b45a'; c.beginPath(); for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, rr = (i % 2 ? 0.28 : 0.86) * K; c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } c.fill();   // 中央的八芒星徽
-  c.fillStyle = '#3e5a8c'; c.beginPath(); c.arc(0, 0, 0.22 * K, 0, 7); c.fill();
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const geo = new THREE.PlaneGeometry(R * 2, R * 2, 40, 40); geo.rotateX(-Math.PI / 2);
-  const P = geo.attributes.position; for (let i = 0; i < P.count; i++) { const x = cx + P.getX(i), z = cz + P.getZ(i); P.setY(i, groundAt(x, z) + 0.045); }
-  geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, bend(new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, roughness: 0.9 }))); m.position.set(cx, 0, cz); m.receiveShadow = true; m.frustumCulled = false; scene.add(m);
+  const R = 6.6, cx = SITES.plaza.x, cz = SITES.plaza.z;
+  scene.add(plazaModel(cx, cz, groundAt));
+  // 保留原來的廣場草遮罩、中心、半徑與高度；沒有碰撞變動。
   for (let x = -R; x <= R; x += 0.4) for (let z = -R; z <= R; z += 0.4) if (Math.hypot(x, z) < R - 0.4) ROAD.add(roadKey(cx + x, cz + z));
 }
 /** 水邊的石頭：小溪兩岸、池塘一圈、大河兩岸每隔一段一顆圓潤的石頭（參考插畫的溪岸與池畔），踏石、橋、路那幾段空著。
@@ -1064,7 +1031,7 @@ function fordStones() {
     const a = r.path[0], b = r.path[r.path.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.round(L / 0.72);
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, px = a[0] + (b[0] - a[0]) * t + Math.sin(t * 5.3) * 0.25, pz = a[1] + (b[1] - a[1]) * t, [x, z] = warp(px, pz);
-      const tt = tileAt(x, z); if (tt !== 3) { if (tt >= 0) { const m = mesh(stepGeo(k), M('#e8dcc0', {}, 'stone'), x, groundAt(x, z) - 0.02, z, { noCast: true }); m.scale.set(1.3, 1.3, 1.2); m.rotation.y = rnd() * 6.28; scene.add(m); STEP_STONES.push({ x, z, r: 0.42 }); } continue; }
+      const tt = tileAt(x, z); if (tt !== 3) { if (tt >= 0 && Math.hypot(x - SITES.plaza.x, z - SITES.plaza.z) > 6.9) { const m = mesh(stepGeo(k), M('#e8dcc0', {}, 'stone'), x, groundAt(x, z) - 0.02, z, { noCast: true }); m.scale.set(1.3, 1.3, 1.2); m.rotation.y = rnd() * 6.28; scene.add(m); STEP_STONES.push({ x, z, r: 0.42 }); } continue; }
       const m = mesh(geos[k % 3], mat, x, FORD_Y - 0.1, z); m.scale.set(1.35 + rnd() * 0.2, 1.6, 1.15 + rnd() * 0.2); m.rotation.y = rnd() * 6.28; scene.add(m);
     }
   });
@@ -1154,21 +1121,21 @@ let FLOWER_GEOS = null;
 export function flowerGeos() {
   if (FLOWER_GEOS) return FLOWER_GEOS;
   const merge = parts => { const P = [], Nn = []; parts.forEach(g => { const gi = g.index ? g.toNonIndexed() : g; P.push(...gi.attributes.position.array); Nn.push(...gi.attributes.normal.array); }); const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3)); return o; };
-  // 低面數：島上有幾千朵，一朵約 170 個三角形（原本 570），遠看一樣、近看花瓣稍微有稜角
-  if (ULTRA) {   // 極省電：一朵 15 個三角形——三角柱的莖、五角形的花冠、四角形的花心（從上往下看還是一朵朵彩色的小花）
+  // 標準72 tris／朵（原176），三階花高共用幾何；花瓣有弧度、葉片折成淺V。
+  if (ULTRA) {
     const flat = (r, n, y) => new THREE.CircleGeometry(r, n).rotateX(-Math.PI / 2).translate(0, y, 0);
     return (FLOWER_GEOS = { stemG: merge([new THREE.CylinderGeometry(0.008, 0.012, 0.26, 3, 1, true).translate(0, 0.13, 0)]), headG: merge([flat(0.095, 5, 0).rotateX(-0.25).translate(0, 0.27, 0)]), coreG: merge([flat(0.03, 4, 0.29)]) });
   }
-  const stemG = merge([new THREE.CylinderGeometry(0.008, 0.012, 0.26, 4).translate(0, 0.13, 0),
-    new THREE.SphereGeometry(0.05, 4, 2).scale(1, 0.18, 0.45).translate(0.04, 0.07, 0).rotateZ(0.3), new THREE.SphereGeometry(0.045, 4, 2).scale(1, 0.18, 0.45).translate(-0.04, 0.11, 0).rotateZ(-0.3)]);
-  const petals = []; for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; petals.push(new THREE.SphereGeometry(0.045, 6, 3).scale(1, 0.32, 0.62).translate(0.05, 0, 0).rotateY(a)); }
-  const headG = merge(petals).rotateX(-0.25).translate(0, 0.27, 0), coreG = new THREE.SphereGeometry(0.026, 6, 3).scale(1, 0.6, 1).translate(0, 0.285, 0);
+  const leaf = (sign, y) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0,y,0, sign*.035,y+.02,-.023,sign*.085,y+.035,0, 0,y,0,sign*.085,y+.035,0,sign*.035,y+.02,.023],3));g.computeVertexNormals();return g; };
+  const stemG = merge([new THREE.CylinderGeometry(0.006, 0.009, 0.26, 4, 1, true).translate(0, 0.13, 0), leaf(1, .07), leaf(-1, .13)]);
+  const petals = []; for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; petals.push(new THREE.SphereGeometry(0.045, 5, 2).scale(1.12, 0.32, 0.72).translate(0.05, 0, 0).rotateY(a)); }
+  const headG = merge(petals).rotateX(-0.25).translate(0, 0.27, 0), coreG = new THREE.SphereGeometry(0.026, 5, 2).scale(1, 0.6, 1).translate(0, 0.285, 0);
   return (FLOWER_GEOS = { stemG, headG, coreG });
 }
 /** 莖、花冠、花心合成一個幾何（v7.3：一塊野花原本三個 InstancedMesh，現在一個）：顏色烘進頂點色，aTint 標出要染上每朵花顏色的花瓣 */
 function flowerOne() {
   const { stemG, headG, coreG } = flowerGeos(), P = [], N = [], C = [], T = [];
-  [[stemG, '#4f9a3a', 0], [headG, '#ffffff', 1], [coreG, '#ffcf3a', 0]].forEach(([g0, hex, tint]) => {
+  [[stemG, '#7f9e72', 0], [headG, '#ffffff', 1], [coreG, '#e8c48b', 0]].forEach(([g0, hex, tint]) => {
     const g = g0.index ? g0.toNonIndexed() : g0, c = new THREE.Color(hex), n = g.attributes.position.count;
     P.push(...g.attributes.position.array); N.push(...g.attributes.normal.array);
     for (let i = 0; i < n; i++) { C.push(c.r, c.g, c.b); T.push(tint); }
@@ -1178,30 +1145,26 @@ function flowerOne() {
   o.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); o.setAttribute('aTint', new THREE.Float32BufferAttribute(T, 1));
   return o;
 }
-/* 野花分成 16×16 公尺一塊（每塊一個 InstancedMesh：莖、花冠、花心合成一個，v7.3），畫面外的塊不畫（props3d.cull） */
+/* 野花按16m分塊，一材質、一朵72 tris；5–9株一叢，保留原花色與flowerSpots。 */
 {
   const oneG = flowerOne(), FC = 16, TOTAL = 6000, SPARE = 120;
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }); mat.defines = { TA_FLOWERTINT: '' }; bend(mat, 'flower');   // 粗糙度取莖（0.9）、花瓣（0.7）、花心（0.6）的中間
-  const chunks = new Map(); let total = 0;
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
-  const chunkOf = (x, z) => { const k = Math.floor(x / FC) + ',' + Math.floor(z / FC); let c = chunks.get(k); if (!c) chunks.set(k, c = { x: (Math.floor(x / FC) + 0.5) * FC, z: (Math.floor(z / FC) + 0.5) * FC, mats: [], cols: [], im: null, cap: 0 }); return c; };
-  const build = (c, cap) => {   // 建立這一塊的 InstancedMesh（cap：最多幾朵，留一些給之後補種）
-    c.cap = cap; const g = new THREE.Group();
-    { const im = new THREE.InstancedMesh(oneG, mat, cap); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false; im.count = 0; g.add(im); c.im = im; }
-    c.n = 0; scene.add(g); { let lo = 1e9, hi = -1e9; for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const gy = groundAt(c.x + (i - 1) * FC * 0.5, c.z + (j - 1) * FC * 0.5); lo = Math.min(lo, gy); hi = Math.max(hi, gy); } registerAt(g, c.x, (lo + hi) / 2 + 0.3, c.z, FC * 0.75 + 0.5, null, (hi - lo) / 2 + 0.8); }   // 野花很矮：包圍體只到地面上一點
-  };
-  const write = (c, m, hex) => { const i = c.n++, im = c.im; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(hex)); im.instanceColor.needsUpdate = true; };
-  const matrix = (x, z, s, tall, R = rnd) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.25, R() * 6.28, (R() - 0.5) * 0.25)), sc.set(s, s * (tall ? 1.45 : 1), s));
-  const put = (x, z, c, s, tall, R) => { if (total >= TOTAL) return; const ch = chunkOf(x, z); ch.mats.push(matrix(x, z, s, tall, R).clone()); ch.cols.push(c); total++; };
-  /* v7.6 夢幻風（consult3 §8、四季各有色盤）：花色依季節——春：奶油、粉、淡紫、少量淡黃；夏：白、淡藍、淡紫、少量粉；
-     秋：奶油、淡紫、乾燥玫瑰、柔金；冬：奶油、冰藍、淡紫。以前是飽和的原色（亮黃、橘紅、寶藍）。只換顏色、抽樣次數不變，花的位置照舊 */
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide }); mat.defines = { TA_FLOWERTINT: '' }; bend(mat, 'flower');
+  const chunks = new Map(); let total = 0, gardenSeed = 7741;
+  const R = () => { gardenSeed = (gardenSeed * 16807) % 2147483647; return (gardenSeed - 1) / 2147483646; };
   let FS = 'autumn'; try { FS = seasonNow(); } catch (e) { FS = seasonAuto(); }
-  const FP = {
+  const SEASON_FP = {
     spring: { pal: ['#fff3e6', '#fff3e6', '#f4a8c8', '#f4a8c8', '#b9a2e6', '#f0d48a'], BC: ['#f4a8c8', '#fff3e6', '#b9a2e6', '#fff3e6', '#f4a8c8'], FIELD: [['#f4a8c8', '#fff3e6'], ['#b9a2e6', '#fff3e6'], ['#f4a8c8', '#b9a2e6'], ['#fff3e6', '#f0d48a']] },
     summer: { pal: ['#ffffff', '#ffffff', '#a9c8f0', '#b9a2e6', '#b9a2e6', '#f4a8c8'], BC: ['#a9c8f0', '#ffffff', '#b9a2e6', '#ffffff', '#f4a8c8'], FIELD: [['#a9c8f0', '#ffffff'], ['#b9a2e6', '#ffffff'], ['#ffffff', '#f4a8c8'], ['#cfe6f4', '#b9a2e6']] },
     autumn: { pal: ['#fbefdc', '#fbefdc', '#b9a2e6', '#b9a2e6', '#d48fae', '#eec67a'], BC: ['#b9a2e6', '#fbefdc', '#d48fae', '#fbefdc', '#eec67a'], FIELD: [['#b9a2e6', '#fbefdc'], ['#d48fae', '#fbefdc'], ['#eec67a', '#fbefdc'], ['#b9a2e6', '#d48fae']] },
     winter: { pal: ['#fbf4ea', '#fbf4ea', '#c8d4f0', '#c8d4f0', '#d8cdee', '#ffffff'], BC: ['#c8d4f0', '#fbf4ea', '#d8cdee', '#ffffff', '#c8d4f0'], FIELD: [['#e8eef8', '#ffffff'], ['#c8d4f0', '#ffffff'], ['#d8cdee', '#ffffff'], ['#ffffff', '#f2e6d2']] }
-  }[FS] || {};
+  };
+
+  // 沿用原配置器的抽樣預算：高地仍共用rnd，改花不能連帶搬動樹、岩石與碰撞。
+  // 此通過只推進舊亂數串流，沒有建立網格；實際花群用下方獨立R配置。
+  (() => {
+    const FP = SEASON_FP[FS] || SEASON_FP.autumn, oldSpots = flowerSpots.length, oldStones = STEP_STONES.length;
+    let total = 0;
+    const put = (x, z, c, size, tall, sample = rnd) => { if (total >= TOTAL) return; sample(); sample(); sample(); total++; };
   const pal = FP.pal || ['#ffffff', '#ff8fb1', '#ffd23f', '#b38bff', '#ff7a5a', '#6c8dff'];
   // 主要步道兩側的花帶：每隔一步一小叢（參考圖的路邊都是藍、白、黃的小花）
   const BORDER = /Main Street|Academy|Observatory|East Stair|Lighthouse Walk|South Meadow/, BC = FP.BC || ['#6c8dff', '#ffffff', '#ffd23f', '#ffffff', '#b38bff'];
@@ -1248,11 +1211,90 @@ function flowerOne() {
       flowerSpots.push([cx, cz]); STEP_STONES.push({ x: cx, z: cz, r: rad + 0.12 }); made++;
     }
   }
+
+    flowerSpots.length = oldSpots; STEP_STONES.length = oldStones;
+  })();
+  const tint = (token, season = FS) => {
+    if (typeof token === 'string') return token; // wildFlowers(x,z,color)沿用外部指定色。
+    const fp = SEASON_FP[season] || SEASON_FP.autumn, v = fp[token[0]][token[1]];
+    return Array.isArray(v) ? v[token[2]] : v;
+  };
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+  const chunkOf = (x, z) => { const k = Math.floor(x / FC) + ',' + Math.floor(z / FC); let c = chunks.get(k); if (!c) chunks.set(k, c = { x: (Math.floor(x / FC) + 0.5) * FC, z: (Math.floor(z / FC) + 0.5) * FC, mats: [], cols: [], tints: [], im: null, cap: 0 }); return c; };
+  const build = (c, cap) => {
+    c.cap = cap; const g = new THREE.Group(); g.name = 'w04-flower-chunk';
+    const im = new THREE.InstancedMesh(oneG, mat, cap); im.name = 'w04-flowers'; im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false; im.count = 0; g.add(im); c.im = im;
+    c.n = 0; scene.add(g); let lo = 1e9, hi = -1e9;
+    for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const gy = groundAt(c.x + (i - 1) * FC * 0.5, c.z + (j - 1) * FC * 0.5); lo = Math.min(lo, gy); hi = Math.max(hi, gy); }
+    registerAt(g, c.x, (lo + hi) / 2 + 0.3, c.z, FC * 0.75 + 0.5, null, (hi - lo) / 2 + 0.8);
+  };
+  const write = (c, m, token) => { const i = c.n++, im = c.im; c.tints[i] = token; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(tint(token))); im.instanceColor.needsUpdate = true; };
+  const matrix = (x, z, size, level = 1) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.08, R() * Math.PI * 2, (R() - 0.5) * 0.08)), sc.set(size, [0.4, 0.8, 1.2][level], size));
+  const safe = (x, z, pad = 0.13) => {
+    const t = tileAt(x, z); return (t === 1 || t === 2) && !onRoad(x, z) && !blocked(x, z, pad) && !homeKeepout(x, z, pad) && !isBridgeAt(x, z) && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > 6.72;
+  };
+  const put = (x, z, token, size, level) => { if (total >= TOTAL || !safe(x, z)) return false; const ch = chunkOf(x, z); ch.mats.push(matrix(x, z, size, level).clone()); ch.cols.push(token); total++; return true; };
+  const clusters = [];
+  const cluster = (cx, cz, token, radius = 0.4) => {
+    if (!safe(cx, cz, 0.2) || clusters.some(p => Math.hypot(p[0] - cx, p[1] - cz) < radius + 0.48)) return;
+    const n = 5 + Math.floor(R() * 5), added = new Map(); let made = 0;
+    for (let j = 0; j < n; j++) {
+      const a = j * 2.39996 + R() * 0.3, d = Math.sqrt((j + 0.5) / n) * radius;
+      const x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, level = j < 2 ? 2 : j < 5 ? 1 : 0;
+      if (put(x, z, j % 4 ? token : ['pal', 0], 1.03 + R() * 0.25, level)) { const ch = chunkOf(x, z); if (!added.has(ch)) added.set(ch, ch.mats.length - 1); made++; }
+    }
+    if (made < 5) { added.forEach((n, c) => { c.mats.length = c.cols.length = n; }); total -= made; return; }
+    if (made) { clusters.push([cx, cz]); flowerSpots.push([cx, cz]); STEP_STONES.push({ x: cx, z: cz, r: radius + 0.1 }); }
+  };
+  // 主路、住宅巷與廣場外緣：每叢前後留0.4–1m的呼吸空間，兩側不鏡像。
+  PLAN.roads.filter(r => r.kind === 'stone').forEach(r => {
+    for (let i = 0; i < r.path.length - 1; i++) {
+      const a = r.path[i], b = r.path[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+      for (let s = 0.5 + R(); s < L; s += 1.65 + R() * 0.45) [-1, 1].forEach(side => {
+        const off = r.w / 2 + 0.65 + R() * 0.22, px = a[0] + ux * s - uz * side * off, pz = a[1] + uz * s + ux * side * off;
+        if (roadGap(px, pz) < 0.48) return; const [x, z] = warp(px, pz); cluster(x, z, ['BC', Math.floor(R() * 5)], 0.36 + R() * 0.08);
+      });
+    }
+  });
+  // 屋前側花床，保持door→主路的通道；屋簷、台階、模型步道都在homeKeepout內。
+  homes.forEach(h => {
+    const box = new THREE.Box3().setFromObject(h.g);
+    for (let side of [-1, 1]) for (let j = 0; j < 6; j++) {
+      const x = side < 0 ? box.min.x - 0.55 : box.max.x + 0.55, z = box.min.z + (box.max.z - box.min.z) * (j + 0.5) / 6;
+      cluster(x, z, ['pal', (j + (side > 0 ? 2 : 0)) % 6]);
+    }
+  });
+  // 樹下弧形花島，幹根半徑與碰撞照舊，花叢不繞成完整甜甜圈。
+  trees.filter(t => t.kind !== 'cedar' && t.kind !== 'palm').forEach((t, i) => {
+    if (i % 2) return;
+    for (let j = 0; j < 3; j++) { const a = i * 1.7 + j * 0.95, d = 1.0 + R() * 0.4; cluster(t.x + Math.cos(a) * d, t.z + Math.sin(a) * d, ['pal', i % 6], 0.38); }
+  });
+  // 規劃花地以同色花島組成，群間留草，而不是均勻隨機撒點。
+  PLAN.props.flowers.forEach((f, fi) => {
+    const [x0, z0, x1, z1] = bbox(f.poly), want = Math.min(45, Math.round(polyArea(f.poly) * 0.9)); let made = 0;
+    for (let k = 0; k < want * 18 && made < want; k++) {
+      const px = x0 + R() * (x1 - x0), pz = z0 + R() * (z1 - z0); if (!inPolyPt(px, pz, f.poly) || roadGap(px, pz) < 0.55) continue;
+      const [x, z] = warp(px, pz), n = total; cluster(x, z, ['FIELD', fi % 4, R() < 0.8 ? 0 : 1], 0.4); if (total > n) made++;
+    }
+  });
+  // 廣場外三小片苔花，打斷整圈邊線；不進入原有廣場半徑。
+  [0.45, 2.5, 4.55].forEach((a, i) => cluster(PLAZA[0] + Math.cos(a) * 7.15, PLAZA[1] + Math.sin(a) * 7.15, ['pal', i % 6], 0.32));
+  // 剩餘花量集中邊緣：保留草地留白，優先沿路邊，少量落在林下。
+  for (let k = 0; k < 14000 && total < 5350; k++) {
+    const px = (R() - 0.5) * 86, pz = (R() - 0.5) * 86, gap = roadGap(px, pz);
+    if (gap < 0.6 || gap > 3.5 || plazaArea(px, pz)) continue;
+    const [x, z] = warp(px, pz); cluster(x, z, ['pal', Math.floor(R() * 6)], 0.34 + R() * 0.1);
+  }
   chunks.forEach(c => { build(c, c.mats.length + SPARE); c.mats.forEach((m, i) => write(c, m, c.cols[i])); c.mats = c.cols = null; });
-  wildFlowers = (x, z, c) => {   // 之後補種（西部高地的野花草原）：塊滿了就不種
-    if (total >= TOTAL) return;
-    const ch = chunkOf(x, z); if (!ch.im) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
-    write(ch, matrix(x, z, 0.75 + rnd() * 0.35, false), c); total++; flowerSpots.push([x, z]);
+  // 設定頁即時換季時也更新instanceColor；保留FP四季色盤與aTint，不必重建幾何。
+  mat.onBeforeRender = () => {
+    const now = seasonNow(); if (now === FS || !SEASON_FP[now]) return; FS = now;
+    chunks.forEach(c => { if (!c.im) return; for (let i = 0; i < c.n; i++) c.im.setColorAt(i, col.set(tint(c.tints[i]))); c.im.instanceColor.needsUpdate = true; });
+  };
+  wildFlowers = (x, z, color) => {
+    rnd(); rnd(); rnd(); rnd(); // 原版補種的size與三個轉角抽樣，保持後續景物的亂數串流。
+    if (total >= TOTAL || !safe(x, z)) return; const ch = chunkOf(x, z); if (!ch.im) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
+    write(ch, matrix(x, z, 0.9 + R() * 0.2, 1), color); total++; flowerSpots.push([x, z]);
   };
 }
 /** v6.78 以前：溪畔那一棟島民的家挪到構圖較好的位置。新島照規劃擺好了，不用挪 */

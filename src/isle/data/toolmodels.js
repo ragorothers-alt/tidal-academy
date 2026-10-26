@@ -5,14 +5,53 @@
   const I = (root.TA = root.TA || {}).ISLE = root.TA.ISLE || {};
   I.TOOLMODELS = I.TOOLMODELS || {};
 
+  // 工具沒有活動零件：按材質合併靜態幾何，保留握把原點與所有子群組座標。
+  // 不經 kit 額外 clone 材質；同色面共用同一物件，第一／第三人稱沿用相同工廠。
+  function finish(THREE, root) {
+    root.updateMatrixWorld(true);
+    const inverse = root.matrixWorld.clone().invert(), buckets = new Map(), meshes = [], matrix = new THREE.Matrix4(), inst = new THREE.Matrix4();
+    const p = new THREE.Vector3(), n = new THREE.Vector3(), normal = new THREE.Matrix3();
+    root.traverse(mesh => {
+      if (!mesh.isMesh) return;
+      meshes.push(mesh);
+      const geo = mesh.geometry, indices = geo.index, P = geo.attributes.position, N = geo.attributes.normal;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const groups = Array.isArray(mesh.material) ? geo.groups : [{ start: 0, count: indices ? indices.count : P.count, materialIndex: 0 }];
+      for (let instance = 0; instance < (mesh.isInstancedMesh ? mesh.count : 1); instance++) {
+        matrix.multiplyMatrices(inverse, mesh.matrixWorld);
+        if (mesh.isInstancedMesh) { mesh.getMatrixAt(instance, inst); matrix.multiply(inst); }
+        normal.getNormalMatrix(matrix);
+        for (const group of groups) {
+          const material = materials[group.materialIndex];
+          if (!buckets.has(material)) buckets.set(material, { positions: [], normals: [], names: new Set() });
+          const batch = buckets.get(material); batch.names.add(mesh.name);
+          for (let j = group.start; j < group.start + group.count; j++) {
+            const i = indices ? indices.getX(j) : j;
+            p.fromBufferAttribute(P, i).applyMatrix4(matrix); batch.positions.push(p.x, p.y, p.z);
+            n.fromBufferAttribute(N, i).applyMatrix3(normal).normalize(); batch.normals.push(n.x, n.y, n.z);
+          }
+        }
+      }
+    });
+    for (const mesh of meshes) { mesh.removeFromParent(); mesh.geometry.dispose(); }
+    for (const [material, batch] of buckets) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(batch.positions, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(batch.normals, 3));
+      geo.computeBoundingBox(); geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, material); mesh.name = [...batch.names].join(' + '); root.add(mesh);
+    }
+    return root;
+  }
+
   I.TOOLMODELS["rod"] = function (THREE, kit) {
     const rod = new THREE.Group();
     rod.name = 'island-fishing-rod';
-    const teal = kit.mat('#639e99', {roughness:0.64, metalness:0.04});
-    const cork = kit.mat('#d4aa74', {roughness:0.94, metalness:0});
-    const steel = kit.mat('#89999d', {roughness:0.43, metalness:0.48});
-    const dark = kit.mat('#4a5d6b', {roughness:0.57, metalness:0.22});
-    const cream = kit.mat('#e6ddbb', {roughness:0.84, metalness:0});
+    const teal = kit.mat('#9EBDB3', {roughness:0.74, metalness:0.02});
+    const cork = kit.mat('#D0AB83', {roughness:0.88, metalness:0});
+    const steel = kit.mat('#AD9ABD', {roughness:0.65, metalness:0.18});
+    const dark = kit.mat('#777A98', {roughness:0.76, metalness:0.08});
+    const cream = kit.mat('#F0E5D5', {roughness:0.82, metalness:0});
     function mesh(geo, mat, name, x=0, y=0, z=0) {
       const item = new THREE.Mesh(geo, mat);
       item.name=name; item.position.set(x,y,z); rod.add(item); return item;
@@ -74,17 +113,17 @@
     }
     mesh(merge(rings),dark,'five-open-line-guides');
     mesh(tube([[.047,.137,-.017],[.045,.153,-.034],[.081,.160,-.043],[.116,.153,-.028],[.118,.140,0],[.111,.130,.023]],.0034,12,5),steel,'reel-bail-wire');
-    return rod;
+    return finish(THREE, rod);
   };
 
   I.TOOLMODELS["net"] = function (THREE, kit) {
     const root = new THREE.Group();
     root.name = 'pastel-insect-net';
-    const wood = kit.mat('#DDB27B', { roughness: 0.67, metalness: 0 });
-    const coral = kit.mat('#EC9A87', { roughness: 0.46, metalness: 0 });
-    const mint = kit.mat('#94BFA6', { roughness: 0.45, metalness: 0 });
-    const ivory = kit.mat('#FFF9E9', { roughness: 0.84, metalness: 0, transparent: true, opacity: 0.66 });
-    const thread = kit.mat('#DDD9C2', { roughness: 0.9, metalness: 0, transparent: true, opacity: 0.77 });
+    const wood = kit.mat('#D0AB83', { roughness: 0.88, metalness: 0 });
+    const coral = kit.mat('#E4B6BD', { roughness: 0.74, metalness: 0 });
+    const mint = kit.mat('#BCD0B9', { roughness: 0.74, metalness: 0 });
+    const ivory = kit.mat('#FFF0D4', { roughness: 0.9, metalness: 0, transparent: true, opacity: 0.18, depthWrite: false });
+    const thread = kit.mat('#F0E5D5', { roughness: 0.9, metalness: 0 });
     const add = (name, geometry, material, position) => {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = name;
@@ -163,19 +202,19 @@
     lattice.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     lattice.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     add('ivory-diagonal-net-lattice', lattice, thread);
-    return root;
+    return finish(THREE, root);
   };
 
   I.TOOLMODELS["shovel"] = function (THREE, kit) {
     const root = new THREE.Group();
     root.name = 'shovel';
     const mat = {
-      wood: kit.mat('#cb9459', { roughness: 0.76, metalness: 0 }),
-      grip: kit.mat('#9bbb98', { roughness: 0.68, metalness: 0 }),
-      socket: kit.mat('#65999a', { roughness: 0.58, metalness: 0.16 }),
-      lip: kit.mat('#9bbbb0', { roughness: 0.53, metalness: 0.12 }),
-      steel: kit.mat('#8aa7b1', { roughness: 0.48, metalness: 0.38 }),
-      edge: kit.mat('#d0dcd9', { roughness: 0.38, metalness: 0.48 })
+      wood: kit.mat('#D0AB83', { roughness: 0.88, metalness: 0 }),
+      grip: kit.mat('#BCD0A9', { roughness: 0.78, metalness: 0 }),
+      socket: kit.mat('#9EBDB3', { roughness: 0.74, metalness: 0.08 }),
+      lip: kit.mat('#F0E5D5', { roughness: 0.78, metalness: 0.08 }),
+      steel: kit.mat('#AD9ABD', { roughness: 0.66, metalness: 0.18 }),
+      edge: kit.mat('#D6CCDF', { roughness: 0.62, metalness: 0.18 })
     };
     function add(name, geometry, material, x = 0, y = 0, z = 0) {
       const mesh = new THREE.Mesh(geometry, material);
@@ -259,7 +298,7 @@
     bladeGeometry.computeVertexNormals();
     bladeGeometry.computeBoundingBox();
     add('blade',bladeGeometry,[mat.steel,mat.edge]);
-    return root;
+    return finish(THREE, root);
   };
 
   I.TOOLMODELS["can"] = function (THREE, kit) {
@@ -267,11 +306,11 @@
     g.name = 'mint-watering-can'; body.rotation.z = Math.PI; body.position.y = 0.17; g.add(body);
     // Reference is upright; this grip frame places the carrying bar at the hand origin.
     // chars.js supplies the shared -1.2 radian carrying rotation.
-    const mint = kit.mat('#7cc7c0', { roughness: 0.43, metalness: 0.16 });
-    const teal = kit.mat('#4d9791', { roughness: 0.47, metalness: 0.18 });
-    const cream = kit.mat('#f3dfb6', { roughness: 0.62, metalness: 0.03 });
-    const brass = kit.mat('#dbc18d', { roughness: 0.44, metalness: 0.32 });
-    const dark = kit.mat('#335b56', { roughness: 0.8, metalness: 0.02 });
+    const mint = kit.mat('#B7D1C3', { roughness: 0.72, metalness: 0.08 });
+    const teal = kit.mat('#8EAFA6', { roughness: 0.76, metalness: 0.08 });
+    const cream = kit.mat('#F0E5D5', { roughness: 0.82, metalness: 0 });
+    const brass = kit.mat('#D0AB83', { roughness: 0.68, metalness: 0.18 });
+    const dark = kit.mat('#777A98', { roughness: 0.9, metalness: 0 });
     const add = (name, geometry, material, x=0, y=0, z=0, parent=body) => {
       const m = new THREE.Mesh(geometry, material); m.name = name; m.position.set(x,y,z); parent.add(m); return m;
     };
@@ -303,6 +342,6 @@
     for(let i=0;i<10;i++){const a=i*Math.PI/5+0.15;hole(Math.cos(a)*0.026,Math.sin(a)*0.026);}
     const plate=add('perforated-cream-rose',new THREE.ShapeGeometry(face,5),cream,0,0.013,0,rose);plate.rotation.x=-Math.PI/2;
     const rim=add('rose-rolled-metal-rim',new THREE.TorusGeometry(0.0367,0.003,5,20),brass,0,0.012,0,rose);rim.rotation.x=Math.PI/2;
-    return g;
+    return finish(THREE, g);
   };
 })(typeof window !== 'undefined' ? window : globalThis);

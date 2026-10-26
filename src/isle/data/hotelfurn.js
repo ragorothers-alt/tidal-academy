@@ -971,24 +971,24 @@
   ]);
 
   I.WALLPAPER = (I.WALLPAPER || []).concat([
-    { id: 'wp_hotel_beach', name: '海風奶油條紋壁紙', price: 0, hotel: 'beach', c1: '#f7efd9', c2: '#95cbd2', pattern: 'stripe' },
-    { id: 'wp_hotel_wa', name: '和紙竹影壁紙', price: 0, hotel: 'wa', c1: '#eee0be', c2: '#b2bd99', pattern: 'stripe' },
-    { id: 'wp_hotel_country', name: '暖杏小格壁紙', price: 0, hotel: 'country', c1: '#f4dfbd', c2: '#cfa083', pattern: 'check' },
-    { id: 'wp_hotel_kids', name: '棉糖點點壁紙', price: 0, hotel: 'kids', c1: '#fff1ce', c2: '#eba8a0', pattern: 'dot' },
-    { id: 'wp_hotel_star', name: '午夜星點壁紙', price: 0, hotel: 'star', c1: '#293b63', c2: '#e6d397', pattern: 'dot' },
-    { id: 'wp_hotel_forest', name: '苔綠木紋壁紙', price: 0, hotel: 'forest', c1: '#8f9c77', c2: '#bdc8a2', pattern: 'wood' },
-    { id: 'wp_hotel_retro', name: '葡萄汽水條紋壁紙', price: 0, hotel: 'retro', c1: '#5b476c', c2: '#e799aa', pattern: 'stripe' },
-    { id: 'wp_hotel_library', name: '鼠尾草書房壁紙', price: 0, hotel: 'library', c1: '#b6bfa5', c2: '#dee2c9', pattern: 'stripe' },
+    { id: 'wp_hotel_beach', name: '海風奶油條紋壁紙', price: 0, hotel: 'beach', c1: '#e8e4d6', c2: '#d2e0dc', pattern: 'stripe' },
+    { id: 'wp_hotel_wa', name: '和紙竹影壁紙', price: 0, hotel: 'wa', c1: '#e8decf', c2: '#d7dcc8', pattern: 'stripe' },
+    { id: 'wp_hotel_country', name: '暖杏小格壁紙', price: 0, hotel: 'country', c1: '#ebdbcb', c2: '#e1cdbb', pattern: 'check' },
+    { id: 'wp_hotel_kids', name: '棉糖點點壁紙', price: 0, hotel: 'kids', c1: '#f0e5d5', c2: '#e3cbc9', pattern: 'dot' },
+    { id: 'wp_hotel_star', name: '午夜星點壁紙', price: 0, hotel: 'star', c1: '#8f91b2', c2: '#bdafca', pattern: 'dot' },
+    { id: 'wp_hotel_forest', name: '苔綠木紋壁紙', price: 0, hotel: 'forest', c1: '#c0cdb1', c2: '#d0d9c3', pattern: 'wood' },
+    { id: 'wp_hotel_retro', name: '葡萄汽水條紋壁紙', price: 0, hotel: 'retro', c1: '#c6b6d3', c2: '#d9bfd0', pattern: 'stripe' },
+    { id: 'wp_hotel_library', name: '鼠尾草書房壁紙', price: 0, hotel: 'library', c1: '#d5dfd2', c2: '#e0e5d8', pattern: 'stripe' },
   ]);
 
   I.FLOORING = (I.FLOORING || []).concat([
-    { id: 'fl_hotel_beach', name: '晴沙淺木地板', price: 0, hotel: 'beach', c1: '#dfbd92', c2: '#f3dcb7', pattern: 'wood' },
-    { id: 'fl_hotel_wa', name: '青草榻榻米地板', price: 0, hotel: 'wa', c1: '#b5bf91', c2: '#87996a', pattern: 'check' },
-    { id: 'fl_hotel_country', name: '蜂蜜松木地板', price: 0, hotel: 'country', c1: '#bb895d', c2: '#e1b883', pattern: 'wood' },
-    { id: 'fl_hotel_kids', name: '薄荷奶油拼格地板', price: 0, hotel: 'kids', c1: '#a9cfcb', c2: '#f6dfab', pattern: 'check' },
-    { id: 'fl_hotel_star', name: '月影靛藍地毯', price: 0, hotel: 'star', c1: '#3f5175', c2: '#536b91', pattern: 'plain' },
-    { id: 'fl_hotel_forest', name: '林間栗木地板', price: 0, hotel: 'forest', c1: '#916e4f', c2: '#b4946e', pattern: 'wood' },
-    { id: 'fl_hotel_retro', name: '奶油可可棋格地板', price: 0, hotel: 'retro', c1: '#f3dfb4', c2: '#6c5961', pattern: 'check' },
-    { id: 'fl_hotel_library', name: '栗棕書香木地板', price: 0, hotel: 'library', c1: '#927253', c2: '#ba9470', pattern: 'wood' },
+    { id: 'fl_hotel_beach', name: '晴沙淺木地板', price: 0, hotel: 'beach', c1: '#d6b590', c2: '#e3cbb0', pattern: 'wood' },
+    { id: 'fl_hotel_wa', name: '青草榻榻米地板', price: 0, hotel: 'wa', c1: '#c8d1b5', c2: '#b8c3a4', pattern: 'check' },
+    { id: 'fl_hotel_country', name: '蜂蜜松木地板', price: 0, hotel: 'country', c1: '#ceaa83', c2: '#dbc1a3', pattern: 'wood' },
+    { id: 'fl_hotel_kids', name: '薄荷奶油拼格地板', price: 0, hotel: 'kids', c1: '#d6e3db', c2: '#e9e2cd', pattern: 'check' },
+    { id: 'fl_hotel_star', name: '月影靛藍地毯', price: 0, hotel: 'star', c1: '#9598b9', c2: '#9e9fbd', pattern: 'plain' },
+    { id: 'fl_hotel_forest', name: '林間栗木地板', price: 0, hotel: 'forest', c1: '#b49b85', c2: '#c6b39c', pattern: 'wood' },
+    { id: 'fl_hotel_retro', name: '奶油可可棋格地板', price: 0, hotel: 'retro', c1: '#e8decf', c2: '#d3c8d3', pattern: 'check' },
+    { id: 'fl_hotel_library', name: '栗棕書香木地板', price: 0, hotel: 'library', c1: '#b49b85', c2: '#c6b39c', pattern: 'wood' },
   ]);
 })(typeof window !== 'undefined' ? window : globalThis);

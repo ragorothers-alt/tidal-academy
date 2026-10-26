@@ -12,7 +12,7 @@ const HW=3.5, HD=3, LY=2.25, R=.22;
 const LOFT={x0:.45,x1:3.3,z0:-2.83,z1:-.7}, BOTTOM={x:.75,y:0,z:.68}, TOP={x:.75,y:LY,z:-1.05};
 const C={wood:'#95633d',light:'#bd8b54',dark:'#563c2b',navy:'#294770',gold:'#d0a356',ivory:'#f3e6ce',blue:'#456596',stone:'#e2d4bd'};
 export let inside=false;
-let P,V,H,sc,visit,savedP,savedV,savedCurve,floor=0,climb=null,cols=[],spots=[],windows=[],steam=[],loftVisual,loftOpacity=1,hemi,key,warm,lanternMat,soupMat;
+let P,V,H,sc,visit,away=false,savedP,savedV,savedCurve,floor=0,climb=null,cols=[],spots=[],windows=[],steam=[],loftVisual,loftOpacity=1,hemi,key,warm,lanternMat,soupMat;
 const camPos=new THREE.Vector3(),camTarget=new THREE.Vector3(),desired=new THREE.Vector3(),TX={},GIFT_MODELS=new Map();
 export function init(player,villager,hooks){P=player;V=villager;H=hooks||{};}
 function texture(name,w,h,draw,repeat){
@@ -186,14 +186,14 @@ function build(shown){
  archWindow(s,-2.15,1.65,-2.91,0,1.05);archWindow(s,-3.4,1.65,1,Math.PI/2,1.02);
  tor(s,.37,.07,M('stone'),-.75,2.92,-2.89);const glass=mat('roundglass','#f4cb83',{emissive:'#edc081',emissiveIntensity:.45});windows.push(glass);add(s,new THREE.CircleGeometry(.33,24),glass,-.75,2.92,-2.895,false);box(s,.045,.64,.06,M('wood'),-.75,2.92,-2.82);box(s,.64,.045,.06,M('wood'),-.75,2.92,-2.82);
  lantern(s,-.3,2.62,-2.7);lantern(s,-3.05,2.65,1.65);lantern(s,2.95,3.42,-2.65);stove(s);desk(s);dining(s);sciences(s);gifts(s,shown);
- bake(s);loft(s);spot('talk',`和${V?V.name:'岳'}聊聊`,-1.45,-.65,{r:.68});collider(-2.05,-.68,.48,.48,0,'host');
+ bake(s);loft(s);if(!away){spot('talk',`和${V?V.name:'岳'}聊聊`,-1.45,-.65,{r:.68});collider(-2.05,-.68,.48,.48,0,'host');}   // v7.6：岳不在家時沒有聊天點
  s.traverse(o=>{if(o.isMesh)o.frustumCulled=false;});return s;
 }
 function snapshot(o){return o&&{parent:o.parent,position:o.position.clone(),quaternion:o.quaternion.clone(),scale:o.scale.clone(),visible:o.visible,look:o.userData.look};}
 function restore(o,saved){if(!o||!saved)return;o.removeFromParent();if(saved.parent)saved.parent.add(o);o.position.copy(saved.position);o.quaternion.copy(saved.quaternion);o.scale.copy(saved.scale);o.visible=saved.visible;o.userData.look=saved.look;o.updateMatrixWorld(true);}
-export function enter(shown=[]){
- if(inside||!P||!H)return false;savedP=snapshot(P);savedV=snapshot(V&&V.mesh);savedCurve=U.uCurve.value;sc=build(shown);inside=true;floor=0;climb=null;loftOpacity=1;U.uCurve.value=0;
- sc.add(P);P.position.set(0,0,2.15);P.rotation.set(0,Math.PI,0);P.visible=true;if(V&&V.mesh){sc.add(V.mesh);V.mesh.position.set(-2.05,0,-.68);V.mesh.rotation.set(0,.5,0);V.mesh.visible=true;V.mesh.userData.look=new THREE.Vector3(0,1.1,0);}
+export function enter(shown=[],opt={}){
+ if(inside||!P||!H)return false;away=!!opt.away;savedP=snapshot(P);savedV=away?null:snapshot(V&&V.mesh);savedCurve=U.uCurve.value;sc=build(shown);inside=true;floor=0;climb=null;loftOpacity=1;U.uCurve.value=0;
+ sc.add(P);P.position.set(0,0,2.15);P.rotation.set(0,Math.PI,0);P.visible=true;if(V&&V.mesh&&!away){sc.add(V.mesh);V.mesh.position.set(-2.05,0,-.68);V.mesh.rotation.set(0,.5,0);V.mesh.visible=true;V.mesh.userData.look=new THREE.Vector3(0,1.1,0);}
  updateCamera(1,true);document.body.classList.add('in-trip','in-yue-home');ui.iris();Audio.sfx('open');return true;
 }
 function dispose(){

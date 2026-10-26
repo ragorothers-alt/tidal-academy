@@ -75,22 +75,27 @@ function doormatTex() {
   g.stroke();
   DOORMAT = new THREE.CanvasTexture(c); DOORMAT.colorSpace = THREE.SRGBColorSpace; DOORMAT.anisotropy = 4; return DOORMAT;
 }
-function rbox(w, h, d, r) {
+export function rbox(w, h, d, r) {
   const k = [w, h, d, r].map(v => v.toFixed(3)).join(','); if (GEO[k]) return GEO[k];
   r = Math.min(r || 0, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001);
   if (r <= 0.005) return (GEO[k] = new THREE.BoxGeometry(w, h, d));
-  const g = new THREE.BoxGeometry(w, h, d, 5, 5, 5), p = g.attributes.position, v = new THREE.Vector3(), c = new THREE.Vector3();
-  const ix = w / 2 - r, iy = h / 2 - r, iz = d / 2 - r;
+  // 格線只放在圓角那一圈：每軸「兩側各 s 格圓弧＋中間一格平面」，圓弧格線依角度排，法線直接取圓心方向
+  // （v7.6 以前是均分 5 格：每個 300 面，大箱子的圓角只剩一條看不出來的斜帶；現在小圓角 108 面、圓得更真）
+  const s = r >= 0.05 ? 2 : 1, n = 2 * s + 1, g = new THREE.BoxGeometry(w, h, d, n, n, n), p = g.attributes.position, nm = g.attributes.normal;
+  const half = [w / 2, h / 2, d / 2], inner = half.map(a => a - r), v = [0, 0, 0], c = [0, 0, 0];
+  const row = (x, a, ia) => { const i = Math.round((x / a + 1) * n / 2), j = i <= s ? s - i : i >= n - s ? i - n + s : 0;
+    return Math.sign(x || (i - n / 2)) * (ia + r * Math.tan(Math.PI / 4 * j / s)); };
   for (let i = 0; i < p.count; i++) {
-    v.fromBufferAttribute(p, i); c.set(Math.max(-ix, Math.min(ix, v.x)), Math.max(-iy, Math.min(iy, v.y)), Math.max(-iz, Math.min(iz, v.z)));
-    const n = v.clone().sub(c); if (n.lengthSq() > 1e-9) n.normalize().multiplyScalar(r); p.setXYZ(i, c.x + n.x, c.y + n.y, c.z + n.z);
+    let q = 0; for (let a = 0; a < 3; a++) { v[a] = row(p.getComponent(i, a), half[a], inner[a]); c[a] = Math.max(-inner[a], Math.min(inner[a], v[a])); v[a] -= c[a]; q += v[a] * v[a]; }
+    q = Math.sqrt(q); if (q < 1e-9) continue;
+    p.setXYZ(i, c[0] + v[0] / q * r, c[1] + v[1] / q * r, c[2] + v[2] / q * r); nm.setXYZ(i, v[0] / q, v[1] / q, v[2] / q);
   }
-  g.computeVertexNormals(); return (GEO[k] = g);
+  return (GEO[k] = g);
 }
 /** 零件材質：e 可以是發光強度（數字，用本身顏色發光）或發光色碼（字串，強度 0.8） */
 const mat = (c, e) => M(c, e ? (typeof e === 'string' ? { emissive: new THREE.Color(e), emissiveIntensity: 0.8 } : { emissive: new THREE.Color(c), emissiveIntensity: e }) : {});
 /** 程式化家具模型（data/furnmodels.js，img2threejs 重建）用的工具：材質一律走 M()，光影與地平線彎曲和其他物件一致 */
-const KIT = { mat: (c, o) => M(c, o), rbox: (w, h, d, r) => rbox(w, h, d, r || 0) };
+const KIT = { mat: (c, o, k) => M(c, o, k), rbox: (w, h, d, r) => rbox(w, h, d, r || 0) };
 const PROTO = {};   // 程式化模型每種只建一次，之後 clone（共用幾何與材質；房間、夢境島、縮圖會重複用到同一件）
 /** 依零件組出家具模型（原點在佔地中心地板）；有程式化模型（TA.ISLE.FURNMODELS[id]）就用它，建立失敗才退回零件 */
 export function buildFurniture(f) {
@@ -232,6 +237,8 @@ export const isEdit = () => !!cur.edit;
 export const roomData = () => data();
 export const hostSid = () => cur.sid || null;
 const data = () => (cur.own ? room() : cur.home);
+/** v7.6：玩家家的整棟室內用「我的房間」的家具、壁紙與地板（資料還是同一份；佈置時切到這裡的俯視擺放） */
+export function ownDecor() { cur = { own: true }; applyPaper(); return { wall: wallMat, floor: floorMat, items: room().items }; }
 export function room() { const s = S(); s.room = s.room || { items: [], wall: '', floor: '' }; s.storage = s.storage || {}; return s.room; }
 /** 主題角落（v7.1）：附近（2.2 公尺內）湊齊幾類家具就成形。島嶼評價看有幾種角落，不只看家具數量；來作客的導師會注意到 */
 export const CORNERS = [
@@ -250,7 +257,7 @@ export function corners(r) {
   }));
 }
 export function addStorage(id, n) { const s = S(); s.storage = s.storage || {}; s.storage[id] = (s.storage[id] || 0) + (n || 1); s.catalog = s.catalog || {}; s.catalog[id] = s.catalog[id] || Date.now(); save(); }   // 收藏目錄：拿到過就登錄
-const foot = (f, r) => { const [w, d] = f.size || [1, 1]; return r % 2 ? [d, w] : [w, d]; };
+export const foot = (f, r) => { const [w, d] = f.size || [1, 1]; return r % 2 ? [d, w] : [w, d]; };
 function occupied(ignore) {
   const g = new Set();
   data().items.forEach(it => { if (it === ignore) return; const f = furn(it.id); if (!f || f.cat === 'rug') return; const [w, d] = foot(f, it.r); for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) g.add((it.x + x) + ',' + (it.z + z)); });

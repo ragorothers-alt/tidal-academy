@@ -7,7 +7,10 @@
 
 I.BLDMODELS['exam']=function tidalExamHall(THREE,kit){
  const g=new THREE.Group();g.name='tidal-exam-hall';
- const stone=kit.mat('#f3efe6',{roughness:.86},'stone'),shadow=kit.mat('#d8cbb7',{roughness:.9},'stone'),roof=kit.mat('#3e5a8c',{roughness:.66},'roof'),roofLight=kit.mat('#5b7fbf',{roughness:.67},'roof'),gold=kit.mat('#d8b45a',{roughness:.4,metalness:.72}),navy=kit.mat('#1f2c55',{roughness:.88}),wood=kit.mat('#8f6040',{roughness:.78}),dark=kit.mat('#543d2e',{roughness:.82}),pane=kit.win();
+ const stone=kit.mat('#f0e5d5',{roughness:.92},'plaster'),shadow=kit.mat('#e8decf',{roughness:.94},'stone');
+ const roof=kit.mat('#ad9abd',{roughness:.8},'roof'),roofLight=roof,gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal');
+ const navy=kit.mat('#777a98',{roughness:.88}),wood=kit.mat('#cda67e',{roughness:.8},'wood'),dark=kit.mat('#947b7b',{roughness:.8},'wood'),pane=kit.win();
+ const flower=kit.mat('#f3bdd2',{roughness:.94}),leaf=kit.mat('#9fb994',{roughness:.94});
  const batches=new Map(), groups=new Map();
  function add(geo,mat,part){if(!geo.attributes.normal)geo.computeVertexNormals();const k=part+'|'+mat.uuid;if(!batches.has(k))batches.set(k,{mat,part,geos:[]});batches.get(k).geos.push(geo.index?geo.toNonIndexed():geo);}
  function tf(geo,x=0,y=0,z=0,rx=0,ry=0,rz=0){geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));return geo;}
@@ -17,7 +20,7 @@ I.BLDMODELS['exam']=function tidalExamHall(THREE,kit){
  function rod(a,b,r,m,part,n=8){const va=new THREE.Vector3(...a),vb=new THREE.Vector3(...b),v=vb.clone().sub(va),geo=new THREE.CylinderGeometry(r,r,v.length(),n,1);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.clone().normalize()));geo.translate(...va.add(vb).multiplyScalar(.5).toArray());add(geo,m,part);}
  function profile(w,h,pointed=true){const s=new THREE.Shape();s.moveTo(-w/2,0);s.lineTo(w/2,0);s.lineTo(w/2,h*.63);if(pointed){s.quadraticCurveTo(w*.43,h*.87,0,h);s.quadraticCurveTo(-w*.43,h*.87,-w/2,h*.63);}else{s.absarc(0,h-w/2,w/2,0,Math.PI,false);}s.closePath();return s;}
  function flat(shape,depth,m,part,p,r,bevel=0){place(new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:bevel>0,bevelSize:bevel,bevelThickness:bevel,bevelSegments:1,curveSegments:12,steps:1}),m,part,p,r);}
- function outline(w,h,t,dep,m,part,p,r,pointed=true){const s=profile(w,h,pointed),inn=profile(w-2*t,h-t*1.8,pointed),pts=inn.getPoints(24).map(v=>new THREE.Vector2(v.x,v.y+t));s.holes.push(new THREE.Path(pts.reverse()));flat(s,dep,m,part,p,r,0);}
+ function outline(w,h,t,dep,m,part,p,r,pointed=true){const s=profile(w,h,pointed),inn=profile(w-2*t,h-t*1.8,pointed),pts=inn.getPoints(24).map(v=>new THREE.Vector2(v.x,v.y+t));s.holes.push(new THREE.Path(pts.reverse()));flat(s,dep,m,part,p,r,part==='door-surround'?.03:0);}
  function gable(w,d,y,rise,m,part){const s=new THREE.Shape();s.moveTo(-d/2,0);s.lineTo(d/2,0);s.lineTo(0,rise);s.closePath();flat(s,w,m,part,[-w/2,y,0],[0,Math.PI/2,0]);}
  function star(x,y,z,r,m,part){const s=new THREE.Shape();for(let i=0;i<8;i++){const a=i*Math.PI/4,rr=i%2?r*.28:r;const xx=Math.sin(a)*rr,yy=Math.cos(a)*rr;i?s.lineTo(xx,yy):s.moveTo(xx,yy);}s.closePath();flat(s,.012,m,part,[x,y,z]);}
  // Blockout: low bilateral wings, one central tower, pitched roofs and wide entry steps.
@@ -88,7 +91,7 @@ I.BLDMODELS['exam']=function tidalExamHall(THREE,kit){
  star(0,4.85,.48,.115,gold,'spire-finial');
  cyl(.038,.07,.10,gold,'spire-finial',[0,4.74,.48]);
  // Game stage 3, material and surface: broad slate rhythm, stone courses and leaded panes.
- const roofMid=kit.mat('#496a9b',{roughness:.65},'roof'),honey=kit.mat('#ba8756',{roughness:.76}),plinth=kit.mat('#798499',{roughness:.88},'stone');
+ const roofMid=roof,honey=wood,plinth=shadow;
  const slope=Math.atan(.9/1.5),slopeLength=Math.hypot(.9,1.5);
  for(const side of [-1,1])for(let row=0;row<6;row++)for(let col=0;col<16;col++){
   const x=-1.79+col*.239+(row%2?.018:0),t=(row+.5)/6;
@@ -115,11 +118,15 @@ I.BLDMODELS['exam']=function tidalExamHall(THREE,kit){
   box(.34,.17,.34,stone,'masonry',[x,2.23,z]);
   box(.29,.1,.29,gold,'masonry',[x,2.35,z]);
  }
- for(const y of [.58,.94,1.3,1.66,2.02]){
-  for(const z of [-1.395,1.395])box(3.6,.009,.008,shadow,'stone-courses',[0,y,z]);
-  for(const x of [-1.835,1.835])box(.008,.009,2.7,shadow,'stone-courses',[x,y,0]);
+ // Low planting beds flank, rather than cover, the entry signage and steps.
+ for(const side of [-1,1]){
+  box(.49,.12,.28,shadow,'entry-flowers',[side*1.37,.34,1.58]);
+  for(let j=0;j<3;j++){
+   const x=side*1.37+(j-1)*.14;
+   place(new THREE.SphereGeometry(.12,6,3),leaf,'entry-flowers',[x,.43,1.58]);
+   place(new THREE.SphereGeometry(.075,6,3),flower,'entry-flowers',[x,.54+(j%2)*.025,1.61]);
+  }
  }
- for(const z of [-1.396,1.396])for(let row=0;row<4;row++)for(let j=0;j<7;j++)box(.008,.31,.007,shadow,'stone-courses',[-1.55+j*.5+(row%2?.2:0),.76+row*.36,z]);
  function leaded(x,y,z,w=.49,h=1.27,ang=0){
   function local(p){const v=new THREE.Vector3(...p).applyAxisAngle(new THREE.Vector3(0,1,0),ang);return[x+v.x,y+v.y,z+v.z];}
   outline(w+.025,h+.025,.027,.018,navy,'window-lead',[x,y,z],[0,ang,0]);
@@ -191,23 +198,12 @@ I.BLDMODELS['library'] = function tidalLibrary(THREE, kit) {
   g.userData.sign = [-0.35, 2.69, 1.455];
   const cache = new Map(), batches = new Map();
   function mat(c, o = {}, k) { const key = c + JSON.stringify(o) + k; if (!cache.has(key)) cache.set(key, kit.mat(c, o, k)); return cache.get(key); }
-  const M = {
-    ivory: mat('#eee4ce', {roughness:.9}, 'stone'),
-    light: mat('#f3ebda', {roughness:.88}, 'stone'),
-    shadow: mat('#d2c4a8', {roughness:.95}, 'stone'),
-    mortar: mat('#bcaf96', {roughness:1}, 'stone'),
-    slate: mat('#315b70', {roughness:.72}, 'roof'),
-    slateLight: mat('#426d83', {roughness:.69}, 'roof'),
-    slateDark: mat('#263e55', {roughness:.79}, 'roof'),
-    blue: mat('#274967', {roughness:.78}),
-    cyan: mat('#4c8b9f', {roughness:.72}),
-    gold: mat('#d5ae5c', {roughness:.4,metalness:.65}),
-    oak: mat('#875b3d', {roughness:.83}, 'wall'),
-    oakLight: mat('#ac7c50', {roughness:.8}, 'wall'),
-    oakDark: mat('#503b2f', {roughness:.91}, 'wall'),
-    pages: mat('#f2dfb5', {roughness:.9}),
-    glass: kit.win()
-  };
+  const ivory=mat('#f0e5d5',{roughness:.92},'plaster'),limestone=mat('#e8decf',{roughness:.94},'stone');
+  const slate=mat('#ad9abd',{roughness:.8},'roof'),blue=mat('#777a98',{roughness:.88});
+  const oak=mat('#cda67e',{roughness:.8},'wood'),oakDark=mat('#947b7b',{roughness:.8},'wood');
+  const M={ivory,light:ivory,shadow:limestone,mortar:limestone,slate,slateLight:slate,slateDark:slate,blue,cyan:blue,
+    gold:mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),oak,oakLight:oak,oakDark,
+    pages:mat('#fff0d4',{roughness:.94},'paper'),flower:mat('#f3bdd2',{roughness:.94}),glass:kit.win()};
   const mid = new Map(Object.values(M).map((m, i) => [m, i]));
   function add(geo, material, part) {
     if (!geo.attributes.normal) geo.computeVertexNormals();
@@ -277,8 +273,8 @@ I.BLDMODELS['library'] = function tidalLibrary(THREE, kit) {
     arch(x,y+.035,z,w,h,.076,M.blue,part,ry);
     const c=Math.cos(ry),s=Math.sin(ry),front=(dist)=>[x+s*dist,y,z+c*dist];
     const inset=front(.077);arch(inset[0],y+.09,inset[2],w*.76,h-.2,.018,M.cyan,part,ry);
-    const q=front(.10);arch(q[0],y+.09,q[2],w*.42,h-.2,.015,M.glass,part,ry);
-    archRim(q[0],y+.025,q[2],w+.045,h+.035,.055,.06,M.light,part,ry);
+    const q=front(.10);arch(q[0],y+.09,q[2],w*.70,h-.2,.015,M.glass,part,ry);
+    archRim(q[0]-s*.10,y+.025,q[2]-c*.10,w+.045,h+.035,.055,.16,M.light,part,ry);
     localBox(x,y,z,0,-.035,.06,w+.23,.1,.22,M.shadow,part,ry);
     localBox(x,y,z,0,.09+(h-.2)*.43,.13,.022,(h-.2)*.83,.035,M.gold,part,ry);
     localBox(x,y,z,0,.42,.13,w*.72,.025,.035,M.gold,part,ry);
@@ -355,31 +351,14 @@ I.BLDMODELS['library'] = function tidalLibrary(THREE, kit) {
     cylinder(x,1.55,1.65,0,.033,.08,M.gold,'lanterns',6);
   }
   for(const yy of [2.435,2.945])box(-.35,yy,1.429,1.94,.025,.026,M.gold,'sign-board');
-  // Surface pass: a few wide masonry courses, subordinate to the window and roof silhouettes.
-  for(let row=0;row<7;row++){
-    const y=.66+row*.315;
-    for(const z of [1.237,-1.277]){
-      box(-.35,y,z,2.64,.012,.012,M.shadow,'masonry-courses');
-      for(let col=0;col<6;col++){
-        const x=-1.55+col*.43+(row%2)*.18;
-        if(x<.93)box(x,y+.151,z,.011,.285,.013,M.shadow,'masonry-courses');
-      }
-    }
-    for(const x of [-1.727,1.027]){
-      box(x,y,-.02,.012,.012,2.38,M.shadow,'masonry-courses');
-      for(let col=0;col<5;col++){
-        const z=-1.12+col*.47+(row%2)*.18;
-        if(z<1.2)box(x,y+.151,z,.013,.285,.011,M.shadow,'masonry-courses');
-      }
-    }
-  }
-  for(let row=0;row<9;row++){
-    const y=.64+row*.315;
-    if(y<3.48)add(tf(new THREE.TorusGeometry(.692,.006,4,24),1.15,y,-.68,Math.PI/2),M.shadow,'masonry-courses');
-    for(let col=0;col<12;col++){
-      const a=col*Math.PI/6+(row%2)*Math.PI/12;
-      const x=1.15+Math.sin(a)*.692,z=-.68+Math.cos(a)*.692;
-      beam([x,y+.016,z],[x,Math.min(3.47,y+.293),z],.005,M.shadow,'masonry-courses',.005,4);
+  // Small book plaque on the left jamb and pendant flowers, outside the sign reservation.
+  box(-1.15,.98,1.38,.25,.32,.065,M.oakDark,'entry-book-plaque');
+  for(const side of [-1,1])box(-1.15+side*.055,.99,1.42,.10,.24,.025,M.pages,'entry-book-plaque',0,side*.12);
+  for(const x of [-1.56,.86]){
+    beam([x,2.37,1.29],[x,1.79,1.32],.014,M.oakDark,'entry-flowers');
+    for(let j=0;j<4;j++){
+      const geo=new THREE.SphereGeometry(.075-j*.01,6,4);geo.scale(.85,1.25,.7);
+      add(tf(geo,x+Math.sin(j*2)*.034,2.28-j*.12,1.34),M.flower,'entry-flowers');
     }
   }
   // Material batches stay separated by meaningful assembly.

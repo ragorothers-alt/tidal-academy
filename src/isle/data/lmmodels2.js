@@ -4,21 +4,122 @@
   const I = (root.TA = root.TA || {}).ISLE = root.TA.ISLE || {};
   I.LMMODELS = I.LMMODELS || {};
 
+  // 地標的細磨石／霧面瓦：保留原 kind、雪與地平線變形，只移除照片細節。
+  // 32² 程式顆粒讓同色材質共用，也讓 mergeStatic 保留這份局部表面設定。
+  let finishTexture;
+  function finishKit(THREE, kit) {
+    return Object.assign({}, kit, {mat(color, opts, kind) {
+      if (kind !== 'stone' && kind !== 'roof' && kind !== 'wall') return kit.mat(color, opts, kind);
+      if (!finishTexture) {
+        const data = new Uint8Array(32 * 32 * 4);
+        for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+          const i = (y * 32 + x) * 4, v = 251 + ((x * 17 + y * 29 + x * y * 3) % 5);
+          data[i] = data[i + 1] = data[i + 2] = v; data[i + 3] = 255;
+        }
+        finishTexture = new THREE.DataTexture(data, 32, 32);
+        finishTexture.colorSpace = THREE.SRGBColorSpace;
+        finishTexture.wrapS = finishTexture.wrapT = THREE.RepeatWrapping;
+        finishTexture.magFilter = finishTexture.minFilter = THREE.LinearFilter;
+        finishTexture.needsUpdate = true;
+      }
+      const m = kit.mat(color, Object.assign({}, opts, {name: 'landmark-matte-v1'}), kind);
+      if (!m.userData.landmarkFinish) {
+        const compile = m.onBeforeCompile, cacheKey = m.customProgramCacheKey();
+        m.map = finishTexture;
+        m.onBeforeCompile = function(shader, renderer) {
+          compile.call(this, shader, renderer);
+          shader.fragmentShader = shader.fragmentShader
+            .replace(/triD\(uD0,[^;\n]*?,\s*gB\)/g, 'vec3(0.5)')
+            .replace(/triN\(uN0,[^;\n]*?,\s*gB\)/g, 'vec3(0.0)')
+            .replace('board * grain * (0.89 + lip * 0.11)', '(0.98 + (board * grain - 1.0) * 0.18)')
+            .replace('(0.86 + (1.0 - gap) * 0.1 + n_h(floor(p)) * 0.08) * (0.94 + c2 * 0.08)', '(0.985 + (1.0 - gap) * 0.01 + n_h(floor(p)) * 0.015)')
+            .replace('(0.74 + scal * 0.26) * (0.89 + edge * 0.11)', '(0.94 + scal * 0.06) * (0.97 + edge * 0.03)');
+        };
+        m.customProgramCacheKey = () => cacheKey + '-landmark-matte-v1';
+        m.userData.landmarkFinish = true; m.needsUpdate = true;
+      }
+      return m;
+    }});
+  }
+  // 木件按材質先合併；旋轉輪單獨處理。如此後續 mergeStatic 不會重建 wall 材質，
+  // 也不會把細木紋恢復成共用照片；wheel 的原點／層級／動畫軸保持不動。
+  function finishTimbers(THREE, g) {
+    const wheel = g.getObjectByName('wheel');
+    for (const scope of wheel ? [g, wheel] : [g]) {
+      scope.updateWorldMatrix(true,true);
+      const inv = new THREE.Matrix4().copy(scope.matrixWorld).invert(), bins = new Map();
+      scope.traverse(o => {
+        if (!o.isMesh || Array.isArray(o.material) || !['wall', 'wood'].includes(o.material.userData.kind)) return;
+        if (scope === g && wheel) {let p=o;while(p&&p!==wheel)p=p.parent;if(p===wheel)return;}
+        if (!bins.has(o.material)) bins.set(o.material,[]); bins.get(o.material).push(o);
+      });
+      for (const [mat, meshes] of bins) {
+        if (meshes.length < 2) continue;
+        const positions=[],normals=[],uv=[];
+        for (const mesh of meshes) {
+          const src=mesh.geometry, geo=src.index?src.toNonIndexed():src.clone();
+          geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv,mesh.matrixWorld));
+          const p=geo.attributes.position,n=geo.attributes.normal,u=geo.attributes.uv;
+          positions.push(...p.array);normals.push(...n.array);
+          if(u)uv.push(...u.array);else for(let i=0;i<p.count;i++)uv.push(p.getX(i),p.getY(i));
+          geo.dispose();src.dispose();mesh.parent.remove(mesh);
+        }
+        const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+        const mesh=new THREE.Mesh(geo,mat);mesh.name=meshes[0].name;mesh.castShadow=true;mesh.receiveShadow=true;scope.add(mesh);
+      }
+    }
+    return g;
+  }
+
+  // 小型、實體花葉；只在原輪廓內的指定基座／外緣生長，不佔走道。
+  function dressLandmark(THREE, kit, g, paths, flowers, flowerColor = '#f3bdd2') {
+    const bins = [[], []], V = p => new THREE.Vector3(...p);
+    const add = (geo, bin, p, scale, ry = 0) => {
+      if (scale) geo.scale(...scale); geo.rotateY(ry); geo.translate(...p);
+      const raw = geo.index ? geo.toNonIndexed() : geo;
+      if (raw !== geo) geo.dispose(); bins[bin].push(raw);
+    };
+    for (const pts of paths) {
+      const curve = new THREE.CatmullRomCurve3(pts.map(V));
+      add(new THREE.TubeGeometry(curve, 8, .009, 4, false), 0, [0,0,0]);
+      for (let j = 0; j < 6; j++) {
+        const p = curve.getPoint((j + .5) / 6), side = j % 2 ? 1 : -1;
+        add(new THREE.OctahedronGeometry(1), 0, [p.x + side * .035, p.y, p.z], [.065,.025,.035], side * .6);
+      }
+    }
+    for (const [x,y,z] of flowers) {
+      for (let j = 0; j < 5; j++) {
+        const a = j * Math.PI * 2 / 5;
+        add(new THREE.SphereGeometry(1,4,2), 1, [x + .035*Math.cos(a),y+.01,z+.035*Math.sin(a)], [.038,.025,.038]);
+      }
+      for (const side of [-1,1]) add(new THREE.OctahedronGeometry(1), 0, [x+side*.037,y-.035,z], [.065,.018,.034], side*.7);
+    }
+    const mats = [kit.mat('#9fb994',{roughness:.94}),kit.mat(flowerColor,{roughness:.88})];
+    bins.forEach((geos,i) => {
+      if (!geos.length) return;
+      const positions=[],normals=[];
+      for (const geo of geos) {positions.push(...geo.attributes.position.array);normals.push(...geo.attributes.normal.array);geo.dispose();}
+      const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));
+      const mesh=new THREE.Mesh(geo,mats[i]);mesh.name=i?'landmark-flowers':'landmark-leaves';mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);
+    });
+  }
+
+
   // shrine — meters; origin at ground, entrance toward +Z.
-  I.LMMODELS['shrine'] = function tidalCrystalShrine(THREE, kit) {
+  I.LMMODELS['shrine'] = function tidalCrystalShrine(THREE, kit) { kit=finishKit(THREE,kit);
     const g = new THREE.Group(); g.name = 'shrine';
     const stage = 8;
     const color = (c) => stage >= 4 ? c : '#e5dbc7';
     const M = {
-      stone: kit.mat(color('#eee5d2'), {roughness: .88}, 'stone'),
-      shade: kit.mat(color('#d7c9ad'), {roughness: .95}, 'stone'),
-      blue: kit.mat(color('#344e7b'), {roughness: .69}),
-      gold: kit.mat(color('#d5a751'), {roughness: .36, metalness: .67}),
-      goldLight: kit.mat(color('#edc77a'), {roughness: .32, metalness: .62}),
-      crystal: kit.mat(color('#67b9f1'), {roughness: .18, metalness: .08,
-        emissive: stage >= 4 ? '#7fc8ff' : '#000000', emissiveIntensity: stage >= 4 ? 1.0 : 0}),
-      crystalShade: kit.mat(color('#1f6fac'), {roughness: .22, metalness: .06,
-        emissive: stage >= 4 ? '#7fc8ff' : '#000000', emissiveIntensity: stage >= 4 ? 1.0 : 0})
+      stone: kit.mat(color('#efe3d1'), {roughness: .88}, 'stone'),
+      shade: kit.mat(color('#c8bdd1'), {roughness: .95}, 'stone'),
+      blue: kit.mat(color('#ad9abd'), {roughness: .69}),
+      gold: kit.mat(color('#cda67c'), {roughness: .4, metalness:0.6},'metal'),
+      goldLight: kit.mat(color('#e8c48b'), {roughness: .4, metalness:0.6},'metal'),
+      crystal: kit.mat(color('#abd0ce'), {roughness: .40, metalness: .02,
+        emissive: stage >= 4 ? '#d5c7e6' : '#000000', emissiveIntensity: stage >= 4 ? .20 : 0}),
+      crystalShade: kit.mat(color('#9db5c9'), {roughness: .44, metalness: .02,
+        emissive: stage >= 4 ? '#d5c7e6' : '#000000', emissiveIntensity: stage >= 4 ? .20 : 0})
     };
     const nodes = {}, batches = new Map();
     function node(id, parent) {const n = new THREE.Group(); n.name = id; (parent ? nodes[parent] : g).add(n); nodes[id] = n; return n;}
@@ -77,7 +178,7 @@
       for(const y of [2.801,2.939])cyl('fascia',y<2.9?1.582:1.563,.016,y,M.gold,0,0,y<2.9?1.582:1.563,48);
     }
     const dome=new THREE.SphereGeometry(1,48,20,0,Math.PI*2,0,Math.PI/2);
-    dome.scale(1.51,1.02,1.51);dome.translate(0,2.95,0);add(dome,M.stone,'dome');
+    dome.scale(1.51,1.02,1.51);dome.translate(0,2.95,0);add(dome,M.blue,'dome');
     if(stage>=3) {
       // Meridian ribbons have actual width; they stay readable from the distant island camera.
       for(let i=0;i<6;i++) {
@@ -122,11 +223,12 @@
       const geom=new THREE.BufferGeometry();geom.setAttribute('position',new THREE.BufferAttribute(pos,3));geom.setAttribute('normal',new THREE.BufferAttribute(norm,3));geom.setAttribute('uv',new THREE.BufferAttribute(uv,2));
       const mesh=new THREE.Mesh(geom,mat);mesh.name=part+'-'+Object.keys(M).find(k=>M[k]===mat);mesh.castShadow=true;mesh.receiveShadow=true;nodes[part].add(mesh);
     }
+    dressLandmark(THREE,kit,g,[],[-1.35,1.35].flatMap(x=>[-.09,0,.09].map(d=>[x+d,.37,.68])));
     return g;
   };
 
   // aqueduct — meters; origin at ground, entrance toward +Z.
-  I.LMMODELS['aqueduct'] = function (THREE, kit) {
+  I.LMMODELS['aqueduct'] = function (THREE, kit) { kit=finishKit(THREE,kit);
   const g = new THREE.Group(); g.name = 'aqueduct';
   const assemblies = {};
   for (const name of ['pier-assembly', 'arch-assembly', 'channel-assembly']) {
@@ -136,12 +238,12 @@
   const L = 4.25, pitch = 8.5 / 3, rise = 1.02, spring = 1, rx = 7 / 6;
   const piers = [-L, -pitch / 2, pitch / 2, L], bays = [-pitch, 0, pitch];
   const mats = {
-    stone: kit.mat(STAGE < 3 ? '#e8e3d7' : '#f3efe6', { roughness: .86 }, 'stone'),
-    shade: kit.mat(STAGE < 3 ? '#ded7ca' : '#d8cbb7', { roughness: .9 }, 'stone'),
-    blue: kit.mat(STAGE < 3 ? '#e8e3d7' : '#263d68', { roughness: .72 }),
-    gold: kit.mat(STAGE < 3 ? '#ded7ca' : '#d8b45a', { roughness: .39, metalness: .72 }),
-    water: kit.mat(STAGE < 3 ? '#e8e3d7' : '#70bdc9', { roughness: .18, transparent: true, opacity: .8 }),
-    ripple: kit.mat('#c7edf0', { roughness: .22, transparent: true, opacity: .56 })
+    stone: kit.mat(STAGE < 3 ? '#e8e3d7' : '#efe3d1', { roughness: .86 }, 'stone'),
+    shade: kit.mat(STAGE < 3 ? '#ded7ca' : '#c8bdd1', { roughness: .9 }, 'stone'),
+    blue: kit.mat(STAGE < 3 ? '#e8e3d7' : '#a69ab7', { roughness: .72 }),
+    gold: kit.mat(STAGE < 3 ? '#ded7ca' : '#e8c48b', { roughness: .4, metalness:0.6 },'metal'),
+    water: kit.mat(STAGE < 3 ? '#e8e3d7' : '#abd0ce', { roughness: .18, transparent: true, opacity: .8 }),
+    ripple: kit.mat('#d8e6df', { roughness: .22, transparent: true, opacity: .56 })
   };
   const buckets = new Map();
   function add(name, material, geo) {
@@ -240,20 +342,21 @@
     const parent = name.startsWith('arch-') || name.startsWith('ring-') ? 'arch-assembly' : name.startsWith('pier-') || name.startsWith('gold-') ? 'pier-assembly' : 'channel-assembly';
     assemblies[parent].add(mesh);
   });
+  dressLandmark(THREE,kit,g,[[[-2.84,2.88,.51],[-2.95,2.55,.51],[-2.88,2.16,.51]],[[2.80,2.87,-.51],[2.91,2.58,-.51],[2.84,2.36,-.51]]],[[-2.90,2.53,.51],[2.86,2.60,-.51]]);
   return g;
 };
 
   // statue — meters; origin at ground, entrance toward +Z.
-  I.LMMODELS['statue'] = function (THREE, kit) {
+  I.LMMODELS['statue'] = function (THREE, kit) { kit=finishKit(THREE,kit);
     const g = new THREE.Group();
     g.name = 'tidal-seabird-monument';
     const STAGE = 8;
-    const stone = kit.mat('#f3efe6', { roughness: .88 }, 'stone');
-    const bird = kit.mat('#f5efe3', { roughness: .83 });
-    const feather = kit.mat('#eee6d8', { roughness: .85 });
-    const navy = kit.mat('#34486f', { roughness: .78, metalness: .08 });
-    const gold = kit.mat('#d8b45a', { roughness: .38, metalness: .72 });
-    const eye = kit.mat('#263348', { roughness: .25, metalness: .1 });
+    const stone = kit.mat('#efe3d1', { roughness: .88 }, 'stone');
+    const bird = kit.mat('#f0e5d5', { roughness: .83 });
+    const feather = kit.mat('#e8decf', { roughness: .85 });
+    const navy = kit.mat('#b7a4c7', { roughness: .78, metalness: .08 });
+    const gold = kit.mat('#e8c48b', { roughness: .4, metalness:0.6 },'metal');
+    const eye = kit.mat('#777a98', { roughness: .25, metalness: .1 });
     const V = (x,y,z) => new THREE.Vector3(x,y,z);
     function merge(geos) {
       const ps=[], ns=[], uv=[];
@@ -446,13 +549,14 @@
     if(STAGE>=2)beaks.push(loft([[0,2.181,.272,.058,.02],[0,2.182,.345,.064,.023],[0,2.174,.424,.037,.016],[0,2.165,.481,.002,.001]],V(1,0,0),8));
     part('beak',beaks,gold);
     if(STAGE>=2)part('eyes',[ellipse(.009,.015,.015,.132,2.26,.19),ellipse(.009,.015,.015,-.132,2.26,.19)],eye);
+    dressLandmark(THREE,kit,g,[],[[-.34,.24,.31],[-.25,.25,.35],[.31,.24,-.32],[.23,.25,-.35]]);
     return g;
   };
 
   // well — meters; origin at ground, entrance toward +Z.
-  I.LMMODELS['well']=function(THREE,kit){
+  I.LMMODELS['well']=function(THREE,kit){ kit=finishKit(THREE,kit);
  const g=new THREE.Group(),STAGE=7,batches=new Map();
- const mats={stone:kit.mat('#f3efe6',{roughness:.88},'stone'),accent:kit.mat('#e4dbc9',{roughness:.9},'stone'),wood:kit.mat('#8f6040',{roughness:.78},'wall'),roof:kit.mat('#3e5a8c',{roughness:.63},'roof'),blue:kit.mat('#5b7fbf',{roughness:.64},'roof'),gold:kit.mat('#d8b45a',{roughness:.36,metalness:.75}),rope:kit.mat('#c5a579',{roughness:.92}),inner:kit.mat('#535f70',{roughness:.93},'stone'),darkwood:kit.mat('#68452f',{roughness:.84},'wall')};
+ const mats={stone:kit.mat('#efe3d1',{roughness:.88},'stone'),accent:kit.mat('#d8cfce',{roughness:.9},'stone'),wood:kit.mat('#cda67e',{roughness:.8},'wood'),roof:kit.mat('#ad9abd',{roughness:.63},'roof'),blue:kit.mat('#b7a4c7',{roughness:.64},'roof'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),rope:kit.mat('#e3d2b6',{roughness:.92}),inner:kit.mat('#777a98',{roughness:.93},'stone'),darkwood:kit.mat('#947b7b',{roughness:.8},'wood')};
  function add(geo,mat,name,p=[0,0,0],r=[0,0,0]){const m=new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)),new THREE.Vector3(1,1,1));geo.applyMatrix4(m);const k=name+'|'+mat;if(!batches.has(k))batches.set(k,{name,mat,geos:[]});batches.get(k).geos.push(geo);}
  function box(w,h,d,p,mat='wood',name='timber-frame',r=[0,0,0]){add(new THREE.BoxGeometry(w,h,d),mat,name,p,r);}
  function beam(a,b,w,d,mat='wood',name='timber-frame'){const v=new THREE.Vector3().fromArray(b).sub(new THREE.Vector3().fromArray(a)),geo=new THREE.BoxGeometry(w,v.length(),d);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));geo.translate((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);add(geo,mat,name);}
@@ -504,12 +608,13 @@ for(const x of [-.48,.48]){const s=new THREE.Shape();s.moveTo(-.11,-.65);s.lineT
  }
  if(STAGE>=2){box(.065,.06,1.05,[0,2.465,0],'gold','gold-hardware');for(const z of [-.49,.49]){cyl(.058,.07,.05,[0,2.49,z],'gold','gold-hardware',[0,0,0],4);add(new THREE.OctahedronGeometry(.065,0),'gold','gold-hardware',[0,2.53,z]);}for(const x of [-.58,.58])for(const z of [-.49,.49])box(.1,.09,.08,[x,2.01,z],'gold','gold-hardware');}
  for(const {name,mat,geos} of batches.values()){let size=0;const list=geos.map(geo=>{const n=geo.index?geo.toNonIndexed():geo;size+=n.attributes.position.array.length;return n;});const pos=new Float32Array(size),normal=new Float32Array(size);let at=0;for(const geo of list){pos.set(geo.attributes.position.array,at);normal.set(geo.attributes.normal.array,at);at+=geo.attributes.position.array.length;}for(let i=1;i<pos.length;i+=3)if(pos[i]>.615)pos[i]=.615+(pos[i]-.615)*.70;const merged=new THREE.BufferGeometry();merged.setAttribute('position',new THREE.BufferAttribute(pos,3));merged.setAttribute('normal',new THREE.BufferAttribute(normal,3));merged.computeVertexNormals();const mesh=new THREE.Mesh(merged,mats[mat]);mesh.name=name+(mat==='blue'?'-blue':'');mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);}
- return g;
+ dressLandmark(THREE,kit,g,[[[-.50,.64,.10],[-.54,.96,.12],[-.49,1.18,.13]],[[.52,.63,-.09],[.55,.84,-.08],[.50,.99,-.08]]],[[-.52,.86,.16],[.51,.78,-.05]]);
+ return finishTimbers(THREE,g);
 };
 
   // signpost — meters; origin at ground, entrance toward +Z.
-  I.LMMODELS['signpost']=function(THREE,kit){
- const g=new THREE.Group(),STAGE=7,batches=new Map(),mats={stone:kit.mat('#f3efe6',{roughness:.87},'stone'),wood:kit.mat('#8f6040',{roughness:.77},'wall'),light:kit.mat('#ba8756',{roughness:.76},'wall'),blue:kit.mat('#3e5a8c',{roughness:.63},'roof'),gold:kit.mat('#d8b45a',{roughness:.35,metalness:.75})};
+  I.LMMODELS['signpost']=function(THREE,kit){ kit=finishKit(THREE,kit);
+ const g=new THREE.Group(),STAGE=7,batches=new Map(),mats={stone:kit.mat('#efe3d1',{roughness:.87},'stone'),wood:kit.mat('#cda67e',{roughness:.8},'wood'),light:kit.mat('#d7b38c',{roughness:.8},'wood'),blue:kit.mat('#ad9abd',{roughness:.63},'roof'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal')};
  function add(geo,mat,name,p=[0,0,0],r=[0,0,0]){geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)),new THREE.Vector3(1,1,1)));const k=name+'|'+mat;if(!batches.has(k))batches.set(k,{name,mat,geos:[]});batches.get(k).geos.push(geo);}
  function cube(w,h,d,p,mat,name){if(STAGE<2){add(new THREE.BoxGeometry(w,h,d),mat,name,p);return;}const s=new THREE.Shape(),b=Math.min(.014,w*.08,h*.08,d*.2),x=w/2-b,y=h/2-b;s.moveTo(-x+b,-y);s.lineTo(x-b,-y);s.lineTo(x,-y+b);s.lineTo(x,y-b);s.lineTo(x-b,y);s.lineTo(-x+b,y);s.lineTo(-x,y-b);s.lineTo(-x,-y+b);s.closePath();const geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelSegments:1,bevelSize:b,bevelThickness:b,steps:1});geo.translate(0,0,-d/2+b);add(geo,mat,name,p);}
  cube(.48,.17,.48,[0,.085,0],'stone','stone-base');cube(.37,.08,.37,[0,.21,0],'stone','stone-base');cube(.29,.26,.29,[0,.37,0],'stone','stone-base');cube(.34,.065,.34,[0,.52,0],'stone','stone-base');
@@ -526,7 +631,7 @@ for(const x of [-.48,.48]){const s=new THREE.Shape();s.moveTo(-.11,-.65);s.lineT
   if(STAGE>=2){for(const z of [-.15,.15])cube(.18,.16,.012,[0,.37,z],'blue','blue-borders');}
  }
  for(const {name,mat,geos}of batches.values()){let size=0;const list=geos.map(x=>{const n=x.index?x.toNonIndexed():x;size+=n.attributes.position.array.length;return n;});const p=new Float32Array(size),n=new Float32Array(size);let at=0;for(const geo of list){p.set(geo.attributes.position.array,at);n.set(geo.attributes.normal.array,at);at+=geo.attributes.position.array.length;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(p,3));geo.setAttribute('normal',new THREE.BufferAttribute(n,3));const mesh=new THREE.Mesh(geo,mats[mat]);mesh.name=name+(mat==='light'?'-grain':'');mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);}
- g.userData.sign=[.38,1.64,.195];return g;
+ g.userData.sign=[.38,1.64,.195];return finishTimbers(THREE,g);
 };
 
 })(typeof window !== 'undefined' ? window : globalThis);

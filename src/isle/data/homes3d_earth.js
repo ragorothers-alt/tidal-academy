@@ -6,21 +6,26 @@
   I.BLDMODELS['home_earth']=function(THREE,kit){
     const g=new THREE.Group();g.name='home-earth-stargazing-log-cabin';
     const M={
-      wood:kit.mat('#8a6040',{roughness:.83},'wall'),
-      honey:kit.mat('#bc8a55',{roughness:.78},'wall'),
-      dark:kit.mat('#4d382e',{roughness:.92},'wall'),
+      wood:kit.mat('#8a6040',{roughness:.83},'wood'),
+      honey:kit.mat('#bc8a55',{roughness:.78},'wood'),
+      dark:kit.mat('#4d382e',{roughness:.92},'wood'),
       cream:kit.mat('#f4e7ce',{roughness:.9},'stone'),
       stone:kit.mat('#b9b0a2',{roughness:.96},'stone'),
       stoneLight:kit.mat('#d7ccba',{roughness:.92},'stone'),
       roof:kit.mat('#4a6b4f',{roughness:.85},'roof'),
       roofLight:kit.mat('#688665',{roughness:.84},'roof'),
-      brass:kit.mat('#d7ad57',{roughness:.38,metalness:.52}),
+      brass:kit.mat('#d7ad57',{roughness: 0.38,metalness: 0.6}, 'metal'),
       leaf:kit.mat('#718957',{roughness:.95}),
       pink:kit.mat('#e9a7bd',{roughness:.88}),
       lavender:kit.mat('#ae96ca',{roughness:.9}),
-      flag:kit.mat('#5b526e',{roughness:.93}),
+      flag:kit.mat('#5b526e',{roughness:.9},'fabric'),
       charcoal:kit.mat('#283c3b',{roughness:.86}),
       ember:kit.mat('#ef9853',{roughness:.8,emissive:'#ef9853',emissiveIntensity:.3}),
+      // One fabric batch for the banner and hammock; the telescope lens keeps its plain finish.
+      lens:kit.mat('#5b526e',{roughness:.93}),
+      fabricCream:kit.mat('#f4e7ce',{roughness:.9},'fabric'),
+      fabricPink:kit.mat('#e9a7bd',{roughness:.9},'fabric'),
+      fabricLavender:kit.mat('#ae96ca',{roughness:.9},'fabric'),
       glass:kit.win()
     };
     let p=g;
@@ -70,7 +75,7 @@
     ball(.97,4.67,-.42,.12,M.brass);beam([.97,4.61,-.42],[.97,4.83,-.42],.055,M.brass);
     const axis=new THREE.Vector3(.83,.53,.15).normalize(),mid=new THREE.Vector3(1.03,4.91,-.41);
     function barrel(off,len,r1,r2,m){const c=mid.clone().addScaledVector(axis,off);const q=new THREE.CylinderGeometry(r2,r1,len,16,1);q.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),axis));add(q,m,...c.toArray());}
-    barrel(0,1.13,.11,.16,M.brass);barrel(-.68,.27,.055,.066,M.dark);barrel(-.83,.055,.075,.075,M.brass);barrel(.64,.14,.19,.19,M.brass);barrel(.717,.012,.143,.143,M.charcoal);barrel(.724,.009,.121,.121,M.flag);
+    barrel(0,1.13,.11,.16,M.brass);barrel(-.68,.27,.055,.066,M.dark);barrel(-.83,.055,.075,.075,M.brass);barrel(.64,.14,.19,.19,M.brass);barrel(.717,.012,.143,.143,M.charcoal);barrel(.724,.009,.121,.121,M.lens);
     for(const off of [-.42,.23,.51])barrel(off,.048,off>.4?.18:.145,off>.4?.18:.145,M.honey);
     part('porch');for(const x of [-.45,1.31]){box(x,.42,1.62,.34,.22,.34,M.stoneLight);box(x,1.30,1.62,.18,1.69,.18,M.wood);box(x,2.14,1.62,.29,.13,.29,M.honey);beam([x,2.15,1.62],[x+(x<0?.29:-.29),1.84,1.62],.065,M.honey);}
     for(const side of [-1,1]){quad([.43,3.0,.97],[.43,3.0,1.98],[.43+side*1.03,2.14,1.98],[.43+side*1.03,2.14,.97],M.roof,.10);beam([.43,3.05,2.0],[.43+side*1.05,2.19,2.0],.075,M.honey);}
@@ -114,11 +119,11 @@
     for(let j=0;j<stars.length;j++){const v=stars[j];ball(fx+v[0],4.34+v[1],fz+.039,.021,M.brass,1,1,.45);if(j)beam([fx+stars[j-1][0],4.34+stars[j-1][1],fz+.038],[fx+v[0],4.34+v[1],fz+.038],.005,M.brass,4);}
     add(new THREE.TorusGeometry(.056,.012,4,14,Math.PI*1.60),M.brass,fx-.17,4.25,fz+.04,0,0,.60);
     part('hammock');
-    for(const z of [-.39,1.12]){chamferBox(2.16,.69,z,.15,1.38,.15,M.honey);for(let j=0;j<3;j++)add(new THREE.TorusGeometry(.092,.011,4,8),M.cream,2.16,1.19+j*.033,z,Math.PI/2);}
-    for(let j=0;j<12;j++){const t0=j/12,t1=(j+1)/12,z0=-.27+t0*1.26,z1=-.27+t1*1.26,y0=1.19-.50*Math.sin(Math.PI*t0),y1=1.19-.50*Math.sin(Math.PI*t1);quad([1.96,y0,z0],[2.34,y0,z0],[2.34,y1,z1],[1.96,y1,z1],j%4===0?M.pink:M.cream,.018);}
-    for(const x of [1.96,2.34])for(const end of [-1,1])beam([x,1.19,end<0?-.27:.99],[2.16,1.25,end<0?-.39:1.12],.014,M.cream,5);
-    for(let j=0;j<9;j++){const t=j/8,z=-.20+t*1.12,y=1.18-.50*Math.sin(Math.PI*(z+.27)/1.26);beam([2.35,y,z],[2.35,y-.10,z],.009,M.cream,4);ball(2.35,y-.11,z,.018,M.cream);}
-    box(2.14,.80,.34,.30,.15,.29,M.lavender,0,0,.09);
+    for(const z of [-.39,1.12]){chamferBox(2.16,.69,z,.15,1.38,.15,M.honey);for(let j=0;j<3;j++)add(new THREE.TorusGeometry(.092,.011,4,8),M.fabricCream,2.16,1.19+j*.033,z,Math.PI/2);}
+    for(let j=0;j<12;j++){const t0=j/12,t1=(j+1)/12,z0=-.27+t0*1.26,z1=-.27+t1*1.26,y0=1.19-.50*Math.sin(Math.PI*t0),y1=1.19-.50*Math.sin(Math.PI*t1);quad([1.96,y0,z0],[2.34,y0,z0],[2.34,y1,z1],[1.96,y1,z1],j%4===0?M.fabricPink:M.fabricCream,.018);}
+    for(const x of [1.96,2.34])for(const end of [-1,1])beam([x,1.19,end<0?-.27:.99],[2.16,1.25,end<0?-.39:1.12],.014,M.fabricCream,5);
+    for(let j=0;j<9;j++){const t=j/8,z=-.20+t*1.12,y=1.18-.50*Math.sin(Math.PI*(z+.27)/1.26);beam([2.35,y,z],[2.35,y-.10,z],.009,M.fabricCream,4);ball(2.35,y-.11,z,.018,M.fabricCream);}
+    box(2.14,.80,.34,.30,.15,.29,M.fabricLavender,0,0,.09);
     part('campfire');const cx=-2.08,cz=1.94;
     for(let j=0;j<11;j++){const a=j*Math.PI*2/11;ball(cx+Math.cos(a)*.33,.10,cz+Math.sin(a)*.33,.097,j%3?M.stone:M.stoneLight,1.16,.72,.96);}
     for(const a of [0,Math.PI/3,Math.PI*2/3])beam([cx+Math.cos(a)*.24,.10,cz+Math.sin(a)*.24],[cx-Math.cos(a)*.24,.10,cz-Math.sin(a)*.24],.045,M.dark,6);

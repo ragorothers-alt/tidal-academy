@@ -10,14 +10,15 @@ import { groundAt } from './terrain.js';
 
 /** 每種光源：顏色、強度（燭光）、照射距離、衰減、空氣光暈的大小（公尺） */
 const KIND = {
-  window:  { color: '#ffb35c', power: 4.6, range: 5, decay: 1.7, halo: 0 },   // v7.0：夜裡的燈是一圈圈的光池（燈下亮、燈外暗 4–6 倍），不再把整座廣場照成白天
-  lantern: { color: '#ffc070', power: 3.2, range: 5, decay: 1.8, halo: 0.6 },
-  lamp:    { color: '#ffc070', power: 8.5, range: 8.5, decay: 1.85, halo: 1.0 },
-  garden:  { color: '#ffc870', power: 5, range: 6, decay: 1.9, halo: 0.75 },
-  crystal: { color: '#8fd0ff', power: 4.5, range: 7, decay: 1.6, halo: 1.1, day: 0.25 },
-  beacon:  { color: '#ffd98a', power: 26, range: 26, decay: 1.6, halo: 3.2 }
+  window:  { color: '#ffd39d', power: 3.5, range: 4.5, decay: 1.7, halo: 0 },   // 窗仍由 scan 自動登記；暖奶油光留在窗邊，不把整面牆洗白
+  lantern: { color: '#ffd39d', power: 2.8, range: 4.5, decay: 1.8, halo: 0.48 },
+  lamp:    { color: '#ffd39d', power: 6.4, range: 7.2, decay: 1.85, halo: 0.72 },
+  garden:  { color: '#ffd39d', power: 3.8, range: 5.5, decay: 1.9, halo: 0.58 },
+  crystal: { color: '#a99acb', power: 3.6, range: 7, decay: 1.6, halo: 0.85, day: 0.25 },
+  beacon:  { color: '#ffd39d', power: 21, range: 26, decay: 1.6, halo: 2.4 }
 };
 const emitters = [];
+const HALO_TINT = new THREE.Color('#ebc2bc');
 /** 每一格最多照幾盞（省電模式由 settings.js 設成 6） */
 export const setPool = n => { U.uLMax.value = n; };
 let dirty = true;
@@ -27,6 +28,7 @@ let dirty = true;
  */
 export function emit(o) {
   const k = KIND[o.kind] || KIND.lantern, e = { x: o.x, y: o.y, z: o.z, kind: o.kind, k, nx: o.nx || 0, nz: o.nz || 0, col: new THREE.Color(o.color || k.color), pw: o.power || 1 };
+  e.haloCol = e.col.clone().lerp(HALO_TINT, o.color || o.kind === 'crystal' ? 0 : 0.45);
   e.lx = e.x + e.nx * 0.55; e.lz = e.z + e.nz * 0.55; e.ly = e.y - (o.kind === 'window' ? 0.15 : 0);   // 光源的位置
   e.gy = groundAt(e.lx, e.lz);
   emitters.push(e); dirty = true; return e;
@@ -116,7 +118,7 @@ function buildGrid() {
 /* ---------- 空氣中的光暈 ---------- */
 const poolTex = (() => {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const c = cv.getContext('2d'), g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.35, 'rgba(255,255,255,0.55)'); g.addColorStop(0.7, 'rgba(255,255,255,0.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  g.addColorStop(0, 'rgba(255,255,255,0.8)'); g.addColorStop(0.22, 'rgba(255,255,255,0.42)'); g.addColorStop(0.6, 'rgba(255,255,255,0.08)'); g.addColorStop(1, 'rgba(255,255,255,0)');
   c.fillStyle = g; c.fillRect(0, 0, 128, 128); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
 let halos = null;
@@ -151,6 +153,6 @@ export function update(dt, target, show) {
   haloMat.uniforms.uScale.value = camera.projectionMatrix.elements[5] * innerHeight * 0.5;   // 世界大小 → 畫面像素（和透視一樣）
   if (Math.abs(lit - lastLit) < 0.002) return; lastLit = lit;
   const list = halos.userData.list, C = halos.geometry.attributes.aCol;
-  for (let i = 0; i < list.length; i++) { const e = list[i], on = Math.max(lit, (e.k.day || 0) * 0.6) * 0.42; C.setXYZ(i, e.col.r * on, e.col.g * on, e.col.b * on); }
+  for (let i = 0; i < list.length; i++) { const e = list[i], on = Math.max(lit, (e.k.day || 0) * 0.6) * 0.3; C.setXYZ(i, e.haloCol.r * on, e.haloCol.g * on, e.haloCol.b * on); }
   C.needsUpdate = true;
 }

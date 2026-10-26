@@ -241,23 +241,28 @@ export function waterAt(x0, z0) { const [x, z] = unwarp(x0, z0), tx = Math.floor
 export const waterY = (x, z) => { const [tx, tz] = tileOf(x, z); return isCreek(tx, tz) ? CREEK_WATER : WATER_Y[T(tx, tz)] ?? null; };
 
 /* ---------- 地形網格 ---------- */
+// 明確表面分類只套用在主島網格；waves.js／trip.js 保留原 TERRAIN 的相容路徑。
+// aSurface = (草, 沙, 白石[1牆身／2立體石], 水底)。不影響任何格子與高度查詢。
+const surfaceMat = bend(TERRAIN.clone(), 'terrain');
+surfaceMat.defines = { ...TERRAIN.defines, TA_SURFACE: '' };
 /** 崖頂邊緣的取樣點 [x, y, z, 往外的方向 dx, dz]（世界座標）：grass.js 在這裡長出往下垂的草 */
 export const cliffTops = [];
 export const terrain = (function build() {
-  const P = [], Cc = [], WALL = [];   // WALL：哪些頂點屬於崖壁（法線要平滑）
-  let inWall = false;
-  const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); WALL.push(inWall); };
+  const P = [], Cc = [], WALL = [], SF = [], RP = [], RC = [], RS = [];   // WALL：哪些頂點屬於崖壁（法線要平滑）
+  let inWall = false, surface = [0, 0, 0, 0];
+  const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); WALL.push(inWall); SF.push(...surface); };
   const quad = (a, b, c, d, ca, cb, cc, cd) => { push(...a, ca); push(...b, cb); push(...c, cc); push(...a, ca); push(...c, cc); push(...d, cd); };
-  const BED_SH = new THREE.Color('#b6b79a'), BED_DP = new THREE.Color('#4f7268');   // 池底：淺岸的砂、池心的深青綠（Codex 第二輪 C6）
-  const grassC = (x, z, hi) => { const n = noise(x * 0.35, z * 0.35), n2 = noise(x * 1.7 + 5, z * 1.7); const c = new THREE.Color(hi ? '#94bb3e' : '#8ab336').lerp(new THREE.Color(hi ? '#72a02e' : '#6a9628'), n * 0.8); c.offsetHSL(0, 0, (n2 - 0.5) * 0.05); return c; };   // 草毯底色深一點，草葉之間的縫看得出陰影
-  const sandC = (x, z) => new THREE.Color('#ffe6bf').lerp(new THREE.Color('#f3d3a2'), noise(x * 0.5, z * 0.5) * 0.7);   // 暖白的細沙
-  const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#e2cc9e').lerp(new THREE.Color('#c8b58a'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? (pondOf(tx, tz) ? BED_SH.clone().lerp(BED_DP, pondK(pondOf(tx, tz), x, z)) : new THREE.Color('#7da493')) : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙；池塘（v7.4）岸邊是淺色的砂底、往池心漸深
-  const lip = new THREE.Color('#6cbf4e'), cliffT = new THREE.Color('#b48a5c'), cliffB = new THREE.Color('#946c45'), sandW = new THREE.Color('#e3cc90'), sandWB = new THREE.Color('#c9b07a'), bankB = new THREE.Color('#c8b58a');
+  const BED_SH = new THREE.Color('#c8d3b6'), BED_DP = new THREE.Color('#91afa6');   // 池底：淺岸的砂、池心的深青綠（Codex 第二輪 C6）
+  const grassC = (x, z, hi) => { const n = noise(x * 0.45, z * 0.45); return new THREE.Color(hi ? '#a7bfa0' : '#9fb994').lerp(new THREE.Color(hi ? '#c4d4b4' : '#b8cba5'), n * 0.48); };
+  const sandC = (x, z) => new THREE.Color('#f4e5ce').lerp(new THREE.Color('#e6ddce'), noise(x * 0.5, z * 0.5) * 0.7);   // 暖白的細沙
+  const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#c8d3b6').lerp(new THREE.Color('#b7c9b8'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? (pondOf(tx, tz) ? BED_SH.clone().lerp(BED_DP, pondK(pondOf(tx, tz), x, z)) : new THREE.Color('#9fbdaf')) : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙；池塘（v7.4）岸邊是淺色的砂底、往池心漸深
+  const lip = new THREE.Color('#9fb994'), cliffT = new THREE.Color('#d8c7b4'), cliffB = new THREE.Color('#b5a6b5'), sandW = new THREE.Color('#e9dfce'), sandWB = new THREE.Color('#c7cfd0'), bankB = new THREE.Color('#bdc9b6');
   const bankSl = (x, z) => 0.42 + noise(x * 0.7, z * 0.7) * 0.18;   // 草岸斜坡在這個角點的寬度
-  const rockG = new THREE.Color('#9c9184'), rockT = new THREE.Color('#a99c88'), rockB = new THREE.Color('#7e7062'), soil = new THREE.Color('#7a5a3e'), wc = new THREE.Color();
+  const rockG = new THREE.Color('#8d9d9a'), rockT = new THREE.Color('#d8c7b4'), rockB = new THREE.Color('#b5a6b5'), soil = new THREE.Color('#a89c96'), wc = new THREE.Color();
   /* 崖壁：從 b 到 a 的一面牆（底 y0、兩端的頂 yb、ya），細分成 3 × n 格。中間的頂點用世界座標的向量場水平推移，
      相鄰的牆共用的頂點推到同一個位置，轉角也不會裂開；頂與底那一排不動，和崖頂的草邊、下面的地面接得起來 */
   const cliffWall = (a, b, y0, ya, yb, dx, dz) => {
+    surface = PLAN && Math.min(ya, yb) > 1.5 ? [0, 0, 1, 0] : [0, 0, 0, 0];
     const nu = 3, nv = Math.max(2, Math.round(Math.max(ya, yb) - y0) * 2), pt = [];
     for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) {
       const u = i / nu, v = j / nv, x = b[0] + (a[0] - b[0]) * u, z = b[1] + (a[1] - b[1]) * u, top = yb + (ya - yb) * u, y = y0 + (top - y0) * v;
@@ -272,6 +277,35 @@ export const terrain = (function build() {
       wc.copy(rockB).lerp(rockT, v).lerp(rockG, rocky * 0.5).lerp(cliffT, 0.25).lerp(soil, topSoil * 0.85).multiplyScalar(band * (0.72 + 0.28 * Math.min(1, v * 2.5)));   // 灰米色岩層、灰色岩塊、牆腳較暗
       pt.push([[px, y, pz], wc.clone()]);
     }
+    if (surface[2]) {
+      // 沿原牆面的細分插值，凸出 3–5cm；不移動原地形頂點，頂面不高於原草皮邊。
+      const wallPoint = (u, y, depth) => {
+        const top = yb + (ya - yb) * u, fu = Math.min(nu - 1e-6, u * nu), fv = Math.min(nv - 1e-6, Math.max(0, (y - y0) / (top - y0) * nv));
+        const i = Math.floor(fu), j = Math.floor(fv), a0 = fu - i, b0 = fv - j, p = [0, y, 0];
+        for (const k of [0, 2]) p[k] = (pt[j * (nu + 1) + i][0][k] * (1 - a0) + pt[j * (nu + 1) + i + 1][0][k] * a0) * (1 - b0) + (pt[(j + 1) * (nu + 1) + i][0][k] * (1 - a0) + pt[(j + 1) * (nu + 1) + i + 1][0][k] * a0) * b0;
+        p[0] += dx * depth; p[2] += dz * depth;
+        chamfer(p); const [wx, wz] = warp(p[0], p[2]); return [wx, y, wz];
+      };
+      const stone = (u0, u1, lo, hi, depth) => {
+        if (hi - lo < 0.07) return;
+        const midU = (u0 + u1) * 0.5, midY = (lo + hi) * 0.5, centerBack = wallPoint(midU, midY, 0);
+        const left = wallPoint(u0, midY, 0), right = wallPoint(u1, midY, 0), tangent = [(right[0] - left[0]) / (u1 - u0), (right[2] - left[2]) / (u1 - u0)];
+        const len = Math.hypot(...tangent), normal = [tangent[1] / len, -tangent[0] / len];
+        let lift = 0;
+        for (const u of [u0, midU, u1]) for (const y of [lo, midY, hi]) { const p = wallPoint(u, y, 0); lift = Math.max(lift, (p[0] - centerBack[0]) * normal[0] + (p[2] - centerBack[2]) * normal[1]); }
+        const planar = (u, y, d) => [centerBack[0] + tangent[0] * (u - midU) + normal[0] * (lift + d), y, centerBack[2] + tangent[1] * (u - midU) + normal[1] * (lift + d)];
+        const du = 0.018, dy = Math.min(0.018, (hi - lo) * 0.18);
+        const ring = (inset, d, back = false) => { const l = u0 + inset, r = u1 - inset, bot = lo + inset, top = hi - inset; return [[l + du, bot], [r - du, bot], [r, bot + dy], [r, top - dy], [r - du, top], [l + du, top], [l, top - dy], [l, bot + dy]].map(([u, y]) => back ? wallPoint(u, y, d) : planar(u, y, d)); };
+        const rear = ring(0, -0.004, true), edge = ring(0, depth - 0.015), front = ring(0.014, depth), center = planar(midU, midY, depth);
+        const color = new THREE.Color('#ece4d5');
+        const tri = (a, b, c) => { for (const p of [a, b, c]) { RP.push(...p); RC.push(color.r, color.g, color.b); RS.push(0, 0, 2, 0); } };
+        for (let k = 0; k < 8; k++) { const n = (k + 1) % 8; tri(center, front[n], front[k]); tri(front[k], front[n], edge[n]); tri(front[k], edge[n], edge[k]); tri(edge[k], edge[n], rear[n]); tri(edge[k], rear[n], rear[k]); }
+      };
+      const top = Math.min(ya, yb);
+      stone(0.008, 0.992, Math.max(y0, top - 0.13), top - 0.005, 0.045);   // 每米分段的倒角壓頂；原走路高度照舊
+      const row = Math.floor((y0 + top) * 0.5 / 0.38), lo = row * 0.38 + 0.018;
+      if (hash(Math.floor((a[0] + b[0]) * 0.5), Math.floor((a[1] + b[1]) * 0.5)) > 0.58 && lo > y0 + 0.03 && lo + 0.34 < top - 0.17) stone(0.12, 0.88, lo, lo + 0.34, 0.04);
+    }
     for (let k = 0; k < 4; k++) { const u = (k + 0.5) / 4; cliffTops.push([b[0] + (a[0] - b[0]) * u, yb + (ya - yb) * u, b[1] + (a[1] - b[1]) * u, dx, dz]); }   // 崖頂邊緣（垂草用）
     inWall = true;
     for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
@@ -282,6 +316,7 @@ export const terrain = (function build() {
   };
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
     const t = T(x, z); if (t < 0) continue;
+    surface = t === 0 ? [0, 1, 0, 0] : t === 3 || t === 6 ? [0, 0, 0, 1] : [1, 0, 0, 0];
     const X = x - C, Z = z - C, h00 = cornerH(x, z, 0, 0), h01 = cornerH(x, z, 0, 1), h11 = cornerH(x, z, 1, 1), h10 = cornerH(x, z, 1, 0);
     { const sink = PLAN && (t === 4 || t === 7) ? 0.3 : 0;   // 新島的階梯有模型：坡道面畫低一點藏在台階底下（走路高度照舊）
       quad([X, h00 - sink, Z], [X, h01 - sink, Z + 1], [X + 1, h11 - sink, Z + 1], [X + 1, h10 - sink, Z], cornerC(t, X, Z, x, z), cornerC(t, X, Z + 1, x, z), cornerC(t, X + 1, Z + 1, x, z), cornerC(t, X + 1, Z, x, z)); }
@@ -302,21 +337,25 @@ export const terrain = (function build() {
       else if (dz === 1) { a = [X, Z + 1]; b = [X + 1, Z + 1]; } else { a = [X + 1, Z]; b = [X, Z]; }
       const ha = t === 4 || t === 7 ? cornerH(x, z, a[0] - X, a[1] - Z) : h, hb = t === 4 || t === 7 ? cornerH(x, z, b[0] - X, b[1] - Z) : h;
       if (t === 7 && Math.max(ha, hb) <= nh + 0.01) return;
+      surface = [0, 0, 0, 0];
       // 牆面的頂點順序要讓正面朝外（朝低的那一格）；反了會被當背面剔除，從外面看牆就消失、露出後面的海和天空
       if (t === 1 && nt === 0 && h - nh < 0.8 && !(sandBank(X + 0.5, Z + 0.5) > 0.5)) {   // 草地到海灘的矮岸：草皮圓圓地往沙灘斜下去（只改外觀，走路高度不變），不是一道垂直切開的土牆
         const sla = bankSl(a[0], a[1]), slb = bankSl(b[0], b[1]), gb = grassC(b[0], b[1], false), ga = grassC(a[0], a[1], false), mid = 0.55;   // 斜坡寬度每個角點各自算：相鄰兩格共用角點，坡腳連成一條線
         const mb = [b[0] + dx * slb * 0.35, nh + (hb - nh) * mid, b[1] + dz * slb * 0.35], ma = [a[0] + dx * sla * 0.35, nh + (ha - nh) * mid, a[1] + dz * sla * 0.35];
+        surface = [1, 0, 0, 0];
         quad(mb, [b[0], hb, b[1]], [a[0], ha, a[1]], ma, gb.clone().multiplyScalar(0.82), gb, ga, ga.clone().multiplyScalar(0.82));
+        surface = [0, 1, 0, 0];
         quad([b[0] + dx * slb, nh, b[1] + dz * slb], mb, ma, [a[0] + dx * sla, nh, a[1] + dz * sla], sandW, soil.clone().lerp(sandW, 0.35), soil.clone().lerp(sandW, 0.35), sandW);
         sloped.push({ dx, dz, a, b, ha, hb, nh, sl: (sla + slb) / 2, top: ga, bank: true });
         return;
       }
       if (nt === 3 && isCreek(x + dx, z + dz)) { const sandy = t === 1 && sandBank(X + 0.5, Z + 0.5) > 0.5, top = sandy ? sandW : lip, sl = sandy ? 0.55 : 0.25; quad([b[0] + dx * sl, nh, b[1] + dz * sl], [b[0], hb, b[1]], [a[0], ha, a[1]], [a[0] + dx * sl, nh, a[1] + dz * sl], bankB, top, top, bankB); return; }   // 岸往水裡斜下去：沙洲是一片緩緩沒入水中的淺灘，草岸短一點   // 小溪的岸很矮：草地（或沙洲）直接接到水邊，水底下是溪床的細沙，不畫岩壁與垂草
-      if (t === 0 || (t === 1 && sandBank(X + 0.5, Z + 0.5) > 0.5)) { const sl = h - nh < 0.8 ? 0.5 : 0; if (sl) sloped.push({ dx, dz, a, b, ha, hb, nh, sl, top: sandW }); quad([b[0] + dx * sl, nh, b[1] + dz * sl], [b[0], hb, b[1]], [a[0], ha, a[1]], [a[0] + dx * sl, nh, a[1] + dz * sl], sandWB, sandW, sandW, sandWB); return; }   // 沙坡：矮的往外斜下去（只改外觀），不是垂直的一階   // 沙洲邊緣也是沙坡
-      const l = 0.14;
+      if (t === 0 || (t === 1 && sandBank(X + 0.5, Z + 0.5) > 0.5)) { surface = [0, 1, 0, 0]; const sl = h - nh < 0.8 ? 0.5 : 0; if (sl) sloped.push({ dx, dz, a, b, ha, hb, nh, sl, top: sandW }); quad([b[0] + dx * sl, nh, b[1] + dz * sl], [b[0], hb, b[1]], [a[0], ha, a[1]], [a[0] + dx * sl, nh, a[1] + dz * sl], sandWB, sandW, sandW, sandWB); return; }   // 沙坡：矮的往外斜下去（只改外觀），不是垂直的一階   // 沙洲邊緣也是沙坡
+      const l = 0.14; surface = [1, 0, 0, 0];
       { const lb = grassC(b[0], b[1], t === 2 || t === 5).multiplyScalar(0.92), la = grassC(a[0], a[1], t === 2 || t === 5).multiplyScalar(0.92); quad([b[0], hb - l, b[1]], [b[0], hb, b[1]], [a[0], ha, a[1]], [a[0], ha - l, a[1]], lb.clone().multiplyScalar(0.8), lb, la, la.clone().multiplyScalar(0.8)); }   // 崖頂的草皮邊：和旁邊草地同色、往下稍暗，不再是一整條亮綠色的邊
       cliffWall(a, b, nh, ha - l, hb - l, dx, dz);
     });
+    surface = [0, 1, 0, 0];
     // 凸出的轉角：兩條互相垂直、都往外斜下去的邊在同一個角落交會，中間會留一個三角形的洞（看得到後面的海和天空）——補一塊三角形（正反兩面）
     for (const e1 of sloped) for (const e2 of sloped) {
       if (!e1.dx || !e2.dz) continue;
@@ -334,19 +373,26 @@ export const terrain = (function build() {
       }
     }
   }
+  const originalVertices = P.length / 3;
+  for (let i = 0; i < RC.length; i++) Cc.push(RC[i]);
+  for (let i = 0; i < RS.length; i++) SF.push(RS[i]);
+  for (let i = 0; i < RP.length / 3; i++) WALL.push(false);
   chamfer(P);
   for (let i = 0; i < P.length; i += 3) { const [wx, wz] = warp(P[i], P[i + 2]); P[i] = wx; P[i + 2] = wz; }
+  for (let i = 0; i < RP.length; i++) P.push(RP[i]);   // 凸石已在世界座標做平面倒角，避免再次扭曲正面
   { const T3 = cliffTops.flatMap(c => [c[0], c[1], c[2]]); chamfer(T3); cliffTops.forEach((c, i) => { const [wx, wz] = warp(T3[i * 3], T3[i * 3 + 2]); c[0] = wx; c[2] = wz; }); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3));
+  g.setAttribute('aSurface', new THREE.Float32BufferAttribute(SF, 4));
+  g.userData.originalVertices = originalVertices; g.userData.reliefTriangles = RP.length / 9;
   g.computeVertexNormals();
   { // 崖壁的法線：同一個位置的崖壁頂點取平均，岩石起伏看起來是圓潤的凹凸，而不是一片片的三角形
     const nA = g.attributes.normal, sum = new Map(), key = i => Math.round(P[i * 3] * 200) + ',' + Math.round(P[i * 3 + 1] * 200) + ',' + Math.round(P[i * 3 + 2] * 200);
     for (let i = 0; i < WALL.length; i++) if (WALL[i]) { const k = key(i), s = sum.get(k) || [0, 0, 0]; s[0] += nA.getX(i); s[1] += nA.getY(i); s[2] += nA.getZ(i); sum.set(k, s); }
     for (let i = 0; i < WALL.length; i++) if (WALL[i]) { const s = sum.get(key(i)), L = Math.hypot(s[0], s[1], s[2]) || 1; nA.setXYZ(i, s[0] / L, s[1] / L, s[2] / L); }
   }
-  const m = new THREE.Mesh(g, TERRAIN); m.receiveShadow = true; m.castShadow = true; scene.add(m);
+  const m = new THREE.Mesh(g, surfaceMat); m.receiveShadow = true; m.castShadow = true; scene.add(m);
   return m;
 })();
 
@@ -354,7 +400,7 @@ export const terrain = (function build() {
 {
   const g = new THREE.RingGeometry(0.01, 160, 96, 90); g.rotateX(-Math.PI / 2);   // 細分的同心環：滾筒彎曲是逐頂點計算，三角形太大會整片歪掉
   const p = g.attributes.position, cols = [];
-  const shallow = new THREE.Color('#efe3b2'), mid = new THREE.Color('#d2c48e'), deep = new THREE.Color('#6f8478');   // v7.0：海床是真的沙（濕沙、深處的海草），水的顏色交給海面的吸收與散射
+  const shallow = new THREE.Color('#e9dfcf'), mid = new THREE.Color('#c7cfcc'), deep = new THREE.Color('#879da4');   // v7.0：海床是真的沙（濕沙、深處的海草），水的顏色交給海面的吸收與散射
   // 離最近陸地的距離（格子上做一次距離轉換）：新長出的西部高地外海也有一圈淺灘
   const D = new Float32Array(N * N).fill(1e9);
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (T(x, z) >= 0) D[z * N + x] = 0;
@@ -369,21 +415,21 @@ export const terrain = (function build() {
     p.setY(i, -0.45 - k1 * 1.2 - k2 * 7);   // 寬一點的淺灘（大陸棚），透亮的青綠一路漸深成湛藍
     const c = shallow.clone().lerp(mid, k1).lerp(deep, k2); cols.push(c.r, c.g, c.b);
   }
-  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, TERRAIN); m.receiveShadow = true; scene.add(m);   // v7.0：和沙灘同一種材質（沙粒、風紋、水底焦散），淺灘接得上岸邊的沙
+  g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.setAttribute('aSurface', new THREE.Float32BufferAttribute(Array.from({ length: p.count }, () => [0, 1, 0, 1]).flat(), 4)); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, surfaceMat); m.receiveShadow = true; scene.add(m);   // v7.0：和沙灘同一種材質（沙粒、風紋、水底焦散），淺灘接得上岸邊的沙
 }
-water.sea = bend(new THREE.MeshStandardMaterial({ color: '#38bdf0', transparent: true, opacity: 0.58, roughness: 0.06, metalness: 0.1, fog: false }), 'water'); water.sea.defines = { TA_SEA: '' };   // 大海：倒影與反光帶自己算（engine.js 的 SEA_GLSL），不吃霧（遠方交給倒影的地平線色）
+water.sea = bend(new THREE.MeshStandardMaterial({ color: '#8bb9cf', transparent: true, opacity: 0.58, roughness: 0.21, metalness: 0.02, fog: false }), 'water'); water.sea.defines = { TA_SEA: '' };   // 大海：倒影與反光帶自己算（engine.js 的 SEA_GLSL），不吃霧（遠方交給倒影的地平線色）
 /* 深海的底：海面是半透明的，島外沒有海床時會透出天幕（遠方的海白成一片）；鋪一片深藍的海底（比最深的海床低一點），
    近岸看得到淺灘，越往外越是飽和的深藍。不吃霧，遠方的海一路保持海色，交給天空的地平線薄霧收邊 */
 export const deepMesh = (() => { const g = new THREE.PlaneGeometry(280, 280, 70, 70); g.rotateX(-Math.PI / 2); const m = new THREE.Mesh(g, bend(new THREE.MeshStandardMaterial({ color: '#0c4a72', roughness: 1, fog: false }))); m.position.y = -9; m.raycast = () => {}; scene.add(m); return m; })();
 // 海面每個頂點量一次水深（aDepth，海面的透明度用）：地形外沒有海床，當成很深
 export const seaMesh = (() => { const g = new THREE.PlaneGeometry(320, 320, 160, 160); g.rotateX(-Math.PI / 2); { const P = g.attributes.position, dep = new Float32Array(P.count); for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i); dep[i] = Math.abs(x) < C - 1 && Math.abs(z) < C - 1 ? Math.max(0, 0.02 - groundAt(x, z)) : 2; } g.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1)); } const m = new THREE.Mesh(g, water.sea); m.position.y = 0.02; m.receiveShadow = true; m.renderOrder = -10; scene.add(m); return m; })();   // renderOrder：透明物裡最先畫（post.js 的第二階段）
-water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, transparent: true, opacity: 0.5, roughness: 0.17 }), 'water');   // 清透一點，看得到河床上的焦散光紋
+water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, transparent: true, opacity: 0.5, roughness: 0.26 }), 'water');   // 清透一點，看得到河床上的焦散光紋
 /* 河面：每格細分成 4×4，靠岸的地方顏色淺、比較透明而且有流動的白沫（頂點顏色的 alpha 是「離岸多近」），
    河中央是較深的藍；流進沙灘或大海的那幾格，水面順著往下斜進海裡，不會浮在沙灘上 */
 {
   const P = [], CL = [], PD = [], S = 4, isW = (x, z) => T(x, z) === 3 || T(x, z) === 6;
-  const deep = new THREE.Color('#126f9e'), shal = new THREE.Color('#3fb6bf'), cDeep = new THREE.Color('#1499c4'), cShal = new THREE.Color('#58d4cf'), col = new THREE.Color();   // 青綠透亮的河水；小溪更淺更亮
+  const deep = new THREE.Color('#6998b1'), shal = new THREE.Color('#9acbc7'), cDeep = new THREE.Color('#8bb9c4'), cShal = new THREE.Color('#b0c8dd'), col = new THREE.Color();   // 青綠透亮的河水；小溪更淺更亮
   const pDeep = new THREE.Color('#2f6f72'), pShal = new THREE.Color('#85b7a2');   // 池塘（v7.4）：池心深青綠、岸邊淺綠
   const cornerY = (cx, cz, y0) => { for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const t = T(cx + dx, cz + dz); if (t === 0 || t === -1) return 0.3; } return y0; };
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {

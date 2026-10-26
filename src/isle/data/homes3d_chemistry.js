@@ -7,21 +7,24 @@
     const STAGE = 3;
     const g = new THREE.Group(); g.name = 'home-chemistry-glass-tea-laboratory';
     const M = {
-      plaster: kit.mat('#f6f1e4', { roughness: .92 }, 'stone'),
+      plaster: kit.mat('#f6f1e4', { roughness: .92 }, 'plaster'),
       stone: kit.mat('#d8c8ac', { roughness: .94 }, 'stone'),
-      wood: kit.mat('#a77648', { roughness: .8 }, 'wall'),
-      dark: kit.mat('#68482f', { roughness: .87 }, 'wall'),
+      wood: kit.mat('#a77648', { roughness: .8 }, 'wood'),
+      dark: kit.mat('#68482f', { roughness: .87 }, 'wood'),
       roof: kit.mat('#4f8f7a', { roughness: .84 }, 'roof'),
-      mint: kit.mat('#62c9a0', { roughness: .43, metalness: .30 }),
+      mint: kit.mat('#62c9a0', { roughness: 0.43, metalness: 0.6 }, 'metal'),
       clear: kit.mat('#d8fff0', { roughness: .08, metalness: .02, transparent: true, opacity: .19, depthWrite: false, side: THREE.DoubleSide }),
       pink: kit.mat('#ff9ec4', { roughness: .36 }),
       amber: kit.mat('#ffc66b', { roughness: .33 }),
       aqua: kit.mat('#8fe3c8', { roughness: .34 }),
-      copper: kit.mat('#b8763d', { roughness: .26, metalness: .72 }),
+      copper: kit.mat('#b8763d', { roughness: 0.3, metalness: 0.72 }, 'metal'),
       leaf: kit.mat('#5d874e', { roughness: .94 }),
       leafLight: kit.mat('#93b55f', { roughness: .94 }),
       lavender: kit.mat('#b8a0dc', { roughness: .86 }),
       cream: kit.mat('#fff2ce', { roughness: .88 }),
+      // Centralized same-colour finishes for the canopy and clay vessels.
+      canopyFabric: kit.mat('#fff2ce', { roughness: .88 }, 'fabric'),
+      clay: kit.mat('#a77648', { roughness: .42 }, 'ceramic'),
       glow: kit.win()
     };
     const batches = new Map(); let part = 'foundation';
@@ -115,7 +118,7 @@
       part='tea-stall';
       box(1.08,1.045,1.48,1.67,.12,.72,M.dark);box(1.08,1.112,1.48,1.70,.035,.74,M.wood);
       for(const x of [.28,1.88])box(x,1.21,1.39,.065,2.10,.065,M.wood);
-      quad([.21,2.24,1.13],[1.95,2.24,1.13],[1.95,2.11,1.96],[.21,2.11,1.96],M.cream,.035);
+      quad([.21,2.24,1.13],[1.95,2.24,1.13],[1.95,2.11,1.96],[.21,2.11,1.96],M.canopyFabric,.035);
       part='bottles';for(let j=0;j<4;j++)bottle(.60+j*.29,1.13,1.53,.75,[M.amber,M.pink,M.aqua][j%3]);
       part='distiller';const dz=STAGE>=2?1.34:-.36;
       box(-2.22,.44,dz,.54,.88,.66,M.stone);box(-2.22,.90,dz,.62,.09,.73,M.plaster);
@@ -159,7 +162,7 @@
         const a=j*Math.PI/6,b=(j+1)*Math.PI/6,mid=(a+b)/2,points=[];
         for(let k=0;k<=16;k++){const t=k/16,aa=a+(b-a)*t;points.push([1.02+1.313*Math.cos(aa),1.84+.42*Math.sin(Math.PI*t),-.12+1.313*Math.sin(aa)]);}tube(points,.025,M.mint,16);
         for(const y of [.48,1.36,2.28])ball(1.02+1.343*Math.cos(a),y,-.12+1.343*Math.sin(a),.027,M.copper,1,1,1,6);
-        if(j===1||j===4||j===10){part='flowerboxes';const xx=1.02+1.02*Math.cos(mid),zz=-.12+1.02*Math.sin(mid);cyl(xx,2.01,zz,.13,.095,.17,M.wood,8);for(const u of [-.10,.10])beam([xx+u,2.10,zz],[xx,2.43,zz],.009,M.dark);for(let k=0;k<5;k++){const q=k*Math.PI*2/5;leaf(xx+.11*Math.cos(q),2.12,zz+.11*Math.sin(q),.9,k%2);flower(xx+.11*Math.cos(q),2.14,zz+.11*Math.sin(q)+.03,.55,k%2?M.cream:M.pink);}part='greenhouse-frame';}
+        if(j===1||j===4||j===10){part='flowerboxes';const xx=1.02+1.02*Math.cos(mid),zz=-.12+1.02*Math.sin(mid);cyl(xx,2.01,zz,.13,.095,.17,M.clay,8);for(const u of [-.10,.10])beam([xx+u,2.10,zz],[xx,2.43,zz],.009,M.dark);for(let k=0;k<5;k++){const q=k*Math.PI*2/5;leaf(xx+.11*Math.cos(q),2.12,zz+.11*Math.sin(q),.9,k%2);flower(xx+.11*Math.cos(q),2.14,zz+.11*Math.sin(q)+.03,.55,k%2?M.cream:M.pink);}part='greenhouse-frame';}
       }
       // Front and rear plantings remain out of the entrance and mailbox reserves.
       planter(-.92,3.14,1.47,.78);planter(-.92,3.14,-1.68,.78);
@@ -171,9 +174,9 @@
       vine([[2.22,.46,.32],[2.28,1.32,.35],[2.17,2.23,.40],[1.91,2.68,.63]]);
       vine([[1.87,.45,1.72],[1.89,1.20,1.72],[1.89,2.08,1.70],[1.56,2.12,1.77]]);
       part='tea-stall';for(let j=0;j<9;j++)box(.40+j*.17,.61,1.778,.012,.78,.015,M.dark);
-      for(let j=0;j<9;j++){const xx=.29+j*.195;profile([[-.098,0],[.098,0],[.08,-.10],[0,-.16],[-.08,-.10]],.027,xx,2.11,1.956,M.cream);}
+      for(let j=0;j<9;j++){const xx=.29+j*.195;profile([[-.098,0],[.098,0],[.08,-.10],[0,-.16],[-.08,-.10]],.027,xx,2.11,1.956,M.canopyFabric);}
       // Lemon bowl, mortar, a small recipe book and a stool complete the tea workspace.
-      cyl(.48,1.16,1.24,.13,.08,.08,M.wood,10);for(let j=0;j<4;j++)ball(.42+j*.045,1.23,1.24,.044,M.amber,1,.85,1,7);
+      cyl(.48,1.16,1.24,.13,.08,.08,M.clay,10);for(let j=0;j<4;j++)ball(.42+j*.045,1.23,1.24,.044,M.amber,1,.85,1,7);
       box(1.62,1.15,1.55,.30,.045,.24,M.cream,0,.10);box(1.62,1.177,1.55,.009,.018,.23,M.dark,0,.1);
       cyl(1.96,.59,1.97,.20,.20,.09,M.wood,12);for(const x of [1.84,2.08])for(const z of [1.87,2.07])beam([x,.11,z],[1.96+(x-1.96)*.78,.56,1.97+(z-1.97)*.78],.028,M.wood);
       part='distiller';arch(-2.22,.08,1.684,.31,.50,.028,M.dark);archRing(-2.22,.065,1.71,.42,.60,.057,M.plaster);add(new THREE.TorusGeometry(.028,.007,5,10),M.copper,-2.28,.34,1.765);

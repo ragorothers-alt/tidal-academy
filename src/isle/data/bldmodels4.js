@@ -5,10 +5,10 @@
   I.BLDMODELS.museum=function(THREE,kit){
     const STAGE=8;
     const g=new THREE.Group();g.name='tidal-crescent-museum';g.userData.sign=[0,3.35,1.905];
-    const stone=kit.mat('#f3efe6',{roughness:.88},'stone'),shade=kit.mat('#d8cbb7',{roughness:.91},'stone'),light=kit.mat('#fff7e9',{roughness:.86},'stone');
-    const blue=kit.mat('#3e5a8c',{roughness:.65},'roof'),blueLight=kit.mat('#526fa3',{roughness:.68},'roof'),blueDark=kit.mat('#283e67',{roughness:.72},'roof');
-    const gold=kit.mat('#d8b45a',{roughness:.35,metalness:.72}),goldShade=kit.mat('#a78137',{roughness:.43,metalness:.64});
-    const wood=kit.mat('#8f6040',{roughness:.78}),woodDark=kit.mat('#5d3d2a',{roughness:.85}),navy=kit.mat('#1f2c55',{roughness:.77}),glass=kit.win();glass.color.set('#497aa6');
+    const stone=kit.mat('#f0e5d5',{roughness:.92},'plaster'),shade=kit.mat('#e8decf',{roughness:.94},'stone'),light=shade;
+    const blue=kit.mat('#ad9abd',{roughness:.8},'roof'),blueLight=blue,blueDark=kit.mat('#9186a8',{roughness:.84},'roof');
+    const gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),goldShade=gold;
+    const wood=kit.mat('#cda67e',{roughness:.8},'wood'),woodDark=kit.mat('#947b7b',{roughness:.8},'wood'),navy=kit.mat('#777a98',{roughness:.88}),glass=kit.win();
     const groups={},batches=new Map(),tmp=new THREE.Matrix4(),q=new THREE.Quaternion(),v=new THREE.Vector3(),unit=new THREE.Vector3(1,1,1);
     function part(id){const p=new THREE.Group();p.name=id;g.add(p);groups[id]=p;return p;}
     ['root','body','lower-roof','drum','dome','portico','steps','cornice','columns','door','side-windows','drum-windows','finial','lantern','ribs','star-emblem','column-bands','masonry-joints','door-mullions','roof-seams','sign-architrave'].forEach(part);
@@ -31,11 +31,11 @@
     {const bottom=[[-3.48,3.21,-2.52],[3.48,3.21,-2.52],[3.48,3.21,1.82],[-3.48,3.21,1.82]],top=[[-2.12,3.95,-1.5],[2.12,3.95,-1.5],[2.12,3.95,.63],[-2.12,3.95,.63]],p=[],ind=[];bottom.concat(top).forEach(a=>p.push(...a));ind.push(0,2,1,0,3,2,4,5,6,4,6,7);for(let j=0;j<4;j++){let k=(j+1)%4;ind.push(j,k,k+4,j,k+4,j+4);}for(let i=0;i<ind.length;i+=3){const a=ind[i+1];ind[i+1]=ind[i+2];ind[i+2]=a;}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(p,3));geo.setIndex(ind);const flat=geo.toNonIndexed();flat.computeVertexNormals();add('lower-roof',flat,blue);geo.dispose();}
     cyl('drum',2.025,2.04,.81,stone,0,4.17,-.35,40);cyl('drum',2.15,2.15,.12,shade,0,3.82,-.35,48);
     const domeGeo=new THREE.SphereGeometry(2.12,48,20,0,Math.PI*2,0,Math.PI/2);domeGeo.scale(1,.84,1);add('dome',domeGeo,blue,0,4.54,-.35);
-    cyl('finial',.38,.48,.1,gold,0,6.36,-.35);cyl('finial',.22,.35,.15,gold,0,6.46,-.35);add('finial',new THREE.SphereGeometry(.16,16,10),blueLight,0,6.63,-.35);add('finial',new THREE.ConeGeometry(.105,.32,6),gold,0,6.81,-.35);
+    cyl('finial',.38,.48,.1,shade,0,6.36,-.35);cyl('finial',.22,.35,.15,shade,0,6.46,-.35);add('finial',new THREE.SphereGeometry(.16,16,10),blueLight,0,6.63,-.35);add('finial',new THREE.ConeGeometry(.105,.32,6),gold,0,6.81,-.35);
     // Four stout portico columns, a smaller triangular pediment, and a warm arched door.
     for(const x of [-2.48,-1.48,1.48,2.48]){
       cyl('columns',.255,.30,2.31,stone,x,1.815,1.42,24);
-      if(STAGE>=1){box('columns',.73,.24,.73,shade,x,.62,1.42);cyl('columns',.35,.35,.13,light,x,.795,1.42);box('columns',.77,.2,.76,light,x,3.015,1.42);cyl('column-bands',.31,.31,.115,gold,x,.88,1.42);cyl('column-bands',.31,.31,.105,gold,x,2.865,1.42);cyl('column-bands',.305,.305,.17,navy,x,2.96,1.42);}
+      if(STAGE>=1){cyl('columns',.34,.365,.24,shade,x,.62,1.42,24);cyl('columns',.35,.35,.13,light,x,.795,1.42);add('columns',new THREE.TorusGeometry(.33,.02,4,24),shade,x,.735,1.42,[Math.PI/2,0,0]);box('columns',.77,.2,.76,light,x,3.015,1.42);cyl('column-bands',.31,.31,.115,shade,x,.88,1.42);cyl('column-bands',.31,.31,.105,shade,x,2.865,1.42);cyl('column-bands',.305,.305,.17,shade,x,2.96,1.42);}
     }
     box('portico',5.86,.18,.94,shade,0,3.15,1.4);box('sign-architrave',5.72,.64,.92,stone,0,3.35,1.4);
     {const s=new THREE.Shape();s.moveTo(-2.82,0);s.lineTo(2.82,0);s.lineTo(0,1.13);s.closePath();add('portico',new THREE.ExtrudeGeometry(s,{depth:.84,bevelEnabled:false}),stone,0,3.66,.98);}
@@ -62,7 +62,6 @@
       // Restrained real slate courses and stone joints; deterministic without noise.
       for(let row=1;row<6;row++){const t=row/6*Math.PI/2,r=2.126*Math.sin(t),y=4.54+1.786*Math.cos(t);const geo=new THREE.TorusGeometry(r,.009,4,64);add('roof-seams',geo,blueDark,0,y,-.35,[Math.PI/2,0,0]);}
       for(let row=1;row<6;row++){const count=12+row*4;for(let j=0;j<count;j++){const a=(j+(row%2)*.5)/count*Math.PI*2,pts=[];for(let k=0;k<=4;k++){const t=(row+k/4)/6*Math.PI/2;pts.push([2.128*Math.sin(t)*Math.sin(a),4.54+1.788*Math.cos(t),-.35+2.128*Math.sin(t)*Math.cos(a)]);}pathTube('roof-seams',pts,.006,blueDark,4,3);}}
-      for(let row=0;row<4;row++){const y=.68+row*.57;for(const side of [-1,1])box('masonry-joints',.014,.014,3.3,shade,side*3.365,y,-.86);box('masonry-joints',6.69,.014,.014,shade,0,y,-2.554);}
       // Eave rims and corner pilasters repeat only at construction boundaries.
       for(const x of [-3.28,3.28])for(const z of [-2.46,.74]){box('body',.2,2.45,.2,light,x,1.75,z);box('body',.34,.16,.26,shade,x,2.96,z);}
       box('cornice',7.04,.09,4.4,light,0,3.235,-.35);
@@ -81,8 +80,10 @@
   I.BLDMODELS=I.BLDMODELS||{};
   I.BLDMODELS.telescope=function(THREE,kit){
     const g=new THREE.Group();g.name='telescope-observatory';
-    const M={stone:kit.mat('#eee4cf',{roughness:.89},'stone'),stone2:kit.mat('#d8cab0',{roughness:.92},'stone'),joint:kit.mat('#baac91',{roughness:.95}),navy:kit.mat('#2b456b',{roughness:.66}),ivory:kit.mat('#eee3cb',{roughness:.7}),gold:kit.mat('#d8b45a',{roughness:.4,metalness:.6}),goldLight:kit.mat('#ecd193',{roughness:.34,metalness:.55}),darkGold:kit.mat('#94733c',{roughness:.5,metalness:.66}),wood:kit.mat('#8e6040',{roughness:.8},'wall'),woodLight:kit.mat('#b18354',{roughness:.78},'wall'),crystal:kit.mat('#5faef0',{roughness:.27,metalness:.1,emissive:'#5dbeff',emissiveIntensity:.68}),lens:kit.win()};
-    M.lens.color.set('#467dd4');
+    const limestone=kit.mat('#e8decf',{roughness:.94},'stone'),gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),wood=kit.mat('#cda67e',{roughness:.8},'wood');
+    const M={stone:limestone,stone2:limestone,joint:kit.mat('#c8bdd1',{roughness:.95}),navy:kit.mat('#9186a8',{roughness:.78}),ivory:gold,gold,goldLight:gold,
+      darkGold:kit.mat('#b9a184',{roughness:.4,metalness:0.6},'metal'),wood,woodLight:wood,
+      crystal:kit.mat('#cfbee8',{roughness:.32,emissive:'#cfbee8',emissiveIntensity:.18}),lens:kit.mat('#b7a8cd',{roughness:.2,metalness:.1,transparent:true,opacity:.78},'glass')};
     const parts=new Map();
     function add(id,geo,mat){if(!geo.getAttribute('normal'))geo.computeVertexNormals();const k=id+':'+Object.keys(M).find(k=>M[k]===mat);if(!parts.has(k))parts.set(k,{id,mat,geos:[]});parts.get(k).geos.push(geo.index?geo.toNonIndexed():geo);}
     function transform(geo,p,r=[0,0,0]){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)),new THREE.Vector3(1,1,1)));}
@@ -213,14 +214,14 @@
     const g = new THREE.Group(); g.name = 'board-model';
     const M = {
       stone: kit.mat('#eee3cb', {roughness:.88}, 'stone'),
-      wood: kit.mat('#8f6040', {roughness:.78}, 'wall'),
-      woodLight: kit.mat('#a9774e', {roughness:.76}, 'wall'),
-      dark: kit.mat('#513b2d', {roughness:.85}),
-      roof: kit.mat('#3e5a8c', {roughness:.66}, 'roof'),
-      roofLight: kit.mat('#5b7fb0', {roughness:.64}, 'roof'),
-      gold: kit.mat('#cba555', {roughness:.43, metalness:.66}),
-      paper: kit.mat('#f4e7c9', {roughness:.94}),
-      ink: kit.mat('#746c59', {roughness:.92}),
+      wood: kit.mat('#cda67e', {roughness:.8}, 'wood'),
+      woodLight: kit.mat('#cda67e', {roughness:.8}, 'wood'),
+      dark: kit.mat('#947b7b', {roughness:.8}, 'wood'),
+      roof: kit.mat('#ad9abd', {roughness:.8}, 'roof'),
+      roofLight: kit.mat('#ad9abd', {roughness:.8}, 'roof'),
+      gold: kit.mat('#e8c48b', {roughness:.4, metalness:0.6},'metal'),
+      paper: kit.mat('#fff0d4', {roughness:.94}, 'paper'),
+      ink: kit.mat('#947b7b', {roughness:.94}, 'paper'),
       glow: kit.win()
     };
     const buckets = new Map();
@@ -240,7 +241,7 @@
       box(x,.14,0,.25,.19,.3,'stone','root');
       box(x,.96,0,.14,1.60,.17,'wood',part);
     }
-    box(0,1.18,0,1.22,1.04,.12,'wood','board');
+    box(0,1.18,0,1.22,1.04,.12,'paper','board');
     // GAME structure: timber gable, independent slate roof skin.
     const gable=[[-.79,-.065]];for(let j=0;j<=16;j++){const x=-.79+j*1.58/16;gable.push([x,roofY(x)-1.815]);}gable.push([.79,-.065]);profile(gable,.13,0,1.79,-.065,'wood','roof');
     function roofY(x){const t=Math.abs(x)/.8;return 2.14-.40*t+.055*t*t*t*t;}
@@ -250,7 +251,7 @@
     // GAME structure: four staggered paper sheets, connected lantern cages.
     const papers=[[-.37,1.16,.32,.56,-.035],[.04,1.32,.32,.28,.055],[-.005,.96,.24,.27,-.02],[.38,1.07,.23,.40,.045]];
     const paperNames=['paper-large','paper-upper','paper-lower','paper-right'];
-    papers.forEach((p,i)=>{const w=p[2],h=p[3];profile([[-w/2,-h/2],[w/2-.038,-h/2],[w/2,-h/2+.043],[w/2,h/2],[-w/2,h/2]],.014,p[0],p[1],.079,'paper',paperNames[i],0,p[4]);});
+    papers.forEach((p,i)=>{const w=p[2],h=p[3];profile([[-w/2,-h/2],[w/2-.038,-h/2],[w/2,-h/2+.043],[w/2,h/2],[-w/2,h/2]],.014,p[0],p[1],.079+i*.0015,'paper',paperNames[i],0,p[4]);});
     for(const side of [-1,1]){
       const part=side<0?'lantern-left':'lantern-right',x=side*.795;
       beam([side*.63,1.72,0],[x,1.72,0],.028,'wood',part);
@@ -286,23 +287,23 @@
     function star(x,y,z,r,part){const pts=[];for(let j=0;j<8;j++){const a=Math.PI/2+j*Math.PI/4,R=j%2?r*.26:r;pts.push([Math.cos(a)*R,Math.sin(a)*R]);}profile(pts,.012,x,y,z,'gold',part);}
     star(.012,2.005,.297,.059,'emblem');
     // Clipped corner parchment silhouettes and pin crowns.
-    papers.forEach((p,i)=>{sphere(p[0],p[1]+p[3]*.5-.037,.104,.015,'gold','pins',1,1,.55);});
+    papers.forEach((p,i)=>{sphere(p[0],p[1]+p[3]*.5-.037,.104+i*.0015,.015,'gold','pins',1,1,.55);});
     // GAME surface/material: broad planks, sparse schematic ink, real sign backplate.
-    for(let row=0;row<6;row++)box(0,.755+row*.158,.068,1.12,.152,.014,row%3?'wood':'woodLight','board');
+    for(let row=0;row<6;row++)box(0,.755+row*.158,.068,1.12,.152,.014,'paper','board');
     papers.forEach((p,i)=>{
       const name=paperNames[i],c=Math.cos(p[4]),sn=Math.sin(p[4]);
-      function stroke(x,y,w,h){box(p[0]+x*c-y*sn,p[1]+x*sn+y*c,.101,w,h,.0025,'ink',name,0,0,p[4]);}
+      function stroke(x,y,w,h){box(p[0]+x*c-y*sn,p[1]+x*sn+y*c,.101+i*.0015,w,h,.0025,'ink',name,0,0,p[4]);}
       stroke(0,p[3]*.5-.105,p[2]*.57,.009);
       stroke(-p[2]*.03,p[3]*.5-.143,p[2]*.53,.007);
       if(i!==1){stroke(-p[2]*.07,p[3]*.5-.183,p[2]*.45,.007);}
       if(i===0){
         stroke(-.034,-.085,.102,.008);stroke(.015,-.123,.13,.007);stroke(-.044,-.155,.08,.007);
         const pts=[[-.05,-.03],[0,.035],[.052,-.03],[.024,-.03],[0,0],[-.025,-.03]];
-        profile(pts,.002,p[0],p[1]+.035,.101,'ink',name,0,p[4]);
+        profile(pts,.002,p[0],p[1]+.035,.101+i*.0015,'ink',name,0,p[4]);
       }
       if(i===3){stroke(.016,-.046,.09,.007);stroke(-.006,-.08,.13,.007);}
       const w=p[2],h=p[3],px=p[0]+(w*.5-.02)*c-(-h*.5+.02)*sn,py=p[1]+(w*.5-.02)*sn+(-h*.5+.02)*c;
-      profile([[-.022,-.02],[.018,.024],[-.022,.024]],.007,px,py,.092,'paper',name,0,p[4]);
+      profile([[-.022,-.02],[.018,.024],[-.022,.024]],.007,px,py,.092+i*.0015,'paper',name,0,p[4]);
     });
     for(const x of [-.55,.55])for(const y of [.73,1.61]){const sx=x>0?-1:1,sy=y>1?-1:1;profile([[0,0],[sx*.085,0],[0,sy*.085]],.012,x,y,.103,'gold','fittings');}
     // The 1.2 x .3 game label is fully backed and sits .050 in front of this plate.
