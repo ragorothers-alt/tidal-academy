@@ -1,8 +1,8 @@
 /* 潮汐小島 · 季節與學測倒數活動：週末模擬考祭典、倒數 100 天、跨年煙火、學測前夜、考後慶典、春櫻、中秋。 */
 import * as THREE from 'three';
-import { scene, bend, M, mesh, nightMats } from './engine.js';
+import { scene, bend, M, mesh, nightMats, cullable } from './engine.js';
 import { groundAt } from './terrain.js';
-import { PLAZA, woodSign } from './props.js';
+import { PLAZA, woodSign, mergeStatic } from './props.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
@@ -85,7 +85,8 @@ export function refresh() {
       deco.add(mesh(new THREE.BoxGeometry(0.14, 0.03, 0.03), face, fx, y + 0.17, fz, { noCast: true }));
     }
   }
-  deco.traverse(o => { o.frustumCulled = false; });
+  mergeStatic(deco);   // 節慶裝飾擺好就不動：同材質的零件合併（南瓜燈一圈原本六十幾次繪製）
+  deco.traverse(o => { o.frustumCulled = cullable(o); });
   // 春櫻：圓樹的葉子換成粉紅（材質由 M() 快取共用）
   const leaf = M('#58b34d', {}, 'sway'); if (!leafBase) leafBase = leaf.color.clone();
   leaf.color.copy(ev.includes('spring') ? new THREE.Color('#ffc4dc') : leafBase);

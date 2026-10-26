@@ -2,7 +2,7 @@
    子代的基因型依孟德爾定律隨機產生，森會用你花園裡真實的親代出遺傳題，答對替你檢測基因型。
    存檔 S().garden = { plants: { "tx,tz": { sp, g, st, wet, pa, pb, known, mate } }, bag: [...], book: { 表現型: 日期 } } */
 import * as THREE from 'three';
-import { scene, M, mesh } from './engine.js';
+import { scene, M, mesh, cullable } from './engine.js';
 import { C, T, groundAt, isBridge } from './terrain.js';
 import { blocked, SITES, homes } from './props.js';
 import * as ui from './ui.js';
@@ -63,7 +63,7 @@ function build(k) {
       }
     }
   }
-  g.scale.setScalar(1.45); g.traverse(o => { o.frustumCulled = false; });
+  g.scale.setScalar(1.45); g.traverse(o => { o.frustumCulled = cullable(o); });
   group.add(g); meshes[k] = g;
 }
 export function init(player, h) { P = player; hooks = h || {}; Object.keys(data().plants).forEach(build); }

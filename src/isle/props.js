@@ -1,6 +1,6 @@
 /* 潮汐小島 · 場景物件：房子、博物館、商店、燈塔、路燈、橋、樹、花草與碰撞。 */
 import * as THREE from 'three';
-import { scene, bend, M, mesh, nightMats, lamps, leafGeo, mergedIco, canopyCards, cardMat, CARD_DEPTH } from './engine.js';
+import { scene, bend, M, mesh, nightMats, lamps, leafGeo, mergedIco, canopyCards, cardMat, CARD_DEPTH, cullable } from './engine.js';
 import { register, unregister, registerAt } from './props3d.js';
 import { ULTRA } from './perf.js';
 import * as glow from './glow.js';
@@ -263,26 +263,35 @@ const colorKey = m => (m.isMeshStandardMaterial && !m.map && !m.transparent && !
   ? [m.userData.kind || 'plain', qR(m.roughness), qM(m.metalness), m.side].join('|') : null;
 const VC_MATS = new Map();
 const vcMat = (key, m) => { if (!VC_MATS.has(key)) VC_MATS.set(key, M('#ffffff', { vertexColors: true, roughness: qR(m.roughness), metalness: qM(m.metalness), side: m.side }, m.userData.kind === 'plain' ? undefined : m.userData.kind)); return VC_MATS.get(key); };
-export function mergeStatic(g) {
+export function mergeStatic(g, noProxy) {   // noProxy：拿去做共用繪製零件的模型（protoParts）不做陰影替身
   g.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m4 = new THREE.Matrix4(), nm = new THREE.Matrix3(), buckets = new Map(), victims = [];
+  /* 一個零件：網格 c 的一段頂點（多材質的模型每個材質群組各是一段，v7.3 起也合併——img2threejs 的房子一棟原本要畫二十次） */
+  const add = (c, mat, geo, start, count, whole) => {
+    const ck = colorKey(mat), key = (ck ? 'C' + ck : mat.uuid) + (c.castShadow ? 's' : '') + (c.receiveShadow ? 'r' : '');
+    if (!buckets.has(key)) buckets.set(key, { mat, ck, cast: c.castShadow, recv: c.receiveShadow, parts: [] });
+    buckets.get(key).parts.push({ c, mat, geo, start, count, whole });
+  };
   const walk = o => o.children.forEach(c => {
-    if (c.userData && c.userData.prop) return;
-    if (c.isMesh && !c.isInstancedMesh && !c.isSkinnedMesh && !Array.isArray(c.material) && c.visible && !KEEP_KIND.has(c.material.userData.kind) && c.geometry.attributes.normal) {
-      const ck = colorKey(c.material), key = (ck ? 'C' + ck : c.material.uuid) + (c.castShadow ? 's' : '') + (c.receiveShadow ? 'r' : '');
-      if (!buckets.has(key)) buckets.set(key, { mat: c.material, ck, cast: c.castShadow, recv: c.receiveShadow, parts: [] });
-      buckets.get(key).parts.push(c); victims.push(c);
+    if (c.userData && (c.userData.prop || c.userData.camThrough)) return;   // camThrough：鏡頭可以穿過的零件（節慶招牌），合併後這個標記會不見
+    if (c.isMesh && !c.isInstancedMesh && !c.isSkinnedMesh && c.visible && c.geometry.attributes.normal) {
+      const ms = Array.isArray(c.material) ? c.material : null;
+      if (!ms) { if (KEEP_KIND.has(c.material.userData.kind)) return; const geo = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry; add(c, c.material, geo, 0, geo.attributes.position.count, true); victims.push(c); return; }
+      const gs = c.geometry.groups; if (!gs.length || ms.some(m => KEEP_KIND.has(m.userData.kind))) return;
+      const geo = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry, n = geo.attributes.position.count;   // toNonIndexed 保留群組：群組的範圍直接是頂點的範圍
+      gs.forEach(gr => { const m = ms[gr.materialIndex]; if (m && gr.start < n) add(c, m, geo, gr.start, Math.min(gr.count, n - gr.start), false); });
+      victims.push(c);
     } else if (!c.isMesh) walk(c);
   });
   walk(g);
   buckets.forEach(b => {
-    const colors = b.ck && b.parts.some(c => c.material !== b.mat || c.material.vertexColors);   // 這一組裡有不同顏色（或本來就是頂點色）：用頂點色
-    if (b.parts.length < 2) { b.parts.forEach(c => victims.splice(victims.indexOf(c), 1)); return; }
-    const P = [], N = [], UV = [], CL = [], hasUV = b.parts.every(c => c.geometry.attributes.uv), v = new THREE.Vector3();
-    b.parts.forEach(c => {
-      const geo = c.geometry.index ? c.geometry.toNonIndexed() : c.geometry, pa = geo.attributes.position, na = geo.attributes.normal, ua = geo.attributes.uv, col = c.material.color, ca = c.material.vertexColors ? geo.attributes.color : null;
+    if (b.parts.length < 2 && b.parts[0].whole) { victims.splice(victims.indexOf(b.parts[0].c), 1); return; }   // 只有一個完整的網格：留著原本的
+    const colors = b.ck && b.parts.some(p => p.mat !== b.mat || p.mat.vertexColors);   // 這一組裡有不同顏色（或本來就是頂點色）：用頂點色
+    const P = [], N = [], UV = [], CL = [], hasUV = b.parts.every(p => p.geo.attributes.uv), v = new THREE.Vector3();
+    b.parts.forEach(({ c, mat, geo, start, count }) => {
+      const pa = geo.attributes.position, na = geo.attributes.normal, ua = geo.attributes.uv, col = mat.color, ca = mat.vertexColors ? geo.attributes.color : null;
       m4.multiplyMatrices(inv, c.matrixWorld); nm.getNormalMatrix(m4);
-      for (let i = 0; i < pa.count; i++) {
+      for (let i = start; i < start + count; i++) {
         v.fromBufferAttribute(pa, i).applyMatrix4(m4); P.push(v.x, v.y, v.z);
         v.fromBufferAttribute(na, i).applyMatrix3(nm).normalize(); N.push(v.x, v.y, v.z);
         if (hasUV) UV.push(ua.getX(i), ua.getY(i));
@@ -292,9 +301,40 @@ export function mergeStatic(g) {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
     if (hasUV) geo.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));
     if (colors) geo.setAttribute('color', new THREE.Float32BufferAttribute(CL, 3));
-    const m = new THREE.Mesh(geo, mergedMat(colors ? vcMat(b.ck, b.mat) : b.mat)); m.castShadow = b.cast; m.receiveShadow = b.recv; m.frustumCulled = false; g.add(m);
+    const m = new THREE.Mesh(geo, mergedMat(colors ? vcMat(b.ck, b.mat) : b.mat)); m.castShadow = b.cast; m.receiveShadow = b.recv; g.add(m);
   });
   victims.forEach(c => c.parent.remove(c));
+  if (!noProxy) shadowProxy(g);
+}
+/* 陰影替身（v7.3）：畫陰影貼圖時材質不重要，一棟建築合併完還有好幾個網格，每個都要多畫一次。
+   這裡把會投影的零件（依正反面分組）再合成一個只有位置的網格，放在圖層 2——主畫面不畫，只有畫陰影貼圖時看得到（props3d 畫陰影時打開圖層 2）；
+   原本的零件不再投影。之後會換成 3D 模型的子群組（userData.prop）、有自訂陰影材質（樹葉）或透明鏤空的零件不動 */
+const PROXY_MAT = {};
+function shadowProxy(g) {
+  if (g.userData && g.userData.prop) return;
+  g.updateMatrixWorld(true);
+  const bySide = new Map(), inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), m4 = new THREE.Matrix4(), v = new THREE.Vector3();
+  g.traverse(o => {
+    if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.castShadow || !o.visible || o.customDepthMaterial || o.userData.shadowProxy) return;
+    for (let q = o.parent; q && q !== g; q = q.parent) if (!q.visible || (q.userData && q.userData.prop)) return;
+    const ms = [].concat(o.material); if (ms.some(m => m.transparent || m.alphaTest > 0 || m.alphaMap || m.displacementMap)) return;
+    const side = ms[0].side; if (ms.some(m => m.side !== side)) return;
+    if (!bySide.has(side)) bySide.set(side, []); bySide.get(side).push(o);
+  });
+  bySide.forEach((list, side) => {
+    if (list.length < 2) return;
+    const P = [];
+    list.forEach(o => {
+      const geo = o.geometry, pa = geo.attributes.position, idx = geo.index, n = idx ? idx.count : pa.count;
+      const ranges = Array.isArray(o.material) && geo.groups.length ? geo.groups.filter(r => o.material[r.materialIndex]) : [{ start: 0, count: n }];
+      m4.multiplyMatrices(inv, o.matrixWorld);
+      ranges.forEach(r => { for (let k = r.start, e = Math.min(r.start + r.count, n); k < e; k++) { v.fromBufferAttribute(pa, idx ? idx.getX(k) : k).applyMatrix4(m4); P.push(v.x, v.y, v.z); } });
+      o.castShadow = false;
+    });
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+    const m = new THREE.Mesh(geo, PROXY_MAT[side] || (PROXY_MAT[side] = new THREE.MeshBasicMaterial({ side, colorWrite: false })));
+    m.castShadow = true; m.layers.set(1); m.userData.shadowProxy = true; m.raycast = () => {}; g.add(m);
+  });
 }
 const mailbox = () => { const pm = modelClone('PROPMODELS', 'mailbox'); if (pm) { const g = new THREE.Group(); g.position.set(1.9, 0, 1.6); g.add(pm); return g; } const mb = new THREE.Group(); mb.position.set(1.9, 0.15, 1.6); mb.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 6), M('#7a5238'), 0, 0.4, 0), mesh(new THREE.BoxGeometry(0.4, 0.3, 0.5), M('#5fa8ff'), 0, 0.9, 0)); mb.userData.prop = { id: 'prop_mailbox', h: 1.15 }; return mb; };
 const DOOR_X = { cottage_a: 0.7, cottage_b: 0.3, cottage_c: 0.93, player_home: 0.43, earth_home: 0.43 };   // 小屋模型的門不在正中央（門口台階的中心）
@@ -489,7 +529,7 @@ export function makePlot(x, z) {
   [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]].forEach(([dx, dz]) => g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), M('#c99a62'), dx, 0.25, dz)));
   g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), M('#8a5a3b'), 0, 0.45, 1.6), mesh(new THREE.BoxGeometry(0.8, 0.45, 0.06), M('#f6e7c8'), 0, 0.95, 1.6));
   const sg = label('空地', '#c99a62', 0.7, 0.18); sg.position.set(0, 0.96, 1.64); g.add(sg);
-  g.traverse(o => { o.frustumCulled = false; });
+  g.traverse(o => { o.frustumCulled = cullable(o); });
   const col = { x, z, r: 1.6 }; scene.add(g); colliders.push(col);
   const pl = { x, z, marker: g, col, model: HOUSE_MODELS[plots.length % HOUSE_MODELS.length] }; plots.push(pl); return pl;
 }
@@ -498,7 +538,7 @@ export function removeHouse(h) { scene.remove(h.g); unregister(h.g); (h.cols || 
 /** 在空地蓋房子 */
 export function buildOnPlot(pl, roof, model) {
   scene.remove(pl.marker); const i = colliders.indexOf(pl.col); if (i >= 0) colliders.splice(i, 1);
-  pl.built = true; const h = house(pl.x, pl.z, roof, '#fff6e6', 0.82, model || pl.model); h.g.traverse(o => { o.frustumCulled = false; }); return h;
+  pl.built = true; const h = house(pl.x, pl.z, roof, '#fff6e6', 0.82, model || pl.model); h.g.traverse(o => { o.frustumCulled = cullable(o); }); return h;
 }
 
 /* 重複擺很多次的道具（路燈、長椅、旗幟、花台、水晶地燈、貨箱、指路牌）：同一種模型的所有擺放共用 InstancedMesh，
@@ -516,7 +556,7 @@ const PARTS = new Map();
 export function protoParts(table, key) {
   const id = table + ':' + key; if (PARTS.has(id)) return PARTS.get(id);
   const m = modelClone(table, key); if (!m) { PARTS.set(id, null); return null; }
-  const tmp = new THREE.Group(); tmp.add(m); mergeStatic(tmp); tmp.updateMatrixWorld(true);
+  const tmp = new THREE.Group(); tmp.add(m); mergeStatic(tmp, true); tmp.updateMatrixWorld(true);
   const parts = [];
   tmp.traverse(o => { if (!o.isMesh) return; const geo = o.isInstancedMesh ? bakeInstanced(o) : o.geometry; if (!geo.boundingSphere) geo.computeBoundingSphere(); parts.push({ geo, mat: o.material, local: o.matrixWorld.clone(), cast: o.castShadow && geo.boundingSphere.radius > 0.3, depth: o.customDepthMaterial }); });
   PARTS.set(id, parts); return parts;
@@ -555,7 +595,7 @@ function instanceGroup(parts, at, matOf, noCast) {
     const im = new THREE.InstancedMesh(pt.geo, matOf ? matOf(pt.mat) : pt.mat, at.length);
     at.forEach((a, i) => im.setMatrixAt(i, m4.multiplyMatrices(a, pt.local)));
     im.instanceMatrix.needsUpdate = true; im.customDepthMaterial = pt.depth;
-    im.castShadow = pt.cast && !noCast; im.receiveShadow = true; im.frustumCulled = false; g.add(im);
+    im.castShadow = pt.cast && !noCast; im.receiveShadow = true; im.userData.staticInst = true; g.add(im);   // 擺好就不再動：可以交給視錐剔除（engine.cullable）
   });
   return g;
 }
@@ -613,7 +653,7 @@ function board(x, z) {   // 廣場告示牌：島嶼評價
   const sg = label('島嶼評價', '#ffb84a', 1.2, 0.3); sg.position.set(0, 1.42, 0.05); g.add(sg);
   [['#fff3dc', -0.32], ['#dff4ff', 0.05], ['#ffe0ea', 0.36]].forEach(([c, dx], i) => g.add(mesh(new THREE.BoxGeometry(0.28, 0.32, 0.02), M(c), dx, 1.05 - (i % 2) * 0.06, 0.05)));
   altBuilding('board', g, [sg]);
-  scene.add(g); register(g); colliders.push({ x, z, r: 0.7 });
+  mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z, r: 0.7 });
   SITES.board = { x, z, door: [x, z + 1.1] };
 }
 function telescope(x, z) {   // 學院台地上的觀星台（晚上可以觀星）
@@ -623,7 +663,7 @@ function telescope(x, z) {   // 學院台地上的觀星台（晚上可以觀星
   tube.add(mesh(new THREE.CylinderGeometry(0.13, 0.11, 1.3, 14), M('#f4f0e6'), 0, 0.2, 0), mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.12, 14), M('#3b5a8a'), 0, 0.85, 0), mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.2, 8), M('#3a3040'), 0, -0.52, 0));
   const sg = label('天文望遠鏡', '#3b5a8a', 1.3, 0.32); sg.position.set(0, 0.35, 0.45); g.add(sg);
   if (altBuilding('telescope', g, [sg])) sg.position.set(0, 0.4, 1.0);   // 新模型的平台比較大：招牌插在平台前緣
-  g.traverse(o => { o.frustumCulled = false; });
+  mergeStatic(g); g.traverse(o => { o.frustumCulled = cullable(o); });
   scene.add(g); register(g); colliders.push({ x, z, r: 0.6 });
   SITES.telescope = { x, z, door: [x, z + 1.4] };
 }
@@ -637,7 +677,7 @@ function camp(x, z) {   // 沙灘上的露營地
   const lg = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.9, 8), M('#a57a4f'), 1.4, 0.16, 1.7); lg.rotation.z = Math.PI / 2; g.add(lg);
   const sg = label('露營地', '#ff9a6a', 1.1, 0.28); sg.position.set(-1.3, 1.1, 0.6); g.add(sg); g.add(mesh(new THREE.CylinderGeometry(0.04, 0.04, 1, 6), M('#8a5a3b'), -1.3, 0.5, 0.55));
   altBuilding('camp', g, [sg]);
-  scene.add(g); register(g); colliders.push({ x, z: z - 0.3, r: 1.1 }, { x: x + 0.9, z: z + 1.2, r: 0.4 });
+  mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z: z - 0.3, r: 1.1 }, { x: x + 0.9, z: z + 1.2, r: 0.4 });
   SITES.camp = { x, z, spot: [x + 0.4, z + 1.8] };
 }
 function fountain(x, z) {   // 廣場中央的噴泉：白石水池、金色渾天儀與發光的藍水晶
@@ -725,7 +765,7 @@ function banner(x, z, rot) {   // 掛著深藍金徽旗幟的旗桿
     const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 1.25, 1, 4), bend(new THREE.MeshStandardMaterial({ map: emblem(), side: THREE.DoubleSide, roughness: 0.85 }), 'sway'));
     cloth.position.set(0.32, 2.2, 0.03); cloth.castShadow = true; g.add(cloth);
   }
-  scene.add(g); register(g); colliders.push({ x, z, r: 0.25 });
+  mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z, r: 0.25 });
 }
 function planter(x, z) {   // 方形白石花台
   if (instanced('PROPMODELS', 'planter', x, z, 0)) { colliders.push({ x, z, r: 0.55 }); return; }
@@ -874,7 +914,7 @@ function roads() {
   }
   buf.forEach((B, k) => {
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(B.P, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(B.UV, 2)); geo.computeVertexNormals();
-    const m = new THREE.Mesh(geo, MAT[k]); m.receiveShadow = true; m.frustumCulled = false; scene.add(m);
+    const m = new THREE.Mesh(geo, MAT[k]); m.receiveShadow = true; scene.add(m);
   });
 }
 const isBridgeAt = (x, z) => { const [tx, tz] = tileOf(x, z); return isBridge(tx, tz); };
@@ -1105,19 +1145,32 @@ export function flowerGeos() {
   const headG = merge(petals).rotateX(-0.25).translate(0, 0.27, 0), coreG = new THREE.SphereGeometry(0.026, 6, 3).scale(1, 0.6, 1).translate(0, 0.285, 0);
   return (FLOWER_GEOS = { stemG, headG, coreG });
 }
-/* 野花分成 16×16 公尺一塊（每塊三個 InstancedMesh：莖、花冠、花心），畫面外的塊不畫（props3d.cull） */
+/** 莖、花冠、花心合成一個幾何（v7.3：一塊野花原本三個 InstancedMesh，現在一個）：顏色烘進頂點色，aTint 標出要染上每朵花顏色的花瓣 */
+function flowerOne() {
+  const { stemG, headG, coreG } = flowerGeos(), P = [], N = [], C = [], T = [];
+  [[stemG, '#4f9a3a', 0], [headG, '#ffffff', 1], [coreG, '#ffcf3a', 0]].forEach(([g0, hex, tint]) => {
+    const g = g0.index ? g0.toNonIndexed() : g0, c = new THREE.Color(hex), n = g.attributes.position.count;
+    P.push(...g.attributes.position.array); N.push(...g.attributes.normal.array);
+    for (let i = 0; i < n; i++) { C.push(c.r, c.g, c.b); T.push(tint); }
+  });
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  o.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); o.setAttribute('aTint', new THREE.Float32BufferAttribute(T, 1));
+  return o;
+}
+/* 野花分成 16×16 公尺一塊（每塊一個 InstancedMesh：莖、花冠、花心合成一個，v7.3），畫面外的塊不畫（props3d.cull） */
 {
-  const { stemG, headG, coreG } = flowerGeos(), FC = 16, TOTAL = 5000, SPARE = 120;
-  const mats = [bend(new THREE.MeshStandardMaterial({ color: '#4f9a3a', roughness: 0.9 }), 'flower'), bend(new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide }), 'flower'), bend(new THREE.MeshStandardMaterial({ color: '#ffcf3a', roughness: 0.6 }), 'flower')];
+  const oneG = flowerOne(), FC = 16, TOTAL = 5000, SPARE = 120;
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }); mat.defines = { TA_FLOWERTINT: '' }; bend(mat, 'flower');   // 粗糙度取莖（0.9）、花瓣（0.7）、花心（0.6）的中間
   const chunks = new Map(); let total = 0;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
-  const chunkOf = (x, z) => { const k = Math.floor(x / FC) + ',' + Math.floor(z / FC); let c = chunks.get(k); if (!c) chunks.set(k, c = { x: (Math.floor(x / FC) + 0.5) * FC, z: (Math.floor(z / FC) + 0.5) * FC, mats: [], cols: [], ims: null, cap: 0 }); return c; };
+  const chunkOf = (x, z) => { const k = Math.floor(x / FC) + ',' + Math.floor(z / FC); let c = chunks.get(k); if (!c) chunks.set(k, c = { x: (Math.floor(x / FC) + 0.5) * FC, z: (Math.floor(z / FC) + 0.5) * FC, mats: [], cols: [], im: null, cap: 0 }); return c; };
   const build = (c, cap) => {   // 建立這一塊的 InstancedMesh（cap：最多幾朵，留一些給之後補種）
     c.cap = cap; const g = new THREE.Group();
-    c.ims = [stemG, headG, coreG].map((geo, i) => { const im = new THREE.InstancedMesh(geo, mats[i], cap); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false; im.count = 0; g.add(im); return im; });
+    { const im = new THREE.InstancedMesh(oneG, mat, cap); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false; im.count = 0; g.add(im); c.im = im; }
     c.n = 0; scene.add(g); { let lo = 1e9, hi = -1e9; for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const gy = groundAt(c.x + (i - 1) * FC * 0.5, c.z + (j - 1) * FC * 0.5); lo = Math.min(lo, gy); hi = Math.max(hi, gy); } registerAt(g, c.x, (lo + hi) / 2 + 0.3, c.z, FC * 0.75 + 0.5, null, (hi - lo) / 2 + 0.8); }   // 野花很矮：包圍體只到地面上一點
   };
-  const write = (c, m, hex) => { const i = c.n++; c.ims.forEach(im => { im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; }); c.ims[1].setColorAt(i, col.set(hex)); c.ims[1].instanceColor.needsUpdate = true; };
+  const write = (c, m, hex) => { const i = c.n++, im = c.im; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(hex)); im.instanceColor.needsUpdate = true; };
   const matrix = (x, z, s, tall) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((rnd() - 0.5) * 0.25, rnd() * 6.28, (rnd() - 0.5) * 0.25)), sc.set(s, s * (tall ? 1.45 : 1), s));
   const put = (x, z, c, s, tall) => { if (total >= TOTAL) return; const ch = chunkOf(x, z); ch.mats.push(matrix(x, z, s, tall).clone()); ch.cols.push(c); total++; };
   const pal = ['#ffffff', '#ff8fb1', '#ffd23f', '#b38bff', '#ff7a5a', '#6c8dff'];
@@ -1154,7 +1207,7 @@ export function flowerGeos() {
   chunks.forEach(c => { build(c, c.mats.length + SPARE); c.mats.forEach((m, i) => write(c, m, c.cols[i])); c.mats = c.cols = null; });
   wildFlowers = (x, z, c) => {   // 之後補種（西部高地的野花草原）：塊滿了就不種
     if (total >= TOTAL) return;
-    const ch = chunkOf(x, z); if (!ch.ims) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
+    const ch = chunkOf(x, z); if (!ch.im) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
     write(ch, matrix(x, z, 0.75 + rnd() * 0.35, false), c); total++; flowerSpots.push([x, z]);
   };
 }

@@ -5,7 +5,7 @@
    - 優惠券可以在大廳紀念品櫃換主題家具（每天 2 件現貨七折、目錄每天最多訂 5 件），或交付島嶼特產委託（每週更新）賺更多。
    存檔 S().hotel = { coupons, rooms: [{ theme, items, wall, floor, done, guest, d }], made: { d, n }, shop: { d, n }, req: { w, list }, talk: { d, who } } */
 import * as THREE from 'three';
-import { scene, M, mesh, nightMats } from './engine.js';
+import { scene, M, mesh, nightMats, cullable } from './engine.js';
 import { tileAt, groundAt } from './terrain.js';
 import { blocked, colliders, label, PIER, gable, timber, mergeStatic, altBuilding, SITES } from './props.js';
 import { chibi, animate, lookAt } from './chars.js';
@@ -135,7 +135,7 @@ function placeBuilding() {
   return null;
 }
 function tourist(gi) {
-  const G = GUESTS[gi], m = chibi(Object.assign({ pants: '#5a6070' }, G)); m.traverse(o => { o.frustumCulled = false; });
+  const G = GUESTS[gi], m = chibi(Object.assign({ pants: '#5a6070' }, G)); m.traverse(o => { o.frustumCulled = cullable(o); });
   return { G, gi, m, target: null, wait: 0 };
 }
 export function init(c) {

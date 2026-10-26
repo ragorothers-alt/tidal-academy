@@ -91,7 +91,7 @@ export async function build() {
   }
   list.forEach(cl => {
     const m = new THREE.SpriteMaterial({ map: texs[cl.k % texs.length].tex, transparent: true, depthWrite: false, fog: false });
-    const s = new THREE.Sprite(m); s.frustumCulled = false; s.raycast = () => {}; s.renderOrder = -1; scene.add(s);
+    const s = new THREE.Sprite(m); s.raycast = () => {}; s.renderOrder = -1; scene.add(s);
     sprites.push({ s, m, cl });
   });
   const apply = () => sprites.forEach(o => { const t = texs[o.cl.k % texs.length]; o.m.map = t.tex; o.m.needsUpdate = true; o.cl.aspect = t.aspect; o.s.center.set(0.5, t.foot); o.s.scale.y = o.cl.w * t.aspect; });   // 錨點在雲底
@@ -104,7 +104,7 @@ const HZ = { sea: 0 }, col = new THREE.Color(), gold = new THREE.Color('#f2906a'
 /** 每格更新：horizonNdc(x, z) 是該方向畫面地平線的 NDC 高度、yForNdc 反推世界高度（都由 fantasy.js 提供），golden、night 0–1
     地平線高度是沿路取樣地面算的，鏡頭快速移動時，懸崖、台地邊緣在取樣點之間進出，估計值會突然跳一下；
     海面的地平線每格照實算（連續、和鏡頭一起動），只有地形墊高的那一段用彈簧平滑地追上（約一秒），雲才不會一格一格地跳 */
-export function update(show, horizonNdc, yForNdc, golden, night, dt) {
+export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
   sprites.forEach(o => { o.s.visible = show; });
   if (!show) { sprites.forEach(o => { o.cl.bump = null; }); return; }   // 回到戶外時直接對齊，不從舊位置滑過來
   const h = Math.min(dt || 0.016, 0.05), W = 4;   // 臨界阻尼彈簧（約一秒追上）：位置和速度都連續，地平線估計值跳動時雲不會頓一下
@@ -113,6 +113,7 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt) {
   { const gl = gloom() * (1 - night * 0.6); col.lerp(rainC, gl * 0.8).multiplyScalar(1 - gl * 0.36); }   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
   sprites.forEach(o => {
     const { cl } = o, x = camera.position.x + Math.sin(cl.az) * cl.d, z = camera.position.z - Math.cos(cl.az) * cl.d;
+    if (inCone && !inCone(x, z, cl.w)) { o.s.visible = false; cl.bump = null; return; }   // 畫面外：不取樣地平線；轉回來時直接對齊（v7.3）
     const all = horizonNdc(x, z, HZ), bump = Math.max(0, all - HZ.sea);   // bump：地形（台地、懸崖）把地平線墊高的部分——只有這段是取樣出來、會跳的
     if (cl.bump == null) { cl.bump = bump; cl.nv = 0; } else { cl.nv += ((bump - cl.bump) * W * W - 2 * W * cl.nv) * h; cl.bump += cl.nv * h; }
     o.s.position.set(x, yForNdc(x, z, HZ.sea + cl.bump + cl.up), z);

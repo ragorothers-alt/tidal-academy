@@ -2,7 +2,7 @@
    東緣是一道懸崖，坡道在 z ≈ 10；高地上是松林與竹林、巨石與野花；山頂（高 5）可以三段跳或爬梯子上去，有一張看夕陽海景的長椅；
    高地池塘從懸崖落下一道瀑布，注入下方的水潭。 */
 import * as THREE from 'three';
-import { scene, M, mesh, U, bend } from './engine.js';
+import { scene, M, mesh, U, bend, cullable } from './engine.js';
 import { N, C, T, tileAt, legacyTile, groundAt, WATER_Y, ramp2X, PLANNED, STAIRS, warp } from './terrain.js';
 import { tree, rock, bush, bench, blocked, colliders, seats, wildFlowers, label, rnd, SITES, modelClone, mergeStatic } from './props.js';
 import * as ui from './ui.js';
@@ -24,7 +24,7 @@ function bamboo(x, z, s) {
     for (let k = 1; k < h / 0.42; k++) g.add(mesh(new THREE.CylinderGeometry(0.06 * s, 0.06 * s, 0.035, 7), node, px + st.rotation.z * -k * 0.42 * 0.5, k * 0.42, pz + st.rotation.x * k * 0.42 * 0.5, { noCast: true }));
     for (let k = 0; k < 3; k++) { const lf = mesh(new THREE.SphereGeometry(0.28 * s, 7, 5), leaf, px + (rnd() - 0.5) * 0.4, h - 0.1 - k * 0.3, pz + (rnd() - 0.5) * 0.4); lf.scale.set(1.3, 0.35, 0.8); lf.rotation.y = rnd() * 6; g.add(lf); }
   }
-  g.traverse(o => { o.frustumCulled = false; }); g.userData.prop = { id: 'prop_bamboo', h: 3.4 * s }; scene.add(g); colliders.push({ x, z, r: 0.45 * s });
+  g.traverse(o => { o.frustumCulled = cullable(o); }); g.userData.prop = { id: 'prop_bamboo', h: 3.4 * s }; scene.add(g); colliders.push({ x, z, r: 0.45 * s });
 }
 /* ---------- 瀑布：高地池塘東緣落到下方水潭，水流條紋往下流、底部白色水花與水霧 ---------- */
 const fallU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uNight: { value: 0 } };

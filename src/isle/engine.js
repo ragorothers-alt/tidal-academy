@@ -53,6 +53,41 @@ scene.fog = new THREE.Fog(0xcfeeff, 60, 150);
 /* ---------- 滾筒地平線：在視空間把遠處往下彎 ---------- */
 /** 滾筒地平線的彎曲程度（動森式：遠處明顯往下沉，畫面上方露出天空） */
 export const CURVE = 0.032;
+/* ---------- 視錐剔除（v7.3）：three.js 用彎曲前的位置判斷，遠處高的東西會被誤剔除，所以以前整個場景都關掉剔除（每格多畫好幾百個畫面外的網格）。
+   這裡改成兩個位置都判斷：原本的包圍球，和照著色器的彎曲公式往下移（深度不同彎得不同：中心移平均、半徑加上差的一半）的包圍球，
+   有一個在畫面裡就畫——有沒有套彎曲的材質都不會被誤剔除。鏡頭是這一次 renderer.render 的鏡頭（彎曲是在它的視空間算的）；
+   陰影貼圖的視錐（noBend）不彎曲，照原本的判斷。包圍球加一點邊界，給風吹、旗子這類頂點動畫。 ---------- */
+const CULL = { cam: null, up: new THREE.Vector3(), fw: new THREE.Vector3(), pos: new THREE.Vector3() }, _cs = new THREE.Sphere(), _cv = new THREE.Vector3();
+function bentHit(fr, s) {
+  s.radius += 0.5 + s.radius * 0.05;
+  if (fr.intersectsSphere(s)) return true;
+  if (fr.noBend || !CULL.cam || !U.uCurve.value) return false;
+  const F = U.uBendF.value, K = U.uCurve.value, d = _cv.copy(s.center).sub(CULL.pos).dot(CULL.fw), b = x => { const z = Math.max(x - F, 0); return z * z * K; };
+  const b0 = b(d - s.radius), b1 = b(d + s.radius); if (b1 <= 0) return false;
+  s.center.addScaledVector(CULL.up, -(b0 + b1) / 2); s.radius += (b1 - b0) / 2;
+  return fr.intersectsSphere(s);
+}
+THREE.Frustum.prototype.intersectsObject = function (o) {
+  if (o.boundingSphere !== undefined) { if (o.boundingSphere === null) o.computeBoundingSphere(); _cs.copy(o.boundingSphere); }
+  else { const g = o.geometry; if (g.boundingSphere === null) g.computeBoundingSphere(); _cs.copy(g.boundingSphere); }
+  return bentHit(this, _cs.applyMatrix4(o.matrixWorld));
+};
+/* 精靈（雲、霧、光暈）：three.js 用半徑 0.707 的球，沒算 center 偏移；這裡用 1.42（center 在角落也包得住），一樣兩個位置都判斷 */
+THREE.Frustum.prototype.intersectsSprite = function (s) { _cs.center.set(0, 0, 0); _cs.radius = 1.42; return bentHit(this, _cs.applyMatrix4(s.matrixWorld)); };
+{ const render = renderer.render.bind(renderer);
+  renderer.render = (sc, cam) => { CULL.cam = cam; cam.updateMatrixWorld(); CULL.pos.setFromMatrixPosition(cam.matrixWorld); CULL.up.setFromMatrixColumn(cam.matrixWorld, 1).normalize(); CULL.fw.setFromMatrixColumn(cam.matrixWorld, 2).normalize().negate(); render(sc, cam); }; }
+/** 可以交給視錐剔除的物件：一般網格、精靈與擺好不再動的 InstancedMesh（userData.staticInst）；數量會變的 InstancedMesh 與粒子（位置在著色器裡算）照舊不剔除，userData.noCull 也不剔除 */
+export const cullable = o => (!!o.isSprite || (!!o.isMesh && (!o.isInstancedMesh || !!o.userData.staticInst) && !o.isSkinnedMesh)) && !(o.userData && o.userData.noCull);
+/** 很小的零件（包圍半徑 0.2 公尺以下：釘飾、小花、按鈕；角色是 0.1 以下：眼睛、鼻子）不投影子：陰影貼圖上幾乎看不出來，卻要多畫一次 */
+export function dropTinyShadows(root) {
+  const s = new THREE.Vector3();
+  root.traverse(o => {
+    if (!o.isMesh || !o.castShadow || o.isInstancedMesh) return;
+    let ch = false; for (let p = o; p && !ch; p = p.parent) ch = !!(p.userData && p.userData.wear);
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); o.getWorldScale(s);
+    if (o.geometry.boundingSphere.radius * Math.max(s.x, s.y, s.z) < (ch ? 0.1 : 0.2)) o.castShadow = false;
+  });
+}
 export const U = { uCurve: { value: CURVE }, uBendF: { value: 15 }, uTime: { value: 0 }, uWind: { value: 1 }, uSunV: { value: new THREE.Vector3(0, 1, 0) }, uRimCol: { value: new THREE.Color('#ffc870') }, uRim: { value: 0 },
   uOccP: { value: new THREE.Vector2(-9999, -9999) }, uOccR: { value: 0 }, uOccD: { value: 0 }, uOccY: { value: 0 }, uPlayer: { value: new THREE.Vector3(0, -99, 0) },
   uSnow: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 },
@@ -374,6 +409,14 @@ export function bend(mat, kind) {
         vSeaDepth = aDepth;
       #endif
       transformed.y += (sin(uTime * 0.9 + position.x * 0.35 + position.z * 0.2) * 0.06 + sin(uTime * 1.4 - position.z * 0.5) * 0.04) * ((modelMatrix * vec4(position, 1.0)).y > 0.8 ? 0.25 : 1.0);`);   // 小溪很淺：水面起伏小
+    if (kind === 'flower' && mat.defines && 'TA_FLOWERTINT' in mat.defines) v = 'attribute float aTint;\n' + v.replace('#include <color_vertex>', `
+      vColor = vec3(1.0);
+      #ifdef USE_COLOR
+        vColor *= color;
+      #endif
+      #ifdef USE_INSTANCING_COLOR
+        vColor *= mix(vec3(1.0), instanceColor.xyz, aTint);   // v7.3 野花合成一個網格：只有花瓣（aTint = 1）染上每一朵的顏色，莖和花心維持頂點色
+      #endif`);
     if (kind === 'grass' || kind === 'flower') {
       // 草叢與花（花不會縮進雪裡）（InstancedMesh）：在世界座標加上風吹，玩家走過時往外倒
       v = v.replace('#include <project_vertex>', `
@@ -1073,14 +1116,14 @@ sky.renderOrder = -1; scene.add(sky);
 export const hemi = new THREE.HemisphereLight('#cfeaff', '#8ab868', 1.1); scene.add(hemi);
 export const sun = new THREE.DirectionalLight('#fff4e0', 2.6);
 sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096);   // 陰影貼圖：每公尺約 75 個像素，窗框、欄杆、樹葉的影子都清楚（省電模式改回 2048，見 settings.js）
-Object.assign(sun.shadow.camera, { left: -27, right: 27, top: 27, bottom: -27, near: 1, far: 120 });
+Object.assign(sun.shadow.camera, { left: -27, right: 27, top: 27, bottom: -27, near: 1, far: 120 }); sun.shadow.getFrustum().noBend = true;   // 陰影貼圖不彎曲：照原本的視錐剔除
 sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.025; sun.shadow.radius = 2;
 scene.add(sun, sun.target);
 /** 遠處的陰影（兩層陰影的第二層）：亮度 0，只提供陰影貼圖；不每一格重畫（shadows.js 決定何時 needsUpdate） */
 export const sunFar = new THREE.DirectionalLight('#ffffff', 0);
 sunFar.castShadow = CASCADES; sunFar.shadow.mapSize.set(2048, 2048); sunFar.shadow.autoUpdate = false; sunFar.shadow.radius = 0;
 sunFar.shadow.bias = -0.0006; sunFar.shadow.normalBias = 0.07;   // 遠處的像素格大，偏移也要大一點才不會自己遮自己
-Object.assign(sunFar.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 190 });
+Object.assign(sunFar.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, near: 1, far: 190 }); sunFar.shadow.getFrustum().noBend = true;
 scene.add(sunFar, sunFar.target);
 /** 陰影框（shadows.js 每一格更新）：近處與遠處各一個，ax／ay 是光源座標系的兩軸、ca／cb 是框的中心、r 是半寬。
     props3d 用來判斷每個模型的影子會不會落進框裡（不會的就不畫進陰影貼圖）。far.on：遠處那張有效；far.due：這一格要重畫 */

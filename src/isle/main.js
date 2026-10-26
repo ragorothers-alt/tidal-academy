@@ -1,6 +1,6 @@
 /* 潮汐小島 · 主程式：島民、對話選單、博物館、商店、口袋、手機、輸入與主迴圈。 */
 import * as THREE from 'three';
-import { scene, camera, renderer, U, sun, sky, applyTime, screenOf, skyU, bend, CURVE, HZ } from './engine.js';
+import { scene, camera, renderer, U, sun, sky, applyTime, screenOf, skyU, bend, CURVE, HZ, cullable, dropTinyShadows } from './engine.js';
 import { N, C, T, terrain, groundAt, tileAt, isBridge, isFord, foamMat, seaMesh, waterY as fwY, GRID_SHIFT, tileOf, waterAt } from './terrain.js';
 import { colliders, blocked, penetration, PLAZA, SITES, homes, onPier, PIER, seats, nudgeHome, flowerSpots, onRoad, spin as spinProps } from './props.js';
 import * as mind from './mind.js';
@@ -2055,8 +2055,8 @@ function roomTick(dt, t, ix, iz, len, moving, locked) {
 let lastFrame = 0;
 /** 每一格。作答中背景不畫，島上的狀態每 0.05 秒更新一次就夠（不必跟著螢幕每秒 60 次）；極省電模式每秒 30 格 */
 function frame(now) { if (now - lastFrame > (post.fx.hold ? 45 : ULTRA ? 28 : 0)) { lastFrame = now; tick(); } requestAnimationFrame(frame); }
-// 滾筒地平線會把遠處往下彎，three.js 的視錐剔除用的是彎曲前的位置，遠方高物會被誤剔除
-scene.traverse(o => { o.frustumCulled = false; });
+// 滾筒地平線會把遠處往下彎，three.js 原本的視錐剔除會誤剔除遠方高物：engine.js 換成彎曲前後兩個位置都判斷（v7.3），一般網格交給它剔除
+scene.traverse(o => { o.frustumCulled = cullable(o); }); dropTinyShadows(scene);
 paintHud(); paintTools();
 requestAnimationFrame(frame);
 addEventListener('pagehide', () => { if (TA.importing) return; if (!room.inside && !elsewhere()) S().pos = [player.position.x, player.position.z]; TA.Store.flush(); });

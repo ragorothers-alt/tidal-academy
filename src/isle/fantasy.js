@@ -3,7 +3,7 @@
    在畫面上最高到哪裡」（畫面上的地平線），再反推物件的世界高度，讓它停在地平線上方固定的畫面距離——
    鏡頭怎麼轉、拉多近，浮空島都穩穩浮在天上；顏色依距離混入天空色（大氣透視），越遠越淡、越偏藍。 */
 import * as THREE from 'three';
-import { scene, camera, skyU, U } from './engine.js';
+import { scene, camera, skyU, U, cullable } from './engine.js';
 import { groundAt } from './terrain.js';
 import * as cumulus from './cumulus.js';
 import { gloom } from './weather.js';
@@ -92,13 +92,13 @@ function place(model, cfg, dens) {
     const sm = new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: cfg === CASTLE ? 0.4 : 0.85 });
     const sp = new THREE.Sprite(sm), a = i / n * Math.PI * 2 + Math.random() * 0.6, w = cfg.size * (0.55 + Math.random() * 0.35);
     sp.scale.set(w, w * 0.55, 1); sp.position.set(Math.cos(a) * cfg.size * 0.42, -size.y * k * (0.18 + Math.random() * 0.22), Math.sin(a) * cfg.size * 0.42);
-    sp.frustumCulled = false; g.add(sp); puffs.push(sm); skirts.push({ sp, w, k: i % 2 ? 0 : 3 });
+    g.add(sp); puffs.push(sm); skirts.push({ sp, w, k: i % 2 ? 0 : 3 });
   }
   let fall = null;
   if (cfg.fall) {   // 瀑布不跟著島自轉，每格放在島朝向鏡頭的那一側
     const fm = new THREE.SpriteMaterial({ map: fallTex, alphaMap: fallAlpha, transparent: true, depthWrite: false, fog: false });
-    const sp = new THREE.Sprite(fm), L = size.y * k * 1.35; sp.center.set(0.5, 1); sp.scale.set(cfg.size * 0.17, L, 1); sp.frustumCulled = false; sp.raycast = NO_HIT;   // 從島緣流下、往下散進空氣裡
-    const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.25 })); mist.scale.set(cfg.size * 0.22, cfg.size * 0.1, 1); mist.frustumCulled = false; mist.raycast = NO_HIT;
+    const sp = new THREE.Sprite(fm), L = size.y * k * 1.35; sp.center.set(0.5, 1); sp.scale.set(cfg.size * 0.17, L, 1); sp.raycast = NO_HIT;   // 從島緣流下、往下散進空氣裡
+    const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.25 })); mist.scale.set(cfg.size * 0.22, cfg.size * 0.1, 1); mist.raycast = NO_HIT;
     scene.add(sp, mist); puffs.push(mist.material); fall = { sp, mist, L, fm }; falls.push(fall);
   }
   if (cfg === CASTLE) { aqueducts(g, cfg.size, size.y * k / 2); addLights(g, 22, 0.3, 0.82, 2.0); } else addLights(g, cfg.fall ? 8 : 11, 0.66, 1.0, 1.8);
@@ -137,9 +137,9 @@ function aqueducts(g, size, half) {
     [low, up, band, ...piers].forEach(geo => shadeY(geo, -H, H * 0.5, 0.62));
     const y = -half * (sd < 0 ? 0.22 : 0.3), x = sd * (size * 0.38 + L / 2);
     [new THREE.Mesh(low, [mat, shade]), new THREE.Mesh(up, [mat, shade]), new THREE.Mesh(band, shade), ...piers.map(geo => new THREE.Mesh(geo, boxMats)), new THREE.Mesh(cap, trim)]   // ExtrudeGeometry：第 0 組是正背面、第 1 組是拱圈內側與側面
-      .forEach(m => { m.position.set(x, y, size * 0.05); m.frustumCulled = false; m.castShadow = m.receiveShadow = false; g.add(m); });
+      .forEach(m => { m.position.set(x, y, size * 0.05); m.castShadow = m.receiveShadow = false; g.add(m); });
     const mist = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex, transparent: true, depthWrite: false, fog: false, opacity: 0.75 }));   // 斷在雲裡
-    mist.scale.set(size * 0.5, size * 0.28, 1); mist.position.set(sd * (size * 0.38 + L * 0.98), y - H * 0.55, size * 0.05); mist.frustumCulled = false; g.add(mist); puffs.push(mist.material);
+    mist.scale.set(size * 0.5, size * 0.28, 1); mist.position.set(sd * (size * 0.38 + L * 0.98), y - H * 0.55, size * 0.05); g.add(mist); puffs.push(mist.material);
   });
 }
 
@@ -161,7 +161,7 @@ function addLights(g, n, y0, y1, size, src) {   // src：在哪個模型上挑�
     const ry = (v.y - box.min.y) / H; if (ry < y0 || ry > y1) continue;
     if (N) { nrm.fromBufferAttribute(N, i).applyMatrix3(nm.getNormalMatrix(m.matrixWorld)).normalize(); if (nrm.y < -0.3) continue; v.addScaledVector(nrm, size * 0.35); }
     const sm = new THREE.SpriteMaterial({ map: glowTex, color: '#ffe6a0', transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 });
-    const sp = new THREE.Sprite(sm); sp.position.copy(v); const k = size * (0.7 + Math.random() * 0.6); sp.scale.set(k, k, 1); sp.frustumCulled = false; sp.raycast = NO_HIT; sp.visible = false;
+    const sp = new THREE.Sprite(sm); sp.position.copy(v); const k = size * (0.7 + Math.random() * 0.6); sp.scale.set(k, k, 1); sp.raycast = NO_HIT; sp.visible = false;
     g.add(sp); lights.push({ sm, sp, ph: Math.random() * 6.28 }); made++;
   }
 }
@@ -189,7 +189,7 @@ function makeBirds() {
     for (let i = 0; i < f.n; i++) {
       const b = new THREE.Group(), body = new THREE.Mesh(bodyG, mat), L = new THREE.Mesh(wingG, mat), R = new THREE.Mesh(wingG, mat);
       R.scale.x = -1; b.add(body, L, R); b.scale.setScalar(0.9 + Math.random() * 0.4);
-      b.traverse(o => { o.frustumCulled = false; o.raycast = NO_HIT; });
+      b.traverse(o => { o.frustumCulled = cullable(o); o.raycast = NO_HIT; });
       scene.add(b);
       birds.push({ b, L, R, f, off: [(i % 3 - 1) * 1.6 + Math.random(), (Math.random() - 0.5) * 1.2, -Math.floor(i / 1.5) * 1.4], flap: Math.random() * 6.28, rate: 7 + Math.random() * 2 });
     }
@@ -226,7 +226,7 @@ async function buildBg() {
   BG.forEach(c => {
     const t = texs[c.k]; if (!t) return;
     const m = new THREE.SpriteMaterial({ map: t.tex, transparent: true, depthWrite: false, fog: false });
-    const s = new THREE.Sprite(m); s.center.set(0.5, c.foot); s.scale.set(c.w, c.w * t.aspect, 1); s.frustumCulled = false; s.raycast = NO_HIT; s.renderOrder = -2; s.visible = false;
+    const s = new THREE.Sprite(m); s.center.set(0.5, c.foot); s.scale.set(c.w, c.w * t.aspect, 1); s.raycast = NO_HIT; s.renderOrder = -2; s.visible = false;
     scene.add(s); bgs.push({ s, m, c });
   });
 }
@@ -298,7 +298,7 @@ function makeRing() {
   const g = new THREE.Group(), geo = new THREE.PlaneGeometry(1, 1);
   [[halo, 1.12, 0, 0.25], [outer, 1, 0.012, 1], [star, 0.74, -0.022, 0.9], [inner, 0.42, 0.05, 0.85]].forEach(([map, k, spin, w]) => {
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 }));
-    m.scale.setScalar(k); m.frustumCulled = false; m.raycast = NO_HIT; m.renderOrder = -1; g.add(m); ring.layers.push({ m, spin, w });
+    m.scale.setScalar(k); m.raycast = NO_HIT; m.renderOrder = -1; g.add(m); ring.layers.push({ m, spin, w });
   });
   g.scale.setScalar(78 * FAR_K); scene.add(g); ring.g = g;
 }
@@ -333,6 +333,20 @@ export function build() {
 
 let visible = true;
 const vT = new THREE.Vector3(), vA = new THREE.Vector3(), vB = new THREE.Vector3();
+/* 畫面左右的範圍（v7.3）：沿路取樣地平線一次要算幾十個點，浮空島、鳥群、雲加起來每格約 1 毫秒。
+   方向在畫面左右範圍外（多留約 35 度與物件本身的寬度）的就不算、先藏起來；鏡頭轉回來的那一格再算，畫面上看不出差別 */
+const coneF = new THREE.Vector3(); let camHalf = 9;
+function viewCone() {
+  camera.getWorldDirection(coneF); coneF.y = 0; const l = Math.hypot(coneF.x, coneF.z);
+  if (l < 0.05) { camHalf = 9; return; }   // 幾乎正對上下：全部都算
+  coneF.x /= l; coneF.z /= l; camHalf = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) + 0.6;
+}
+/** (x, z) 這個方向會不會進畫面；w 是物件的半寬（公尺） */
+export function inCone(x, z, w) {
+  if (camHalf > 3.2) return true;
+  const dx = x - camera.position.x, dz = z - camera.position.z, L = Math.hypot(dx, dz) || 1;
+  return Math.acos(THREE.MathUtils.clamp((dx * coneF.x + dz * coneF.z) / L, -1, 1)) < camHalf + Math.atan2(w || 0, L);
+}
 /** 從鏡頭往 (x, z) 的方向，彎曲後的地面／海面在畫面上最高的位置（NDC y）；out.sea 是只看海面時的值（不受地形取樣影響，連續） */
 function horizonNdc(x, z, out) {
   const cx = camera.position.x, cz = camera.position.z, L = Math.hypot(x - cx, z - cz) || 1, dx = (x - cx) / L, dz = (z - cz) / L;
@@ -357,9 +371,9 @@ function yForNdc(x, z, T) {
 /** 每格更新：night 0–1，show 表示目前在島上戶外 */
 export function update(dt, t, night, show) {
   if (show !== visible) { visible = show; far.forEach(o => { o.g.visible = show; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = show; }); birds.forEach(o => { o.b.visible = show; }); if (ring.g) ring.g.visible = show; bgs.forEach(o => { o.s.visible = show; }); }
-  cumulus.update(show, horizonNdc, yForNdc, skyU.glow.value * 2, night, dt);
+  if (show) { camera.updateMatrixWorld(); viewCone(); }
+  cumulus.update(show, horizonNdc, yForNdc, skyU.glow.value * 2, night, dt, inCone);
   if (!show) return;
-  camera.updateMatrixWorld();
   gloomK = gloom() * (1 - night * 0.5);
   hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + (skyU.dawn.value + Math.min(1, skyU.glow.value * 2)) * 0.12 + gloomK * 0.22;   // 晨昏空氣多一點；陰雨天遠方淡進灰色的空氣
   const gold = Math.min(1, skyU.glow.value * 2);
@@ -371,7 +385,9 @@ export function update(dt, t, night, show) {
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar(1 - night * 0.55);
   puffs.forEach(m => { m.color.copy(puffCol); });
   far.forEach(o => {
-    const x = Math.sin(o.az) * o.d, z = -Math.cos(o.az) * o.d;
+    const x = Math.sin(o.az) * o.d, z = -Math.cos(o.az) * o.d, on = inCone(x, z, (o.size || 60) * 0.8);
+    o.g.visible = on; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = on;
+    if (!on) return;
     o.g.position.set(x, yForNdc(x, z, horizonNdc(x, z) + o.up) + o.half + Math.sin(t * 0.25 + o.ph) * 0.9, z);
     o.g.rotation.y += o.spin * dt;
     if (o.fall) {
@@ -386,10 +402,11 @@ export function update(dt, t, night, show) {
   const flocks = new Set(birds.map(o => o.f));
   flocks.forEach(f => {   // 每群算一次高度（以隊伍中心為準）
     const a = t * f.sp + f.ph; f.x = Math.sin(a) * f.r; f.z = -Math.cos(a) * f.r;
-    f.y = yForNdc(f.x, f.z, horizonNdc(f.x, f.z) + f.h);
+    f.on = inCone(f.x, f.z, 12); if (f.on) f.y = yForNdc(f.x, f.z, horizonNdc(f.x, f.z) + f.h);
   });
   birds.forEach(o => {
     const f = o.f, a = t * f.sp + f.ph, ca = Math.cos(a), sa = Math.sin(a);
+    if (!f.on) { o.b.visible = false; return; }
     // 隊形：沿飛行方向往後排、往兩側展開
     const fx = Math.sign(f.sp) * ca, fz = Math.sign(f.sp) * sa, sx = -fz, sz = fx;
     const px = f.x + sx * o.off[0] + fx * o.off[2], pz = f.z + sz * o.off[0] + fz * o.off[2];

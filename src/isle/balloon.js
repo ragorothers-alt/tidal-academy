@@ -1,6 +1,6 @@
 /* 潮汐小島 · 熱氣球：晴朗的白天偶爾有掛著禮物的熱氣球飄過島上空；靠近時答對一題就能把禮物射下來。 */
 import * as THREE from 'three';
-import { scene, M, mesh } from './engine.js';
+import { scene, M, mesh, cullable } from './engine.js';
 import * as ui from './ui.js';
 import * as challenge from './challenge.js';   // 答對後可以接著連續挑戰（challenge.js 也會用到這裡，循環相依要用 import * as）
 import * as Audio from './audio.js';
@@ -18,7 +18,7 @@ function make() {
   const str = mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.7, 4), M('#ffffff'), 0, 0.35, 0); g.add(str);
   const box = mesh(new THREE.BoxGeometry(0.34, 0.3, 0.34), M('#fff3dc'), 0, -0.1, 0); g.add(box);
   g.add(mesh(new THREE.BoxGeometry(0.36, 0.06, 0.06), M('#ff6a8a'), 0, -0.1, 0), mesh(new THREE.BoxGeometry(0.06, 0.32, 0.36), M('#ff6a8a'), 0, -0.1, 0));
-  g.traverse(o => { o.frustumCulled = false; }); return g;
+  g.traverse(o => { o.frustumCulled = cullable(o); }); return g;
 }
 function spawn() {
   const a = Math.random() * Math.PI * 2, r = 46, sx = Math.cos(a) * r, sz = Math.sin(a) * r, ex = -sx + (Math.random() - 0.5) * 16, ez = -sz + (Math.random() - 0.5) * 16;

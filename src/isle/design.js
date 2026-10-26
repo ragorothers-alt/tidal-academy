@@ -1,7 +1,7 @@
 /* 潮汐小島 · 島嶼設計：在戶外的格子上鋪步道、種花圃、放籬笆／路燈／長椅（花鈴錢），存檔為 { "x,z": id }。 */
 import * as THREE from 'three';
 import * as grass from './grass.js';
-import { scene, camera, M, mesh, nightMats } from './engine.js';
+import { scene, camera, M, mesh, nightMats, cullable } from './engine.js';
 import * as glow from './glow.js';
 import { C, T, tileAt, groundAt, isBridge, terrain } from './terrain.js';
 import { colliders, blocked, SITES, homes } from './props.js';
@@ -89,7 +89,7 @@ function build(k, id) {
     g.add(mesh(new THREE.BoxGeometry(0.9, 0.07, 0.4), M(it.c), 0, 0.42, 0), mesh(new THREE.BoxGeometry(0.9, 0.3, 0.05), M(it.c), 0, 0.62, -0.18));
     [-0.38, 0.38].forEach(bx => g.add(mesh(new THREE.BoxGeometry(0.06, 0.42, 0.36), M('#5a5f6a'), bx, 0.21, 0)));
   }
-  g.traverse(o => { o.frustumCulled = false; });
+  g.traverse(o => { o.frustumCulled = cullable(o); });
   group.add(g);
   const rec = { obj: g };
   if (it.solid) { rec.col = { x, z, r: 0.42 }; colliders.push(rec.col); }

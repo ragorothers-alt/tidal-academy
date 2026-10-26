@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 import { clone as cloneSkinned } from './vendor/SkeletonUtils.js';
-import { bend } from './engine.js';
+import { bend, cullable } from './engine.js';
 import { MODEL_IDS } from './model-list.js';
 
 /** 角色 → 模型 id（之後補上的模型加在這裡） */
@@ -34,7 +34,7 @@ export function loadModel(id, kind) {
     new GLTFLoader().parse(bin.buffer, '', g => {
       g.scene.traverse(o => {
         if (!o.isMesh) return;
-        o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+        o.castShadow = true; o.receiveShadow = true; o.frustumCulled = cullable(o);
         o.material.side = THREE.DoubleSide;   // 裙擺、飄帶是單層面
         o.material.defines = Object.assign(o.material.defines || {}, { TA_MODEL: '' });
         if (kind !== 'none') bend(o.material, kind || 'char');   // 'none'：遠景（fantasy.js）不彎曲，自己處理大氣透視   // 跟場景一樣的滾筒地平線彎曲與寫實色彩（擺設可指定風擺等效果）

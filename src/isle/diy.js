@@ -2,9 +2,9 @@
    海邊每天漂來一個漂流瓶，答對英文題讀懂瓶中信就學會一張配方；回家門口的工作台把材料做成家具。
    材料存在 S().mats；配方存在 S().recipes（家具 id 陣列）。 */
 import * as THREE from 'three';
-import { scene, M, mesh } from './engine.js';
+import { scene, M, mesh, cullable } from './engine.js';
 import { C, tileAt, groundAt } from './terrain.js';
-import { trees, rocks, blocked, colliders, label, altBuilding, onRoad } from './props.js';
+import { trees, rocks, blocked, colliders, label, altBuilding, onRoad, mergeStatic } from './props.js';
 import * as ui from './ui.js';
 import { register } from './props3d.js';
 import * as challenge from './challenge.js';   // 答對後可以接著連續挑戰（challenge.js 也會用到這裡，循環相依要用 import * as）
@@ -60,7 +60,7 @@ export function layout() {
     const paper = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8), M('#f6e7c8'), 0, 0, 0); paper.rotation.z = Math.PI / 2; g.add(paper);
     g.rotation.y = 0.7; group.add(g); bottle = { o: b, g };
   }
-  group.traverse(o => { o.frustumCulled = false; });
+  group.traverse(o => { o.frustumCulled = cullable(o); });
 }
 function buildBench(home) {
   const cand = [];
@@ -79,7 +79,7 @@ function buildBench(home) {
     g.add(mesh(new THREE.BoxGeometry(0.3, 0.06, 0.12), M('#d8b88a'), -0.3, 0.8, -0.1), mesh(new THREE.BoxGeometry(0.26, 0.06, 0.1), M('#c8a070'), -0.28, 0.86, -0.08));
     const sg = label('DIY 工作台', '#c99a62', 1.0, 0.26); sg.position.set(0, 1.1, 0.32); g.add(sg);
     const alt = altBuilding('diy', g, [sg]);   // Codex 重建的工作台（遮雨篷、工具架）
-    g.traverse(o => { o.frustumCulled = false; }); scene.add(g); register(g); colliders.push(alt ? { x0: x - 1.0, z0: z - 0.6, x1: x + 1.0, z1: z + 0.6 } : { x0: x - 0.62, z0: z - 0.34, x1: x + 0.62, z1: z + 0.34 });
+    mergeStatic(g); g.traverse(o => { o.frustumCulled = cullable(o); }); scene.add(g); register(g); colliders.push(alt ? { x0: x - 1.0, z0: z - 0.6, x1: x + 1.0, z1: z + 0.6 } : { x0: x - 0.62, z0: z - 0.34, x1: x + 0.62, z1: z + 0.34 });
     return { x, z, door: [x, z + (alt ? 1.2 : 0.95)] };
   }
   return null;

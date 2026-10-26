@@ -253,7 +253,7 @@ function setState(o, st) {
   o.st = st;
   if (!st) { o.model.visible = false; if (o.extra) { o.extra.visible = false; o.extra.userData.st = 0; } return; }
   o.model.visible = true; const mask = st === 1 ? 1 : 2;
-  for (const m of meshesOf(o)) m.layers.mask = mask;
+  for (const m of meshesOf(o)) if (!m.userData.shadowProxy) m.layers.mask = mask;   // 陰影替身一直在圖層 2（props.js shadowProxy）
   if (o.extra) { o.extra.visible = true; o.extra.userData.st = st; }
 }
 /** 畫面外的東西，影子會落進畫面嗎：從它的底部往背著太陽的方向，沿著影子的長度（高度 ÷ 太陽仰角，最長 40 公尺）取三段，有一段在畫面裡就算 */
@@ -333,7 +333,10 @@ SCENE.onAfterRender = () => { for (const o of LAYERED) o.layers.mask = 1; LAYERE
   const sm = renderer.shadowMap, orig = sm.render, ONE = [sun], TWO = [sunFar];
   const casters = which => { for (const o of placed) { if (!o.sh || !o.st) continue; const want = which ? o.rf : o.rn; if (o.cs !== want) { o.cs = want; for (const m of o.sh) m.castShadow = want; } } };
   sm.render = function (lights, scene, cam) {
-    if (scene !== SCENE || lights.length !== 2 || !lights.includes(sunFar)) return orig.call(sm, lights, scene, cam);
+    if (scene !== SCENE || lights.length !== 2 || !lights.includes(sunFar)) {   // 只有一層陰影（省電）：一樣打開圖層 2，陰影替身才會投影
+      if (scene !== SCENE) return orig.call(sm, lights, scene, cam);
+      const m1 = cam.layers.mask; cam.layers.mask = m1 | 2 | 8; orig.call(sm, lights, scene, cam); cam.layers.mask = m1; return;
+    }
     const m0 = cam.layers.mask; cam.layers.mask = m0 | 2 | 8;   // 圖層 3（post.js 第二階段才畫的透明物）照樣投影
     casters(0); orig.call(sm, ONE, scene, cam);
     if (sunFar.shadow.needsUpdate) { casters(1); orig.call(sm, TWO, scene, cam); }

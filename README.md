@@ -131,6 +131,8 @@ vendor/three/  three.js r160（MIT）
 
 小島的原始碼是 ES 模組；`build.py` 會把它轉成一般腳本、把 `vendor/three/three.cjs` 包成全域 `THREE`，所以打包版用 `file://` 直接開也能跑。資產檔名帶內容雜湊，清單在 `dist/assets/manifest.json`。
 
+渲染效能：頂點著色器把遠處往下彎（`engine.js` 的 `uCurve`），所以視錐剔除也照同樣的彎曲判斷（`bentHit`）；新加的物件用 `cullable(o)` 設 `frustumCulled`，一般不要直接關掉剔除。靜態的群組用 `props.js` 的 `mergeStatic` 合併（會順便做陰影替身）；之後要換材質或移動的零件放在 `userData.prop` 子群組或設 `userData.noCull`。
+
 ## 限制
 
 - 題目依 108 課綱學測範圍原創撰寫，**不是大考中心官方試題**，也沒有經過外部難度校準。

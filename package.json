@@ -1,6 +1,6 @@
 {
   "name": "tidal-academy",
-  "version": "7.2.0",
+  "version": "7.3.0",
   "private": true,
   "description": "潮汐學院：離線學測衝刺遊戲。在潮汐小島上和島民一起複習：十科 4800+ 原創題、首領戰、激流衝刺、模擬考、間隔複習錯題本與單字燈塔。",
   "scripts": {

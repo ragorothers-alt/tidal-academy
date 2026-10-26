@@ -1,6 +1,6 @@
 /* 潮汐小島 · 旅客與新島民：每天一位旅客住在露營地，提供一種學習風格的挑戰；通過 3 次可邀請搬到空地，成為島民。 */
 import { invalidate as mmRedraw } from './minimap.js';
-import { scene } from './engine.js';
+import { scene, cullable } from './engine.js';
 import { groundAt } from './terrain.js';
 import { SITES, plots, buildOnPlot } from './props.js';
 import * as ui from './ui.js';
@@ -22,7 +22,7 @@ const tail = v => (v.catch && Math.random() < 0.5 ? v.catch : '');
 
 function makeNpc(g, home, range) {
   const v = Object.assign({}, g, { roomLayout: g.home, sid: 'guest:' + g.id, guest: true, color: g.shirt || '#ffb86b', sub: { name: '旅客', short: '旅', color: g.shirt || '#ffb86b' } });
-  v.home = home.slice(); v.range = range; v.mesh = ctx.chibi(v); v.mesh.traverse(m => { m.frustumCulled = false; }); scene.add(v.mesh);
+  v.home = home.slice(); v.range = range; v.mesh = ctx.chibi(v); v.mesh.traverse(m => { m.frustumCulled = cullable(m); }); scene.add(v.mesh);
   v.mesh.position.set(home[0], groundAt(home[0], home[1]), home[1]); v.target = home.slice(); v.wait = 2;
   v.tag = ui.el('div', 'tag', `${ui.esc(v.name)}<small>${v.resident ? '新島民' : '旅客'}</small>`); v.tag.style.setProperty('--c', v.color); document.getElementById('labels').appendChild(v.tag);
   ctx.villagers.push(v);
