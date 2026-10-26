@@ -4,6 +4,7 @@ import { scene, bend, M, mesh, nightMats, lamps, leafGeo, mergedIco, canopyCards
 import { register, unregister, registerAt } from './props3d.js';
 import { ULTRA } from './perf.js';
 import * as glow from './glow.js';
+import { current as seasonNow, auto as seasonAuto } from './seasons.js';
 import { N, C, T, tileAt as tileNow, groundAt, riverDist, FORD_Y, warp, tileOf, isBridge, BRIDGES, STAIRS } from './terrain.js';
 const tileAt = tileNow;
 /** 島嶼規劃（data/islandplan.js）：v6.79 起所有建築、道路與擺設都照規劃放 */
@@ -93,7 +94,7 @@ export function woodSign(text, w, h, ink) {
   const box = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.09), [edge, edge, edge, edge, face, face]); bend(face); box.castShadow = true; box.receiveShadow = true;
   return box;
 }
-function windowMat() { const m = M('#bfe8ff', { emissive: new THREE.Color('#ffcf7a'), emissiveIntensity: 0, roughness: 0.12, metalness: 0.1 }, 'glass'); if (!nightMats.includes(m)) nightMats.push(m); return m; }
+function windowMat() { const m = M('#bfe8ff', { emissive: new THREE.Color('#ffcda6'), emissiveIntensity: 0, roughness: 0.12, metalness: 0.1 }, 'glass'); if (!nightMats.includes(m)) nightMats.push(m); return m; }
 /** 程式化建築（img2threejs 重建，data/bldmodels.js 的 TA.ISLE.BLDMODELS[key] = (THREE, kit) => Group）：有就換掉原本的外觀。
     keep 裡的物件（招牌在 keep[0]、燈塔的光源）保留；碰撞框、門口位置照舊由各建築函式設定。模型用世界尺寸設計，原本的縮放會換算到保留的物件上 */
 // 貼圖以物件身分快取，不交給 M() 的 JSON options 快取（DataTexture 會被序列化）。
@@ -114,11 +115,16 @@ const BKIT = {
     return cache.get(kind);   // 與可見材質共用 bend 的風及地平線變形
   }
 };
+/** 模型裡會動的零件（子群組 name 'anim:spin:<軸>:<每秒弧度>'，例如風車葉）：不併進靜態網格，登記成轉動的零件 */
+function anims(m) {
+  m.traverse(o => { const p = o.name && o.name.startsWith('anim:spin:') ? o.name.split(':') : null; if (!p) return; o.userData.prop = true; spinners.push({ o, ax: 'xyz'.includes(p[2]) ? p[2] : 'x', w: +p[3] || 1 }); });
+}
 export function altBuilding(key, g, keep, kit) {
   const fac = ((window.TA.ISLE || {}).BLDMODELS || {})[key]; if (!fac) return false;
   try {
     const m = fac(THREE, kit ? Object.assign({}, BKIT, kit) : BKIT); if (!(m && m.isObject3D)) throw new Error('沒有回傳 Object3D');
     const a = m.userData.sign;   // 招牌位置要在清掉 userData 之前先拿出來
+    const meta = {}; ['door', 'cols', 'mailbox', 'lights', 'smoke'].forEach(k => { if (m.userData[k] != null) meta[k] = m.userData[k]; });   // v7.6：夢幻風住宅自己宣告門口、碰撞框、信箱、燈與煙囪的位置（相對房子原點）
     // 清掉建模工具留在 userData 的紀錄（mergeStatic、clone 都用不到）
     m.traverse(o => { o.userData = {}; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     const sc = g.scale.x;
@@ -126,7 +132,7 @@ export function altBuilding(key, g, keep, kit) {
     g.scale.setScalar(1);
     keep.forEach(k => { k.position.multiplyScalar(sc); k.scale.multiplyScalar(sc); });
     if (Array.isArray(a) && a.length === 3 && keep[0]) keep[0].position.fromArray(a);
-    g.add(m); return true;
+    g.add(m); g.userData.meta = meta; anims(m); return true;
   } catch (e) { console.warn('程式化建築建立失敗，改用原本的模型：' + key, e); return false; }
 }
 
@@ -337,13 +343,22 @@ function shadowProxy(g) {
   });
 }
 const mailbox = () => { const pm = modelClone('PROPMODELS', 'mailbox'); if (pm) { const g = new THREE.Group(); g.position.set(1.9, 0, 1.6); g.add(pm); return g; } const mb = new THREE.Group(); mb.position.set(1.9, 0.15, 1.6); mb.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 6), M('#7a5238'), 0, 0.4, 0), mesh(new THREE.BoxGeometry(0.4, 0.3, 0.5), M('#5fa8ff'), 0, 0.9, 0)); mb.userData.prop = { id: 'prop_mailbox', h: 1.15 }; return mb; };
+/** v7.6 夢幻風住宅：模型裡標成 'stone' 的淺色面（奶油、粉白灰泥）改用 'plaster'（柔和斑駁、不畫石塊）；深一點的石基、台階照舊是石材 */
+const plasterMat = (c, o, k) => M(c, o, k === 'stone' && new THREE.Color(c).getHSL({}, THREE.SRGBColorSpace).l > 0.82 ? 'plaster' : k);
 const DOOR_X = { cottage_a: 0.7, cottage_b: 0.3, cottage_c: 0.93, player_home: 0.43, earth_home: 0.43 };   // 小屋模型的門不在正中央（門口台階的中心）
 /** 房子：model 是 Codex 重建的小屋（cottage_a/b/c、player_home，屋頂顏色依住戶換），用世界尺寸；沒有模型就用原本的造型（s 是縮放） */
 export function house(x, z, roof, wall, s, model) {
   if (model && ((window.TA.ISLE || {}).BLDMODELS || {})[model]) {
     const g = new THREE.Group(); g.position.set(x, groundAt(x, z), z); const mb = mailbox(); g.add(mb);
-    if (altBuilding(model, g, [mb], { roof })) {
+    if (altBuilding(model, g, [mb], /^home_/.test(model) ? { roof, mat: plasterMat } : { roof })) {
+      const me = g.userData.meta || {};
+      if (me.mailbox) mb.position.set(me.mailbox[0], 0, me.mailbox[1]);
       mergeStatic(g); scene.add(g); register(g);
+      if (me.cols) {   // v7.6 夢幻風住宅：碰撞框、門口、信箱、煙囪都照模型宣告的位置
+        const cols = me.cols.map(([x0, z0, x1, z1]) => ({ x0: x + Math.min(x0, x1), z0: z + Math.min(z0, z1), x1: x + Math.max(x0, x1), z1: z + Math.max(z0, z1) }));
+        const mp = me.mailbox || [1.9, 1.6]; cols.push({ x: x + mp[0], z: z + mp[1], r: 0.25 }); colliders.push(...cols);
+        return { x, z, door: me.door ? [x + me.door[0], z + me.door[1]] : [x, z + 2.5], g, cols, roof, s: 1, model, smoke: me.smoke || null };
+      }
       const box = model === 'earth_home'
         ? { x0: x - 1.61, z0: z - 1.38, x1: x + 1.61, z1: z + 1.36 }
         : { x0: x - 1.8, z0: z - 1.65, x1: x + 1.8, z1: z + 1.65 };
@@ -706,7 +721,7 @@ function waterwheel(x, z) {
   SITES.waterwheel = { x, z };
 }
 /** 每格：轉動水車（main.js 在島上時呼叫） */
-export function spin(dt) { for (const s of spinners) s.o.rotation.x += s.w * dt; }
+export function spin(dt) { for (const s of spinners) s.o.rotation[s.ax || 'x'] += s.w * dt; }
 function gate(x, z) {   // 碼頭與城鎮之間的城門
   const g = placed(x, z), m = modelClone('LMMODELS', 'gate');
   if (m) g.add(m); else {
@@ -1061,15 +1076,18 @@ const bbox = P => [Math.min(...P.map(p => p[0])), Math.min(...P.map(p => p[1])),
 const roadGap = (x, z) => { let d = 1e9; for (const r of PLAN.roads) for (let i = 0; i < r.path.length - 1; i++) { const a = r.path[i], b = r.path[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz || 1))); d = Math.min(d, Math.hypot(x - a[0] - dx * t, z - a[1] - dz * t) - r.w / 2); } return d; };
 
 const PS = PLAN.sites, HOME_WHO = { Moyan: '墨言', Lexi: 'Lexi', Xian: '弦', Lan: '嵐', Heng: '衡', Rayne: '雷恩', Jingjing: '晶晶', Sen: '森', Yue: '岳' };
+/* v7.6：每一戶自己的夢幻風房子（data/homes3d_<科目>.js 的 BLDMODELS['home_<科目>']，各依主人的個性設計）；還沒有的沿用舊小屋 */
+const HOME_OF = { Moyan: 'chinese', Lexi: 'english', Xian: 'math', Lan: 'geography', Heng: 'civics', Rayne: 'physics', Jingjing: 'chemistry', Sen: 'biology', Yue: 'earth' };
+const homeModel = (k, old) => (((window.TA.ISLE || {}).BLDMODELS || {})['home_' + k] ? 'home_' + k : old);
 const ROOFS = ['#3e5a8c', '#4f6fb8', '#bf665d', '#36507e', '#5b7fbf', '#5f8a4a', '#44619c', '#3a5585', '#b85a52', '#4a6aa8'];   // 參考插畫的石板藍為主，夾幾戶磚紅、苔綠
 const W = (o) => warp(o.x, o.z);
 {
-  const [hx, hz] = W(PS.player_home); homes.push(Object.assign(house(hx, hz, '#cf5c4e', null, 1, 'player_home'), { owner: 'player' }));
+  const [hx, hz] = W(PS.player_home); homes.push(Object.assign(house(hx, hz, '#cf5c4e', null, 1, homeModel('player', 'player_home')), { owner: 'player' }));
   const spare = [];
   PLAN.homes.forEach(h => {
     const [x, z] = W(h);
     if (!HOME_WHO[h.who]) { spare.push([x, z]); return; }   // 史遙住在博物館前：規劃給她的那一格當空地
-    const i = homes.length - 1; homes.push(Object.assign(house(x, z, ROOFS[i % ROOFS.length], '#f1e6d2', 0.82, h.who === 'Yue' ? 'earth_home' : HOUSE_MODELS[i % HOUSE_MODELS.length]), { who: HOME_WHO[h.who] }));
+    const i = homes.length - 1; homes.push(Object.assign(house(x, z, ROOFS[i % ROOFS.length], '#f1e6d2', 0.82, homeModel(HOME_OF[h.who], h.who === 'Yue' ? 'earth_home' : HOUSE_MODELS[i % HOUSE_MODELS.length])), { who: HOME_WHO[h.who] }));
   });
   PLAN.plots.forEach(p => { const [x, z] = W(p); makePlot(x, z); });
   spare.forEach(([x, z]) => makePlot(x, z));
@@ -1175,9 +1193,18 @@ function flowerOne() {
   const write = (c, m, hex) => { const i = c.n++, im = c.im; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(hex)); im.instanceColor.needsUpdate = true; };
   const matrix = (x, z, s, tall, R = rnd) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.25, R() * 6.28, (R() - 0.5) * 0.25)), sc.set(s, s * (tall ? 1.45 : 1), s));
   const put = (x, z, c, s, tall, R) => { if (total >= TOTAL) return; const ch = chunkOf(x, z); ch.mats.push(matrix(x, z, s, tall, R).clone()); ch.cols.push(c); total++; };
-  const pal = ['#ffffff', '#ff8fb1', '#ffd23f', '#b38bff', '#ff7a5a', '#6c8dff'];
+  /* v7.6 夢幻風（consult3 §8、四季各有色盤）：花色依季節——春：奶油、粉、淡紫、少量淡黃；夏：白、淡藍、淡紫、少量粉；
+     秋：奶油、淡紫、乾燥玫瑰、柔金；冬：奶油、冰藍、淡紫。以前是飽和的原色（亮黃、橘紅、寶藍）。只換顏色、抽樣次數不變，花的位置照舊 */
+  let FS = 'autumn'; try { FS = seasonNow(); } catch (e) { FS = seasonAuto(); }
+  const FP = {
+    spring: { pal: ['#fff3e6', '#fff3e6', '#f4a8c8', '#f4a8c8', '#b9a2e6', '#f0d48a'], BC: ['#f4a8c8', '#fff3e6', '#b9a2e6', '#fff3e6', '#f4a8c8'], FIELD: [['#f4a8c8', '#fff3e6'], ['#b9a2e6', '#fff3e6'], ['#f4a8c8', '#b9a2e6'], ['#fff3e6', '#f0d48a']] },
+    summer: { pal: ['#ffffff', '#ffffff', '#a9c8f0', '#b9a2e6', '#b9a2e6', '#f4a8c8'], BC: ['#a9c8f0', '#ffffff', '#b9a2e6', '#ffffff', '#f4a8c8'], FIELD: [['#a9c8f0', '#ffffff'], ['#b9a2e6', '#ffffff'], ['#ffffff', '#f4a8c8'], ['#cfe6f4', '#b9a2e6']] },
+    autumn: { pal: ['#fbefdc', '#fbefdc', '#b9a2e6', '#b9a2e6', '#d48fae', '#eec67a'], BC: ['#b9a2e6', '#fbefdc', '#d48fae', '#fbefdc', '#eec67a'], FIELD: [['#b9a2e6', '#fbefdc'], ['#d48fae', '#fbefdc'], ['#eec67a', '#fbefdc'], ['#b9a2e6', '#d48fae']] },
+    winter: { pal: ['#fbf4ea', '#fbf4ea', '#c8d4f0', '#c8d4f0', '#d8cdee', '#ffffff'], BC: ['#c8d4f0', '#fbf4ea', '#d8cdee', '#ffffff', '#c8d4f0'], FIELD: [['#e8eef8', '#ffffff'], ['#c8d4f0', '#ffffff'], ['#d8cdee', '#ffffff'], ['#ffffff', '#f2e6d2']] }
+  }[FS] || {};
+  const pal = FP.pal || ['#ffffff', '#ff8fb1', '#ffd23f', '#b38bff', '#ff7a5a', '#6c8dff'];
   // 主要步道兩側的花帶：每隔一步一小叢（參考圖的路邊都是藍、白、黃的小花）
-  const BORDER = /Main Street|Academy|Observatory|East Stair|Lighthouse Walk|South Meadow/, BC = ['#6c8dff', '#ffffff', '#ffd23f', '#ffffff', '#b38bff'];
+  const BORDER = /Main Street|Academy|Observatory|East Stair|Lighthouse Walk|South Meadow/, BC = FP.BC || ['#6c8dff', '#ffffff', '#ffd23f', '#ffffff', '#b38bff'];
   PLAN.roads.filter(r => BORDER.test(r.name)).forEach(r => {
     for (let i = 0; i < r.path.length - 1; i++) {
       const a = r.path[i], b = r.path[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
@@ -1190,7 +1217,7 @@ function flowerOne() {
     }
   });
   // 規劃的花田：一片片以一兩種顏色為主的花海（參考插畫的藍、白、黃、淡紫）
-  const FIELD = [['#6c8dff', '#ffffff'], ['#ffd23f', '#ffffff'], ['#b38bff', '#ff8fb1'], ['#ffffff', '#ffd23f']];
+  const FIELD = FP.FIELD || [['#6c8dff', '#ffffff'], ['#ffd23f', '#ffffff'], ['#b38bff', '#ff8fb1'], ['#ffffff', '#ffd23f']];
   PLAN.props.flowers.forEach((f, fi) => {
     const [x0, z0, x1, z1] = bbox(f.poly), want = Math.min(420, Math.round(polyArea(f.poly) * 3.2)), cs = FIELD[fi % FIELD.length];
     for (let k = 0, made = 0; k < want * 4 && made < want; k++) {
@@ -1209,7 +1236,7 @@ function flowerOne() {
   { // v7.4 低矮的花墊（Codex 第二輪 B2）：草地的邊上（路邊、沙岸、台地與水邊）一叢叢 5–9 株的小花，奶油白 60%、淡紫 25%、柔黃 15%，
     // 比野花矮（約 0.12–0.2 公尺），中間的草清掉一圈才看得到。用自己的亂數，其他東西的位置不變
     let s2 = 7741; const R = () => { s2 = (s2 * 16807) % 2147483647; return (s2 - 1) / 2147483646; };
-    const LOW = ['#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#ada2c2', '#ada2c2', '#ada2c2', '#d8bf72', '#d8bf72'];
+    const LOW = FS === 'spring' ? ['#f5ebdf', '#f5ebdf', '#f5ebdf', '#f5ebdf', '#edb5cf', '#edb5cf', '#edb5cf', '#edb5cf', '#b8a4da', '#b8a4da', '#b8a4da', '#e6cc8e'] : ['#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#ada2c2', '#ada2c2', '#ada2c2', '#d8bf72', '#d8bf72'];   // 春天的低花墊多一點粉
     const edgy = (x, z, t) => [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]].some(([dx, dz]) => tileAt(x + dx, z + dz) !== t);
     for (let k = 0, made = 0; k < 9000 && made < 150; k++) {
       const px = (R() - 0.5) * 88, pz = (R() - 0.5) * 88, [cx, cz] = warp(px, pz), t = tileAt(cx, cz);

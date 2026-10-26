@@ -58,7 +58,7 @@ const smoke = new THREE.Points(smGeo, new THREE.ShaderMaterial({
 smoke.frustumCulled = false; smoke.renderOrder = 5; smoke.visible = false; scene.add(smoke);
 let chimneys = [];
 function buildChimneys() {
-  chimneys = homes.filter(h => h.g).map((h, i) => { const v = new THREE.Vector3(0.9, 3.95, -0.5); h.g.localToWorld(v); return { v, s: h.s || 1, ph: i * 0.37 }; });
+  chimneys = homes.filter(h => h.g && (h.smoke || !/^home_/.test(h.model || ''))).map((h, i) => { const v = h.smoke ? new THREE.Vector3().fromArray(h.smoke) : new THREE.Vector3(0.9, 3.95, -0.5); h.g.localToWorld(v); return { v, s: h.smoke ? 1 : h.s || 1, ph: i * 0.37 }; });   // v7.6：夢幻風住宅的煙囪口由模型宣告；沒有煙囪的不冒煙
   for (let i = 0; i < SM_MAX; i++) smAge[i] = (i % PER) / PER;
   smGeo.setDrawRange(0, chimneys.length * PER);
 }

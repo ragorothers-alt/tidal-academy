@@ -207,7 +207,7 @@ const LATE_W = `
   vec2 taUV(vec3 p){ vec4 c = uPrj * vec4(p, 1.0); return c.xy / c.w * 0.5 + 0.5; }
   float taEdge(vec2 u){ vec2 e = min(u, 1.0 - u); return smoothstep(0.0, 0.07, min(e.x, e.y)); }
   vec3 taSkyA(vec3 R, vec3 upV){ float ry = dot(R, upV), yy = clamp(max(ry, 0.0) / 0.55, 0.0, 1.0);
-    vec3 s = yy < 0.16 ? mix(uSkyB, uSkyM, yy / 0.16) : mix(uSkyM, uSkyT, smoothstep(0.16, 0.75, yy));
+    vec3 s = yy < 0.32 ? mix(uSkyB, uSkyM, yy / 0.32) : mix(uSkyM, uSkyT, smoothstep(0.32, 0.88, yy));   // v7.6：和天幕同一套分段
     return mix(s, uSkyM * 0.7, smoothstep(0.0, -0.15, ry)); }
   /* n：視空間法線；irr：水面收到的光（漫射，已含陰影與燈光格子）；skyR：解析的天空倒影；spec：太陽／月亮的反光；alb：水體散射的顏色 */
   /* 晨昏的大海：倒影偏深青藍，只有太陽那一側映著金橘（和天幕畫的遠海同一個公式，海平線不會有一條分界） */
@@ -291,7 +291,7 @@ const SEA_GLSL = `
           vec3 nS = normalize(nV + (viewMatrix * vec4(-fn.x, 0.0, -fn.y, 0.0)).xyz * lod * 0.6);
           vec3 R = reflect(-Vv, nV); float ry = dot(R, upV);
           float yy = clamp(max(ry, 0.0) / 0.55, 0.0, 1.0), under = smoothstep(0.0, -0.15, ry);
-          vec3 skyR = yy < 0.16 ? mix(uSkyB, uSkyM, yy / 0.16) : mix(uSkyM, uSkyT, smoothstep(0.16, 0.75, yy));
+          vec3 skyR = yy < 0.32 ? mix(uSkyB, uSkyM, yy / 0.32) : mix(uSkyM, uSkyT, smoothstep(0.32, 0.88, yy));
           vec3 sH = normalize(uSunV - upV * dot(uSunV, upV) + 1e-4), rH = normalize(R - upV * ry + 1e-4);
           skyR += uSunCol * vec3(1.0, 0.82, 0.55) * pow(max(dot(rH, sH), 0.0), 4.0) * smoothstep(0.42, -0.02, ry) * uGlow * 1.5;   // 晨昏：太陽那一側的低空光暈也映在海上
           skyR = mix(skyR, uSkyM * 0.7, under);
@@ -639,6 +639,11 @@ export function bend(mat, kind) {
         vec3 qd = vWP * 0.7; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qd, gB) * 2.0, 0.55);
         gDetN = triN(uN0, qd, gB) * 0.65;
       }`);
+    if (kind === 'plaster') f = f.replace('#include <color_fragment>', `#include <color_fragment>
+      { // v7.6 夢幻風住宅的灰泥牆：大片柔和的冷暖斑駁（±2–3%）與很淡的細顆粒，不畫石塊（'stone' 會把奶油灰泥畫成灰色石塊）
+        float pn = n_f(vWP.xz * 0.55 + vec2(vWP.y * 0.8, 0.0)), fine = n_v(vWP.xz * 9.0 + vWP.y * 7.0);
+        diffuseColor.rgb *= mix(vec3(0.985, 0.97, 0.99), vec3(1.02, 1.01, 0.99), pn) * (0.985 + fine * 0.03);
+      }`);
     if (kind === 'bark') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { vec3 qd = vWP * vec3(1.6, 0.7, 1.6); diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qd, gB) * 2.0, 0.95); gDetN = triN(uN0, qd, gB) * 1.2; }`);
     if (kind === 'water') f = f.replace('#include <color_fragment>', `#include <color_fragment>
@@ -784,8 +789,9 @@ export function bend(mat, kind) {
 function seasonGLSL(kind) {
   if (kind === 'water' || kind === 'char' || kind === 'flower' || kind === 'grass') return kind === 'grass' ? `{
       vec3 bc = diffuseColor.rgb;
-      float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.32, l0 * 1.2, l0 * 0.56), uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // 一大片一大片橄欖綠與金黃交錯；秋天：金綠色（目標畫面的草原是陽光下的黃綠）
+      float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.2, l0 * 1.17, l0 * 0.78), uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // 一大片一大片橄欖綠與金黃交錯；秋天：柔和的鼠尾草金（v7.6 夢幻風：以前 1.32／1.2／0.56 偏金黃）
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), uBloom * 0.4);
+      diffuseColor.rgb *= vec3(0.93, 0.98, 1.22);   // v7.6 夢幻風：草葉往薄荷鼠尾草收（少一點黃），花才露得出來
     }` : '';
   const cover = kind === 'terrain' ? 'smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.0, 0.12, n - (0.42 - (dep + 0.1) * 1.4)) * smoothstep(0.55, 0.75, vWP.y)'   // 河床、海床不積雪
     : kind === 'sway' || kind === 'pine' || kind === 'sakura' ? 'smoothstep(-0.05, 0.45, up)'
@@ -795,7 +801,7 @@ function seasonGLSL(kind) {
   const fall = kind === 'sway' || kind === 'sakura' ? `
       if (uFall > 0.0) {
         float s = vSeed;
-        vec3 ac = s < 0.35 ? vec3(1.0, 0.6, 0.06) : s < 0.6 ? vec3(0.98, 0.72, 0.1) : s < 0.8 ? vec3(0.95, 0.42, 0.05) : vec3(0.85, 0.7, 0.1);   // 金黃、黃、橘、黃褐（日系奇幻的明亮秋色）
+        vec3 ac = s < 0.35 ? vec3(1.0, 0.62, 0.32) : s < 0.6 ? vec3(0.95, 0.75, 0.3) : s < 0.8 ? vec3(0.92, 0.45, 0.4) : vec3(0.85, 0.7, 0.36);   // v7.6 夢幻風：粉杏、柔金、珊瑚、淡黃褐（以前是飽和的金黃橘）
         float lum = dot(bc, vec3(0.3, 0.59, 0.11)) / 0.28;
         float sunny = 0.4 + 0.6 * smoothstep(-0.55, 0.45, normalize(vWN).y), fk = uFall;   // 朝上、受光的葉子先轉黃，底下背光的還帶點橄欖綠
         vec3 fc = ac * clamp(lum * 1.15, 0.85, 1.7);   // 秋葉亮一點，背光面也看得出金黃
@@ -803,21 +809,25 @@ function seasonGLSL(kind) {
           fk *= 0.4;   // 灌木只帶一點秋色，大致保持綠色（和金黃的樹分出層次）
         #endif
         #ifdef TA_GOLD
-          sunny = 0.62 + 0.38 * smoothstep(-0.6, 0.25, normalize(vWN).y); fk = min(1.0, uFall * 1.25); fc = vec3(0.95, 0.72, 0.15) * clamp(lum * 1.05, 0.45, 1.0); leafy = 1.0;   // 廣場大樹：整棵飽滿的金黃（樹冠材質全是葉子；頂端偏黃的葉子也要算進去）
+          sunny = 0.62 + 0.38 * smoothstep(-0.6, 0.25, normalize(vWN).y); fk = min(1.0, uFall * 1.25); fc = vec3(0.95, 0.74, 0.38) * clamp(lum * 1.05, 0.45, 1.0); leafy = 1.0;   // v7.6：柔金（以前飽和的金黃）   // 廣場大樹：整棵飽滿的金黃（樹冠材質全是葉子；頂端偏黃的葉子也要算進去）
         #endif
         #ifdef TA_TREEK
           // v7.4：島上的闊葉樹每棵秋色不同（props3d 依樹的位置給 vTreeK，鄰近的樹多半同色、成群）：金黃 #D9B75F 35%、柔橘 #C77A43 30%、赭紅 #A95B46 20%、
           // 還沒轉色的橄欖綠 #748C57 15%（Codex 第二輪色票）。乘在金黃葉叢貼圖上（保留貼圖的明暗與色差），亮度只降一點，不會一棵亮一棵暗；廣場大樹不在內，維持整棵金黃
-          vec3 tT = vTreeK < 0.35 ? vec3(1.0) : vTreeK < 0.65 ? vec3(1.22, 0.62, 0.74) : vTreeK < 0.85 ? vec3(1.12, 0.43, 1.04) : vec3(0.4, 0.89, 1.33);
+          vec3 tT = vTreeK < 0.4 ? vec3(1.12, 0.92, 1.6) : vTreeK < 0.7 ? vec3(1.06, 1.06, 1.45) : vTreeK < 0.9 ? vec3(1.02, 0.62, 1.7) : vec3(0.45, 0.78, 1.5);   // v7.6 夢幻風（consult3 §8）：粉杏 #EAB084 40%、柔金 #E4C17C 30%、珊瑚 #D98D87 20%、還沒轉色的鼠尾草 #84957A 10%
           fc *= tT;
         #endif
         diffuseColor.rgb = mix(bc, fc, leafy * fk * sunny);
         #ifdef TA_LEAFTEX
           { float upK = smoothstep(-0.7, 0.45, normalize(vWN).y);   // 畫好的葉叢貼圖：秋天換成金黃那張（明暗已經畫在圖上）
-            vec3 gc = goldC * mix(vec3(0.97, 0.7, 0.42), vec3(1.12, 1.05, 0.88), upK);   // 背光面是深琥珀色、受光面是亮金（v7.0：以前背光面混綠葉，整棵變成橄欖色的泥）
+            vec3 gc = goldC * mix(vec3(0.92, 0.64, 0.62), vec3(1.1, 1.04, 0.98), upK);   // v7.6 夢幻風：背光面是乾燥玫瑰色、受光面是奶油金（以前深琥珀／亮金）   // 背光面是深琥珀色、受光面是亮金（v7.0：以前背光面混綠葉，整棵變成橄欖色的泥）
             #ifdef TA_TREEK
               gc *= tT;
             #endif
+            #ifdef TA_GOLD
+              gc *= vec3(1.04, 0.98, 1.45);   // 廣場大樹：柔金（不是鮮黃）
+            #endif
+            gc = mix(gc, vec3(dot(gc, vec3(0.2126, 0.7152, 0.0722))), 0.12) * 1.12;   // v7.6 夢幻風：秋葉亮一點、粉一點（不是深琥珀）
             diffuseColor.rgb = mix(bc, gc, fk * (0.82 + 0.18 * smoothstep(-1.4, 0.2, vOP.y))); }   // 樹冠最底下留一點點綠
         #endif
       }
@@ -825,11 +835,14 @@ function seasonGLSL(kind) {
         // 春天：櫻花樹與一部分闊葉樹開滿櫻花（粉紅花團帶白色細點）
         float lum = dot(bc, vec3(0.3, 0.59, 0.11)) / 0.28;
         float sp = n_v(vOP.xy * 18.0 + vOP.z * 7.0);
-        vec3 pk = mix(vec3(0.93, 0.48, 0.6), vec3(0.98, 0.86, 0.9), smoothstep(0.62, 0.8, sp)) * clamp(lum, 0.55, 1.35);
+        vec3 pk = mix(vec3(0.79, 0.35, 0.58), vec3(0.9, 0.51, 0.69), smoothstep(0.3, 0.6, sp));   // v7.6 夢幻風：主團 #F3BED8／#E69FC8
+        pk = mix(pk, vec3(0.96, 0.78, 0.85), smoothstep(0.72, 0.86, sp));   // 亮團 #FBE5EE
+        pk = mix(vec3(0.42, 0.26, 0.5), pk, 0.55 + 0.45 * smoothstep(-0.6, 0.4, normalize(vWN).y)) * clamp(lum, 0.55, 1.35);   // 冠內與背光是薰衣草 #AD8CBB
         diffuseColor.rgb = mix(diffuseColor.rgb, pk, leafy * uBloom);
       }` : kind === 'terrain' ? `
-      float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.32, l0 * 1.2, l0 * 0.56), leafy * uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // v6.93：秋草是柔和的橄欖金，金色留給大樹與花
-      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), leafy * uBloom * 0.4);` : '';
+      float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.2, l0 * 1.17, l0 * 0.78), leafy * uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // v6.93：秋草是柔和的橄欖金，金色留給大樹與花（v7.6：再柔一點）
+      diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), leafy * uBloom * 0.4);
+      diffuseColor.rgb *= mix(vec3(1.0), vec3(0.93, 0.98, 1.22), leafy);   // v7.6 夢幻風：地面的草色和草葉一起往薄荷鼠尾草收` : '';
   return `{
       vec3 bc = diffuseColor.rgb;
       float leafy = smoothstep(0.02, 0.1, bc.g - max(bc.r, bc.b));
@@ -1011,7 +1024,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       vec3 d = normalize(vec3(vD.x, vD.y + lift, vD.z));
       float e = d.y - hz;   // 相對於畫面上地平線的高度
       float y = clamp(e / max(span, 0.07), 0.0, 1.0);   // 以畫面上的地平線為準、鋪到畫面上緣（span）：一般鏡頭與第一人稱，畫面上緣都是頭頂的深藍
-      vec3 c = y < 0.16 ? mix(bot, mid, smoothstep(0.0, 0.16, y)) : mix(mid, top, smoothstep(0.16, 0.75, y));   // 三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
+      vec3 c = y < 0.32 ? mix(bot, mid, smoothstep(0.0, 0.32, y)) : mix(mid, top, smoothstep(0.32, 0.88, y));   // v7.6 夢幻風：粉紫的低空佔到三成、往上才轉成粉藍（以前 0.16／0.75）。三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
       c += vec3(0.1, 0.1, 0.08) * exp(-abs(e) * 18.0) * (1.0 - night);   // 地平線的亮帶
       float s = max(dot(d, sunSky), 0.0) * step(night, 0.6);   // 夜裡的「太陽方向」是月光，不畫（太陽本體在卷雲之後才畫，見下方）
       vec2 ha = normalize(d.xz + 1e-4), sa = normalize(sunDir.xz + 1e-4); c += sunCol * vec3(1.0, 0.82, 0.55) * pow(max(dot(ha, sa), 0.0), 4.0) * smoothstep(0.42, -0.02, e) * glow * 1.5;
@@ -1057,13 +1070,13 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
           float lit = clamp((dot(normalize(P1.yz + vec2(0.0, 0.2)), sunScr) * 0.7 + dot(normalize(P2.yz + 1e-3), sunScr) * 0.3) * 0.65 + 0.45, 0.0, 1.0);   // 大團決定明暗，小團加細節
           float hk = clamp(e / max(H, 0.02), 0.0, 1.0);   // 雲內的高度：底部陰暗、頂部明亮
           float core = smoothstep(0.0, 0.5, max(P1.x, P2.x));   // 團與團之間的縫比較暗
-          vec3 litC = mix(vec3(1.03, 1.01, 0.97), sunCol * vec3(1.06, 0.9, 0.8), min(0.85, 0.18 + glow * 1.3));   // 晨昏：受光面染成太陽的橘粉
-          vec3 shdC = mix(mix(vec3(0.58, 0.58, 0.82), mix(bot, top, 0.35), 0.2), vec3(0.3, 0.19, 0.38), min(1.0, glow * 1.4));   // 薰衣草紫的背光面；晨昏偏深紫
+          vec3 litC = mix(vec3(1.02, 1.0, 1.01), sunCol * vec3(1.03, 0.9, 0.94), min(0.75, 0.18 + glow * 1.2));   // 晨昏：受光面染成太陽的粉桃（v7.6 夢幻風：少一點橘）
+          vec3 shdC = mix(mix(vec3(0.6, 0.56, 0.8), mix(bot, top, 0.35), 0.2), vec3(0.34, 0.24, 0.46), min(1.0, glow * 1.4));   // v7.6：背光面是粉紫   // 薰衣草紫的背光面；晨昏偏深紫
           vec3 cc = mix(shdC, litC, clamp(lit * 0.75 + hk * 0.25 + toward * 0.08 - (1.0 - core) * 0.3 - 0.1, 0.0, 1.0));
           cc += sunCol * smoothstep(edgeW * 6.0, 0.0, body + bump) * (0.1 + 0.25 * max(toward, 0.0)) * lit * (1.0 - night);   // 雲頂受光的金邊
           cc = mix(cc, mix(bot, top, 0.1) * 1.05, smoothstep(0.05, -0.01, e) * 0.55);   // 雲腳融進地平線的空氣裡
           float rimN = smoothstep(edgeW * 9.0, 0.0, body + bump);   // 夜晚：月光只照亮雲頂的邊緣
-          vec3 ncc = mix(vec3(0.012, 0.032, 0.12), vec3(0.4, 0.4, 0.5), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));
+          vec3 ncc = mix(vec3(0.03, 0.028, 0.1), vec3(0.42, 0.38, 0.56), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v7.6：夜裡的雲是紫藍的雲體、淡紫的雲緣
           c = mix(c, mix(cc, ncc, night), cm * 0.98);   // 夜晚的雲是深藍的雲體、銀白的雲緣
         }
       }
@@ -1174,17 +1187,19 @@ export const SEA = { day: '#22aee8' };   // 白天海面的底色（受強烈日
 // 時間色票（參考 Codex 的概念圖取樣）：top 頭頂、mid 低空、bot 地平線的霧白；sea 遠方海面；其餘是陽光、天光、霧與曝光
 /* v7.0：依 Codex 美術顧問的時段色票重調（主光：補光約 4：1，夜晚的環境光大幅降低、燈光才是夜裡最亮的東西）。
    fn／ff：這個時段的線性霧距（公尺；雨天由 weather.js 再拉近） */
-const NIGHT = { top: '#101d42', mid: '#233b64', bot: '#56617d', sea: '#14306a', sun: '#b9cffc', si: 0.42, hs: '#7186ba', hg: '#253e44', hi: 0.36, fog: '#263859', exp: 1.08, night: 1, fn: 65, ff: 180 };   // 夜色：深靛的天、月光是冷藍的主光；地面只剩月光與燈光
+/* v7.6 夢幻風（Codex 第三輪 consult3 §3、§5）：天頂粉藍／薰衣草、低空粉紫、地平線桃粉；主光奶油色、天光補光薰衣草、地面補光偏紫——
+   影子是淡紫色而不是灰藍；黃金時段不再是一片橘金。夜晚是紫藍的天、不是深靛 */
+const NIGHT = { top: '#211d4c', mid: '#3d3c6c', bot: '#5f5d94', sea: '#1c2658', sun: '#c8ccff', si: 0.4, hs: '#8580b3', hg: '#3f365b', hi: 0.36, fog: '#46446f', exp: 1.06, night: 1, fn: 65, ff: 180 };   // 夜色：紫藍的天、月光是淡紫藍的主光；地面只剩月光與燈光
 const KEYS = [
   [0, NIGHT],
-  [4.8, { top: '#1a2e66', mid: '#34447e', bot: '#5e5a8e', sea: '#1c2c5c', sun: '#b0c0ff', si: 0.46, hs: '#7a8ac0', hg: '#2a3a3a', hi: 0.4, fog: '#3e4a7a', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],
-  [6.1, { top: '#7686d4', mid: '#d0a2c4', bot: '#ffc0a2', sea: '#d8b8c4', sun: '#ffe2b8', si: 1.5, hs: '#cbbad4', hg: '#7a7a6a', hi: 0.85, fog: '#ead0cc', exp: 1.0, night: 0, fn: 45, ff: 140 }],   // 清晨：薰衣草色的天、桃粉的地平線
-  [7.6, { top: '#6c8fc6', mid: '#b5c9de', bot: '#f5dac3', sea: '#8fcbea', sun: '#ffe2ba', si: 1.95, hs: '#b9c9ea', hg: '#777e65', hi: 1.05, fog: '#d4dce8', exp: 1.1, night: 0, fn: 50, ff: 150 }],
-  [9, { top: '#4a85c8', mid: '#88bde1', bot: '#d9e8e9', sea: '#7ad3f6', sun: '#fff0d8', si: 2.9, hs: '#b7d5f0', hg: '#85876d', hi: 1.42, fog: '#c9e2ed', exp: 1.2, night: 0, fn: 70, ff: 190 }],   // 白天：頭頂深藍 → 低空淺青 → 地平線霧白；空氣通透
-  [15.5, { top: '#4c84c6', mid: '#8cbce0', bot: '#dde8e8', sea: '#7ad0f2', sun: '#ffe9cc', si: 2.8, hs: '#b4d0ee', hg: '#86866b', hi: 1.4, fog: '#cbe0ec', exp: 1.18, night: 0, fn: 68, ff: 185 }],
-  [17, { top: '#527db8', mid: '#a9b6d4', bot: '#f4c49a', sea: '#e8c49a', sun: '#ffd08a', si: 2.1, hs: '#aac3e8', hg: '#71766b', hi: 0.95, fog: '#d8d5db', exp: 1.04, night: 0, fn: 55, ff: 160 }],   // 黃金時段：低角度金色逆光、陰影偏冷
-  [18.2, { top: '#414d86', mid: '#a088ae', bot: '#f2a864', sea: '#f2a050', sun: '#ffad76', si: 1.45, hs: '#9a9bcf', hg: '#656873', hi: 0.72, fog: '#c4a8b8', exp: 1.02, night: 0.05, fn: 45, ff: 140 }],   // 夕陽：橘色只留在地平線與迎光面，天光是藍紫
-  [19.5, { top: '#24326c', mid: '#55558e', bot: '#b88aa0', sea: '#4a4a7a', sun: '#c8b0ff', si: 0.6, hs: '#8a8ac0', hg: '#2c3c3c', hi: 0.5, fog: '#5a5a8a', exp: 1.04, night: 0.7, fn: 55, ff: 160 }],
+  [4.8, { top: '#2a2866', mid: '#4a4486', bot: '#7a6a9e', sea: '#232a62', sun: '#bcb8ff', si: 0.46, hs: '#8a86c0', hg: '#3a3450', hi: 0.4, fog: '#4e4a80', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],
+  [6.1, { top: '#7a7cd0', mid: '#cfa6d6', bot: '#f8c0c4', sea: '#d6bcd2', sun: '#ffe2c8', si: 1.5, hs: '#c8bce4', hg: '#857890', hi: 0.88, fog: '#e2cce0', exp: 1.02, night: 0, fn: 50, ff: 160 }],   // 清晨：薰衣草的天、粉桃的地平線
+  [7.6, { top: '#6a86cc', mid: '#b8b8e2', bot: '#f0d0d8', sea: '#96c8ec', sun: '#ffe6cc', si: 2.0, hs: '#c4c4ea', hg: '#888092', hi: 1.08, fog: '#d8d4ea', exp: 1.1, night: 0, fn: 60, ff: 178 }],
+  [9, { top: '#5482d2', mid: '#9cb0e6', bot: '#ecd2e0', sea: '#7cc8f2', sun: '#fff0dc', si: 2.75, hs: '#c2c6ee', hg: '#8a8292', hi: 1.42, fog: '#d2d4ec', exp: 1.18, night: 0, fn: 70, ff: 195 }],   // 白天：頭頂矢車菊藍 → 低空長春花紫 → 地平線粉白；空氣通透
+  [15.5, { top: '#5682d0', mid: '#a0b0e4', bot: '#eed2de', sea: '#7cc6f0', sun: '#ffeacc', si: 2.65, hs: '#c0c2ec', hg: '#8a8090', hi: 1.38, fog: '#d4d2ea', exp: 1.16, night: 0, fn: 68, ff: 190 }],
+  [17, { top: '#5c7cc8', mid: '#b4a2d8', bot: '#f2c0c4', sea: '#e4c0cc', sun: '#ffd8b8', si: 2.0, hs: '#b8b2e2', hg: '#7e7088', hi: 0.95, fog: '#dcc8dc', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、低空粉紫、地平線粉桃；奶油粉的逆光、薰衣草的陰影
+  [18.2, { top: '#4c4e9a', mid: '#b090c4', bot: '#f4ae9c', sea: '#e8a090', sun: '#ffb88e', si: 1.4, hs: '#a29cd2', hg: '#6a6278', hi: 0.72, fog: '#c8a8c4', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：粉橘只留在地平線，天是藍紫到粉紫
+  [19.5, { top: '#33306e', mid: '#6a5f9c', bot: '#c49ab8', sea: '#4c4a80', sun: '#c8b8ff', si: 0.6, hs: '#8f88c4', hg: '#3a3550', hi: 0.5, fog: '#6a6094', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],
   [21, NIGHT], [24, NIGHT]
 ];
 // 月亮：在北偏東的天上（從廣場往北看在右上方）。MOON_L 是月光的方向（夜裡的主光）；天幕上畫月亮的位置由 main.js 依畫面上的地平線算
@@ -1248,7 +1263,7 @@ export function applyTime(h) {
   const dawn = THREE.MathUtils.smoothstep(h, 4.8, 5.9) * (1 - THREE.MathUtils.smoothstep(h, 7.0, 8.4));   // 清晨：粉金的晨光
   skyU.glow.value = Math.max(golden * 0.5, dawn * 0.32); skyU.dawn.value = dawn;
   skyU.sunDir.value.copy(dir); skyU.sunCol.value.copy(sun.color).multiplyScalar(day ? 1 : 0.4);
-  nightMats.forEach(m => { m.emissiveIntensity = night * (m.userData.glowK ?? (m.userData.kind === 'glass' ? 0.95 : 1.25)); });   // 窗戶是溫暖的琥珀色燈光（參考圖的夜景：家家戶戶的窗都亮著），不會亮成一片白（v6.93 再收：看得到燈框與窗格）
+  nightMats.forEach(m => { const gl = m.userData.kind === 'glass'; m.emissiveIntensity = (gl ? night + (1 - night) * 0.09 : night) * (m.userData.glowK ?? (gl ? 0.95 : 1.25)); });   // v7.6 夢幻風：白天的窗也透出一點暖光（屋裡亮著燈的感覺）   // 窗戶是溫暖的琥珀色燈光（參考圖的夜景：家家戶戶的窗都亮著），不會亮成一片白（v6.93 再收：看得到燈框與窗格）
   envState.k = 1 - night * 0.88; ENV_MATS.forEach(m => { if (m.userData.envBase) m.envMapIntensity = m.userData.envBase * envState.k; });
   lamps.forEach(l => { l.intensity = night * (l.userData.k || 6); });
   refreshEnv(Math.round(h * 10), dir, night);   // k：個別燈的亮度（新島的燈籠路燈比較亮）

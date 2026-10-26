@@ -21,9 +21,9 @@ export const fx = {
   sunW: new THREE.Vector3(0, 1, 0),     // 太陽在世界座標的方向（高度霧的散射）
   night: 0,
   focus: 20,         // 對焦距離（玩家到鏡頭的距離）
-  dof: 0.7, ao: 0.8, sharp: 0.07,   // sharp：銳化強度（v6.93 收斂：細碎紋理不搶畫面）
+  dof: 0.7, ao: 0.8, sharp: 0.04,   // v7.6 夢幻風：銳化再收（0.07 → 0.04），柔感來自色光而不是糊；sharp：銳化強度（v6.93 收斂：細碎紋理不搶畫面）
   haze: new THREE.Color('#bfe2ff'),   // 遠景空氣的顏色（跟著霧色）
-  fog: new THREE.Vector4(0.0035, 0.1, 0.4, 0.3),   // 高度霧：密度（每公尺）、隨高度變稀的速率、霧的基準高度、最濃
+  fog: new THREE.Vector4(0.003, 0.11, 0.4, 0.24),   // v7.6：薄一點、有顏色的霧（不是一片白幕）   // 高度霧：密度（每公尺）、隨高度變稀的速率、霧的基準高度、最濃
   air: 0.0016,       // 遠景大氣（每公尺，和高度無關）
   hold: false         // 作答中（main.js 每一格設定）：畫面停在最後一格，不重畫
 };
@@ -141,22 +141,22 @@ const COMP = new THREE.ShaderMaterial({
         c = mix(c, fcol, fa);
       }
       // 泛光：白天輕、黃金時段與夜晚（燈光）較強；b1 是貼著光源的柔光、b2 是寬廣的光暈
-      c += texture2D(b1, vUv).rgb * (0.05 + g * 0.06 + night * 0.06) + texture2D(b2, vUv).rgb * (0.11 + g * 0.09 + night * 0.12);   // v7.4：黃金時段的寬光暈少一點（0.16 → 0.09）：太陽常在城堡後面，整片暈開會蓋掉塔群
+      c += texture2D(b1, vUv).rgb * (0.06 + g * 0.03 + night * 0.04) + texture2D(b2, vUv).rgb * (0.11 + g * 0.045 + night * 0.075);   // v7.6 夢幻風：亮邊與小光源柔化，寬光暈克制（城堡不白化）   // v7.4：黃金時段的寬光暈少一點（0.16 → 0.09）：太陽常在城堡後面，整片暈開會蓋掉塔群
       // 逆光光束
-      c += texture2D(rays, vUv).rgb * sunCol * (0.22 + g * 0.45) * vis * clear;   // v7.4：黃金時段的光束收一點（0.85 → 0.45）：只讀得到兩三道大方向，城堡不被光幕洗白
+      c += texture2D(rays, vUv).rgb * sunCol * (0.22 + g * 0.3) * vis * clear;   // v7.6：0.45 → 0.3，清出城堡尖塔與拱橋   // v7.4：黃金時段的光束收一點（0.85 → 0.45）：只讀得到兩三道大方向，城堡不被光幕洗白
       // 太陽光暈：大片暖色霧光＋亮核＋鏡頭光斑
       vec2 d = vUv - sun; d.x *= aspect; float r = length(d);
-      float haze = exp(-r * 3.2) * (0.04 + g * 0.06) + exp(-r * 11.0) * (0.14 + g * 0.12);   // v7.4：黃金時段的光暈收斂（0.15／0.3 → 0.06／0.12），亮核留著；以前城堡塔群融成一片金白
+      float haze = exp(-r * 3.2) * (0.04 + g * 0.04) + exp(-r * 11.0) * (0.14 + g * 0.08);   // v7.6：再收一點   // v7.4：黃金時段的光暈收斂（0.15／0.3 → 0.06／0.12），亮核留著；以前城堡塔群融成一片金白
       c += sunCol * haze * vis * clear;
       vec2 fl = vec2(0.5) - (sun - vec2(0.5)); vec2 e = vUv - mix(sun, fl, 0.55); e.x *= aspect; vec2 e2 = vUv - mix(sun, fl, 0.85); e2.x *= aspect;
       c += sunCol * (smoothstep(0.07, 0.0, length(e)) * 0.06 + smoothstep(0.035, 0.0, length(e2)) * 0.05) * vis * g * clear;
       // 暖色調色：亮部偏金、暗部保留暖棕，提高一點對比
       { // v7.5（Codex 第二輪 D3）：暖色只加在亮部，陰影反而偏一點淡藍紫——屋瓦的藍、草的綠在影子裡還分得出來，不是整個畫面泡在橘色裡
         float lw = dot(c, vec3(0.2126, 0.7152, 0.0722)), hiK = smoothstep(0.05, 0.45, lw);
-        c = mix(c, c * vec3(1.06, 1.0, 0.86), g * 0.7 * hiK);
-        c = mix(c, c * vec3(0.97, 0.98, 1.05), g * (1.0 - hiK) * 0.8); }
+        c = mix(c, c * vec3(1.04, 1.0, 0.94), g * 0.7 * hiK);   // v7.6 夢幻風：亮部只帶一點奶油暖（以前 1.06／0.86 偏橘）
+        c = mix(c, c * vec3(0.98, 0.97, 1.05), g * (1.0 - hiK) * 0.8); }
       // 空氣遠近：越遠越偏向明亮的天藍（日系 CG 的大氣層次）——有大氣霧的場景交給上面的霧
-      c = mix(c, hazeC, smoothstep(focus * 1.8, focus * 6.5, z) * mix(0.18, 0.08, step(70.0, z)) * (1.0 - night) * (1.0 - sky) * (1.0 - atmo));   // 天空本身不加；遠景物件自己已經做了大氣透視
+      c = mix(c, hazeC, smoothstep(focus * 1.8, focus * 6.5, z) * mix(0.12, 0.06, step(70.0, z)) * (1.0 - night) * (1.0 - sky) * (1.0 - atmo));   // v7.6：空氣色變成薰衣草粉，量收一點（以前 0.18／0.08），中景的房子不泡在霧裡   // 天空本身不加；遠景物件自己已經做了大氣透視
       // 暗角
       vec2 v = vUv - 0.5; v.x *= aspect * 0.8; c *= mix(1.0, smoothstep(0.95, 0.25, length(v)), 0.06 + g * 0.03);   // 白天的暗角很淡，黃金時段才明顯
       gl_FragColor = vec4(c, 1.0);
@@ -165,18 +165,22 @@ const COMP = new THREE.ShaderMaterial({
       // 色調映射後再拉對比：暗部更深、亮部偏金（黃金時段較明顯）
       vec3 o = gl_FragColor.rgb; vec3 sc = o * o * (3.0 - 2.0 * o);
       float dayK0 = (1.0 - g) * (1.0 - night);
-      o = mix(o, sc, 0.24 - g * 0.06 - dayK0 * 0.12);   // 白天對比柔一點（日系 CG 的高調畫面）
+      o = mix(o, sc, 0.2 - g * 0.04 - dayK0 * 0.08);   // v7.6 夢幻風：對比柔一點但不灰（白天 0.12、黃金 0.16、夜晚 0.2；以前 0.12／0.18／0.24）
       float lo = dot(o, vec3(0.299, 0.587, 0.114));
       // 清透藍：提高飽和、暗部偏藍、亮部帶一點暖白（白天；黃金時段改用下面的暖色）
       float dayK = (1.0 - g) * (1.0 - night);
-      o = mix(vec3(lo), o, mix(0.94, 1.04, dayK));   // v6.93：白天少一點飽和（粉彩的空氣感，不像塑膠玩具）
+      o = mix(vec3(lo), o, mix(0.95, 1.0, dayK));   // v7.6 夢幻風：飽和維持（參考圖是鮮明的粉彩，不是灰掉的粉）
       { // 白天的草木（黃綠色調：綠 > 藍、紅也比藍多）再飽和一點，像陽光下的草原；天空、皮膚、屋瓦不受影響
         float yg = smoothstep(0.03, 0.12, o.g - o.b) * smoothstep(-0.02, 0.06, o.r - o.b) * smoothstep(0.08, 0.0, o.r - o.g);
-        o = mix(vec3(lo), o, 1.0 + yg * 0.02 * dayK);   // v7.4：0.05 → 0.02，亮草不再和金樹一樣搶眼
+        o = mix(vec3(lo), o, 1.0 + yg * 0.0 * dayK);   // v7.6：草不再額外加飽和（以前 0.02）
       }   // 白天的色彩清透飽和一點（日系奇幻）；黃金時段與夜晚維持原樣
       o += (vec3(0.01, 0.0, 0.034) * smoothstep(0.55, 0.05, lo) + vec3(0.03, 0.018, -0.02) * smoothstep(0.45, 1.0, lo)) * dayK;   // 陰影偏薰衣草藍、亮部帶暖金
-      o = mix(o, o * 0.95 + 0.045, 0.5 * dayK);   // 稍微抬亮暗部：空氣感、高調
-      o += (vec3(0.05, 0.03, -0.04) * smoothstep(0.45, 1.0, lo) + vec3(0.0, 0.01, -0.01) * smoothstep(0.4, 0.0, lo)) * g;
+      { // v7.6 夢幻風（consult3 §7）：暗部抬一點薰衣草（lift）、亮部略帶粉奶油（gain）；夜晚的亮部偏一點冷紫，暖色交給燈本身
+        float dk = 1.0 - smoothstep(0.05, 0.45, lo), bk = smoothstep(0.5, 0.9, lo);
+        o += mix(vec3(0.012, 0.004, 0.024), vec3(0.006, 0.002, 0.016), night) * dk;
+        o *= mix(vec3(1.0), mix(mix(vec3(1.02, 1.0, 1.015), vec3(1.025, 0.995, 0.99), g), vec3(1.0, 0.99, 1.025), night), bk); }
+      o = mix(o, o * 0.95 + 0.045, 0.3 * dayK);   // 稍微抬亮暗部：空氣感、高調（v7.6：0.5 → 0.3，下面另有薰衣草的 lift，不然整張發白）
+      o += (vec3(0.018, 0.008, -0.004) * smoothstep(0.45, 1.0, lo) + vec3(0.0, 0.01, -0.01) * smoothstep(0.4, 0.0, lo)) * g;   // v7.6：黃金時段的金色加項收到三分之一（整島不再泡在橘黃裡）
       gl_FragColor.rgb = clamp(o, 0.0, 1.0);
       // 細微顆粒，避免漸層色帶
       float n = fract(sin(dot(vUv * 1000.0 + time, vec2(12.9898, 78.233))) * 43758.5453);
@@ -247,7 +251,7 @@ export function render(time, sc0, cam0) {
     } else { renderer.setRenderTarget(main); renderer.render(scene, camera); }
     const aspect = w / h, g = fx.golden * fx.clear;
     // 泛光
-    PRE.uniforms.tex.value = src.texture; PRE.uniforms.px.value.set(1 / w, 1 / h); PRE.uniforms.thr.value = 1.15 - g * 0.15 - fx.night * 0.2; PRE.uniforms.knee.value = 0.55; pass(PRE, pre);
+    PRE.uniforms.tex.value = src.texture; PRE.uniforms.px.value.set(1 / w, 1 / h); PRE.uniforms.thr.value = 1.14 - g * 0.08 - fx.night * 0.18; PRE.uniforms.knee.value = 0.5; pass(PRE, pre);   // v7.6：黃金時段門檻不再壓那麼低（整片暈開）
     let s = pre; for (const m of mips) { DOWN.uniforms.tex.value = s.texture; DOWN.uniforms.px.value.set(1 / s.width, 1 / s.height); pass(DOWN, m); s = m; }
     for (let i = mips.length - 1; i > 0; i--) { const a = mips[i], b = mips[i - 1]; UP.uniforms.tex.value = a.texture; UP.uniforms.px.value.set(1 / a.width, 1 / a.height); UP.uniforms.k.value = 0.85; pass(UP, b, true); }
     // 景深用的模糊版本：半解析度與四分之一解析度各模糊一次

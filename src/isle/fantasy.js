@@ -28,9 +28,9 @@ function farMat(m, dens, fill, roofs) {
   float gUp = dot(normalize(normal), normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz));
   float gRoof = max(smoothstep(0.05, 0.16, gUp) * smoothstep(0.97, 0.88, gUp) * smoothstep(0.42, 0.55, vRelY), smoothstep(0.76, 0.9, vRelY) * 0.85);   // v6.93：尖塔非常陡（法線幾乎水平），斜度分不出來——城堡最上面一段直接算屋頂` : '#include <normal_fragment_maps>').replace('#include <opaque_fragment>', `float fFront = max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0), fUp = dot(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz)) * 0.5 + 0.5;
   outgoingLight += diffuseColor.rgb * uFront * uFrontK * (0.25 + 0.75 * fFront * fFront) * (0.45 + 0.55 * fUp);   // 正面補光：保留明暗的立體感（取代整片均勻的自發光）
-  { float fl = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)); outgoingLight = max(mix(vec3(fl), outgoingLight, 1.3), 0.0); }
-#include <opaque_fragment>`).replace('#include <opaque_fragment>', roofs ? `outgoingLight = mix(outgoingLight * vec3(0.84, 0.89, 1.03), outgoingLight, smoothstep(0.15, 0.75, fFront));   // v6.93：側面偏冷（象牙白的受光面和藍紫的側面分開，看得出體積）
-  outgoingLight = mix(outgoingLight, vec3(0.2, 0.31, 0.62) * min(dot(outgoingLight, vec3(0.3, 0.59, 0.11)), 1.1), gRoof);   // 屋頂換成藍色（依亮度，但上限壓低：城堡很亮，用乘的會被色調映射洗回白色）   // 屋頂染成藍色（打光之後再染，才不會被強光洗白）
+  { float fl = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)); outgoingLight = max(mix(vec3(fl), outgoingLight, 1.1), 0.0); }   // v7.6：1.3 → 1.1
+#include <opaque_fragment>`).replace('#include <opaque_fragment>', roofs ? `outgoingLight = mix(outgoingLight * vec3(0.92, 0.86, 1.0), outgoingLight, smoothstep(0.15, 0.75, fFront));   // v7.6：側面是淡紫（以前偏冷藍灰）   // v6.93：側面偏冷（象牙白的受光面和藍紫的側面分開，看得出體積）
+  outgoingLight = mix(outgoingLight, vec3(0.34, 0.36, 0.7) * min(dot(outgoingLight, vec3(0.3, 0.59, 0.11)), 1.1), gRoof);   // v7.6：屋頂是淡藍紫（以前飽和的藍）   // 屋頂換成藍色（依亮度，但上限壓低：城堡很亮，用乘的會被色調映射洗回白色）   // 屋頂染成藍色（打光之後再染，才不會被強光洗白）
 #include <opaque_fragment>` : '#include <opaque_fragment>').replace('#include <tonemapping_fragment>', 'gl_FragColor.rgb = mix(gl_FragColor.rgb, uHaze, clamp(1.0 - exp(-vFarD * uDens * uDensK), 0.0, uHazeMax));\n#include <tonemapping_fragment>');
   };
   m.customProgramCacheKey = () => roofs ? 'far1r' : 'far1';
@@ -62,7 +62,7 @@ const puffTex = (() => {
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
-const puffCol = new THREE.Color(), WHITE = new THREE.Color(1, 1, 1), NO_HIT = () => {}, fillCol = new THREE.Color(), GOLD = new THREE.Color('#ffc890'), MOONLIT = new THREE.Color('#9eb0e8'), RAINY = new THREE.Color('#9aa2b4'), COOLSIDE = new THREE.Color('#8d96b0'), frontCol = new THREE.Color();
+const puffCol = new THREE.Color(), WHITE = new THREE.Color(1, 1, 1), NO_HIT = () => {}, fillCol = new THREE.Color(), GOLD = new THREE.Color('#ffd4c6'), MOONLIT = new THREE.Color('#9eb0e8'), RAINY = new THREE.Color('#9aa2b4'), COOLSIDE = new THREE.Color('#c4b0dc'), frontCol = new THREE.Color();
 /* 瀑布：從浮空島邊緣垂下的細長水流（面向鏡頭的貼圖）。水紋貼圖往下捲動，另一張不動的透明度貼圖讓上端細、下端散成水霧 */
 const fallTex = (() => {
   const cv = document.createElement('canvas'); cv.width = 32; cv.height = 128; const c = cv.getContext('2d');
@@ -380,7 +380,7 @@ export function update(dt, t, night, show) {
   fillCol.setRGB(1, 1, 1).lerp(GOLD, gold * 0.45).lerp(MOONLIT, night).lerp(RAINY, gloomK * 0.6);   // v6.93：黃昏的金色收一點（城堡不會融成一團黃白光）
   fills.forEach(m => { m.emissive.copy(fillCol); m.emissiveIntensity = m.userData.fill * 0.19 * (1 + night * 0.6); });   // v7.0：底光收一點，城堡、浮空島看得出受光面與背光面   // 一點均勻的底光，主要的亮度交給正面補光
   frontCol.copy(fillCol).lerp(COOLSIDE, gold * 0.55 * (1 - night));   // v7.4：黃金時段太陽多半在遠景後面（逆光）：朝向鏡頭的面是天空照著的冷色陰影，不是一片暖奶油
-  hazeU.uFront.value.copy(frontCol).multiplyScalar(0.42 * (1 - night * 0.3) * (1 - gold * 0.18));   // 黃金時段正面補光也少 18%，塔面才分得出明暗   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
+  hazeU.uFront.value.copy(frontCol).multiplyScalar(0.5 * (1 - night * 0.3) * (1 - gold * 0.12));   // v7.6 夢幻風：逆光時朝鏡頭的面是珍珠粉紫（以前灰藍），城堡是粉白的剪影、不是一團灰影   // 黃金時段正面補光也少 18%，塔面才分得出明暗   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar(1 - night * 0.55);

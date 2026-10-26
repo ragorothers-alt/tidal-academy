@@ -91,6 +91,14 @@ export async function build() {
   }
   list.forEach(cl => {
     const m = new THREE.SpriteMaterial({ map: texs[cl.k % texs.length].tex, transparent: true, depthWrite: false, fog: false });
+    m.onBeforeCompile = sh => {   // v7.6 夢幻風（consult3 §4）：依貼圖亮度把雲分成暗面、亮面、薄邊三色——粉紫在雲體裡、奶油色只在受光的邊，不是整朵乘一個粉色
+      Object.assign(sh.uniforms, TRI);
+      sh.fragmentShader = `uniform vec3 uCShd; uniform vec3 uCLit; uniform vec3 uCRim; uniform float uCMix;
+` + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+        { float cl = dot(sampledDiffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+          vec3 tri = cl < 0.6 ? mix(uCShd, uCLit, smoothstep(0.1, 0.6, cl)) : mix(uCLit, uCRim, smoothstep(0.84, 1.0, cl));   // 雲體大多落在亮面（粉），只有最亮的一圈是奶油白
+          diffuseColor.rgb = mix(diffuseColor.rgb, tri, uCMix); }`);
+    };
     const s = new THREE.Sprite(m); s.raycast = () => {}; s.renderOrder = -1; scene.add(s);
     sprites.push({ s, m, cl });
   });
@@ -100,7 +108,11 @@ export async function build() {
   if (real && real.length) { texs.forEach(t => t.tex.dispose()); texs = real; apply(); if (window.TA) delete window.TA.CLOUDS; }
 }
 
-const HZ = { sea: 0 }, col = new THREE.Color(), gold = new THREE.Color('#f2906a'), dawnC = new THREE.Color('#ffd6cc'), nightC = new THREE.Color('#46568c'), rainC = new THREE.Color('#a4abbd');
+/* 雲的三色（sRGB 色票 → 線性）：清晨、正午、黃金時段、夜晚各一組 [暗面, 亮面, 薄邊]（consult3 §4） */
+const TRI = { uCShd: { value: new THREE.Color() }, uCLit: { value: new THREE.Color() }, uCRim: { value: new THREE.Color() }, uCMix: { value: 0.35 } };
+const TRIS = { dawn: ['#ad96cf', '#f8c4d2', '#fff0e0'], day: ['#a99ad6', '#f4c6dc', '#fff2ea'], gold: ['#a68bc6', '#f6bcd2', '#ffe4cc'], night: ['#39345f', '#7770a6', '#b5a1cc'] };   // 參考圖的雲體是明顯的粉、背光是薰衣草
+const triC = Object.fromEntries(Object.entries(TRIS).map(([k, v]) => [k, v.map(c => new THREE.Color(c))]));
+const HZ = { sea: 0 }, col = new THREE.Color(), gold = new THREE.Color('#ebc6dc'), dawnC = new THREE.Color('#ffd6cc'), nightC = new THREE.Color('#46568c'), rainC = new THREE.Color('#a4abbd');
 /** 每格更新：horizonNdc(x, z) 是該方向畫面地平線的 NDC 高度、yForNdc 反推世界高度（都由 fantasy.js 提供），golden、night 0–1
     地平線高度是沿路取樣地面算的，鏡頭快速移動時，懸崖、台地邊緣在取樣點之間進出，估計值會突然跳一下；
     海面的地平線每格照實算（連續、和鏡頭一起動），只有地形墊高的那一段用彈簧平滑地追上（約一秒），雲才不會一格一格地跳 */
@@ -109,7 +121,10 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
   if (!show) { sprites.forEach(o => { o.cl.bump = null; }); return; }   // 回到戶外時直接對齊，不從舊位置滑過來
   const h = Math.min(dt || 0.016, 0.05), W = 4;   // 臨界阻尼彈簧（約一秒追上）：位置和速度都連續，地平線估計值跳動時雲不會頓一下
   const sd = skyU.sunDir.value, sAz = Math.atan2(sd.x, -sd.z);
-  col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.72).lerp(nightC, THREE.MathUtils.smoothstep(night, 0, 0.6));   // 清晨粉桃、黃昏橘粉（v7.5：0.92 → 0.72，整朵雲不再全是橘色）；天一暗雲就跟著暗下來，夜裡是月光下的深藍
+  { const dw = skyU.dawn.value, nk = THREE.MathUtils.smoothstep(night, 0, 0.6), gl = gloom();   // 雲的三色跟著時段
+    ['uCShd', 'uCLit', 'uCRim'].forEach((u, i) => { TRI[u].value.copy(triC.day[i]).lerp(triC.dawn[i], dw).lerp(triC.gold[i], golden).lerp(triC.night[i], nk); });
+    TRI.uCMix.value = 0.58 * (1 - gl * 0.8); }   // 陰雨天不染粉紫
+  col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.4).lerp(nightC, THREE.MathUtils.smoothstep(night, 0, 0.6));   // 清晨粉桃、黃昏橘粉（v7.5：0.92 → 0.72，整朵雲不再全是橘色）；天一暗雲就跟著暗下來，夜裡是月光下的深藍
   { const gl = gloom() * (1 - night * 0.6); col.lerp(rainC, gl * 0.8).multiplyScalar(1 - gl * 0.36); }   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
   sprites.forEach(o => {
     const { cl } = o, x = camera.position.x + Math.sin(cl.az) * cl.d, z = camera.position.z - Math.cos(cl.az) * cl.d;
