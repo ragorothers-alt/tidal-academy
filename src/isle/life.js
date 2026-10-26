@@ -1,7 +1,7 @@
 /* 潮汐小島 · 島上生物：釣魚（英文單字速答）、捉蟲（國文限時題）、挖化石。 */
 import * as THREE from 'three';
 import { scene, bend, M, mesh } from './engine.js';
-import { tileAt, groundAt, waterAt, waterY, N, C } from './terrain.js';
+import { tileAt, groundAt, waterAt, waterY, N, C, warp } from './terrain.js';
 import { flowerSpots, trees, rocks, blocked, PIER, onPier } from './props.js';
 import * as ui from './ui.js';
 import * as challenge from './challenge.js';   // 答對後可以接著連續挑戰（challenge.js 也會用到這裡，循環相依要用 import * as）
@@ -45,7 +45,7 @@ function spawnShadow(where) {
   if (!ok) return;
   const m = new THREE.Mesh(shadowGeo, bend(new THREE.MeshBasicMaterial({ color: '#0b3550', transparent: true, opacity: 0, depthWrite: false })));
   m.rotation.x = -Math.PI / 2; const s = 0.35 + sp.size * 0.2; m.scale.set(s * 0.55, s, 1); m.renderOrder = 2;
-  const y = where === 'river' ? 0.6 : -0.25; m.position.set(x, y, z); scene.add(m);
+  const y = where === 'river' ? (waterY(x, z) ?? 0.7) - 0.1 - Math.random() * 0.06 : -0.25; m.position.set(x, y, z); scene.add(m);   // v7.5：淡水的魚影貼著那裡的水面（以前一律 0.6，高池和小溪的魚影埋在池底、溪底下面）
   shadows.push({ sp, m, where, x, z, y, a: Math.random() * 6.28, st: 'idle', t: 0, fade: 0 });
 }
 const near = (x, z, r) => { for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; const t = tileAt(x + Math.cos(a) * r, z + Math.sin(a) * r); if (t >= 0) return true; } return false; };
@@ -155,11 +155,50 @@ function rodAction() {
 const bugs = [];
 const texCache = {};
 function bugTex(id) { if (texCache[id]) return texCache[id]; const t = new THREE.TextureLoader().load(icon(id, 'bug')); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; return (texCache[id] = t); }
+/* v7.5（Codex 第二輪 A5）：蝴蝶、蜜蜂在附近幾叢花之間飛來飛去（0.25–0.55 m/s），停在花上 2–5 秒；
+   蜻蜓、豆娘沿著水邊短飛（0.6–1.2 m/s），停在水草尖上 1–3 秒。停的點在出生時挑好；
+   飛／停記在 b.mode，b.st 維持 'idle'，網子照樣抓得到 */
+const FLITS = /蝶|蜂/, DARTS = /蜻蜓|蟌/;
+const flits = sp => sp.where === 'flower' && FLITS.test(sp.name), darts = sp => sp.where === 'water' && DARTS.test(sp.name);
+let pondC = null;
+const ponds = () => pondC || (pondC = ((globalThis.TA && globalThis.TA.ISLE && globalThis.TA.ISLE.PLAN || {}).ponds || []).map(pd => { const n = pd.poly.length; return warp(pd.poly.reduce((a, q) => a + q[0], 0) / n, pd.poly.reduce((a, q) => a + q[1], 0) / n); }));
+function perchSpots(x0, z0, flower) {
+  const out = [];
+  if (flower) flowerSpots.forEach(f => { if (out.length < 8 && Math.hypot(f[0] - x0, f[1] - z0) < 4) out.push([f[0], f[1], groundAt(f[0], f[1]) + 0.35]); });
+  else {   // 水面上、離岸 0.7 公尺內的點（岸邊的水草）；找不夠就放寬到整片水面
+    const bank = (x, z) => [0, 1.57, 3.14, 4.71].some(a => waterAt(x + Math.cos(a) * 0.7, z + Math.sin(a) * 0.7) !== 'river');
+    for (let k = 0; k < 60 && out.length < 6; k++) {
+      const a = Math.random() * 6.28, r = 0.6 + Math.random() * 2.4, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r, w = waterY(x, z);
+      if (w != null && waterAt(x, z) === 'river' && (k > 40 || bank(x, z))) out.push([x, z, w + 0.24 + Math.random() * 0.1]);
+    }
+  }
+  return out;
+}
+function flit(b, dt, t) {
+  const p = b.s.position, fl = b.sp.where === 'flower';
+  if (b.mode === 'perch') {
+    p.y = b.py + Math.sin(t * (fl ? 2.2 : 1.4) + b.ph) * 0.015;
+    if ((b.mt -= dt) > 0) return;
+    const near = b.spots.filter(q => q !== b.at && Math.hypot(q[0] - p.x, q[1] - p.z) < (fl ? 2.6 : 2.2)), pool = near.length ? near : b.spots;   // 多半飛去鄰近的花／水草
+    const q = pool[Math.floor(Math.random() * pool.length)], j = fl ? 0.35 : 0.25;
+    b.at = q; b.tx = q[0] + (Math.random() - 0.5) * j; b.tz = q[1] + (Math.random() - 0.5) * j; b.ty = q[2];
+    b.fx = p.x; b.fz = p.z; b.fy = p.y; b.len = Math.max(0.4, Math.hypot(b.tx - p.x, b.tz - p.z)); b.u = 0;
+    b.v = fl ? 0.25 + Math.random() * 0.3 : 0.6 + Math.random() * 0.6; b.mode = 'fly';
+    return;
+  }
+  b.u = Math.min(1, b.u + b.v * dt / b.len);
+  const u = b.u, e = fl ? u * u * (3 - 2 * u) : 1 - (1 - u) * (1 - u), dx = b.tx - b.fx, dz = b.tz - b.fz, L = Math.hypot(dx, dz) || 1;
+  const w = fl ? Math.sin(u * Math.PI * 3 + b.ph) * 0.22 * Math.sin(u * Math.PI) : 0;   // 蝴蝶走的是左右飄的弧線；蜻蜓直直衝過去、最後一段減速
+  p.x = b.fx + dx * e - dz / L * w; p.z = b.fz + dz * e + dx / L * w;
+  p.y = b.fy + (b.ty - b.fy) * e + Math.sin(u * Math.PI) * (fl ? 0.3 : 0.1) + (fl ? Math.abs(Math.sin(t * 9 + b.ph)) * 0.06 : 0);
+  if (u >= 1) { b.mode = 'perch'; b.py = b.ty; b.mt = fl ? 2 + Math.random() * 3 : 1 + Math.random() * 2; }
+}
 function spawnBug() {
   const sp = roll('bug'); if (!sp) return;
   let x, z, y, ok = false;
   for (let k = 0; k < 30 && !ok; k++) {
     const w = sp.where;
+    if (darts(sp) && k < 10 && Math.random() < 0.4 && ponds().length) { const c = ponds()[Math.floor(Math.random() * ponds().length)]; x = c[0] + (Math.random() - 0.5) * 5; z = c[1] + (Math.random() - 0.5) * 5; y = (waterY(x, z) ?? 0.7) + 0.08; ok = waterAt(x, z) === 'river'; continue; }   // 蜻蜓常在池塘邊
     if (w === 'flower' && flowerSpots.length) { const f = flowerSpots[Math.floor(Math.random() * flowerSpots.length)]; x = f[0] + (Math.random() - 0.5); z = f[1] + (Math.random() - 0.5); y = groundAt(x, z) + 0.35; ok = true; }
     else if (w === 'tree' && trees.length) { const tr = trees[Math.floor(Math.random() * trees.length)]; if (tr.kind === 'palm') continue; const a = Math.random() * 6.28; x = tr.x + Math.cos(a) * 0.28 * tr.s; z = tr.z + Math.sin(a) * 0.28 * tr.s; y = groundAt(x, z) + 0.9 * tr.s; ok = true; }
     else if (w === 'rock' && rocks.length) { const r = rocks[Math.floor(Math.random() * rocks.length)]; x = r.x; z = r.z + 0.1; y = groundAt(x, z) + 0.55 * r.s; ok = true; }
@@ -168,14 +207,20 @@ function spawnBug() {
   if (!ok || Math.hypot(x - P.position.x, z - P.position.z) < 6) return;
   const s = new THREE.Sprite(bend(new THREE.SpriteMaterial({ map: bugTex(sp.id), transparent: true, alphaTest: 0.5 }), 'sprite'));
   s.scale.set(0.55, 0.55, 1); s.position.set(x, y, z); scene.add(s);
-  bugs.push({ sp, s, x, y, z, ph: Math.random() * 6, st: 'idle', t: 0 });
+  const b = { sp, s, x, y, z, ph: Math.random() * 6, st: 'idle', t: 0 };
+  if (flits(sp) || darts(sp)) {
+    const spots = perchSpots(x, z, sp.where === 'flower');
+    if (spots.length > 1) { const q = spots[Math.floor(Math.random() * spots.length)]; Object.assign(b, { spots, at: q, mode: 'perch', py: q[2], mt: Math.random() * 3 }); s.position.set(q[0], q[2], q[1]); }
+  }
+  bugs.push(b);
 }
 function updateBugs(dt, t, running) {
   for (let i = bugs.length - 1; i >= 0; i--) {
     const b = bugs[i], d = Math.hypot(b.s.position.x - P.position.x, b.s.position.z - P.position.z);
     if (b.st === 'flee') { b.t += dt; b.s.position.y += dt * 3; b.s.position.x += Math.cos(b.ph) * dt * 3; b.s.material.opacity = 1 - b.t; if (b.t > 1) { scene.remove(b.s); bugs.splice(i, 1); } continue; }
     if (b.st === 'gone') { scene.remove(b.s); bugs.splice(i, 1); continue; }
-    if (b.sp.where === 'air') { b.s.position.x = b.x + Math.sin(t * 0.5 + b.ph) * 2; b.s.position.z = b.z + Math.cos(t * 0.4 + b.ph) * 2; b.s.position.y = b.y + Math.sin(t * 2 + b.ph) * 0.25; }
+    if (b.mode) flit(b, dt, t);
+    else if (b.sp.where === 'air') { b.s.position.x = b.x + Math.sin(t * 0.5 + b.ph) * 2; b.s.position.z = b.z + Math.cos(t * 0.4 + b.ph) * 2; b.s.position.y = b.y + Math.sin(t * 2 + b.ph) * 0.25; }
     else if (b.sp.where === 'ground' || b.sp.where === 'beach') { b.s.position.x = b.x + Math.sin(t * 0.3 + b.ph) * 0.6; b.s.position.z = b.z + Math.cos(t * 0.25 + b.ph) * 0.6; b.s.position.y = groundAt(b.s.position.x, b.s.position.z) + 0.2; }
     else b.s.position.y = b.y + Math.sin(t * 3 + b.ph) * 0.03;
     if (d < 3 && running && !busy) { b.st = 'flee'; b.t = 0; Audio.sfx('swish'); }

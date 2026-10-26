@@ -151,7 +151,10 @@ const COMP = new THREE.ShaderMaterial({
       vec2 fl = vec2(0.5) - (sun - vec2(0.5)); vec2 e = vUv - mix(sun, fl, 0.55); e.x *= aspect; vec2 e2 = vUv - mix(sun, fl, 0.85); e2.x *= aspect;
       c += sunCol * (smoothstep(0.07, 0.0, length(e)) * 0.06 + smoothstep(0.035, 0.0, length(e2)) * 0.05) * vis * g * clear;
       // 暖色調色：亮部偏金、暗部保留暖棕，提高一點對比
-      c = mix(c, c * vec3(1.06, 1.0, 0.86), g * 0.7);
+      { // v7.5（Codex 第二輪 D3）：暖色只加在亮部，陰影反而偏一點淡藍紫——屋瓦的藍、草的綠在影子裡還分得出來，不是整個畫面泡在橘色裡
+        float lw = dot(c, vec3(0.2126, 0.7152, 0.0722)), hiK = smoothstep(0.05, 0.45, lw);
+        c = mix(c, c * vec3(1.06, 1.0, 0.86), g * 0.7 * hiK);
+        c = mix(c, c * vec3(0.97, 0.98, 1.05), g * (1.0 - hiK) * 0.8); }
       // 空氣遠近：越遠越偏向明亮的天藍（日系 CG 的大氣層次）——有大氣霧的場景交給上面的霧
       c = mix(c, hazeC, smoothstep(focus * 1.8, focus * 6.5, z) * mix(0.18, 0.08, step(70.0, z)) * (1.0 - night) * (1.0 - sky) * (1.0 - atmo));   // 天空本身不加；遠景物件自己已經做了大氣透視
       // 暗角

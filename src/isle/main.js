@@ -2014,7 +2014,7 @@ function tick(fixed) {
   U.uPlayer.value.copy(player.position);
   skyU.cover.value = weather.now.startsWith('cloud') || rk > 0.2 ? 0.9 : 0.22;   // 晴天：高空的薄雲少一點（大朵積雲由 cumulus.js 負責）
   seasons.update(dt, t, { date: simDate(), inside: false, focus: look, wet: rk > 0.2, cloudy: weather.now.startsWith('cloud'), night });
-  winter.update(dt, t, night); highland.update(dt, t, night); details.update(t); hotel.update(dt, t, hourOverride ?? nowHour(), true);
+  winter.update(dt, t, night); highland.update(dt, t, night); details.update(t, dt, look, rk > 0.2); hotel.update(dt, t, hourOverride ?? nowHour(), true);
   // 遮擋鏤空：玩家在螢幕上的位置與深度（擋在前面的東西在這個圓裡挖空）
   { const pv = sunTmp.v.copy(player.position).setY(player.position.y + 0.8).applyMatrix4(camera.matrixWorldInverse), pr = renderer.getPixelRatio();
     const [ox, oy] = screenOf(player, 0.8);

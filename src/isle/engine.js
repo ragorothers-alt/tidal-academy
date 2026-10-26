@@ -612,10 +612,10 @@ export function bend(mat, kind) {
       {
         // 屋瓦：交錯排列的魚鱗瓦，下緣圓弧有陰影，每片顏色略有深淺
         float u = (vWP.x - vWP.z) * 2.2, v = vWP.y * 3.6, row = floor(v);
-        u += mod(row, 2.0) * 0.5; float col = floor(u);
+        u += mod(row, 2.0) * 0.5 + (n_h(vec2(row, 1.7)) - 0.5) * 0.3; float col = floor(u);   // v7.5：每排錯開的量略有不同，瓦縫不會對成一條條斜線
         vec2 q = vec2(fract(u) - 0.5, fract(v));
         float scal = smoothstep(0.0, 0.18, q.y - (0.25 - q.x * q.x) * 0.6);
-        float tile = 0.88 + n_h(vec2(col, row)) * 0.16;
+        float th = n_h(vec2(col, row)), tile = (th < 0.65 ? 1.0 : th < 0.9 ? 1.1 : 0.84) * (0.95 + n_h(vec2(col + 5.3, row)) * 0.1);   // v7.5（Codex 第二輪 C1）：三組瓦色——基本色 65%、略亮 25%、略暗 10%，再各自 ±5%
         float edge = smoothstep(0.5, 0.42, abs(q.x));
         diffuseColor.rgb *= tile * (0.74 + scal * 0.26) * (0.89 + edge * 0.11) * (1.0 + smoothstep(0.75, 0.95, q.y) * 0.08);
         diffuseColor.rgb *= mix(vec3(1.0), vec3(1.05, 0.98, 0.92), n_h(vec2(col * 1.3, row + 7.0)));   // 每片瓦的色相略有冷暖
@@ -626,7 +626,8 @@ export function bend(mat, kind) {
         { vec3 wn = normalize(vWN), dn = normalize(vec3(wn.x, 0.0, wn.z) + 1e-4);
           float tilt = mix(0.18, -0.55, smoothstep(0.0, 0.12, q.y)) * smoothstep(0.2, 0.5, length(wn.xz));
           gDetN += (dn * tilt + vec3(0.0, -0.1, 0.0) * tilt) * 0.6;
-          diffuseColor.rgb *= 1.0 + smoothstep(0.18, 0.08, q.y) * smoothstep(0.0, 0.05, q.y) * 0.12; }   // 瓦片下緣受光的一條亮邊
+          diffuseColor.rgb *= 1.0 + smoothstep(0.18, 0.08, q.y) * smoothstep(0.0, 0.05, q.y) * 0.12 * n_h(vec2(col + 9.0, row)); }   // 瓦片下緣受光的一條亮邊（v7.5：每片強弱不同，不是每片都鑲一條一樣的亮框）
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 1.16 + 0.015, step(0.935, n_h(vec2(col + 3.1, row - 2.0))) * smoothstep(0.3, 0.48, abs(q.x)) * smoothstep(0.4, 0.1, q.y));   // 約 6% 的瓦，下緣角落有一點磨損（較淺）
       }`);
     if (kind === 'stone') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
@@ -738,7 +739,7 @@ export function bend(mat, kind) {
         { float cS = smoothstep(0.5, 0.68, n_f(vWP.xz * 0.028 + vec2(uTime * 0.011, uTime * 0.004))); diffuseColor.rgb *= 1.0 - cS * 0.26 * uShade; }   // 雲影慢慢掠過地面
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
-    if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  roughnessFactor = 0.56 + n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))) * 0.14;');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）
+    if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  { float rh = n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))); roughnessFactor = rh < 0.9 ? 0.68 + rh * 0.13 : 0.6; }');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）；v7.5：大多 0.68–0.8，一成是釉面 0.6
     if (kind === 'water') f = f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  if (vWP.y > 0.8) reflectedLight.indirectSpecular *= 0.3;');   // 小溪：天空倒影淡一點，低角度看也是清透的青綠色、看得到溪底（不會整片泛白）
     f = f.replace('#include <opaque_fragment>', `
         outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? '\n        vec3 wN = normal, wSkyR = vec3(-1.0), wSpec = vec3(0.0);' + SEA_GLSL + `

@@ -109,7 +109,7 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
   if (!show) { sprites.forEach(o => { o.cl.bump = null; }); return; }   // 回到戶外時直接對齊，不從舊位置滑過來
   const h = Math.min(dt || 0.016, 0.05), W = 4;   // 臨界阻尼彈簧（約一秒追上）：位置和速度都連續，地平線估計值跳動時雲不會頓一下
   const sd = skyU.sunDir.value, sAz = Math.atan2(sd.x, -sd.z);
-  col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.92).lerp(nightC, THREE.MathUtils.smoothstep(night, 0, 0.6));   // 清晨粉桃、黃昏橘粉；天一暗雲就跟著暗下來，夜裡是月光下的深藍
+  col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.72).lerp(nightC, THREE.MathUtils.smoothstep(night, 0, 0.6));   // 清晨粉桃、黃昏橘粉（v7.5：0.92 → 0.72，整朵雲不再全是橘色）；天一暗雲就跟著暗下來，夜裡是月光下的深藍
   { const gl = gloom() * (1 - night * 0.6); col.lerp(rainC, gl * 0.8).multiplyScalar(1 - gl * 0.36); }   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
   sprites.forEach(o => {
     const { cl } = o, x = camera.position.x + Math.sin(cl.az) * cl.d, z = camera.position.z - Math.cos(cl.az) * cl.d;

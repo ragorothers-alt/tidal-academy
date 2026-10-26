@@ -89,7 +89,7 @@ export function update(dt, t, ctx) {
     if (ctx.wet) { renderer.toneMappingExposure *= 1 + w * 0.16; scene.fog.color.lerp(C.fogW, w * 0.5 * day); }   // 下雪天是明亮的陰天，不像雨天那麼暗
   } else { if (water.river && C.riverBase) { water.river.color.copy(C.riverBase); water.river.opacity = 0.78; } if (water.sea) water.sea.opacity = 0.62; }
   // 飄落物：冬天下雪（雨天大雪、陰天小雪、晴天偶爾幾片）；春天櫻花瓣；秋天落葉
-  const snowAmt = w * (ctx.wet ? 1 : ctx.cloudy ? 0.45 : 0.08), petalAmt = K.bloom * (ctx.wet ? 0 : 0.22), leafAmt = K.fall * (ctx.wet ? 0 : 0.06);
+  const snowAmt = w * (ctx.wet ? 1 : ctx.cloudy ? 0.45 : 0.08), petalAmt = K.bloom * (ctx.wet ? 0 : 0.22), leafAmt = 0;   // v7.5：秋葉改成從樹冠飄下來（details.js），這裡不再撒一片跟著鏡頭的落葉
   const amt = Math.max(snowAmt, petalAmt, leafAmt); fallK.v += (amt - fallK.v) * Math.min(1, dt * 0.5);
   const kind = snowAmt >= petalAmt && snowAmt >= leafAmt ? 'snow' : petalAmt >= leafAmt ? 'petal' : 'leaf';
   pts.visible = fallK.v > 0.01;

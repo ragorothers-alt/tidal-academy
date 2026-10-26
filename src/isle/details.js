@@ -2,7 +2,7 @@
    使用自己的亂數，不影響 props.js 的佈置順序。季節的東西依 uFall / uBloom 顯示。 */
 import * as THREE from 'three';
 import { scene, M, mesh, U, bend } from './engine.js';
-import { N, C, T, tileAt, groundAt, warp, waterY } from './terrain.js';
+import { N, C, T, tileAt, groundAt, warp, waterY, tileOf, isFord, isBridge } from './terrain.js';
 import { tuftKit } from './grass.js';
 import { trees, blocked, colliders, rockGeo, seats, PIER, SITES, mergeStatic, onRoad } from './props.js';
 
@@ -115,7 +115,7 @@ function seaplane() {
   return g;
 }
 /* ---------- 碎石（v7.4，Codex 第二輪 B2）：草地與沙岸、步道交界的地方，一小群 3–5 顆 9–25 公分的灰米色小石（再小遊戲鏡頭就看不出來）（一個 InstancedMesh） ---------- */
-function pebbles() {
+function pebbles(extra) {
   const geo = new THREE.IcosahedronGeometry(1, 1), P = geo.attributes.position, v = new THREE.Vector3();
   for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i); const k = 1 + (Math.sin(v.x * 4.1 + v.z * 2.3) * 0.5 + Math.sin(v.y * 5.7 + v.x * 1.9) * 0.5) * 0.14; v.multiplyScalar(k); v.y *= v.y < 0 ? 0.3 : 0.62; P.setXYZ(i, v.x, v.y, v.z); }
   geo.computeVertexNormals();
@@ -128,6 +128,7 @@ function pebbles() {
     for (let j = 0; j < n; j++) { const a = r() * 6.28, d = 0.08 + r() * 0.32, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; if (onRoad(x, z) || [-1, 3, 6].includes(tileAt(x, z))) continue; list.push([x, z, 0.045 + r() * r() * 0.08]); }
     made++;
   }
+  if (extra) list.push(...extra);   // 溪岸的小鵝卵石（bankLife）一起畫
   const mat = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.92 }), 'stone');
   const im = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length)); im.count = list.length; im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color(), TONES = ['#a4a593', '#b2ae9a', '#8f9486', '#bdb6a2'];
@@ -203,19 +204,108 @@ function pondPlants() {
     scene.add(im);
   }
 }
+/* ---------- 溪岸的小群落（v7.5，Codex 第二輪 B5）：小溪與河每 6–8 公尺挑一邊的岸，放一組 3–5 顆鵝卵石（一半泡在水裡）、
+   兩叢 20–32 公分的莎草、一塊 30–55 公分的濕苔；只裝飾兩三成的岸線，踏石、橋、步道旁不放。回傳鵝卵石的位置（交給 pebbles 一起畫） ---------- */
+const mossTex = (() => {   // 不規則的苔斑（邊緣參差，alphaTest 剪出形狀）
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const c = cv.getContext('2d');
+  for (let i = 0; i < 14; i++) { const a = i * 2.4, d = 6 + (i % 5) * 4, x = 32 + Math.cos(a) * d, y = 32 + Math.sin(a) * d * 0.8, rr = 9 + (i % 3) * 4; const g = c.createRadialGradient(x, y, 0, x, y, rr); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.6, 'rgba(235,235,235,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = g; c.fillRect(0, 0, 64, 64); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+function bankLife() {
+  const PLAN = globalThis.TA && globalThis.TA.ISLE && globalThis.TA.ISLE.PLAN; if (!PLAN) return [];
+  const free = (x, z) => { const [tx, tz] = tileOf(x, z); return !isFord(tx, tz) && !isBridge(tx, tz) && !onRoad(x, z) && !blocked(x, z, 0.15) && tileAt(x, z) !== -1; };
+  const peb = [], sedge = [], moss = [];
+  [...PLAN.streams.map(s => [s.path, 1.05]), ...PLAN.rivers.map(rv => [rv.path, 1.15])].forEach(([P, half]) => {
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i], b = P[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), ux = (b[0] - a[0]) / L, uz = (b[1] - a[1]) / L;
+      for (let s = 1.5 + r() * 3; s < L - 0.5; s += 6 + r() * 2) {
+        const sd = r() < 0.5 ? -1 : 1, at = (ds, off) => warp(a[0] + ux * (s + ds) - uz * sd * off, a[1] + uz * (s + ds) + ux * sd * off);
+        { const [cx, cz] = at(0, half + (r() - 0.5) * 0.3); if (free(cx, cz)) for (let k = 3 + Math.floor(r() * 3); k > 0; k--) { const q = r() * 6.28, d = 0.06 + r() * 0.22; peb.push([cx + Math.cos(q) * d, cz + Math.sin(q) * d, 0.035 + r() * 0.045]); } }
+        [-1.4, 1.5].forEach(ds => { const [cx, cz] = at(ds + (r() - 0.5) * 0.6, half - 0.05 + r() * 0.2); if (!free(cx, cz)) return; for (let k = 4 + Math.floor(r() * 4); k > 0; k--) { const q = r() * 6.28, d = r() * 0.18; sedge.push([cx + Math.cos(q) * d, cz + Math.sin(q) * d]); } });
+        for (const off of [0.45, 0.7, 0.95]) { const [cx, cz] = at((r() - 0.5) * 1.2, half + off), t = tileAt(cx, cz); if ((t === 0 || t === 1 || t === 2) && free(cx, cz)) { moss.push([cx, cz, 0.3 + r() * 0.25]); break; } }   // 岸邊的格子常被扭曲推進水裡：由近往遠找第一個落在岸上的點
+      }
+    }
+  });
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+  if (sedge.length) {   // 莎草：草叢拉細拉高，在水裡的從水底長出來、高出水面 20–32 公分；顏色深一點、偏冷
+    const { geo, mat } = tuftKit(), im = new THREE.InstancedMesh(geo, mat, sedge.length); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false;
+    sedge.forEach(([x, z], i) => { const y = groundAt(x, z), wy = waterY(x, z), hk = ((wy != null && wy > y ? wy - y : 0) + 0.2 + r() * 0.12) / 0.3; m4.compose(v.set(x, y, z), q.setFromEuler(e.set(0, r() * 6.28, 0)), sc.set(0.6, hk, 0.6)); im.setMatrixAt(i, m4); im.setColorAt(i, col.setRGB(0.7, 0.84, 0.72)); });
+    scene.add(im);
+  }
+  if (moss.length) {   // 濕苔：貼地的不規則苔斑（#597462）
+    const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat = bend(new THREE.MeshStandardMaterial({ map: mossTex, alphaTest: 0.45, roughness: 0.75, color: '#ffffff' }), 'char');
+    const im = new THREE.InstancedMesh(geo, mat, moss.length); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false;
+    const MC = ['#597462', '#62785a', '#4f6b5c'];
+    moss.forEach(([x, z, s], i) => { m4.compose(v.set(x, groundAt(x, z) + 0.035, z), q.setFromEuler(e.set(0, r() * 6.28, 0)), sc.set(s, 1, s * (0.6 + r() * 0.4))); im.setMatrixAt(i, m4); im.setColorAt(i, col.set(MC[i % 3])); });
+    scene.add(im);
+  }
+  return peb;
+}
+/* ---------- 從樹冠飄下的秋葉（v7.5，Codex 第二輪 A4）：從鏡頭附近的闊葉樹樹冠下緣一片片落下（平常十幾片、陣風時多一些），
+   順著風向飄、一邊翻轉；落地停留兩三秒後淡出，掉進小溪、河的在水面漂 8–15 秒。取代以前跟著鏡頭循環的落葉粒子（seasons.js） ---------- */
+const FALL_N = 48, FL = [];
+let fallIM = null, nearT = [], nearAt = -9, spawnT = 0, lastT = 0;
+function canopyLeaves() {
+  const mat = bend(new THREE.MeshStandardMaterial({ map: leafTex, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.8 }), 'char');
+  fallIM = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mat, FALL_N); fallIM.frustumCulled = false; fallIM.castShadow = false; fallIM.receiveShadow = false;   // 不吃陰影：在樹冠影子裡也讀得出一片片亮葉
+  const col = new THREE.Color(), C4 = ['#d8ac57', '#bd7045', '#9f563e', '#c99a4a'], m0 = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < FALL_N; i++) { FL.push({ st: 0, t: 0, x: 0, y: 0, z: 0, vy: 0, hs: 0, ph: r() * 6.28, sp: 0.4 + r() * 0.5, s: 0.17 + r() * 0.09, yaw: r() * 6.28 }); fallIM.setMatrixAt(i, m0); fallIM.setColorAt(i, col.set(C4[i % 4])); }
+  fallIM.visible = false; scene.add(fallIM);
+}
+const fM = new THREE.Matrix4(), fQ = new THREE.Quaternion(), fE = new THREE.Euler(), fV = new THREE.Vector3(), fS = new THREE.Vector3();
+function updateFall(t, dt, focus, wet) {
+  const fall = U.uFall.value, on = fall > 0.3 && !wet && focus;
+  if (!on) { if (fallIM.visible) { fallIM.visible = false; FL.forEach(l => { l.st = 0; }); } return; }
+  fallIM.visible = true;
+  if (t - nearAt > 1) { nearAt = t; nearT = trees.filter(tr => (tr.kind === 'round' || tr.kind === 'pink') && Math.hypot(tr.x - focus.x, tr.z - focus.z) < 16); }
+  const wd = U.uWindDir.value, wk = U.uWind.value, gust = THREE.MathUtils.smoothstep(Math.sin(t * 0.21) * Math.sin(t * 0.13 + 1), 0.35, 0.8);
+  const want = nearT.length ? Math.round((12 + gust * 10) * THREE.MathUtils.clamp((fall - 0.3) / 0.5, 0, 1)) : 0;
+  let act = 0; FL.forEach(l => { if (l.st) act++; });
+  spawnT -= dt;
+  if (act < want && spawnT <= 0) {
+    const l = FL.find(q => !q.st), tr = nearT[Math.floor(r() * nearT.length)];
+    if (l && tr) {
+      const a = r() * 6.28, rr = (0.3 + r() * 0.9) * tr.s * 1.1;
+      l.x = tr.x + Math.cos(a) * rr; l.z = tr.z + Math.sin(a) * rr; l.y = groundAt(tr.x, tr.z) + tr.s * (1.4 + r() * 0.8);
+      l.vy = 0.2 + r() * 0.25; l.hs = 0.1 + r() * 0.25; l.st = 1; l.t = 0;
+    }
+    spawnT = 0.25 + r() * 0.5;
+  }
+  FL.forEach((l, i) => {
+    if (!l.st) return;
+    l.t += dt; let k = 1;
+    if (l.st === 1) {   // 飄落：順著風、左右擺盪，下降速度忽快忽慢
+      const push = l.hs * (0.6 + 0.6 * wk) * (1 + gust);
+      l.x += (wd.x * push + Math.sin(t * 1.3 + l.ph) * 0.22) * dt; l.z += (wd.y * push + Math.cos(t * 1.1 + l.ph) * 0.18) * dt;
+      l.y -= l.vy * (0.75 + 0.5 * Math.sin(t * 2.1 + l.ph)) * dt;
+      const g = groundAt(l.x, l.z), w = waterY(l.x, l.z), fl = w != null && w > g ? w : g;
+      if (l.y <= fl + 0.03 || l.t > 14) { const onW = w != null && w > g; l.st = onW ? 3 : 2; l.y = fl + (onW ? 0.012 : 0.03); l.t = 0; l.life = onW ? 8 + r() * 7 : 2 + r() * 2; }
+    } else {
+      if (l.st === 3) { l.x += wd.x * 0.06 * dt; l.z += wd.y * 0.06 * dt; }   // 水面上慢慢漂
+      if (l.t > l.life) { l.st = 0; fallIM.setMatrixAt(i, fM.makeScale(0, 0, 0)); return; }
+      k = Math.min(1, (l.life - l.t) / 0.6);
+    }
+    const sw = t * l.sp * 6.28 + l.ph;
+    if (l.st === 1) fE.set(-Math.PI / 2 + Math.sin(sw) * 1.2, l.yaw + t * 0.6, Math.cos(sw * 0.7) * 0.6); else fE.set(-Math.PI / 2 + 0.08, l.yaw, 0.05);
+    fallIM.setMatrixAt(i, fM.compose(fV.set(l.x, l.y, l.z), fQ.setFromEuler(fE), fS.setScalar(l.s * k)));
+  });
+  fallIM.instanceMatrix.needsUpdate = true;
+}
 let leaves = null, petals = null, shrooms = null;
 export function build() {
   shoreRocks();
   leaves = scatter(leafTex, ['round', 'pink'], 40, 1.7, ['#d5aa58', '#b96b43', '#9f573f', '#d8ac57', '#bd7045', '#c8a03a'], 0.24);   // 秋葉色（Codex 第二輪色票）
   petals = scatter(petalTex, ['pink'], 26, 1.8, ['#ffd0e0', '#ffe4ee', '#ffb8d0'], 0.28);
   shrooms = mushrooms();
-  pebbles();
+  pebbles(bankLife());
   pondPlants();
+  canopyLeaves();
   plane = seaplane();
 }
 export const debug = () => ({ mesh: leaves, leaves: leaves && leaves.count, petals: petals && petals.count, shrooms: shrooms && shrooms.children.length, lv: leaves && leaves.visible });
-export function update(t) {
+export function update(t, dt, focus, wet) {
   if (!leaves) return;
+  if (fallIM) updateFall(t, dt == null ? Math.min(0.1, Math.max(0, t - lastT)) : dt, focus, wet); lastT = t;
   if (plane) { plane.position.y = Math.sin(t * 1.1) * 0.05 - 0.04; plane.rotation.z = Math.sin(t * 0.8) * 0.025; plane.rotation.x = Math.sin(t * 0.9 + 1) * 0.015; plane.userData.prop.rotation.z = Math.sin(t * 0.3) * 0.2; }
   const fall = U.uFall.value, bloom = U.uBloom.value;
   leaves.visible = fall > 0.3; shrooms.visible = fall > 0.3; petals.visible = bloom > 0.3;

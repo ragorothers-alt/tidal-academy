@@ -844,7 +844,8 @@ function paveTex(kind) {
       let x = L; const n = 2 + Math.floor(r() * 2), w0 = (R - L) / n;
       while (x < R - 4) {
         const w = Math.min(R - x, w0 * (0.7 + r() * 0.6)), x0 = x + 2.5, y0 = y * rh + 2.5, ww = w - 5, hh = rh - 5, rad = 7 + r() * 5;
-        const tone = r(), fill = fills[Math.floor(r() * fills.length)];
+        const tone = r(), fk = r(), fill = fk < 0.7 ? fills[Math.floor(r() * fills.length)] : fk < 0.9 ? ['#dcdccf', '#d4d6ca', '#d9d8c8'][Math.floor(r() * 3)] : ['#d6c9a6', '#cfc19c'][Math.floor(r() * 2)];   // v7.5（Codex 第二輪 C4）：奶油石 70%、偏灰 20%、舊米色 10%
+        const worn = r() < 0.08, rings = worn ? 2 : 3 + Math.floor(r() * 4), step = 16 + r() * 14;   // 每塊的倒角深淺不同；少數磨得很平
         c.fillStyle = fill; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
         const g = c.createLinearGradient(x0, y0, x0 + ww, y0 + hh); g.addColorStop(0, 'rgba(255,255,255,.2)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(90,70,40,.14)');
         c.fillStyle = g; c.beginPath(); c.roundRect(x0, y0, ww, hh, rad); c.fill();
@@ -856,7 +857,8 @@ function paveTex(kind) {
         c.restore();
         for (let s = 0; s < 3; s++) { c.strokeStyle = `rgba(120,98,70,${0.12 + r() * 0.12})`; c.lineWidth = 0.6; c.beginPath(); const sx = x0 + r() * ww, sy = y0 + r() * hh; c.moveTo(sx, sy); c.lineTo(sx + (r() - 0.5) * 18, sy + (r() - 0.5) * 10); c.stroke(); }   // 細裂紋
         // 高度：一圈圈往內縮、越內越高＝圓角倒角；整塊再隨機傾一點，石板不會一樣平
-        for (let i = 0; i < 6; i++) { h.fillStyle = gray(110 + i * 22); h.beginPath(); h.roundRect(x0 + i * 1.1, y0 + i * 1.1, ww - i * 2.2, hh - i * 2.2, Math.max(2, rad - i)); h.fill(); }
+        for (let i = 0; i < rings; i++) { h.fillStyle = gray(Math.min(240, 110 + i * step + (6 - rings) * 12)); h.beginPath(); h.roundRect(x0 + i * 1.1, y0 + i * 1.1, ww - i * 2.2, hh - i * 2.2, Math.max(2, rad - i)); h.fill(); }
+        if (worn) { c.fillStyle = 'rgba(255,250,236,.16)'; c.beginPath(); c.roundRect(x0 + ww * 0.2, y0 + hh * 0.2, ww * 0.6, hh * 0.6, rad); c.fill(); }   // 磨平的石面亮一點
         const a = r() * 6.28, tg = h.createLinearGradient(x0 + ww / 2 - Math.cos(a) * ww / 2, y0 + hh / 2 - Math.sin(a) * hh / 2, x0 + ww / 2 + Math.cos(a) * ww / 2, y0 + hh / 2 + Math.sin(a) * hh / 2);
         tg.addColorStop(0, gray(0, 0.1)); tg.addColorStop(1, gray(255, 0.1)); h.fillStyle = tg; h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.fill();
         h.save(); h.beginPath(); h.roundRect(x0 + 5, y0 + 5, ww - 10, hh - 10, Math.max(2, rad - 5)); h.clip();
@@ -881,7 +883,7 @@ function paveTex(kind) {
   return (PAVE[kind] = t);
 }
 function roads() {
-  const mat = k => { const map = paveTex(k); return bend(new THREE.MeshStandardMaterial({ map, normalMap: PAVEN[k], normalScale: new THREE.Vector2(1, 1), alphaTest: 0.5, roughness: 0.9 })); };
+  const mat = k => { const map = paveTex(k); return bend(new THREE.MeshStandardMaterial({ map, normalMap: PAVEN[k], normalScale: new THREE.Vector2(0.75, 0.75), alphaTest: 0.5, roughness: 0.9 })); };   // v7.5：凹凸收到 75%（每塊都像一樣的厚餅）
   const MAT = { stone: mat('stone'), earth: mat('earth'), sand: mat('sand') }, KIND = { stone: 'stone', address: 'stone', earth: 'earth', sand: 'sand' };
   const buf = new Map();
   let ri = 0;
