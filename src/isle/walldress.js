@@ -4,7 +4,7 @@
    同一種模型全部共用 InstancedMesh（一種零件一次畫完）。所有建築都蓋好之後（main.js，鋪草之前）呼叫 init() */
 import * as THREE from 'three';
 import { scene, bend } from './engine.js';
-import { groundAt } from './terrain.js';
+import { groundAt, cliffTops } from './terrain.js';
 import { protoParts, chunkInstances, homes, SITES } from './props.js';
 import { buildings } from './props3d.js';
 
@@ -95,6 +95,16 @@ export function init() {
   if (!((window.TA.ISLE || {}).PROPMODELS || {}).ivy_wall) return;   // 還沒有模型
   const doors = homes.map(h => h.door).concat(['shop', 'museum', 'exam', 'library'].map(k => SITES[k] && (SITES[k].door || SITES[k].front)).filter(Boolean));
   buildings().forEach(g => { try { dress(g, doors); } catch (e) { console.warn('牆上的植物放不上去：', e); } });
+  // v7.4 擋土牆（Codex 第二輪 B7）：台地與山頂邊緣兩公尺高的白石牆，隔一段從牆頂垂下一叢藤、偶爾一叢從牆腳爬上來（只佔牆面一成多，門口附近不放）
+  const picked = [];
+  cliffTops.forEach(([x, y, z, dx, dz]) => {
+    if (y < 2.7) return;   // 牆頂（扣掉草皮邊）約 2.86（台地）、4.86（山頂）
+    const gy = groundAt(x + dx * 0.6, z + dz * 0.6); if (y - gy < 1.4) return;
+    const h = hash(x * 0.37, z * 0.37); if (h > 0.36 || picked.some(([px, pz]) => Math.hypot(px - x, pz - z) < 6) || doors.some(d => d && Math.hypot(d[0] - x, d[1] - z) < 3)) return;
+    picked.push([x, z]);
+    if (h < 0.25) put('ivy_drape', x + dx * 0.03, y + 0.16, z + dz * 0.03, dx, dz, 0.55 + h * 1.6);   // 從牆頂的草皮邊（+0.14）垂下來
+    else put('ivy_wall', x + dx * 0.03, gy - 0.03, z + dz * 0.03, dx, dz);
+  });
   Object.entries(PLACE).forEach(([key, list]) => {
     if (!list.length) return; const parts = protoParts('PROPMODELS', key); if (!parts) return;
     chunkInstances(parts, list, still, true);   // 分塊：看不到的牆上植物不畫；貼在牆上的植物影子只落在牆面，不畫進陰影貼圖

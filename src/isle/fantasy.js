@@ -62,7 +62,7 @@ const puffTex = (() => {
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
-const puffCol = new THREE.Color(), WHITE = new THREE.Color(1, 1, 1), NO_HIT = () => {}, fillCol = new THREE.Color(), GOLD = new THREE.Color('#ffc890'), MOONLIT = new THREE.Color('#9eb0e8'), RAINY = new THREE.Color('#9aa2b4');
+const puffCol = new THREE.Color(), WHITE = new THREE.Color(1, 1, 1), NO_HIT = () => {}, fillCol = new THREE.Color(), GOLD = new THREE.Color('#ffc890'), MOONLIT = new THREE.Color('#9eb0e8'), RAINY = new THREE.Color('#9aa2b4'), COOLSIDE = new THREE.Color('#8d96b0'), frontCol = new THREE.Color();
 /* 瀑布：從浮空島邊緣垂下的細長水流（面向鏡頭的貼圖）。水紋貼圖往下捲動，另一張不動的透明度貼圖讓上端細、下端散成水霧 */
 const fallTex = (() => {
   const cv = document.createElement('canvas'); cv.width = 32; cv.height = 128; const c = cv.getContext('2d');
@@ -375,11 +375,12 @@ export function update(dt, t, night, show) {
   cumulus.update(show, horizonNdc, yForNdc, skyU.glow.value * 2, night, dt, inCone);
   if (!show) return;
   gloomK = gloom() * (1 - night * 0.5);
-  hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + (skyU.dawn.value + Math.min(1, skyU.glow.value * 2)) * 0.12 + gloomK * 0.22;   // 晨昏空氣多一點；陰雨天遠方淡進灰色的空氣
+  hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + skyU.dawn.value * 0.06 - Math.min(1, skyU.glow.value * 2) * 0.03 + gloomK * 0.22;   // 清晨空氣多一點；陰雨天遠方淡進灰色的空氣。v7.4：黃金時段反而少一點（0.5 → 0.35）——太陽就在城堡後面，霧色是發亮的天色，以前塔群融成一片金白
   const gold = Math.min(1, skyU.glow.value * 2);
   fillCol.setRGB(1, 1, 1).lerp(GOLD, gold * 0.45).lerp(MOONLIT, night).lerp(RAINY, gloomK * 0.6);   // v6.93：黃昏的金色收一點（城堡不會融成一團黃白光）
   fills.forEach(m => { m.emissive.copy(fillCol); m.emissiveIntensity = m.userData.fill * 0.19 * (1 + night * 0.6); });   // v7.0：底光收一點，城堡、浮空島看得出受光面與背光面   // 一點均勻的底光，主要的亮度交給正面補光
-  hazeU.uFront.value.copy(fillCol).multiplyScalar(0.42 * (1 - night * 0.3));   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
+  frontCol.copy(fillCol).lerp(COOLSIDE, gold * 0.55 * (1 - night));   // v7.4：黃金時段太陽多半在遠景後面（逆光）：朝向鏡頭的面是天空照著的冷色陰影，不是一片暖奶油
+  hazeU.uFront.value.copy(frontCol).multiplyScalar(0.42 * (1 - night * 0.3) * (1 - gold * 0.18));   // 黃金時段正面補光也少 18%，塔面才分得出明暗   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar(1 - night * 0.55);

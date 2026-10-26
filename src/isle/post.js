@@ -141,12 +141,12 @@ const COMP = new THREE.ShaderMaterial({
         c = mix(c, fcol, fa);
       }
       // 泛光：白天輕、黃金時段與夜晚（燈光）較強；b1 是貼著光源的柔光、b2 是寬廣的光暈
-      c += texture2D(b1, vUv).rgb * (0.05 + g * 0.06 + night * 0.06) + texture2D(b2, vUv).rgb * (0.11 + g * 0.16 + night * 0.12);
+      c += texture2D(b1, vUv).rgb * (0.05 + g * 0.06 + night * 0.06) + texture2D(b2, vUv).rgb * (0.11 + g * 0.09 + night * 0.12);   // v7.4：黃金時段的寬光暈少一點（0.16 → 0.09）：太陽常在城堡後面，整片暈開會蓋掉塔群
       // 逆光光束
-      c += texture2D(rays, vUv).rgb * sunCol * (0.22 + g * 0.85) * vis * clear;
+      c += texture2D(rays, vUv).rgb * sunCol * (0.22 + g * 0.45) * vis * clear;   // v7.4：黃金時段的光束收一點（0.85 → 0.45）：只讀得到兩三道大方向，城堡不被光幕洗白
       // 太陽光暈：大片暖色霧光＋亮核＋鏡頭光斑
       vec2 d = vUv - sun; d.x *= aspect; float r = length(d);
-      float haze = exp(-r * 3.2) * (0.04 + g * 0.15) + exp(-r * 11.0) * (0.14 + g * 0.3);
+      float haze = exp(-r * 3.2) * (0.04 + g * 0.06) + exp(-r * 11.0) * (0.14 + g * 0.12);   // v7.4：黃金時段的光暈收斂（0.15／0.3 → 0.06／0.12），亮核留著；以前城堡塔群融成一片金白
       c += sunCol * haze * vis * clear;
       vec2 fl = vec2(0.5) - (sun - vec2(0.5)); vec2 e = vUv - mix(sun, fl, 0.55); e.x *= aspect; vec2 e2 = vUv - mix(sun, fl, 0.85); e2.x *= aspect;
       c += sunCol * (smoothstep(0.07, 0.0, length(e)) * 0.06 + smoothstep(0.035, 0.0, length(e2)) * 0.05) * vis * g * clear;
@@ -169,7 +169,7 @@ const COMP = new THREE.ShaderMaterial({
       o = mix(vec3(lo), o, mix(0.94, 1.04, dayK));   // v6.93：白天少一點飽和（粉彩的空氣感，不像塑膠玩具）
       { // 白天的草木（黃綠色調：綠 > 藍、紅也比藍多）再飽和一點，像陽光下的草原；天空、皮膚、屋瓦不受影響
         float yg = smoothstep(0.03, 0.12, o.g - o.b) * smoothstep(-0.02, 0.06, o.r - o.b) * smoothstep(0.08, 0.0, o.r - o.g);
-        o = mix(vec3(lo), o, 1.0 + yg * 0.05 * dayK);
+        o = mix(vec3(lo), o, 1.0 + yg * 0.02 * dayK);   // v7.4：0.05 → 0.02，亮草不再和金樹一樣搶眼
       }   // 白天的色彩清透飽和一點（日系奇幻）；黃金時段與夜晚維持原樣
       o += (vec3(0.01, 0.0, 0.034) * smoothstep(0.55, 0.05, lo) + vec3(0.03, 0.018, -0.02) * smoothstep(0.45, 1.0, lo)) * dayK;   // 陰影偏薰衣草藍、亮部帶暖金
       o = mix(o, o * 0.95 + 0.045, 0.5 * dayK);   // 稍微抬亮暗部：空氣感、高調

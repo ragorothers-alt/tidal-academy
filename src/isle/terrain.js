@@ -80,6 +80,10 @@ export const streamDist = (x, z) => { let d = 1e9; for (const S of STREAMS) d = 
 /* ---------- 照規劃分類（座標都是世界座標、還沒扭曲） ---------- */
 function inPoly(x, z, P) { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const a = P[i], b = P[j]; if ((a[1] > z) !== (b[1] > z) && x < (b[0] - a[0]) * (z - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
 const edgeDist = (x, z, P) => { let d = 1e9; for (let i = 0, j = P.length - 1; i < P.length; j = i++) d = Math.min(d, distSeg(x, z, P[j], P[i])); return d; };
+/** v7.4：格子 (tx, tz) 在哪一個規劃的池塘裡（高地泉、柳池）；不是池塘回傳 null */
+const pondOf = (tx, tz) => PLAN ? PLAN.ponds.find(pd => inPoly(tx - C + 0.5, tz - C + 0.5, pd.poly)) || null : null;
+/** 池塘裡 (x, z)（未扭曲的座標）離岸多遠：0 = 岸邊、1 = 離岸 1.8 公尺以上 */
+const pondK = (pd, x, z) => inPoly(x, z, pd.poly) ? THREE.MathUtils.smoothstep(edgeDist(x, z, pd.poly), 0, 1.8) : 0;
 /** 折線加寬成帶狀（兩端平切，和規劃的 Shapely buffer 一樣）：點在帶子裡回傳沿線的進度 0–1 與到中線的距離，否則 null */
 function inBand(x, z, P, w) {
   let best = null, s = 0; const L = P.reduce((a, p, i) => i ? a + Math.hypot(p[0] - P[i - 1][0], p[1] - P[i - 1][1]) : 0, 0) || 1;
@@ -244,9 +248,10 @@ export const terrain = (function build() {
   let inWall = false;
   const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); WALL.push(inWall); };
   const quad = (a, b, c, d, ca, cb, cc, cd) => { push(...a, ca); push(...b, cb); push(...c, cc); push(...a, ca); push(...c, cc); push(...d, cd); };
+  const BED_SH = new THREE.Color('#b6b79a'), BED_DP = new THREE.Color('#4f7268');   // 池底：淺岸的砂、池心的深青綠（Codex 第二輪 C6）
   const grassC = (x, z, hi) => { const n = noise(x * 0.35, z * 0.35), n2 = noise(x * 1.7 + 5, z * 1.7); const c = new THREE.Color(hi ? '#94bb3e' : '#8ab336').lerp(new THREE.Color(hi ? '#72a02e' : '#6a9628'), n * 0.8); c.offsetHSL(0, 0, (n2 - 0.5) * 0.05); return c; };   // 草毯底色深一點，草葉之間的縫看得出陰影
   const sandC = (x, z) => new THREE.Color('#ffe6bf').lerp(new THREE.Color('#f3d3a2'), noise(x * 0.5, z * 0.5) * 0.7);   // 暖白的細沙
-  const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#e2cc9e').lerp(new THREE.Color('#c8b58a'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? new THREE.Color('#7da493') : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙
+  const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#e2cc9e').lerp(new THREE.Color('#c8b58a'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? (pondOf(tx, tz) ? BED_SH.clone().lerp(BED_DP, pondK(pondOf(tx, tz), x, z)) : new THREE.Color('#7da493')) : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙；池塘（v7.4）岸邊是淺色的砂底、往池心漸深
   const lip = new THREE.Color('#6cbf4e'), cliffT = new THREE.Color('#b48a5c'), cliffB = new THREE.Color('#946c45'), sandW = new THREE.Color('#e3cc90'), sandWB = new THREE.Color('#c9b07a'), bankB = new THREE.Color('#c8b58a');
   const bankSl = (x, z) => 0.42 + noise(x * 0.7, z * 0.7) * 0.18;   // 草岸斜坡在這個角點的寬度
   const rockG = new THREE.Color('#9c9184'), rockT = new THREE.Color('#a99c88'), rockB = new THREE.Color('#7e7062'), soil = new THREE.Color('#7a5a3e'), wc = new THREE.Color();
@@ -377,21 +382,23 @@ water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColo
 /* 河面：每格細分成 4×4，靠岸的地方顏色淺、比較透明而且有流動的白沫（頂點顏色的 alpha 是「離岸多近」），
    河中央是較深的藍；流進沙灘或大海的那幾格，水面順著往下斜進海裡，不會浮在沙灘上 */
 {
-  const P = [], CL = [], S = 4, isW = (x, z) => T(x, z) === 3 || T(x, z) === 6;
+  const P = [], CL = [], PD = [], S = 4, isW = (x, z) => T(x, z) === 3 || T(x, z) === 6;
   const deep = new THREE.Color('#126f9e'), shal = new THREE.Color('#3fb6bf'), cDeep = new THREE.Color('#1499c4'), cShal = new THREE.Color('#58d4cf'), col = new THREE.Color();   // 青綠透亮的河水；小溪更淺更亮
+  const pDeep = new THREE.Color('#2f6f72'), pShal = new THREE.Color('#85b7a2');   // 池塘（v7.4）：池心深青綠、岸邊淺綠
   const cornerY = (cx, cz, y0) => { for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const t = T(cx + dx, cz + dz); if (t === 0 || t === -1) return 0.3; } return y0; };
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
     if (!isW(x, z)) continue;
     const X = x - C, Z = z - C, y0 = isCreek(x, z) ? CREEK_WATER : WATER_Y[T(x, z)];
     const L = !isW(x - 1, z), R = !isW(x + 1, z), Nn = !isW(x, z - 1), Ss = !isW(x, z + 1);
     const dLN = !L && !Nn && !isW(x - 1, z - 1), dRN = !R && !Nn && !isW(x + 1, z - 1), dLS = !L && !Ss && !isW(x - 1, z + 1), dRS = !R && !Ss && !isW(x + 1, z + 1);
-    const h00 = cornerY(x, z, y0), h10 = cornerY(x + 1, z, y0), h01 = cornerY(x, z + 1, y0), h11 = cornerY(x + 1, z + 1, y0);
+    const h00 = cornerY(x, z, y0), h10 = cornerY(x + 1, z, y0), h01 = cornerY(x, z + 1, y0), h11 = cornerY(x + 1, z + 1, y0), pd = pondOf(x, z);
     const vert = (u, v) => {
       let d = 1;
       if (L) d = Math.min(d, u); if (R) d = Math.min(d, 1 - u); if (Nn) d = Math.min(d, v); if (Ss) d = Math.min(d, 1 - v);
       if (dLN) d = Math.min(d, Math.hypot(u, v)); if (dRN) d = Math.min(d, Math.hypot(1 - u, v)); if (dLS) d = Math.min(d, Math.hypot(u, 1 - v)); if (dRS) d = Math.min(d, Math.hypot(1 - u, 1 - v));
       const e = 1 - THREE.MathUtils.smoothstep(d, 0, 0.42), y = (h00 * (1 - u) + h10 * u) * (1 - v) + (h01 * (1 - u) + h11 * u) * v;
-      P.push(X + u, y, Z + v); if (isCreek(x, z)) col.copy(cDeep).lerp(cShal, 0.25 + e * 0.6); else col.copy(deep).lerp(shal, e); CL.push(col.r, col.g, col.b, e);
+      const pk = pd ? pondK(pd, X + u, Z + v) : 0;   // aPond：0 = 不是池塘；池塘是 0.12（岸邊）到 1（池心），著色器依它加深、少畫光網與白沫
+      P.push(X + u, y, Z + v); if (isCreek(x, z)) col.copy(cDeep).lerp(cShal, 0.25 + e * 0.6); else if (pd) col.copy(pDeep).lerp(pShal, Math.max(e, 1 - pk)); else col.copy(deep).lerp(shal, e); CL.push(col.r, col.g, col.b, e); PD.push(pd ? 0.12 + 0.88 * pk : 0);
     };
     for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
       const u0 = i / S, u1 = (i + 1) / S, v0 = j / S, v1 = (j + 1) / S;
@@ -407,7 +414,7 @@ water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColo
     for (const k of [0, 1]) P[i + k * 2] += (a[k] * (1 - u) + b[k] * u) * (1 - v) + (c[k] * (1 - u) + e[k] * u) * v;
   }
   for (let i = 0; i < P.length; i += 3) { const [wx, wz] = warp(P[i], P[i + 2]); P[i] = wx; P[i + 2] = wz; }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CL, 4)); g.computeVertexNormals();
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CL, 4)); g.setAttribute('aPond', new THREE.Float32BufferAttribute(PD, 1)); g.computeVertexNormals();
   { const rm = new THREE.Mesh(g, water.river); rm.renderOrder = -10; scene.add(rm); }
 }
 export const foamMat = bend(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false }));

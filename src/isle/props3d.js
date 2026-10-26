@@ -113,6 +113,7 @@ function buildCanopy(g, model, kind, H) {
   pts.forEach((p, i) => { rad[lab[i]] += p.distanceToSquared(cs[lab[i]]); cnt[lab[i]]++; });
   const gold = m => { m.defines = Object.assign({}, m.defines, { TA_GOLD: '' }); return bend(m, kind); },   // TA_GOLD：整棵樹同一種金黃，不像一般秋樹每團顏色不同
     core = gold(new THREE.MeshStandardMaterial({ color: '#4f9a3e', roughness: 0.9 })), card = gold(new THREE.MeshStandardMaterial({ color: '#58b34d', map: heroLeafTex(), alphaTest: 0.5, alphaToCoverage: true, roughness: 0.9 })), depth = HERO_DEPTH();
+  if (kind === 'sway') [core, card].forEach(treeK);   // 一般闊葉樹：每棵的秋色不同（廣場大樹是 sakura，不加）
   // 畫好的葉叢貼圖載入後：卡片的底圖換成綠葉叢，另外傳入金黃葉叢，著色器依季節在兩張之間切換（TA_LEAFTEX）
   const goldU = { value: null }, ob = card.onBeforeCompile;
   card.onBeforeCompile = (sh, r) => { ob(sh, r); sh.uniforms.uGoldMap = goldU; sh.fragmentShader = 'uniform sampler2D uGoldMap;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  #ifdef TA_LEAFTEX\n    vec3 goldC = diffuse * texture2D(uGoldMap, vMapUv).rgb;\n  #endif'); };
@@ -154,6 +155,20 @@ function buildCanopy(g, model, kind, H) {
   return { h: H, noleaf, C0, parts: [[merge(cores, false), core, null], [merge(cards, true), card, depth]] };
 }
 const CANOPY = {};
+/* 每棵樹一個 0–1 的值（aTreeK，fillCanopies 依樹的位置填），著色器用它挑這棵樹的秋色（engine.js TA_TREEK）。
+   v7.4：本來想用著色器裡依位置算的亂數（vSeed），但一起畫的樹冠在 GPU 上算出來幾乎都落在同一組，改由這裡決定 */
+function treeK(m) {
+  const ob = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    ob(sh, r);
+    sh.vertexShader = 'attribute float aTreeK;\nvarying float vTreeK;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vTreeK = aTreeK;');
+    sh.fragmentShader = 'varying float vTreeK;\n' + sh.fragmentShader;
+  };
+  m.defines = Object.assign({}, m.defines, { TA_TREEK: '' });
+}
+const hash2 = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s); };
+/** 七成跟著所在的 9 公尺區塊（相鄰兩三棵同色、成一群），三成自己抽：整體比例不變，但讀起來是一片片的色群，不是每棵隨機 */
+const treeHash = (x, z) => { const X = Math.round(x * 10), Z = Math.round(z * 10); return hash2(X, Z) < 0.7 ? hash2(Math.floor(x / 9) + 101, Math.floor(z / 9) + 7) : hash2(Z + 3, X + 11); };
 /** 換上葉片卡樹冠：同一種模型（與著色方式）只算一次，以第一棵（廣場大樹排在最前面）的大小為準，其他棵依高度等比例縮放、共用網格與材質 */
 function canopy(g, model, p) {
   const kind = p.kind || 'sway', key = p.id + '|' + kind;
@@ -165,6 +180,7 @@ function canopy(g, model, p) {
     c.inst = c.parts.map(([geo, mat, depth]) => { const im = new THREE.InstancedMesh(geo, mat, 256); im.count = 0; im.castShadow = im.receiveShadow = true; im.frustumCulled = false; if (depth) im.customDepthMaterial = depth; scene.add(im); return im; });
     c.instS = c.parts.map(([geo, mat, depth]) => { const im = new THREE.InstancedMesh(geo, mat, 256); im.count = 0; im.castShadow = true; im.frustumCulled = false; im.layers.set(1); if (depth) im.customDepthMaterial = depth; scene.add(im); return im; });   // 畫面外、影子落進畫面的樹冠：只畫進陰影貼圖
     c.trees = []; INST.push(c);
+    if (kind === 'sway') c.kA = c.parts.map(([geo]) => { const a = new THREE.InstancedBufferAttribute(new Float32Array(256), 1); geo.setAttribute('aTreeK', a); return a; });
   }
   const hold = new THREE.Object3D(); hold.scale.setScalar(p.h / c.h); hold.position.set(0, 0, 0); g.add(hold);
   c.trees.push({ g, hold, vis: true }); return hold;
@@ -178,8 +194,10 @@ function fillCanopies() {
       if (!t.g.parent || !t.hold.visible || !t.vis) continue;   // 已經移除的樹（例如被溪水佔掉）或看不到、影子也落不進畫面
       const shOnly = t.hold.userData.st === 2; if (shOnly ? ns >= 256 : n >= 256) continue;
       t.hold.updateWorldMatrix(true, false); mA.multiplyMatrices(t.hold.matrixWorld, mOff);
-      if (shOnly) { c.instS.forEach(im => im.setMatrixAt(ns, mA)); ns++; } else { c.inst.forEach(im => im.setMatrixAt(n, mA)); n++; }
+      if (c.kA && t.k == null) t.k = treeHash(t.hold.matrixWorld.elements[12], t.hold.matrixWorld.elements[14]);
+      if (shOnly) { c.instS.forEach(im => im.setMatrixAt(ns, mA)); ns++; } else { c.inst.forEach(im => im.setMatrixAt(n, mA)); if (c.kA) c.kA.forEach(a => { a.array[n] = t.k; }); n++; }
     }
+    if (c.kA) c.kA.forEach(a => { a.needsUpdate = true; });
     c.inst.forEach(im => { im.count = n; im.instanceMatrix.needsUpdate = true; });
     c.instS.forEach(im => { im.count = ns; im.instanceMatrix.needsUpdate = true; });
   }

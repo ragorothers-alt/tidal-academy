@@ -1160,7 +1160,7 @@ function flowerOne() {
 }
 /* 野花分成 16×16 公尺一塊（每塊一個 InstancedMesh：莖、花冠、花心合成一個，v7.3），畫面外的塊不畫（props3d.cull） */
 {
-  const oneG = flowerOne(), FC = 16, TOTAL = 5000, SPARE = 120;
+  const oneG = flowerOne(), FC = 16, TOTAL = 6000, SPARE = 120;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, side: THREE.DoubleSide }); mat.defines = { TA_FLOWERTINT: '' }; bend(mat, 'flower');   // 粗糙度取莖（0.9）、花瓣（0.7）、花心（0.6）的中間
   const chunks = new Map(); let total = 0;
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
@@ -1171,8 +1171,8 @@ function flowerOne() {
     c.n = 0; scene.add(g); { let lo = 1e9, hi = -1e9; for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const gy = groundAt(c.x + (i - 1) * FC * 0.5, c.z + (j - 1) * FC * 0.5); lo = Math.min(lo, gy); hi = Math.max(hi, gy); } registerAt(g, c.x, (lo + hi) / 2 + 0.3, c.z, FC * 0.75 + 0.5, null, (hi - lo) / 2 + 0.8); }   // 野花很矮：包圍體只到地面上一點
   };
   const write = (c, m, hex) => { const i = c.n++, im = c.im; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(hex)); im.instanceColor.needsUpdate = true; };
-  const matrix = (x, z, s, tall) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((rnd() - 0.5) * 0.25, rnd() * 6.28, (rnd() - 0.5) * 0.25)), sc.set(s, s * (tall ? 1.45 : 1), s));
-  const put = (x, z, c, s, tall) => { if (total >= TOTAL) return; const ch = chunkOf(x, z); ch.mats.push(matrix(x, z, s, tall).clone()); ch.cols.push(c); total++; };
+  const matrix = (x, z, s, tall, R = rnd) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.25, R() * 6.28, (R() - 0.5) * 0.25)), sc.set(s, s * (tall ? 1.45 : 1), s));
+  const put = (x, z, c, s, tall, R) => { if (total >= TOTAL) return; const ch = chunkOf(x, z); ch.mats.push(matrix(x, z, s, tall, R).clone()); ch.cols.push(c); total++; };
   const pal = ['#ffffff', '#ff8fb1', '#ffd23f', '#b38bff', '#ff7a5a', '#6c8dff'];
   // 主要步道兩側的花帶：每隔一步一小叢（參考圖的路邊都是藍、白、黃的小花）
   const BORDER = /Main Street|Academy|Observatory|East Stair|Lighthouse Walk|South Meadow/, BC = ['#6c8dff', '#ffffff', '#ffd23f', '#ffffff', '#b38bff'];
@@ -1198,11 +1198,26 @@ function flowerOne() {
     }
   });
   // 草地上零星的一叢叢野花
-  for (let k = 0; k < 5000 && total < TOTAL - 900; k++) {
+  for (let k = 0; k < 5000 && total < 4100; k++) {
     const px = (rnd() - 0.5) * 88, pz = (rnd() - 0.5) * 88, [cx, cz] = warp(px, pz), t = tileAt(cx, cz);
     if ((t !== 1 && t !== 2) || roadGap(px, pz) < 0.8 || plazaArea(px, pz) || blocked(cx, cz, 0.6)) continue;
     const c = pal[Math.floor(rnd() * pal.length)]; flowerSpots.push([cx, cz]);
     for (let j = 0; j < 6; j++) { const x = cx + (rnd() - 0.5) * 1.2, z = cz + (rnd() - 0.5) * 1.2; if (tileAt(x, z) !== t) continue; put(x, z, c, 0.85 + rnd() * 0.4, rnd() < 0.2); }
+  }
+  { // v7.4 低矮的花墊（Codex 第二輪 B2）：草地的邊上（路邊、沙岸、台地與水邊）一叢叢 5–9 株的小花，奶油白 60%、淡紫 25%、柔黃 15%，
+    // 比野花矮（約 0.12–0.2 公尺），中間的草清掉一圈才看得到。用自己的亂數，其他東西的位置不變
+    let s2 = 7741; const R = () => { s2 = (s2 * 16807) % 2147483647; return (s2 - 1) / 2147483646; };
+    const LOW = ['#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#f0e6cb', '#ada2c2', '#ada2c2', '#ada2c2', '#d8bf72', '#d8bf72'];
+    const edgy = (x, z, t) => [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]].some(([dx, dz]) => tileAt(x + dx, z + dz) !== t);
+    for (let k = 0, made = 0; k < 9000 && made < 150; k++) {
+      const px = (R() - 0.5) * 88, pz = (R() - 0.5) * 88, [cx, cz] = warp(px, pz), t = tileAt(cx, cz);
+      if ((t !== 1 && t !== 2) || plazaArea(px, pz) || blocked(cx, cz, 0.5) || onRoad(cx, cz)) continue;
+      const gap = roadGap(px, pz); if (gap < 0.45 || (gap > 1.4 && !edgy(cx, cz, t))) continue;   // 只在邊上：路邊 0.45–1.4 公尺，或旁邊就是沙灘、水、台地邊
+      if (flowerSpots.some(([fx, fz]) => Math.abs(fx - cx) < 1.1 && Math.abs(fz - cz) < 1.1)) continue;
+      const c = LOW[Math.floor(R() * LOW.length)], n = 6 + Math.floor(R() * 6), rad = 0.16 + R() * 0.18;
+      for (let j = 0; j < n; j++) { const a = R() * 6.28, d = Math.sqrt(R()) * rad, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d; if (tileAt(x, z) !== t || onRoad(x, z)) continue; put(x, z, R() < 0.82 ? c : LOW[Math.floor(R() * LOW.length)], 0.44 + R() * 0.24, false, R); }
+      flowerSpots.push([cx, cz]); STEP_STONES.push({ x: cx, z: cz, r: rad + 0.12 }); made++;
+    }
   }
   chunks.forEach(c => { build(c, c.mats.length + SPARE); c.mats.forEach((m, i) => write(c, m, c.cols[i])); c.mats = c.cols = null; });
   wildFlowers = (x, z, c) => {   // 之後補種（西部高地的野花草原）：塊滿了就不種
