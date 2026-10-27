@@ -48,12 +48,19 @@ const viewMat = new THREE.ShaderMaterial({
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBot; uniform float uNight; uniform sampler2D map; varying vec2 vUv;
     void main(){ vec3 s = vUv.y > 0.5 ? mix(uMid, uTop, (vUv.y - 0.5) * 2.0) : mix(uBot, uMid, vUv.y * 2.0);
-      vec4 t = texture2D(map, vUv); vec3 c = mix(s, t.rgb * mix(1.0, 0.32, uNight), t.a * (1.0 - uNight * 0.35));
+      vec4 t = texture2D(map, vUv); t.rgb = mix(vec3(dot(t.rgb, vec3(0.3, 0.59, 0.11))), t.rgb, 0.85);   // 畫的窗景收一點飽和，和島上的粉彩一致
+      vec3 c = mix(s, t.rgb * mix(1.0, 0.32, uNight), t.a * (1.0 - uNight * 0.35));
       gl_FragColor = vec4(c * 1.1, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`
 });
+/* v7.7 夢幻風的窗景：Codex 畫的手繪風景（models/tex_view.js：浮空島、粉白城堡、雲、遠山、海、櫻花與花草坡，天空去背），載入前沿用上面程式畫的 */
+{
+  const use = url => new THREE.TextureLoader().load(url, t => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; viewMat.uniforms.map.value = t; });
+  if (window.TA && window.TA.VIEW) use(window.TA.VIEW);
+  else { const sc = document.createElement('script'); sc.src = (window.__MODEL_BASE || 'src/isle/models/') + 'tex_view.js'; sc.onload = () => { if (window.TA && window.TA.VIEW) use(window.TA.VIEW); }; document.head.appendChild(sc); }
+}
 const glassMat = new THREE.MeshStandardMaterial({ color: '#eef6ff', transparent: true, opacity: 0.18, roughness: 0.08, metalness: 0, depthWrite: false });
 const lampMats = new Set();
 /** 給室內模型用的工具（和住宅外觀的 kit 同一套材質：同色同參數共用；匯出給檢查工具直接建室內） */

@@ -182,6 +182,15 @@ export function patternTex(p) {
     for (let y = 0; y < S; y += 256) for (let x = 0; x < S; x += 256) { c.fillStyle = shade(p.c1, 0.94 + rnd() * 0.1); c.fillRect(x, y, 256, 256); }
     c.fillStyle = p.c2; for (let x = 0; x <= S; x += 256) { c.fillRect(x - 5, 0, 10, S); c.fillRect(0, x - 5, S, 10); }
   }
+  // v7.7 夢幻風：水彩暈染——幾團很淡的暖杏與薰衣草色塊（四邊接續，重複貼時看不出接縫）
+  for (let i = 0; i < 12; i++) {
+    const x = rnd() * S, y = rnd() * S, r = 70 + rnd() * 120, warm = i % 2 === 0;
+    for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+      const g = c.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      g.addColorStop(0, warm ? 'rgba(255,226,196,0.09)' : 'rgba(214,204,246,0.09)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = g; c.fillRect(x + ox - r, y + oy - r, r * 2, r * 2);
+    }
+  }
   // 紙紋／材質雜訊：一點點細小的明暗
   const img = c.getImageData(0, 0, S, S), d = img.data;
   for (let i = 0; i < d.length; i += 4) { const n = (rnd() - 0.5) * 10; d[i] += n; d[i + 1] += n; d[i + 2] += n; }

@@ -112,6 +112,16 @@ const NOISE = `
     vec3 t = mix(mix(vec3(0.84, 1.1, 0.56), vec3(0.77, 1.11, 0.63), sg), vec3(1.05, 1.03, 0.58), dr);
     return mix(c, t * l, 0.3 + 0.25 * max(sg, dr)) * (1.0 + dr * 0.06 - sg * 0.05);
   }
+  // v7.7 夢幻風的手繪暈染：表面像水彩上色——1–3 公尺的色塊在暖杏與薰衣草之間漂移，朝上的面被陽光曬得暖一點、朝下的面（屋簷底、桌底）帶薰衣草的陰影色，
+  // 不是灰色的髒污。只換色相、亮度幾乎不變；y 斜斜混進 xz 當座標，曲面上沒有投影的接縫。k：強度（0 = 不變）
+  vec3 taDream(vec3 c, vec3 wp, vec3 wn, float k){
+    vec2 p = wp.xz + wp.y * vec2(0.71, -0.53);
+    float w = smoothstep(0.3, 0.7, n_v(p * 0.4 + vec2(5.3, 1.7)) * 0.62 + n_v(p * 1.25 + vec2(1.3, 8.2)) * 0.38);
+    vec3 t = mix(vec3(0.95, 0.945, 1.07), vec3(1.06, 1.01, 0.92), w);
+    t *= mix(vec3(1.0), vec3(1.035, 1.015, 0.975), clamp(wn.y, 0.0, 1.0));
+    t *= mix(vec3(1.0), vec3(0.93, 0.92, 1.04), clamp(-wn.y, 0.0, 1.0));
+    return c * mix(vec3(1.0), t, k);
+  }
 `;
 /* 遮擋鏤空：擋在鏡頭與玩家之間、比玩家腳高的東西，在玩家周圍用網點方式挖空（房子、樹、懸崖不會把角色整個擋住） */
 const OCC_F = `
@@ -472,6 +482,7 @@ export function bend(mat, kind) {
     if (kind === 'water') Object.assign(sh.uniforms, { uSkyT: skyU.top, uSkyM: skyU.mid, uSkyB: skyU.bot, uSunCol: skyU.sunCol, uGlow: skyU.glow, uNight: skyU.night });   // 大海的倒影用當下的天色
     if (kind === 'water') Object.assign(sh.uniforms, WL);   // 第二階段：讀得到底下的場景
     let f = FTOP + LG_TOP + NOISE + (dk ? TRI : '') + (kind === 'terrain' ? '#ifdef TA_SURFACE\nvarying vec4 vSurface;\n#endif\nuniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry; uniform float uSplit;\n' : '') + (kind === 'water' ? 'varying float vPond;\nuniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
+    if (kind === 'terrain') f = f.replace('void main() {', 'float tGlint = 0.0;\nvoid main() {');   // 沙灘的閃光（顏色階段算、打光後加）
     if (kind === 'water') f = f.replace('void main() {', '#define TA_CREEK (vWP.y > 0.8 && vPond <= 0.0)\n' + LATE_W + 'void main() {');   // v7.4：高地泉（水面 2.75）以前也被當成高處的小溪，整片光網和一圈白沫
     if (dk) {
       // gDetN：細節法線在世界空間的擾動（顏色階段算好，法線階段加上）
@@ -515,28 +526,37 @@ export function bend(mat, kind) {
         float wash = n_v(p * 0.45 + 7.0), stroke = n_v(vec2(p.x * 4.0, p.y * 1.7));
         vec3 g = habTint(bc * (0.76 + wash * 0.05 + (stroke - 0.5) * 0.02), p);
         vec3 sd = bc * (0.985 + n_v(p * 2.5) * 0.03);
+        { // v7.7 夢幻風：粉珍珠色的大色塊、順著風的淡淡沙紋，近處陽光下有零星的細閃光
+          float rip = sin(dot(p, vec2(0.8, 0.6)) * 7.0 + n_v(p * 0.7) * 5.0) * 0.5 + 0.5;
+          sd *= (0.965 + smoothstep(0.2, 1.0, rip) * 0.07) * mix(vec3(1.0), vec3(1.04, 0.98, 0.99), smoothstep(0.35, 0.7, n_v(p * 0.3 + 2.0)));
+          tGlint = step(0.992, n_h(floor(p * 40.0))) * clamp(1.0 - length(fwidth(p)) * 30.0, 0.0, 1.0); }
         // 材質濕邊依低頻位置改變寬度；不動沙面、水面或任何高度查詢。
         float wetEdge = 0.22 + (n_v(p * 0.42 + 3.0) - 0.5) * 0.24;
         float wet = 1.0 - smoothstep(wetEdge - 0.12, wetEdge + 0.24, vWP.y);
         sd *= mix(vec3(1.0), vec3(0.86, 0.90, 0.96), wet * 0.55);
         float band = sin(vWP.y * 5.0 + n_v(p * 0.45) * 1.1);
-        vec3 cl = bc * (0.97 + band * 0.035);
+        vec3 cl = bc * mix(vec3(0.965, 0.955, 1.03), vec3(1.035, 1.0, 0.95), band * 0.5 + 0.5);   // v7.7 夢幻風：岩層是暖杏與薰衣草交替（以前只有明暗）
         if (masonK > 0.0) {
           float hc = abs(wn.x) > abs(wn.z) ? vWP.z : vWP.x, row = floor(vWP.y / 0.38);
           vec2 bp = vec2(hc / 0.76 + mod(row, 2.0) * 0.5, vWP.y / 0.38), fb = fract(bp);
           float mortar = smoothstep(0.0, 0.026, fb.x) * (1.0 - smoothstep(0.974, 1.0, fb.x)) * smoothstep(0.0, 0.04, fb.y) * (1.0 - smoothstep(0.96, 1.0, fb.y));
           mortar = mix(mortar, 1.0, relief);
-          float tone = n_h(floor(bp) + 0.37);
-          vec3 st = mix(vec3(0.84, 0.78, 0.68), vec3(0.72, 0.70, 0.77), step(0.8, tone) * 0.28);
-          st *= (0.97 + tone * 0.05) * mix(0.82, 1.0, mortar);
+          float tone = n_h(floor(bp) + 0.37), hue = n_h(floor(bp) + 4.1);
+          // v7.7 夢幻風：奶油、腮紅粉、薰衣草灰、鼠尾草奶油四種粉彩石塊（以前米色加一點灰紫）；每塊像枕頭微微鼓起——上緣受光、下緣與兩側暗一點
+          vec3 st = hue < 0.5 ? vec3(0.85, 0.79, 0.69) : hue < 0.7 ? vec3(0.87, 0.77, 0.74) : hue < 0.88 ? vec3(0.78, 0.76, 0.84) : vec3(0.81, 0.81, 0.71);
+          float pil = mix(0.86, 1.04, smoothstep(0.0, 0.75, fb.y)) * mix(0.92, 1.0, smoothstep(0.0, 0.12, min(fb.x, 1.0 - fb.x))) + smoothstep(0.8, 0.95, fb.y) * 0.06;
+          st *= (0.94 + tone * 0.1) * mix(pil, 1.0, relief);
+          st *= mix(vec3(0.97, 0.96, 1.03), vec3(1.03, 1.01, 0.96), n_v(vec2(hc * 2.3, vWP.y * 1.1) + floor(bp) * 3.7));   // 每塊石頭裡也有一點暖冷的暈染
+          st = mix(vec3(0.66, 0.62, 0.71), st, mix(0.18, 1.0, mortar));
           float moss = (1.0 - mortar) * smoothstep(0.72, 0.88, n_v(vec2(hc * 1.2, vWP.y * 2.0) + 4.0));
-          st = mix(st, vec3(0.39, 0.48, 0.37), moss * 0.32);
+          st = mix(st, vec3(0.55, 0.62, 0.5), moss * 0.3);
           // 藍紫飾板每約 3m 留一小段，兩側留白；壓頂／凸石不畫飾帶。
           float plaque = (1.0 - smoothstep(0.25, 0.46, abs(fract(hc / 3.1) - 0.5))) * (1.0 - relief);
           float my = mod(vWP.y, 2.0), ribbon = smoothstep(0.66, 0.68, my) * (1.0 - smoothstep(0.80, 0.82, my));
           st = mix(st, vec3(0.32, 0.33, 0.44), ribbon * plaque * 0.64);
           cl = mix(cl, st, masonK);
         }
+        tGlint *= sandy * (1.0 - green) * (1.0 - wet) * up;
         vec3 top = mix(mix(bc, sd, sandy), g, green);
         float side = (1.0 - up) * (1.0 - green) * (1.0 - sandy) * (1.0 - bed);
         diffuseColor.rgb = mix(top, cl, max(side, masonK));
@@ -585,10 +605,11 @@ export function bend(mat, kind) {
         float board = 0.94 + n_h(vec2(row, floor((vWP.x + vWP.z) * 0.5))) * 0.1;
         float lip = smoothstep(0.0, 0.12, fv) * (1.0 - smoothstep(0.88, 1.0, fv) * 0.5);
         float grain = 0.97 + n_v(vec2((vWP.x + vWP.z) * 9.0, v * 0.5)) * 0.06;
-        float dirt = 1.0 - smoothstep(0.55, 0.0, vOP.y + 0.95) * 0.12;
+        float dk = smoothstep(0.55, 0.0, vOP.y + 0.95);
         #ifdef TA_MERGED
-          dirt = 1.0 - smoothstep(0.85, 0.3, vOP.y) * 0.12;   // 合併後的物件座標以建築的地面為原點：牆腳一段髒污
+          dk = smoothstep(0.85, 0.3, vOP.y);   // 合併後的物件座標以建築的地面為原點：牆腳一段
         #endif
+        vec3 dirt = mix(vec3(1.0), vec3(0.9, 0.88, 0.97), dk);   // v7.7 夢幻風：牆腳是薰衣草色的陰影，不是灰色髒污
         diffuseColor.rgb *= dirt * vec3(1.06, 1.0, 0.9) * mix(1.0, board * grain * (0.89 + lip * 0.11), vert);   // 木板帶一點暖色；每片板子明暗不同、板縫一條細細的陰影（以前算了沒用上）
         vec3 q = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, q, gB) * 2.0, 0.3);
         gDetN = triN(uN0, q, gB) * 0.12;
@@ -616,14 +637,31 @@ export function bend(mat, kind) {
       }`);
     if (kind === 'stone') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { // 形體與倒角交給模型，石柱／花台不再被同一張裂紋切碎。
-        float wash = n_v(vWP.xz * 0.65 + vWP.y * 0.4);
-        diffuseColor.rgb *= 0.97 + wash * 0.06;
+        // v7.7 夢幻風：水彩色塊（taDream）上再疊 30–50 公分的柔和明暗，零星幾群淡色的地衣斑（鼠尾草綠、腮紅粉），朝上的面被陽光曬得淡一點
+        vec3 wn = normalize(vWN); vec2 sp = vWP.xz + vWP.y * vec2(0.71, -0.53);
+        float aa = clamp(1.0 - length(fwidth(sp)) * 5.0, 0.0, 1.0);
+        diffuseColor.rgb *= 0.92 + n_f(sp * 2.1 + 4.0) * 0.16;
+        float br = n_v(vec2(sp.x * 1.4, sp.y * 5.0) + 3.0) * 0.6 + n_v(vec2(sp.x * 3.1, sp.y * 11.0) + 8.0) * 0.4 * aa;   // 一筆一筆的手繪筆觸
+        diffuseColor.rgb *= mix(vec3(0.95, 0.94, 1.0), vec3(1.04, 1.02, 0.97), smoothstep(0.25, 0.75, br));
+        float lk = smoothstep(0.3, 0.14, n_cell(sp * 1.9 + 9.0)) * smoothstep(0.46, 0.62, n_v(sp * 0.55 + 7.0)) * step(-0.3, wn.y) * aa;
+        vec3 lt = mix(vec3(0.86, 0.97, 0.9), vec3(1.05, 0.9, 0.95), step(0.5, n_v(sp * 0.8 + 2.0)));
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * lt, lk * 0.7);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.04, 1.03, 1.0) + 0.012, smoothstep(0.6, 0.95, wn.y) * 0.5);
+        #ifdef TA_NATURE
+          { float sb = sin(vWP.y * 13.0 + n_v(vWP.xz * 1.3) * 3.5) * 0.5 + 0.5;   // 圓岩與海岸礁石：一層層柔和的岩層，暖杏與薰衣草交替
+            diffuseColor.rgb *= mix(vec3(0.92, 0.91, 1.04), vec3(1.06, 1.02, 0.94), smoothstep(0.2, 0.8, sb)); }
+        #endif
         gDetN = triN(uN0, vWP * 0.45, gB) * 0.10;
       }`);
     if (kind === 'plaster') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { // v7.6 夢幻風住宅的灰泥牆：大片柔和的冷暖斑駁（±2–3%）與很淡的細顆粒，不畫石塊（'stone' 會把奶油灰泥畫成灰色石塊）
-        float pn = n_f(vWP.xz * 0.55 + vec2(vWP.y * 0.8, 0.0)), fine = n_v(vWP.xz * 9.0 + vWP.y * 7.0);
-        diffuseColor.rgb *= mix(vec3(1.025, 1.01, 0.965), vec3(1.045, 1.025, 0.975), pn) * (0.985 + fine * 0.03);
+        // v7.7：參考圖的灰泥看得到手抹的質感——20–50 公分一塊塊柔和的抹痕（亮的偏暖、暗的偏薰衣草）、細細的灰泥顆粒；顆粒隨距離淡掉
+        vec2 sp = vWP.xz + vWP.y * vec2(0.71, -0.53);
+        float aa = clamp(1.0 - length(fwidth(sp)) * 22.0, 0.0, 1.0);
+        float pn = n_f(sp * 0.55), tr = n_f(sp * 2.6 + 5.0), fine = n_v(sp * 16.0) * 0.6 + n_v(sp * 37.0 + 3.0) * 0.4;
+        diffuseColor.rgb *= mix(vec3(1.025, 1.01, 0.965), vec3(1.045, 1.025, 0.975), pn);
+        diffuseColor.rgb *= mix(vec3(0.95, 0.945, 0.99), vec3(1.035, 1.02, 0.99), smoothstep(0.3, 0.7, tr));
+        diffuseColor.rgb *= 1.0 + (fine - 0.5) * 0.07 * aa;
       }`);
     if (kind === 'bark') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { vec2 p = vec2(vOP.x + vOP.z * 0.6, vOP.y);
@@ -652,7 +690,7 @@ export function bend(mat, kind) {
         ${kind === 'ceramic' ? `// 陶瓷：上釉的柔和斑駁
         diffuseColor.rgb *= 0.975 + n_f(fp * 3.2 + vWP.y) * 0.05;` : ''}
         ${kind === 'metal' ? `// 金屬（黃銅、銅、鐵）：細細的拉絲與一點氧化的斑
-        diffuseColor.rgb *= (0.97 + n_v(vec2(fp.x * 3.0, fp.y * 140.0)) * 0.05 * aa) * mix(1.0, 0.9, smoothstep(0.62, 0.85, n_f(fp * 2.4)) * 0.6);` : ''}
+        diffuseColor.rgb *= (0.97 + n_v(vec2(fp.x * 3.0, fp.y * 140.0)) * 0.05 * aa) * mix(vec3(1.0), vec3(0.91, 0.98, 0.97), smoothstep(0.62, 0.85, n_f(fp * 2.4)) * 0.6);` : ''}   // v7.7：氧化斑是淡淡的青綠銅鏽色（以前是灰暗的斑）
         ${kind === 'foliage' ? `// 室內盆栽的葉子：一片片深淺不同、頂面受光偏黃綠
         float lc = n_cell(vec2(vWP.x + vWP.z * 0.7, vWP.y * 1.3) * 9.0);
         diffuseColor.rgb *= (0.86 + lc * 0.2) * mix(0.84, 1.08, wn.y * 0.5 + 0.5);
@@ -660,6 +698,9 @@ export function bend(mat, kind) {
         ${kind === 'paper' ? `// 紙：很淡的纖維
         diffuseColor.rgb *= 0.975 + n_v(fp * 60.0) * 0.035 * aa + n_v(fp * 4.0) * 0.02;` : ''}
       }`);
+    const DREAM = { plain: 0.8, stone: 1.2, plaster: 1.0, wall: 0.8, roof: 0.6, wood: 0.7, metal: 0.45, ceramic: 0.55, paper: 0.45, fabric: 0.6, bark: 0.6 }[kind];   // v7.7 夢幻風：水彩暈染的強度
+    if (DREAM) f = f.replace('#include <color_fragment>', `#include <color_fragment>
+      diffuseColor.rgb = taDream(diffuseColor.rgb, vWP, normalize(vWN), ${DREAM.toFixed(2)});`);
     if (kind === 'water') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       vec3 wAlb = diffuseColor.rgb;   // 第二階段：水體散射的顏色（頂點色、隨時間變的海色）
       {
@@ -748,6 +789,7 @@ export function bend(mat, kind) {
         { float cS = smoothstep(0.5, 0.68, n_f(vWP.xz * 0.028 + vec2(uTime * 0.011, uTime * 0.004))); diffuseColor.rgb *= 1.0 - cS * 0.26 * uShade; }   // 雲影慢慢掠過地面
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
+    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade;');   // 晴天才閃
     if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  { float rh = n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))); roughnessFactor = rh < 0.9 ? 0.68 + rh * 0.13 : 0.6; }');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）；v7.5：大多 0.68–0.8，一成是釉面 0.6
     const RGH = { wood: '0.66 + n_v(vWP.xz * 2.3 + vWP.y) * 0.1', fabric: '1.0', ceramic: '0.3 + n_v(vWP.xz * 4.0 + vWP.y * 3.0) * 0.08', metal: 'roughnessFactor * (0.85 + n_v(vWP.xz * 6.0 + vWP.y * 5.0) * 0.3)', foliage: '0.78', paper: '0.95' }[kind];
     if (RGH) f = f.replace('float sGl = 0.0;', `float sGl = 0.0;\n  roughnessFactor = ${RGH};`);   // 上釉的陶瓷有柔和的高光、木頭半霧面、布料完全霧面

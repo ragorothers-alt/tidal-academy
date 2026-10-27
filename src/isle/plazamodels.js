@@ -5,12 +5,13 @@ import { bend } from './engine.js';
 
 const TAU = Math.PI * 2;
 const hash = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
-const stoneMat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94 }));
+const stoneMat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94 }), 'stone');   // v7.7：石面的水彩色塊、柔和明暗與零星地衣（以前是純色）
 const colors = ['#d8c6b6', '#d5c2b2', '#d3bdb9', '#c6b9c9', '#dbcabb', '#bfc0ad', '#dfccbc'].map(c => new THREE.Color(c));   // 暖米、粉米、薰衣草、鼠尾草的石塊（太接近白色的鋪面在白天會整片過曝）
 const buffer = () => ({ p: [], c: [] });
-function tri(b, a, c, d, color, shade = 1) {
+const RIM = [0.95, 0.935, 0.99];   // v7.7：石板邊緣暗一點、帶一點薰衣草
+function tri(b, a, c, d, color, shade = 1, sc = shade, sd = shade) {
   b.p.push(...a, ...c, ...d);
-  for (let i = 0; i < 3; i++) b.c.push(color.r * shade, color.g * shade, color.b * shade);
+  for (const s of [shade, sc, sd]) { const k = Array.isArray(s) ? s : [s, s, s]; b.c.push(color.r * k[0], color.g * k[1], color.b * k[2]); }
 }
 function finish(b, name) {
   const g = new THREE.BufferGeometry();
@@ -30,7 +31,7 @@ function slab(b, outline, surface, color, bevel = 0.018, depth = 0.07) {
   const center = [cx, surface(cx, cz), cz];
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    tri(b, center, top[j], top[i], color);
+    tri(b, center, top[j], top[i], color, 1.07, RIM, RIM);   // v7.7：石板中間亮、邊緣暗一點，像微微鼓起的枕頭
     tri(b, top[i], top[j], rim[j], color, 0.97); tri(b, top[i], rim[j], rim[i], color, 0.97);
     tri(b, rim[i], rim[j], bot[j], color, 0.84); tri(b, rim[i], bot[j], bot[i], color, 0.84);
   }
