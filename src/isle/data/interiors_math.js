@@ -265,6 +265,17 @@
     walkBatches.forEach(list=>{if(list.length<2)return;const P=[],N=[],UV=[],v=new THREE.Vector3(),normal=new THREE.Matrix3();for(const o of list){const ge=o.geometry,pa=ge.attributes.position,na=ge.attributes.normal,uv=ge.attributes.uv,ix=ge.index,n=ix?ix.count:pa.count;normal.getNormalMatrix(o.matrixWorld);for(let i=0;i<n;i++){const k=ix?ix.getX(i):i;v.fromBufferAttribute(pa,k).applyMatrix4(o.matrixWorld);P.push(v.x,v.y,v.z);v.fromBufferAttribute(na,k).applyMatrix3(normal).normalize();N.push(v.x,v.y,v.z);UV.push(uv?uv.getX(k):0,uv?uv.getY(k):0);}}const ge=new THREE.BufferGeometry();ge.setAttribute('position',new THREE.Float32BufferAttribute(P,3));ge.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));ge.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));const o=mesh(ge,list[0].material,0,0,0,false,true);o.visible=list[0].visible;o.name='合併可走樓板';for(const old of list){g.remove(old);old.geometry.dispose();}});
 
     Object.assign(g.userData,{
+      // 環境以短燈槽與樓上洗牆分層，五線譜層板和證明桌補任務光，白色鋼琴樂譜為重點，床與譜櫃底柔光收邊。
+      glow:[
+        {kind:'cove',a:[-6.88,3.5,-2.05],b:[-6.88,3.5,-1.25],n:[1,0],c:'#bcb5df'},
+        {kind:'under',a:face(5*Math.PI/4,-2.4,2.78,6.45),b:face(5*Math.PI/4,-1.5,2.78,6.45)},
+        {kind:'wash',a:[-2.05,7.75,-6.8],b:[-1.25,7.75,-6.8],n:[0,1],c:'#bcb5df'},
+        {kind:'under',a:face(5*Math.PI/4,-2.4,6.98,6.45),b:face(5*Math.PI/4,-1.5,6.98,6.45)},
+        {kind:'kick',a:[-5.35,4.3,-1.4],b:[-3.45,4.3,-1.4],n:[0,1]},
+        {kind:'kick',a:[3.75,.1,3.6],b:[4.95,.1,3.6],n:[0,1]},
+        {kind:'spot',p:[-4.6,3.78,-1],t:[-4.55,1.55,-2.75],r:.55},
+        {kind:'spot',p:[.1,3.75,-4.5],t:[-.35,1.2,-4.6],r:.75}
+      ],
       spawn:[0,0,4.9,Math.PI],exit:[0,6.48,.62],host:[-1.55,0,.4,.4],cols,
       gifts:[[2.55,0,-1.6,0],[-2.55,0,1.6,0],[-4.9,Y,2.0,Math.PI/2],[3.2,Y,-4.2,0]],
       lights:lamps.map((p,j)=>[...p,'#ffdda8',j===5?1.1:1.25]),sun:[0,.85,1],

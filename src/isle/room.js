@@ -23,6 +23,11 @@ const hemi = new THREE.HemisphereLight('#fff1e2', '#9d8bb0', 0.45); scene.add(he
 const keyL = new THREE.DirectionalLight('#fff0d8', 1.5); keyL.position.set(2.5, 10, -3.5); keyL.castShadow = true; keyL.shadow.mapSize.set(1024, 1024);   // 主光從窗戶那一側的高處照下來（和窗光同一側），家具的影子朝房間前方、正面仍受光
 Object.assign(keyL.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 }); keyL.shadow.bias = -0.0005; scene.add(keyL, keyL.target);
 const ceil = new THREE.PointLight('#ffe2b0', 6, 0, 2); ceil.position.set(0, 2.8, 0); scene.add(ceil);
+// v7.9 間接照明：三面牆頂飾線下藏著洗牆燈帶（面光源，往下貼著牆照），牆面一片由上往下漸暗的暖光，看得到光、看不到燈
+const washL = [[0, -1], [-1, 0], [1, 0]].map(([wx, wz]) => {   // (wx, wz)：朝牆的方向（後牆、左牆、右牆）
+  const l = new THREE.RectAreaLight('#ffd0a0', 0, R - 0.3, 0.12); l.position.set(wx * (H - 0.22), WALL_H - 0.16, wz * (H - 0.22));
+  l.lookAt(l.position.x + wx * 0.4, WALL_H - 1.18, l.position.z + wz * 0.4); scene.add(l); return l;
+});
 const winL = new THREE.SpotLight('#fff0dc', 0, 0, 1.0, 1, 2); winL.position.set(1.6, 1.9, -H - 0.8); winL.target.position.set(1.0, 0, -0.6); scene.add(winL, winL.target);   // 窗的天光：燈在窗外，照不到屋裡朝內的牆面
 
 /* ---------- 窗光：從後牆窗戶斜斜照進來的光柱、地上的光斑與光裡飄的微塵 ---------- */
@@ -423,6 +428,7 @@ export function render(dt, night, o) {
   const g = o.golden || 0, day = 1 - THREE.MathUtils.smoothstep(night, 0.2, 0.6);
   keyL.intensity = 0.25 + day * 0.4; hemi.intensity = 0.24 + day * 0.18; ceil.intensity = 2.5 + (1 - day) * 14;   // 白天燈開得小，晚上撐起一圈暖光
   lights.forEach(l => { l.intensity = l.userData.k * (1.2 + (1 - day) * 2.6); });
+  washL.forEach(l => { l.intensity = 10 * (0.22 * day + (1 - day)); });   // 洗牆燈：白天調暗、晚上全亮
   beamU.uCol.value.copy(o.winter ? WARM.snow : WARM.day).lerp(WARM.gold, g); beamU.uAmt.value = day * (0.34 + g * 0.36); beamU.uTime.value = o.t || 0;
   beam.spot.material.color.copy(beamU.uCol.value); beam.spot.material.opacity = day * (0.22 + g * 0.25);
   winL.color.copy(beamU.uCol.value).lerp(WARM.day, 0.4); winL.intensity = day * (34 + g * 10) + (1 - day) * 1.2;

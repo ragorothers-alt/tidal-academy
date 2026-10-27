@@ -23,6 +23,7 @@ import * as props3d from './props3d.js';
 import * as grass from './grass.js';
 import * as shadows from './shadows.js';
 import { LEVEL } from './perf.js';
+import { RectAreaLightUniformsLib } from './vendor/RectAreaLightUniformsLib.js';
 import * as Audio from './audio.js';
 import * as ui from './ui.js';
 import * as post from './post.js';
@@ -188,7 +189,7 @@ function beamGeo(wins, sd) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aAxis', new THREE.Float32BufferAttribute(AX, 3));
   g.setAttribute('aSA', new THREE.Float32BufferAttribute(SA, 2)); g.setAttribute('aW', new THREE.Float32BufferAttribute(W, 1)); g.setAttribute('aF', new THREE.Float32BufferAttribute(F, 1)); g.setIndex(IX); return g;
 }
-const FX = { beam: null, dust: null, halos: [], sky: [], sd: new THREE.Vector3(), beamT: 0 };
+const FX = { beam: null, dust: null, halos: [], sky: [], glow: [], sd: new THREE.Vector3(), beamT: 0 };
 const _sd = new THREE.Vector3();
 /** 屋裡的主光方向：島上真正的太陽（晚上是月亮）換到室內的座標，仰角限制在 17–40 度之間（光才照得進窗、落在地板上） */
 function interiorSun(out) {
@@ -244,8 +245,66 @@ function fxTick(dt, t, n, gold) {
   // 屋裡的空氣：只有大房子的深處微微泛霧；霧色是屋裡散射光的亮度（中間調），不會把遠處洗成一片亮白
   if (scene.fog) { scene.fog.color.set(n > 0.5 ? '#2a2442' : '#bfa9b2').lerp(_c.set('#c9a593'), gold * day * 0.6); scene.fog.near = 8 + n * 4; scene.fog.far = 60 + n * 16; }
 }
+/* ---------- v7.9 燈光設計：分層照明與間接照明 ----------
+   照室內設計的原則：至少三層光——環境光（吊燈、燈槽打上天花板的間接光）、任務光（書桌與工作台）、重點光（照亮這家最有故事的一面牆或櫃子）；
+   間接照明把光源藏起來，光打在天花板與牆面再反射下來：看得到光、看不到燈泡，沒有眩光。同一個空間都是 2700–3000K 的暖光；白天調暗、晚上全亮。
+   每一戶在 userData.glow 列出燈具（重要的排前面，超過這台電腦的預算就省略後面的）：
+     { kind: 'cove',  a: [x, y, z], b: [x, y, z], n: [nx, nz], c? }   燈槽：a→b 是燈帶（離牆約 0.1 公尺、天花板下 0.3–0.5 公尺），n 是朝屋裡的水平方向；
+                                                                      自動做一道擋板與底板（顏色 c，預設奶油白），光往上打亮天花板
+     { kind: 'wash',  a, b, n, c? }   洗牆：燈帶藏在天花板邊或頂飾線下（自動做一片小擋板），往下貼著牆照：牆面一片由上往下漸暗的光
+     { kind: 'under', a, b }       櫃下／層板下：a→b 是層板底面的前緣，往下照檯面、書與下一層
+     { kind: 'kick',  a, b, n }    踢腳／床底／沙發底：貼地的燈帶，往下往外照地板
+     { kind: 'spot',  p: [x, y, z], t: [x, y, z], r? }   重點投射燈：p 燈在天花板或樑下，t 照的中心（畫、書櫃、黑板），r 光圈半徑（預設 0.9 公尺）
+   燈帶是面光源（RectAreaLight：照度隨面積、距離與角度自然變化，不投影）＋一條發亮的燈條（被擋板或櫃子擋住）。 */
+RectAreaLightUniformsLib.init();
+const GLOW = { col: new THREE.Color('#ffd0a0'), spot: new THREE.Color('#ffdcb2'), k: { cove: 13, wash: 9, under: 24, kick: 18 }, rects: [8, 6, 3][LEVEL], spots: [2, 2, 1][LEVEL] };
+const stripMat = new THREE.MeshBasicMaterial({ color: GLOW.col.clone() }), stripDim = stripMat.clone();   // 燈條：顏色超過 1（HDR），泛光會讓它微微發亮
+const _gx = new THREE.Vector3(), _gy = new THREE.Vector3(), _gz = new THREE.Vector3(), _gm = new THREE.Matrix4(), UPV = new THREE.Vector3(0, 1, 0);
+/** 一個物件的朝向：本地 x 沿著 t（燈帶方向），本地 -z 朝著 d（光照出去的方向） */
+function orient(o, t, d) {
+  _gx.copy(t).normalize(); _gz.copy(d).negate().addScaledVector(_gx, _gx.dot(d)).normalize(); _gy.crossVectors(_gz, _gx);
+  o.quaternion.setFromRotationMatrix(_gm.makeBasis(_gx, _gy, _gz));
+}
+function glowBox(w, h, d, m, p, t, face) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.copy(p); orient(o, t, face); o.castShadow = false; o.receiveShadow = true; scene.add(o); extra.push(o); return o; }
+function glowEnter() {
+  FX.glow = [];
+  let nr = 0, ns = 0;
+  for (const f of cur.ud.glow || []) {
+    if (f.kind === 'spot') {
+      if (ns >= GLOW.spots) continue; ns++;
+      const p = new THREE.Vector3(...f.p), t = new THREE.Vector3(...f.t), dist = p.distanceTo(t), r = f.r || 0.9;
+      const l = new THREE.SpotLight(GLOW.spot, 0, 0, Math.min(0.9, Math.atan(r / dist) * 1.25), 0.6, 2); l.position.copy(p); l.target.position.copy(t); scene.add(l, l.target); extra.push(l, l.target);
+      const d = t.clone().sub(p).normalize(), side = Math.abs(d.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : UPV.clone().cross(d);
+      glowBox(0.12, 0.12, 0.2, kit.mat('#4a4150', { metalness: 0.6, roughness: 0.4 }, 'metal'), p.clone().addScaledVector(d, -0.04), side, d);   // 小小的投射燈罩（燈泡藏在罩子裡，從旁邊看不到）
+      glowBox(0.08, 0.08, 0.01, stripMat, p.clone().addScaledVector(d, 0.065), side, d);
+      FX.glow.push({ l, k: 5 * dist * dist });   // 照到的地方比四周亮幾倍、但不會把淺色的畫照成一片白（照度 = 強度 ÷ 距離²）：這家的視覺焦點
+      continue;
+    }
+    if (nr >= GLOW.rects || !GLOW.k[f.kind]) continue; nr++;
+    const A = new THREE.Vector3(...f.a), B = new THREE.Vector3(...f.b), len = A.distanceTo(B), mid = A.clone().add(B).multiplyScalar(0.5), t = B.clone().sub(A).normalize();
+    const n = new THREE.Vector3(f.n ? f.n[0] : 0, 0, f.n ? f.n[1] : 0); if (n.lengthSq() > 0) n.normalize();
+    const d = { cove: UPV.clone().addScaledVector(n, 0.35), wash: new THREE.Vector3(0, -1, 0).addScaledVector(n, -0.25), under: new THREE.Vector3(0, -1, 0), kick: new THREE.Vector3(0, -1, 0).addScaledVector(n, 0.8) }[f.kind].normalize();
+    if (f.kind === 'kick') mid.addScaledVector(n, -0.06);   // 踢腳燈縮在家具底下 6 公分：只看得到地上的光
+    if (f.kind === 'wash') mid.addScaledVector(n, 0.1);   // 洗牆燈再離牆 0.1 公尺：太貼牆的話，牆頂會照出一條過亮的白線
+    const h = { cove: 0.25, wash: 0.3, under: 0.06, kick: 0.06 }[f.kind], l = new THREE.RectAreaLight(GLOW.col, 0, len, h);   // 燈槽與洗牆的發光面寬一點：光暈比較柔
+    l.position.copy(mid); orient(l, t, d); scene.add(l); extra.push(l);
+    if (f.kind !== 'wash') glowBox(len, 0.03, 0.018, f.kind === 'under' ? stripDim : stripMat, mid.clone().addScaledVector(d, -0.012), t, d);   // 發亮的燈條（洗牆的燈藏在天花板的槽裡，看不到；櫃下的燈條從下面看得到，暗一點不刺眼）
+    if (f.kind === 'cove' || f.kind === 'wash') {   // 擋板（與燈槽的底板）：從屋裡一般的視線看不到燈條
+      const m = kit.mat(f.c || '#f4ead9', { roughness: 0.8 }, 'plaster'), down = new THREE.Vector3(0, -1, 0);
+      // 擋板細一點（像一道頂飾線，短的燈槽才不會看起來像一個盒子），而且整片在發光面外側：不然發光面會把擋板正面照出一條過亮的線
+      if (f.kind === 'cove') { glowBox(len + 0.04, 0.14, 0.03, m, mid.clone().addScaledVector(n, 0.16).addScaledVector(down, -0.01), t, n); glowBox(len + 0.04, 0.025, 0.24, m, mid.clone().addScaledVector(n, 0.04).addScaledVector(down, 0.07), t, n); }
+      else glowBox(len + 0.04, 0.1, 0.03, m, mid.clone().addScaledVector(n, 0.2).addScaledVector(down, 0.03), t, n);
+    }
+    FX.glow.push({ l, k: GLOW.k[f.kind] });
+  }
+}
+function glowTick(n) {
+  const lv = 0.22 * (1 - n) + n;   // 調光：白天開一點點（間接光一直都在，只是暗），晚上全亮
+  FX.glow.forEach(g => { g.l.intensity = g.k * lv; });
+  stripMat.color.copy(GLOW.col).multiplyScalar(0.6 + lv * 2.4); stripDim.color.copy(GLOW.col).multiplyScalar(0.5 + lv * 0.7);
+}
 const _c = new THREE.Color(), _c2 = new THREE.Color();
-const glassMat = new THREE.MeshStandardMaterial({ color: '#eef6ff', transparent: true, opacity: 0.18, roughness: 0.08, metalness: 0, depthWrite: false });
+const glassMat =new THREE.MeshStandardMaterial({ color: '#eef6ff', transparent: true, opacity: 0.18, roughness: 0.08, metalness: 0, depthWrite: false });
 const lampMats = new Set();
 /** 給室內模型用的工具（和住宅外觀的 kit 同一套材質：同色同參數共用；匯出給檢查工具直接建室內） */
 export const kit = {
@@ -339,6 +398,7 @@ export function enter(key, opt = {}) {
   savedCurve = U.uCurve.value; U.uCurve.value = 0; inside = true;
   envEnter(key);   // 窗外：從這棟房子在島上的位置拍全景
   fxEnter();   // 窗光、微塵、燈暈、室內的空氣
+  glowEnter();   // 間接照明與重點光
   document.body.classList.add('in-house'); ui.iris(); Audio.sfx('open');
   return true;
 }
@@ -454,6 +514,7 @@ export function tick(dt, t, o) {
   viewMat.uniforms.uNight.value = n;
   envTick(dt, n, gold);   // 窗外的全景：天色變了就重拍（在擺好室內鏡頭之前，拍完鏡頭已還原）
   fxTick(dt, t, n, gold);
+  glowTick(n);
   updateCam(dt, fpNow, yawNow, o.pitch || 0, o.tilt || 0, o.zoom ?? 1);
   const fx = post.fx, dof0 = fx.dof, ao0 = fx.ao;
   fx.golden = Math.max(gold * 0.5, 0.2) * (1 - n); fx.clear = 1; fx.sunVis = 0; fx.night = n * 0.6; fx.focus = camera.position.distanceTo(P.position); fx.dof = dof0 * (fpNow > 0.5 ? 0.15 : 0.35); fx.ao = ao0 * 1.2;   // v7.8：屋裡一直帶一點暖光（亮部奶油、窗與燈的光暈柔一點）
