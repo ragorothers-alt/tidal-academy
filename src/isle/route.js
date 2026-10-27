@@ -56,11 +56,12 @@ export const quiet = () => { const r = data(); return r.shut || r.walk || restin
 export const quietWhy = () => { const r = data(); return r.shut ? '今天收工了，自由時間' : r.walk ? '散步模式' : resting() ? '專注後的休息時間' : Date.now() < (r.hush || 0) ? '島民先不來打擾你' : ''; };
 /** 收工摘要的內容（HTML） */
 export function summary() {
+  if (TA.Store && TA.Store.flush) TA.Store.flush();   // v8.2 先真的寫一次，摘要才知道有沒有存進去
   const d = L.dayRec(), st = state();
   const parts = [d.q ? `答題 ${d.q} 題（答對 ${d.c}）` : '', d.wq ? `非選題折算 ${d.wq} 題` : '', d.voc ? `單字卡 ${d.voc} 張` : '', d.min ? `專注 ${d.min} 分鐘` : ''].filter(Boolean);
   const life = LIFE_KEYS.map(k => [k, miles.count(k)]).filter(([, n]) => n);
   const NAME = { fish: '釣魚', bug: '捉蟲', fossil: '挖化石', sea: '潮池觀察', req: '委託', donate: '捐贈', gift: '送禮', water: '澆花', shell: '撿貝殼', craft: '做家具', photo: '拍照' };
   return `<p class="rt-sum-lead">今天的 ${st.len} 分鐘路線完成了！</p>
     <ul class="wb-list"><li>📚 學習約 <b>${st.study.v}</b> 分鐘：${parts.join('、') || '—'}</li><li>🏝 島上：${life.map(([k, n]) => `${NAME[k]} ${n}`).join('、') || '—'}</li><li>🔥 連續學習 ${L.streakAlive()} 天</li></ul>
-    <p class="muted">進度都存好了，現在離開也沒關係。選「收工」之後是自由時間：島民不會主動找你出題、答對後也不邀連答；想練習的時候，找導師「一起練習」或打開手機都可以。</p>`;
+    <p class="muted">${TA.Store.ok === false ? '<b>這台裝置暫時存不進進度（空間不足或無痕模式）：先到「設定」匯出備份再離開。</b>' : '進度都存好了，現在離開也沒關係。'}選「收工」之後是自由時間：島民不會主動找你出題、答對後也不邀連答；想練習的時候，找導師「一起練習」或打開手機都可以。</p>`;
 }

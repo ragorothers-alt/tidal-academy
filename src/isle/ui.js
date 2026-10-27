@@ -67,6 +67,7 @@ function type(text, pitch, html) {
 }
 /** 觸控裝置沒有鍵盤：提示文字裡的按鍵改說畫面上的按鈕（「按 E」→「按『動作』」、拿掉「Esc 結束」這類子句） */
 const COARSE = matchMedia('(pointer: coarse)');
+export const REDUCE = matchMedia('(prefers-reduced-motion: reduce)');   // 系統的「減少動態效果」
 export function keys(text) {
   if (!COARSE.matches || typeof text !== 'string') return text;
   return text
@@ -94,6 +95,13 @@ export async function say(sp, text, opt) {
 const BIG_TEXT = 110, BIG_OPT = 30;
 const passageOn = () => { const p = $('passage'); return !!p && !p.hidden; };
 function fit(big, long) { const d = $('dlg'); d.classList.toggle('big', !!big); d.classList.toggle('long-opts', !!long); document.body.classList.toggle('dlg-big', !!big); }
+/** v8.2 選項泡泡不超過對話框上緣到畫面頂端（手機直向時導師的十項選單不會跑出畫面），放不下就在泡泡裡捲動 */
+function fitChoices() {
+  const box = $('choices'), d = $('dlg'); if (!box || !d) return;
+  if (d.hidden || d.classList.contains('big')) { box.style.maxHeight = ''; return; }
+  box.style.maxHeight = Math.max(120, Math.floor(d.getBoundingClientRect().top - 28)) + 'px';
+}
+if (window.ResizeObserver && $('dlg')) new ResizeObserver(fitChoices).observe($('dlg'));   // 對話一個字一個字打出來時框會長高
 /** 說話並給選項；opt.timer 秒數到了回傳 -1。
     opt：html 允許 b/u/i/sup/sub/br、keys 標上按鍵（abc 時標 A–E，學測的選項代號；數字鍵 1–5 一樣能選）、multi 多選、big 強制大面板、
     answer 正確選項（數字或陣列；有的話作答後先揭曉對錯再回傳） */
@@ -113,7 +121,7 @@ export async function ask(sp, text, options, opt) {
     // 選項文字包一層 span：大題目面板的 .choice 是 flex，沒包的話 x²、CO₂ 的上下標會被拆成各自的 flex 項目、中間隔一大段
     D.choices.forEach((o, i) => { const b = el('button', 'choice', `<span class="ch-t">${opt.html ? rich(o) : esc(plain(o))}</span>`); b.type = 'button'; b.style.animationDelay = (i * 0.05) + 's'; b.onclick = e => { e.stopPropagation(); pick(i); }; b.onmouseenter = () => { D.hl = i; hl(); }; box.appendChild(b); });
     if (opt.keys) [...box.children].forEach((b, i) => { if (opt.abc && multi && i === options.length) return; b.insertAdjacentHTML('afterbegin', opt.abc ? `<kbd data-n="${(i + 1) % 10}">${LETTERS[i] || i + 1}</kbd>` : `<kbd>${(i + 1) % 10}</kbd>`); });
-    hl();
+    hl(); fitChoices();
     if (multi) box.lastChild.classList.add('submit');
     const pick = i => {
       if (!D.choices) return;
@@ -250,7 +258,11 @@ $('card').addEventListener('click', () => { if (cardRes && performance.now() - c
 $('dlg').addEventListener('click', e => { if (cardRes || !D.open || D.choices || D.input || (e.target.closest && e.target.closest('button, input, a, .choices'))) return; advance(); });
 
 /* ---------- 提示 ---------- */
+const held = [];
+/** v8.2 手機上作答時，通知先排隊，答完才出來（不會蓋住題目的選項） */
+function holdToast() { return D.choices && D.quiz && innerWidth < 760; }
 export function toast(text, tone) {
+  if (holdToast()) { if (!held.length) { const iv = setInterval(() => { if (holdToast()) return; clearInterval(iv); held.splice(0).forEach(([a, b]) => toast(a, b)); }, 300); } if (held.length < 4) held.push([text, tone]); return; }
   text = keys(text); const box = $('toasts'); if ([...box.children].some(c => c.textContent === text)) return;
   while (box.children.length >= 3) box.firstChild.remove();
   const t = el('div', 'toast' + (tone ? ' ' + tone : ''), esc(text)); box.appendChild(t);
@@ -351,11 +363,27 @@ setInterval(() => {
 /** 圓形轉場：從畫面中央擴張打開（進出建築時） */
 export function iris(dur) {
   const o = document.createElement('div'); o.className = 'ac-iris'; document.body.appendChild(o);
-  const t0 = performance.now(), D2 = dur || 650;
+  const t0 = performance.now(), D2 = REDUCE.matches ? 120 : dur || 650;
   const step = () => {
     const k = Math.min(1, (performance.now() - t0) / D2), e = 1 - Math.pow(1 - k, 3);
     o.style.setProperty('--r', (e * 80) + '%');
     if (k < 1) setTimeout(step, 16); else o.remove();
   };
   step();
+}
+/** v8.2 進門前先收圈：畫面全暗、瀏覽器真的畫出黑幕之後才回呼（建室內、編譯著色器的停頓藏在黑幕後面）。
+    回傳 Promise<拿掉黑幕的函式>；之後 iris() 從同樣的顏色打開，接得上 */
+export function closeIris(dur) {
+  return new Promise(res => {
+    const o = document.createElement('div'); o.className = 'ac-iris'; o.style.setProperty('--r', '80%'); document.body.appendChild(o);
+    const t0 = performance.now(), D2 = REDUCE.matches ? 1 : dur || 240;
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / D2);
+      o.style.setProperty('--r', ((1 - k * k) * 80) + '%');
+      if (k < 1) { setTimeout(step, 16); return; }
+      let done = false; const go = () => { if (!done) { done = true; res(() => o.remove()); } };
+      requestAnimationFrame(() => requestAnimationFrame(go)); setTimeout(go, 150);   // 等黑幕真的畫出來；分頁在背景（不畫）時不要卡住
+    };
+    step();
+  });
 }

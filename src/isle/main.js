@@ -447,7 +447,7 @@ async function appraise(v) {
       lastQ = q; await ui.card({ icon: icon(fo.id, 'fossil'), title: `鑑定結果：${fo.name}`, sub: fo.desc, extra: `<span class="era">${ui.esc(fo.era || '')}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}` });
     } else { Audio.sfx('bad'); await ui.explain(sp(v), q, '呼……'); await ui.say(sp(v), '這塊化石我再研究一下。想通了再拿來，我會換一題考你。'); return; }
   }
-  if (lastQ) await challenge.keepGoing(sp(v), lastQ, { v });
+  if (lastQ && guide.finished()) await challenge.keepGoing(sp(v), lastQ, { v });   // v8.2 新手引導還沒做完：鑑定完直接問捐贈，不插連續挑戰
   await ui.say(sp(v), '全部鑑定完了！要捐給博物館嗎？');
 }
 async function donate(v) {
@@ -739,7 +739,7 @@ function phone() {
       ['收藏目錄', '🗂', '#e8dcc8', () => catalog.open({ openDex: k => openDex(k), stock: () => dailyStock(), paint: paintHud })],
       ['圖鑑', '📖', '#b9d0ff', () => openDex()], ['星座圖鑑', '🔭', '#c0c8ff', () => astro.openBook()], ['花園筆記', '🌱', '#d8f5b0', () => garden.openBook()], ['DIY 配方', '🔨', '#f0d8b0', () => diy.openBench(false)],
       ['衣櫃', '👕', '#ffd0e8', () => wardrobe.openCloset(player)], ['相機', '📷', '#ffd6a0', () => { ui.closePanel(); if (elsewhere()) ui.toast('這裡暫時不能拍照'); else photo.toggle(room.inside); }], ['相簿', '🖼', '#e0d0ff', () => photo.album()], ['回憶錄', '📔', '#ffd8c8', () => memo.open()],
-      ['島嶼設計', '🌷', '#c8f0c0', () => { if (room.inside || elsewhere()) ui.toast('回到潮汐小島的戶外才能設計島嶼'); else design.open(player, paintHud); }], ['裝潢', '🛋', '#e0c8a8', () => { if (room.inside) room.openDecor(); else ui.toast('回到家裡才能裝潢'); }]
+      ['島嶼設計', '🌷', '#c8f0c0', () => { if (room.inside || elsewhere()) ui.toast('回到潮汐小島的戶外才能設計島嶼'); else design.open(player, paintHud); }], ['裝潢', '🛋', '#e0c8a8', () => { if (room.inside) room.openDecor(); else if (house.inside && houseSid === 'player') { ui.closePanel(); houseDecor(); } else ui.toast('回到家裡才能裝潢'); }]
     ]],
     ['工具', [['我的檔案', '🪪', '#dce6ff', openProfile], ['鈴錢帳本', '📒', '#f0e6c8', openLedger], ['島上指南', '🧭', '#d8f0e0', () => settings.guide()], ['我的生日', '🎂', '#ffd0e0', () => gifts.openBirthday(paintHud)], ['時間', '⏰', '#ffc0a0', phoneTime], ['成就', '🏆', '#ffe0a0', phoneAch], ['設定', '⚙️', '#e0e0e8', () => settings.open()]]]
   ];
@@ -878,7 +878,9 @@ function paintHud() {
   const exam = Math.round((new Date(TA.S.profile.examDate || '2027-01-22') - new Date(dayKey())) / 864e5);
   $('exam').textContent = exam > 0 ? `學測 D-${exam}` : exam >= -2 ? '學測加油！' : '學測辛苦了'; $('exam').classList.toggle('cram', exam >= -2 && exam <= 30);
   const q = L.effort(L.dayRec()), goal = TA.S.profile.dailyGoal || 30, sk = L.streakAlive();   // 非選題折算的題數也算
-  $('goal').textContent = `今日 ${q} / ${goal}${sk ? ` · 🔥${sk}` : ''}`; $('goal').title = sk ? `連續學習 ${sk} 天` : '今天答滿 10 題（或專注一輪）就開始累積連續天數'; $('goal').classList.toggle('done', q >= goal);
+  const rd = started && route.state().done;   // v8.2 今日路線走完：右上也說完成了（自訂題數是可選的），不會一邊說可以收工、一邊還差一半
+  $('goal').textContent = rd && q < goal ? `✔ 今日路線 · ${q} 題${sk ? ` · 🔥${sk}` : ''}` : `今日 ${q} / ${goal}${sk ? ` · 🔥${sk}` : ''}`;
+  $('goal').title = (rd && q < goal ? `今天的路線完成了，可以收工；自訂的練習目標 ${q} / ${goal} 題是可選的。` : '') + (sk ? `連續學習 ${sk} 天` : '今天答滿 10 題（或專注一輪）就開始累積連續天數'); $('goal').classList.toggle('done', q >= goal || rd);
   if (started && q >= goal && S().goalCel !== dayKey()) { S().goalCel = dayKey(); save(); celebrate('今日目標達成', `${q} 題 · 今天辛苦了！`, '#2fa88f', true); Audio.sfx('ok', { pitch: 7 }); bump($('goal')); }   // 每天第一次達標慶祝一下
   paintLv();
   const fl = feel.level(); $('feel').hidden = !fl; if (fl) $('feel').textContent = `手感 ${feel.stars(fl)}`;
@@ -906,6 +908,8 @@ addEventListener('keydown', e => {
   if (!started) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (ui.keyHook && ui.panelOpen() && !ui.cardOpen() && !ui.dialogOpen() && ui.keyHook(e)) return;
+  { const tg = e.target, typing = !!tg && (/^(TEXTAREA|SELECT)$/.test(tg.tagName) || tg.isContentEditable || tg.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|file|color)$/.test(tg.type));
+    if (typing && (e.isComposing || e.keyCode === 229 || e.code !== 'Escape')) return; }   // v8.2 在輸入框打字（含注音組字：ㄛ在 I、ㄑ在 F）：按鍵交給輸入框，不會關掉面板；Esc 照常關閉
   if (focus.active() && !ui.cardOpen() && !ui.dialogOpen()) return;
   if (ui.panelOpen() && ui.dialogOpen() && !ui.cardOpen()) { if (e.code === 'Escape' || e.code === 'Tab') { e.preventDefault(); ui.requestClose(); } return; }   // 對話上面開著面板（例如解析時打開的示意圖）：按鍵給面板，不推進底下的對話
   if (ui.cardOpen() || ui.dialogOpen()) { if (ui.dialogKey(e)) { e.preventDefault(); return; } if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE') { e.preventDefault(); ui.advance(); } return; }
@@ -916,7 +920,7 @@ addEventListener('keydown', e => {
   if (ui.panelOpen()) {
     const isPhone = $('panelBox').classList.contains('phone');
     if (e.code === 'Tab' && !isPhone) {   // 練習遊戲等面板：Tab 用來在按鈕與滑桿之間移動，焦點不離開面板
-      const box = $('panelBox'), f = [...box.querySelectorAll('button:not([disabled]), input, select, [href]')].filter(x => x.offsetParent !== null);
+      const box = $('panelBox'), f = [...box.querySelectorAll('button:not([disabled]), input, select, textarea, [href], [contenteditable="true"]')].filter(x => x.offsetParent !== null);
       if (!f.length) { e.preventDefault(); return; }
       const i = f.indexOf(document.activeElement), n = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i < 0 || i >= f.length - 1 ? 0 : i + 1);
       e.preventDefault(); f[n].focus(); return;
@@ -927,6 +931,7 @@ addEventListener('keydown', e => {
   if (design.active()) { if (e.code === 'KeyE' || e.code === 'Enter') { e.preventDefault(); design.act(); return; } if (e.code === 'Escape' || e.code === 'KeyQ' || e.code === 'KeyG') { design.stop(); return; } }
   if (!room.inside && e.code === 'KeyG') { design.open(player, paintHud); return; }
   if (room.inside && e.code === 'KeyF') { room.openDecor(); return; }
+  if (house.inside && houseSid === 'player' && e.code === 'KeyF') { houseDecor(); return; }   // v8.2 自己家（整棟室內）按 F 也是裝潢；第一人稱用滾輪拉近或兩指張開
   if (e.code === 'KeyE' || e.code === 'Enter') { e.preventDefault(); act(); }   // E 互動、空白鍵跳躍（J 也能跳）
   else if (e.code === 'Space') { e.preventDefault(); doJump(); }
   else if (e.code === 'Tab') { e.preventDefault(); phone(); }
@@ -941,7 +946,17 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 let nearV = null, moveTo = null, wasAway = false, pendingMove = false;   // pendingMove：過了午夜，回到島上時套用搬家   // wasAway：上一格在室內或離島（進出時清掉點地面走路的目標）
+let entering = false;
+/** v8.2 進門：先收圈，黑幕真的畫出來之後才建室內——第一次進館的建立與編譯停頓藏在黑幕後面，不會卡在門口像沒反應 */
+function viaDoor(fn) {
+  if (entering) return; entering = true; life.cancel(); moveTo = null;
+  ui.closeIris().then(lift => {
+    try { fn(); } catch (e) { console.warn('進門失敗', e); }
+    finally { if (document.querySelectorAll('.ac-iris').length < 2) ui.iris(300); lift(); entering = false; }   // 沒有進門（門鎖著）：自己打開圈
+  });
+}
 function act() {
+  if (entering) return;
   if (jump.air && !talking && !life.busy) { inBuf.act = performance.now(); return; }   // 空中不能互動（進門、釣魚等）：先記著，落地後 0.15 秒內補做
   if (talking || life.busy || astro.isOpen() || jump.air) return;
   if (sitting) { standUp(); return; }
@@ -965,7 +980,14 @@ function act() {
     if (host && Math.hypot(host.mesh.position.x - player.position.x, host.mesh.position.z - player.position.z) < 1.8) { if (host.isLib) libTalk(); else if (host.isHotel) hotelTalk(host); else talk(host); return; }
     const it = room.facingItem(); if (it) { talking = { name: 'room' }; room.itemMenu(it).finally(() => { talking = null; }); } return;
   }
-  if (nearDoor) { if (nearDoor.kind === 'mill') { millTalk(); return; } if (nearDoor.kind === 'mine') enterHome(); else if (nearDoor.kind === 'home') visit(nearDoor.v); else if (nearDoor.kind === 'library') enterLibrary(); else if (nearDoor.kind === 'board') boardMenu(); else if (nearDoor.kind === 'stars') stargaze(); else if (nearDoor.kind === 'museum') enterMuseum(); else if (nearDoor.kind === 'diy') benchMenu(); else if (nearDoor.kind === 'hotel') hotel.enterLobby(); else if (nearDoor.kind === 'shop') { life.cancel(); moveTo = null; if (shopV) { town.interrupt(shopV); if (shopV.sitting) standVillager(shopV); shopV.sitGoal = null; } shopin.enter(); } else building(nearDoor.kind); return; }
+  if (nearDoor) {
+    const d = nearDoor;
+    if (d.kind === 'mill') { millTalk(); return; } if (d.kind === 'board') { boardMenu(); return; } if (d.kind === 'stars') { stargaze(); return; } if (d.kind === 'diy') { benchMenu(); return; }
+    const go = { mine: () => enterHome(), home: () => visit(d.v), library: () => enterLibrary(), museum: () => enterMuseum(), hotel: () => hotel.enterLobby(),
+      shop: () => { if (shopV) { town.interrupt(shopV); if (shopV.sitting) standVillager(shopV); shopV.sitGoal = null; } shopin.enter(); } }[d.kind];
+    if (go) viaDoor(go); else building(d.kind);
+    return;
+  }
   if (nearMail) { social.openMail(); return; }
   if (nearV) { talk(nearV); return; }
   { const st = nearSeat(); if (st) { sitDown(st); return; } }
@@ -1392,7 +1414,7 @@ function visit(v) {
   room.scene.add(v.mesh); v.mesh.visible = true; v.mesh.position.set(0, 0, -1.2); v.mesh.rotation.y = 0;
   if (shown.length) setTimeout(() => { if (roomHost !== v) return; ui.emote(v.mesh, '💖', '#ff7b9c'); ui.bubble(v.mesh, `你送我的「${pick(shown).name}」，我好好擺著喔！`, 3600); }, 900);   // 珍惜你送的禮物
 }
-let roomHost = null, houseSid = null;
+let roomHost = null, houseSid = null, myHouseCls = false;
 /** v7.6：整棟室內的互動點（書桌複習三題、其他說一句這家的小故事）；主人在家由主人說（lines），不在家或在自己家是旁白（alone） */
 async function spotAct(s, host, subject) {
   const own = !!host;
@@ -1685,7 +1707,7 @@ async function intro() {
   await ui.say(sp(v), '這座島上住著十位學院導師。找他們聊天，他們會考你學測題目——答對能拿鈴錢、增加好感度。');
   await ui.say(sp(v), '這四樣工具送你：釣竿（1）、捕蟲網（2）、鏟子（3）、澆水壺（4）。釣魚要答英文單字，捉蟲要答國文題，挖到化石就拿去博物館給史遙鑑定。');
   await ui.say(sp(v), '每天的到期複習和錯題，會優先出現在島上；晚上回家睡覺，夢裡還會重考錯題本的題目。');
-  await ui.say(sp(v), coarse.matches ? '點右下角的手機：「練習遊戲」有九種各科小遊戲和練習護照，「島上指南」整理了島上所有能做的事。' : '按 Tab 打開手機：「練習遊戲」有九種各科小遊戲和練習護照，「島上指南」整理了島上所有能做的事。');
+  await ui.say(sp(v), (coarse.matches ? '點右下角的手機' : '按 Tab 打開手機') + '，每天先看「今日學習」：它替你排好一條 20 到 60 分鐘的路線，走完就可以收工。想自己挑的話，「自由練習」裡有各科小遊戲和練習護照；「島上指南」整理了島上所有能做的事。');
   await ui.say(sp(v), '不知道先做什麼的話，看左上角的任務欄——它會一步一步告訴你。祝你在島上玩得開心！');
   ui.closeDialog(); talking = null; S().intro = true; S().news50 = true; save();
 }
@@ -1904,7 +1926,11 @@ function tick(fixed) {
   if (sitting) { ix = iz = 0; moveTo = null; }
   const run = keys.ShiftLeft || keys.ShiftRight || joy.run, len = Math.hypot(ix, iz), moving = len > 0.01;
   { const away = room.inside || elsewhere(); if (away !== wasAway) { wasAway = away; moveTo = null; } if (!away && pendingMove) { pendingMove = false; move.apply(villagers); } }   // 跨日的搬家：在島上時才搬（不會在你拜訪時把房子搬走）   // 進出室內、離島：上一個場景點的目的地不能帶過去
-  if (house.inside) { houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow); return; }
+  if (house.inside) {
+    minimap.update(dt, false);   // v8.2 室內收起島上的小地圖（地名不會停在進門前）
+    if (myHouseCls !== (houseSid === 'player')) { myHouseCls = houseSid === 'player'; document.body.classList.toggle('my-house', myHouseCls); }   // 自己家顯示 🛋 裝潢鈕
+    houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow); return;
+  }
   if (room.inside || elsewhere()) { seasons.update(dt, t, { inside: true }); fpK = 0; fpLens(0); fpResync = true; }   // 室內、博物館、神秘島不顯示島上的季節，也用一般鏡頭
   if (room.inside || elsewhere()) { player.userData.umbrella.visible = dreamisle.inside && dreamisle.raining() && !player.userData.tool; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; }); }   // 室內不撐傘（傘只在島上的每一格依雨勢更新，進門前在下雨就會一直撐著）；回到島上的下一格自動恢復
   if (room.inside) { roomTick(dt, t, ix, iz, len, moving, locked); return; }

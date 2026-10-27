@@ -226,6 +226,13 @@ function assignLate(sc) {
   });
 }
 const pinv = new THREE.Vector2();
+/** v8.2 先把一個場景的著色器編譯好（進門時在黑幕後面做，開圈後的第一格不會再卡一下）；畫到哪裡就用哪裡的設定編譯 */
+export function precompile(scene, camera) {
+  const rt0 = renderer.getRenderTarget();
+  try { if (fx.on && !failed) { ensure(); renderer.setRenderTarget(main); } renderer.compile(scene, camera); }
+  catch (e) { console.warn('預先編譯失敗（第一格照常編譯）：', e); }
+  finally { renderer.setRenderTarget(rt0); }
+}
 /** 取代 renderer.render(scene, camera) */
 export function render(time, sc0, cam0) {
   renderer.getDrawingBufferSize(holdSz);

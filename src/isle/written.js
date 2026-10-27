@@ -132,6 +132,7 @@ function review(w, ans, secs, back) {
     const s = sum(), r = L.recordWritten(w, s), k = r.k;
     delete drafts[w.id]; saveDrafts();
     Audio.sfx(k >= 0.8 ? 'ok' : k >= 0.5 ? 'pop' : 'tick');
+    if (r.early) ui.toast(`今天的改寫存好了（自評 ${Math.round(k * 100)}%）。還沒到複習日，所以不往後排：${r.days} 天後再獨立寫一次（+${r.xp} 經驗）`); else
     ui.toast(k >= 0.8 ? `自評 ${Math.round(k * 100)}%！很穩，過一段時間再複習一次（+${r.xp} 經驗）` : k >= 0.5 ? `自評 ${Math.round(k * 100)}%：把沒寫到的要點記下來，過幾天再寫一次（+${r.xp} 經驗）` : `自評 ${Math.round(k * 100)}%：明天再練一次這題（+${r.xp} 經驗）`);
     back();
   };

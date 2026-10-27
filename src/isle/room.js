@@ -282,7 +282,7 @@ function occupied(ignore) {
 }
 function fits(f, x, z, r, ignore) {
   const [w, d] = foot(f, r); if (x < 0 || z < 0 || x + w > R || z + d > R) return false;
-  if (f.cat === 'rug') return true;
+  if (f.cat === 'rug') return !data().items.some(it => it !== ignore && it.x === x && it.z === z && (furn(it.id) || {}).cat === 'rug');   // v8.2 同一格不能再疊一張地毯（以前可以無限疊）
   const occ = occupied(ignore); for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) if (occ.has((x + dx) + ',' + (z + dz))) return false;
   if (z + d >= R && x <= 4 && x + w > 3) return false; // 門口要留路
   return true;
@@ -387,7 +387,8 @@ function moveGhost(dx, dz) {
 }
 function place() {
   const f = furn(mode.id);
-  if (!fits(f, mode.x, mode.z, mode.r)) { ui.toast('這裡放不下'); Audio.sfx('deny'); return; }
+  if (!fits(f, mode.x, mode.z, mode.r)) { ui.toast(f.cat === 'rug' ? '這裡已經鋪了一張地毯' : '這裡放不下'); Audio.sfx('deny'); return; }
+  if (data().items.length >= 160) { ui.toast('房間已經擺滿了（最多 160 件），先收起一些吧'); Audio.sfx('deny'); return; }
   const s = S(); if (!cur.edit) { s.storage[mode.id]--; if (s.storage[mode.id] <= 0) delete s.storage[mode.id]; }
   data().items.push({ id: mode.id, x: mode.x, z: mode.z, r: mode.r }); save(); rebuild(); Audio.sfx('ok');
   cancelPlace(); cur.onChange && cur.onChange();

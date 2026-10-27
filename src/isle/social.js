@@ -47,7 +47,7 @@ const targetName = r => r.type === 'weak' ? ((L.UNITS[r.target] || {}).name || '
 export function badge(v) { const r = reqOf(v.sid); return r && !r.accepted ? '！' : ''; }
 export function reqText(r) {
   const v = vOf(r.sid), n = targetName(r);
-  if (r.type === 'weak') return `陪${v.name}複習「${n}」（你的弱點單元${r.acc != null ? '，正確率 ' + r.acc + '%' : '，還沒練過'}）`;
+  if (r.type === 'weak') return r.acc != null ? `陪${v.name}複習「${n}」（你的弱點單元，正確率 ${r.acc}%）` : `和${v.name}一起認識「${n}」（還沒練過的單元）`;   // v8.2 沒作答紀錄時不說是弱點
   const sp = (r.type === 'fish' || r.type === 'bug') && find(r.type, r.target), at = sp ? `（${whereName(r.type, sp)}，${fmtHours(sp)}）` : '';
   if (r.type === 'fish') return `幫${v.name}釣一條「${n}」${at}`;
   if (r.type === 'bug') return `幫${v.name}抓一隻「${n}」${at}`;
@@ -143,9 +143,14 @@ function noteFor(sid) {
 }
 function makeLetters() {
   const s = S(); s.mail = s.mail || [];
+  // v8.2 一封來自錯題最多的那科（有錯題時），另一封輪流：最久沒寫信的導師先寫（以前同分時永遠是墨言和 Lexi）
+  s.mailLast = s.mailLast || {};
   const subj = VS.map(v => ({ v, m: L.mistakes(v.sid).length })).sort((a, b) => b.m - a.m);
-  const writers = [subj[0], subj[1]].filter(Boolean).map(x => x.v);
+  const weak = subj[0] && subj[0].m > 0 ? subj[0].v : null;
+  const rest = VS.filter(v => v !== weak).map(v => ({ v, r: Math.random() })).sort((a, b) => (s.mailLast[a.v.sid] || 0) - (s.mailLast[b.v.sid] || 0) || a.r - b.r).map(x => x.v);
+  const writers = (weak ? [weak, rest[0]] : rest.slice(0, 2)).filter(Boolean);
   writers.forEach((v, k) => {
+    s.mailLast[v.sid] = Date.now();
     const n = noteFor(v.sid); if (!n) return;
     const L1 = lines(v.sid).letter || {};
     const gift = (s.fr[v.sid] || 0) >= 6 && Math.random() < 0.5 ? { type: 'bells', n: 300 + Math.floor(Math.random() * 5) * 100 } : null;
@@ -157,9 +162,25 @@ function makeLetters() {
       giftLine: gift ? fill(pick(L1.gift || ['隨信附上一點心意：{item}。']), { item: `${gift.n} 鈴錢` }) : ''
     });
   });
-  s.mail = s.mail.slice(0, 30);
+  trimMail(s);
 }
-export function sendLetter(m) { const s = S(); s.mail = s.mail || []; s.mail.unshift(Object.assign({ id: Date.now() + '-' + Math.random(), date: dayKey(), read: false }, m)); s.mail = s.mail.slice(0, 30); save(); }
+/** 信裡的禮物：第一次讀信時收下（鈴錢、家具） */
+function claimGift(s, m) {
+  if (!m.gift || m.gotGift) return; m.gotGift = true;
+  if (m.gift.type === 'bells') s.bells += m.gift.n;
+  if (m.gift.type === 'furn' && hooks.giveFurn) hooks.giveFurn(m.gift.id);
+}
+/** v8.2 信箱最多 30 封：先丟最舊的已讀信；非丟未讀的不可時，附的禮物先替你收下（一次性的活動家具不會跟著信消失） */
+function trimMail(s) {
+  let auto = 0;
+  while (s.mail.length > 30) {
+    let i = s.mail.length - 1; for (let j = s.mail.length - 1; j >= 0; j--) if (s.mail[j].read) { i = j; break; }
+    const [m] = s.mail.splice(i, 1);
+    if (!m.read && m.gift && !m.gotGift) { claimGift(s, m); auto++; }
+  }
+  if (auto) setTimeout(() => ui.toast(`信箱滿了：${auto} 封沒拆的信裡的禮物先替你收下了`), 800);
+}
+export function sendLetter(m) { const s = S(); s.mail = s.mail || []; s.mail.unshift(Object.assign({ id: Date.now() + '-' + Math.random(), date: dayKey(), read: false }, m)); trimMail(s); save(); }
 export const unread = () => (S().mail || []).filter(m => !m.read).length;
 export function openMail() {
   miles.ping('mail');   // 任務欄：新手引導「看看信箱」
@@ -174,10 +195,7 @@ export function openMail() {
 }
 function readLetter(m) {
   const s = S(), first = !m.read; m.read = true;
-  if (first && m.gift) {
-    if (m.gift.type === 'bells') s.bells += m.gift.n;
-    if (m.gift.type === 'furn' && hooks.giveFurn) hooks.giveFurn(m.gift.id);
-  }
+  if (first) claimGift(s, m);
   if (first && m.note) { L.gain(5, 1); }
   save(); hooks.paint && hooks.paint(); Audio.sfx('open');
   const body = ui.el('div', 'letter', `

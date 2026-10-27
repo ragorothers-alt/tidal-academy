@@ -47,11 +47,16 @@ export function record(q, ok, opt) { if (q.vocab) L.recordVocab(q.vocab.w, ok); 
 /** 單字題：英文 → 中文 */
 export function vocabQ(opt) {
   const V0 = L.VOCAB || []; if (V0.length < 8) return null;
-  // opt：{ minLv, maxLv } 單字等級範圍（釣到大魚考難字）；範圍內沒有字時不限等級
-  const inLv = v => (!opt || ((v.lv || 1) >= (opt.minLv || 0) && (v.lv || 1) <= (opt.maxLv || 99)));
+  // opt：{ minLv, maxLv } 單字等級範圍（釣到大魚考難字）；範圍內沒有字時不限等級。not：這一輪出過的字（Set of 'voc:字'）
+  const lvOpt = opt && (opt.minLv || opt.maxLv) ? opt : null, not = opt && opt.not;
+  const inLv = v => (!lvOpt || ((v.lv || 1) >= (lvOpt.minLv || 0) && (v.lv || 1) <= (lvOpt.maxLv || 99)));
   const V = V0.filter(inLv).length >= 8 ? V0.filter(inLv) : V0;
-  const due = L.vocabDue().filter(inLv), fresh = V.filter(v => !TA.S.voc[v.w] && (opt ? true : v.lv <= 5));
-  const v = due.length && Math.random() < 0.6 ? pick(due) : fresh.length ? pick(fresh) : pick(V);
+  // v8.2 同一輪不重複出同一個字；剛答過（20 分鐘內）的到期字先冷卻，跟題庫的錯題一樣隔一陣子再考
+  const now = Date.now(), cool = v => { const r = TA.S.voc[v.w]; return !!r && !!r.last && now - r.last < 20 * 60e3; };
+  const ok = v => !not || !not.has('voc:' + v.w), prefer = a => { const b = a.filter(ok); return b.length ? b : a; };
+  const due0 = L.vocabDue().filter(v => inLv(v) && ok(v)), dueReady = due0.filter(v => !cool(v)), due = dueReady.length ? dueReady : [];
+  const fresh = V.filter(v => !TA.S.voc[v.w] && (lvOpt ? true : v.lv <= 5) && ok(v));
+  const v = due.length && Math.random() < 0.6 ? pick(due) : fresh.length ? pick(fresh) : due.length ? pick(due) : pick(prefer(V.filter(x => !cool(x)).length ? V.filter(x => !cool(x)) : V));
   const same = V0.filter(x => x.w !== v.w && x.zh !== v.zh && x.pos === v.pos), pool = same.length >= 6 ? same : V0.filter(x => x.w !== v.w && x.zh !== v.zh);
   const wrong = []; while (wrong.length < 3) { const x = pick(pool); if (!wrong.includes(x.zh)) wrong.push(x.zh); }
   const a = Math.floor(Math.random() * 4), o = wrong.slice(); o.splice(a, 0, v.zh);

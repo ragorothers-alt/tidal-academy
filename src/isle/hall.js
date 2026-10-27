@@ -325,6 +325,10 @@ export function showResult(r) {
 /** 一行狀態，例如「今天的複習還有 8 題（已複習 12 題）」 */
 export function reviewLine() {
   const r = L.reviewToday();
+  if (!r.left) {   // v8.2 錯題都還在冷卻：說「剛練過、幾分鐘後」，不要說沒有題目
+    const cool = L.pickReview(9999).filter(id => L.inTrack(L.Q[id].subject) && L.cooling(id));
+    if (cool.length) { const m = Math.max(1, Math.ceil((Math.min(...cool.map(L.coolUntil)) - Date.now()) / 60000)); return `${cool.length} 題剛練過，約 ${m} 分鐘後再複習${r.done ? `（今天已複習 ${r.done} 題）` : ''}`; }
+  }
   return r.left ? `今天的複習還有 ${r.left} 題${r.done ? `（已複習 ${r.done} 題）` : ''}` : r.done ? `今天的複習完成了 ✔（${r.done} 題）` : '今天沒有要複習的題目';
 }
 /** 沒有題目可以出時的原因（全部在冷卻中，或真的沒有） */

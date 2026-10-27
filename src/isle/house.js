@@ -404,6 +404,7 @@ export function enter(key, opt = {}) {
   envEnter(key);   // 窗外：從這棟房子在島上的位置拍全景
   fxEnter();   // 窗光、微塵、燈暈、室內的空氣
   glowEnter();   // 間接照明與重點光
+  post.precompile(scene, camera);   // v8.2 著色器在進門的黑幕後面編譯（main.js 先收圈才進門）
   document.body.classList.add('in-house'); ui.iris(); Audio.sfx('open');
   return true;
 }

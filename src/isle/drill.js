@@ -13,7 +13,7 @@ export function picker(focus) {
   const fresh = ids => { const left0 = ids.filter(id => !used.has(id)); if (!left0.length) return null; const ready = left0.filter(id => !L.cooling(id)), left = ready.length ? ready : left0; const pri = left.filter(id => L.isDue(id) || L.isMistake(id)); const id = pick(pri.length && Math.random() < 0.6 ? pri : left); used.add(id); return L.Q[id]; };
   let group = [];
   return () => {
-    if (focus.mode === 'vocab') return vocabQ();
+    if (focus.mode === 'vocab') { const q = vocabQ({ not: used }); if (q) used.add(q.id); return q; }   // v8.2 同一輪不重複出同一個字
     if (focus.mode === 'ids') return fresh(focus.ids);
     if (focus.mode === 'group') {
       if (!group.length) {

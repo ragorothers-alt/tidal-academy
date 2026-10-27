@@ -23,7 +23,7 @@ function fact(v, k) {
   const list = [
     lab ? `${v.name}還記得我們一起做研究的那些日子：已經完成 ${lab} 個階段了。` : '',
     mastered ? `${v.name}說，我已經把 ${mastered} 道${subj}題練到熟練——比剛來島上時進步好多。` : '',
-    donated ? `${v.name}跟我一起逛了博物館，裡面有 ${donated} 件是我捐的。` : '',
+    donated ? `${v.name}說，博物館裡已經有 ${donated} 件是我捐的，下次要我帶路去看。` : '',   // v8.2 沒有真的一起去過，不寫成一起逛
     flowers ? `${v.name}在我的花園前停了好久，說花園筆記裡已經有 ${flowers} 種花色。` : '',
     best >= 3 ? `${v.name}記得我最長連續學習了 ${best} 天。` : '',
     `和${v.name}坐在一起讀書，安安靜靜的，也很好。`,

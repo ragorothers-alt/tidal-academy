@@ -32,6 +32,14 @@ function normalize(d) {
   if (d.stats) Object.keys(d.stats).forEach(k => { if (!num(d.stats[k]) || d.stats[k] < 0) delete d.stats[k]; });
   if (d.practice) Object.keys(d.practice).forEach(k => { const p = d.practice[k]; if (!isObj(p) || !num(p.n) || !num(p.ok) || !num(p.tot) || !num(p.days)) delete d.practice[k]; });
   if (d.settings) { d.settings.lowPerf = !!d.settings.lowPerf; d.settings.ultra = !!d.settings.ultra; d.settings.music = d.settings.music !== false; }
+  // v8.2 匯入或損壞的存檔：巢狀結構也要對（例如 dex.fish 是 null、信件是 null、房間的家具不是陣列），修正後才拿來用
+  ['dex', 'museum'].forEach(k => { if (k in d && !isObj(d[k])) delete d[k]; if (d[k]) Object.keys(KINDS).forEach(c => { if (c in d[k] && !isObj(d[k][c])) delete d[k][c]; }); });
+  if (d.mail) d.mail = d.mail.filter(m => isObj(m) && typeof m.title === 'string');
+  if (Array.isArray(d.pockets)) d.pockets = d.pockets.map(p => isObj(p) && typeof p.k === 'string' ? p : null);
+  if (d.storage && !isObj(d.storage)) delete d.storage;
+  if (d.storage) Object.keys(d.storage).forEach(k => { if (!num(d.storage[k]) || d.storage[k] <= 0) delete d.storage[k]; });
+  const fixRoom = r => { if (!isObj(r) || !('items' in r)) return; if (!Array.isArray(r.items)) r.items = []; const seen = new Set(); r.items = r.items.filter(it => { if (!isObj(it) || typeof it.id !== 'string' || !num(it.x) || !num(it.z)) return false; const k = [it.id, it.x, it.z, it.r || 0].join(','); if (seen.has(k)) return false; seen.add(k); return true; }); };   // 完全重疊的同一件（無限疊的地毯）只留一件
+  fixRoom(d.room); if (d.hotel && isObj(d.hotel.rooms)) Object.values(d.hotel.rooms).forEach(fixRoom);
 }
 export function S() {
   const s = TA.S;
@@ -41,8 +49,7 @@ export function S() {
   if (typeof d.bells !== 'number') d.bells = 1000;
   if (!Array.isArray(d.pockets)) d.pockets = Array(POCKET_N).fill(null);
   else if (d.pockets.length !== POCKET_N) { const items = d.pockets.filter(Boolean).slice(0, POCKET_N); d.pockets = items.concat(Array(POCKET_N - items.length).fill(null)); }   // 格數對不上（舊版或匯入的存檔）：東西往前排、補空格，不整包清空
-  d.dex = Object.assign({ fish: {}, bug: {}, fossil: {}, sea: {}, mineral: {} }, d.dex || {});
-  d.museum = Object.assign({ fish: {}, bug: {}, fossil: {}, sea: {}, mineral: {} }, d.museum || {});
+  for (const k of ['dex', 'museum']) { const o = d[k] || (d[k] = {}); for (const c in KINDS) if (!o[c]) o[c] = {}; }   // 每次呼叫都會跑：不建新物件
   d.fr = d.fr || {}; d.frDay = d.frDay || {}; d.spots = d.spots || []; d.tips = d.tips || {};
   return d;
 }

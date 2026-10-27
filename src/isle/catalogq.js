@@ -15,7 +15,7 @@ export const inCatalog = f => !!f && f.src !== 'hotel-fixed';
 export function how(f, name) {
   const src = String(f.src || '');
   if (f.hotel) return '潮汐渡假飯店：用優惠券兌換';
-  if (f.shard) return '夢境島：用星之碎片兌換';
+  if (f.shard) return '夢境島：用夢之碎片兌換';
   if (src === 'shop') return '阿潮的商店（每天換貨）';
   if (src === 'diy') return 'DIY 工作台：從漂流瓶學到配方後手作';
   if (src.startsWith('gift:')) return `${name(src.slice(5))}的心事（好感度）`;

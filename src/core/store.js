@@ -91,6 +91,7 @@
     exportJSON() { return JSON.stringify({ app: 'tidal-academy', exported: new Date().toISOString(), data: TA.S }, null, 1); },
     importJSON(text) {
       const obj = JSON.parse(text);
+      if (obj && typeof obj.app === 'string' && obj.app !== 'tidal-academy') throw new Error('這不是潮汐學院的存檔');   // v8.2 其他程式的匯出檔
       const data = obj && obj.app === 'tidal-academy' ? obj.data : obj;
       if (!isObj(data) || !isObj(data.profile)) throw new Error('這不是潮汐學院的存檔');
       const prev = TA.S;

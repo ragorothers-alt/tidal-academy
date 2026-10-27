@@ -164,14 +164,19 @@
   L.wrDue = w => { const r = TA.S.written[w.id]; return !!r && r.due <= today(); };
   L.wrEq = w => WR_EQ[w.kind] || 2;
   /** 記一次非選題練習：got 自評分數（0–w.pts）。回傳 { xp, k 得分率 } */
+  /** v8.2 「夜航者」「晨光讀書人」：在那個時段真的作答才算（以前只看遊戲開著的時間） */
+  const markHour = () => { const h = new Date().getHours(); if (h >= 23 || h < 2) TA.S._night = true; if (h >= 5 && h < 7) TA.S._dawn = true; };
   L.recordWritten = function (w, got) {
     const S = TA.S, r = S.written[w.id] = S.written[w.id] || { n: 0, best: 0, sc: 0, s: 0, due: 0, last: 0 };
     const k = w.pts > 0 ? Math.max(0, Math.min(1, got / w.pts)) : 0;
+    // v8.2 還沒到期就重寫（同一天改寫、剛對照完參考答案）：分數照記，但不往後排——要隔天以後獨立再寫一次，間隔才有意義；寫不到一半照樣明天再練
+    const early = r.n > 0 && r.due > today();
     r.n++; r.sc = Math.round(k * 1000) / 1000; r.best = Math.max(r.best, r.sc); r.last = Date.now();
-    r.s = k >= 0.8 ? Math.min(WR_GAP.length - 1, r.s + 1) : k >= 0.5 ? r.s : 0; r.due = today() + WR_GAP[r.s];
+    if (!early || k < 0.5) { r.s = k >= 0.8 ? Math.min(WR_GAP.length - 1, r.s + 1) : k >= 0.5 ? r.s : 0; r.due = today() + WR_GAP[r.s]; }
+    markHour();
     const eq = L.wrEq(w), d = dayRec(); d.wq = (d.wq || 0) + eq;
     const xp = Math.round(eq * 5 * (0.4 + 0.6 * k)); L.gain(xp, 0); L.touchStreak(); L.checkAch(); TA.Store.save();
-    return { xp, k };
+    return { xp, k, early: early && k >= 0.5, days: r.due - today() };
   };
 
   /** 記錄一次作答。opts: {combo, mode, silent, blank}；空白只記錯，不算學習進度或獎勵。 */
@@ -196,7 +201,7 @@
     if (uid) { const recent = S.unitRecent[uid] = S.unitRecent[uid] || []; recent.push(correct ? 1 : 0); S.unitRecent[uid] = recent.slice(-20); }
     // 讀書計畫／週報用 last 判定實際練過；空白保留 last，靠 lastWrong 保存記錯時間。
     if (opts.blank) { TA.Store.save(); return { xp: 0, gems: 0, levelUp: 0 }; }
-    const d = dayRec(); d.q++; if (correct) d.c++; if (wasReview) d.rv = (d.rv || 0) + 1;
+    const d = dayRec(); d.q++; if (correct) d.c++; if (wasReview) d.rv = (d.rv || 0) + 1; markHour();
     let xp = correct ? 10 + (q.d - 1) * 3 : 2;
     if (correct && opts.combo > 1) xp += Math.min(10, opts.combo - 1);
     const out = L.gain(xp, 0);
@@ -207,7 +212,7 @@
   };
 
   L.recordVocab = function (w, known) {
-    const S = TA.S, t = today(), now = Date.now();
+    const S = TA.S, t = today(), now = Date.now(); markHour();
     const r = S.voc[w] = S.voc[w] || { n: 0, c: 0, s: 0, due: t };
     const advance = r.n === 0 || canAdvance(r, t, now);
     r.n++; r.last = now;
@@ -560,8 +565,7 @@
     A('isle_museum_all', '博物館的好朋友', '潮汐博物館五個展區全部捐齊', 'trophy', 150, () => !!(isle().collect || {}).mus_all)
   ];
   L.checkAch = function () {
-    const S = TA.S, h = new Date().getHours();
-    if (h >= 23 || h < 2) S._night = true; if (h >= 5 && h < 7) S._dawn = true;
+    const S = TA.S;
     const fresh = [];
     L.ACH.forEach(a => {
       if (S.ach[a.id]) return;

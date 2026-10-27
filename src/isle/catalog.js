@@ -91,7 +91,7 @@ export function open(hooks) {
   const body = ui.el('div', 'catalog');
   const paint = () => {
     const my = ++gen, c = catalog(), F = furnList(), pp = papers();
-    const nWear = COLORS.filter(x => owns('colors', x.id)).length + HAIRS.filter(x => owns('hairs', x[0])).length + HATS.filter(x => owns('hats', x.id)).length, tWear = COLORS.length + HAIRS.length + HATS.length;
+    const nWear = COLORS.filter(x => owns('colors', x.id)).length + HAIRS.filter(x => owns('hairs', x.id)).length + HATS.filter(x => owns('hats', x.id)).length, tWear = COLORS.length + HAIRS.length + HATS.length;
     const dexN = KINDS.reduce((a, [k]) => a + got('dex', k), 0), dexT = KINDS.reduce((a, [k]) => a + ids(k).length, 0), musN = KINDS.reduce((a, [k]) => a + got('museum', k), 0);
     const T = [['furn', '家具', `${furnCount()} / ${F.length}`], ['paper', '壁紙與地板', `${pp.filter(([p]) => ownPaper(p)).length} / ${pp.length}`], ['wear', '服裝', `${nWear} / ${tWear}`], ['dex', '圖鑑與博物館', `圖鑑 ${dexN} / ${dexT}`]];
     body.innerHTML = `<div class="hm-chips ct-tabs">${T.map(([id, n, v]) => `<button type="button" data-tab="${id}" class="${id === tab ? 'on' : ''}">${n}<small>${v}</small></button>`).join('')}</div><div class="ct-main"></div>`;
@@ -121,7 +121,7 @@ export function open(hooks) {
     } else if (tab === 'wear') {
       main.innerHTML = `<b class="ach-h">帽子</b><div class="ct-list">${HATS.map(h => `<span class="${owns('hats', h.id) ? 'ok' : ''}">${owns('hats', h.id) ? '✔' : '○'} ${ui.esc(h.name)}<small>${HAT_HOW[h.src] || '特別活動'}</small></span>`).join('')}</div>
         <b class="ach-h">衣服顏色（染布）</b><div class="ct-swatches">${COLORS.map(x => `<span class="ct-sw${owns('colors', x.id) ? '' : ' no'}"><i style="background:${x.c}"></i>${ui.esc(x.name)}</span>`).join('')}</div>
-        <b class="ach-h">髮色</b><div class="ct-swatches">${HAIRS.map(x => `<span class="ct-sw${owns('hairs', x[0]) ? '' : ' no'}"><i style="background:${x[2]}"></i>${ui.esc(x[1])}</span>`).join('')}</div>
+        <b class="ach-h">髮色</b><div class="ct-swatches">${HAIRS.map(x => `<span class="ct-sw${owns('hairs', x.id) ? '' : ' no'}"><i style="background:${x.c}"></i>${ui.esc(x.name)}</span>`).join('')}</div>
         <p class="muted">帽子、染布與髮色都在阿潮商店的服裝櫃台（每天換款）；部分帽子要靠活動或潮汐里程。</p>`;
     } else {
       const s = S(), col = s.collect || {};

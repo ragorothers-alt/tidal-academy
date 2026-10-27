@@ -148,7 +148,7 @@ const kgReady = () => S().settings && S().settings.keepGoing === false ? false :
 export async function keepGoing(sp, q, opt) {
   opt = opt || {};
   const sid = q && (q.subject || (L.Q[q.id] && L.Q[q.id].subject));
-  const pk = opt.pick || (q && q.vocab ? () => vocabQ() : sid ? bySubject(sid) : null);
+  const usedV = new Set(q && q.id ? [q.id] : []), pk = opt.pick || (q && q.vocab ? () => { const x = vocabQ({ not: usedV }); if (x) usedV.add(x.id); return x; } : sid ? bySubject(sid) : null);   // v8.2 連答單字不重複
   if (!pk || !kgReady()) { ui.closeDialog(); return 0; }
   KG.last = Date.now();
   // 結束時收起對話框：釣魚、抓蟲、石碑這些不是在對話裡出的題，沒有人會幫忙關（還在對話中的話，下一句會再打開）
