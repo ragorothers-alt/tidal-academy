@@ -91,7 +91,7 @@ export function dropTinyShadows(root) {
 export const U = { uCurve: { value: CURVE }, uBendF: { value: 15 }, uTime: { value: 0 }, uWind: { value: 1 }, uSunV: { value: new THREE.Vector3(0, 1, 0) }, uRimCol: { value: new THREE.Color('#ffc870') }, uRim: { value: 0 },
   uOccP: { value: new THREE.Vector2(-9999, -9999) }, uOccR: { value: 0 }, uOccD: { value: 0 }, uOccY: { value: 0 }, uPlayer: { value: new THREE.Vector3(0, -99, 0) },
   uSnow: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 },
-  uWindDir: { value: new THREE.Vector2(0.97, 0.24).normalize() }, uTrans: { value: 0 } };   // v7.0：風向（世界座標 xz，陣風順著它推過去）、逆光時葉片透光的強度（main.js 每幀設定）   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
+  uWindDir: { value: new THREE.Vector2(0.97, 0.24).normalize() }, uTrans: { value: 0 }, uInside: { value: 0 } };   // uInside：v7.8 正在畫住宅的室內（house.js 畫的時候設 1）   // v7.0：風向（世界座標 xz，陣風順著它推過去）、逆光時葉片透光的強度（main.js 每幀設定）   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
 const BEND = `#include <project_vertex>
   { float bz = max(-mvPosition.z - uBendF, 0.0); mvPosition.y -= bz * bz * uCurve; }
   gl_Position = projectionMatrix * mvPosition;`;
@@ -141,7 +141,7 @@ const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;
     float g = wn_(vec2(a * 0.04 - t * 0.2, c * 0.03)) * 0.65 + wn_(vec2(a * 0.11 - t * 0.62, c * 0.09 + 3.7)) * 0.35;
     return smoothstep(0.34, 0.86, g); }
 `;
-const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform float uTrans;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
+const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
 /* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
@@ -475,7 +475,7 @@ export function bend(mat, kind) {
     else v = v.replace('#include <project_vertex>', BEND);
     sh.vertexShader = v;
     if (!std) return;
-    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uTrans: U.uTrans, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
+    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uTrans: U.uTrans, uInside: U.uInside, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
     const dk = DETK[kind];
     if (dk) dk.forEach((n, i) => { sh.uniforms['uD' + i] = DET[n].d; sh.uniforms['uN' + i] = DET[n].n; });
     if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
@@ -791,7 +791,8 @@ export function bend(mat, kind) {
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
     if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade;');   // 晴天才閃
     if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  { float rh = n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))); roughnessFactor = rh < 0.9 ? 0.68 + rh * 0.13 : 0.6; }');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）；v7.5：大多 0.68–0.8，一成是釉面 0.6
-    const RGH = { wood: '0.66 + n_v(vWP.xz * 2.3 + vWP.y) * 0.1', fabric: '1.0', ceramic: '0.3 + n_v(vWP.xz * 4.0 + vWP.y * 3.0) * 0.08', metal: 'roughnessFactor * (0.85 + n_v(vWP.xz * 6.0 + vWP.y * 5.0) * 0.3)', foliage: '0.78', paper: '0.95' }[kind];
+    const RGH = { wood: 'mix(0.66 + n_v(vWP.xz * 2.3 + vWP.y) * 0.1, 0.36 + n_v(vWP.xz * 1.7) * 0.12, uInside * step(0.7, normalize(vWN).y))', fabric: '1.0', ceramic: '0.3 + n_v(vWP.xz * 4.0 + vWP.y * 3.0) * 0.08', metal: 'roughnessFactor * (0.85 + n_v(vWP.xz * 6.0 + vWP.y * 5.0) * 0.3)', foliage: '0.78', paper: '0.95' }[kind];
+    // v7.8：屋裡的木地板上了清漆（uInside），窗光與燈在地上映出柔和的反光；戶外的木板照舊
     if (RGH) f = f.replace('float sGl = 0.0;', `float sGl = 0.0;\n  roughnessFactor = ${RGH};`);   // 上釉的陶瓷有柔和的高光、木頭半霧面、布料完全霧面
     if (kind === 'fabric') f = f.replace('#include <opaque_fragment>', `{ float sh = 1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0); outgoingLight *= 1.0 + sh * sh * 0.22; }   // 布料的絨面：邊緣斜看時亮一點
         #include <opaque_fragment>`);

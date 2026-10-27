@@ -17,10 +17,13 @@ export const furn = id => (I.FURNITURE || []).find(f => f.id === id);
 export const paper = (kind, id) => ((kind === 'wall' ? I.WALLPAPER : I.FLOORING) || []).find(x => x.id === id);
 
 /* ---------- 光源 ---------- */
-const hemi = new THREE.HemisphereLight('#fff4e0', '#7a5a40', 1.1); scene.add(hemi);
+/* v7.8 真實的室內光：不再整片均勻打亮——白天的光從窗戶來（窗外一盞往屋裡斜照的柔邊聚光燈，離窗越遠越暗），
+   天花板的燈與家具燈照度隨距離平方衰減（燈下一圈亮、牆角暗下來）；只留一點點四處反彈的光，背光面是薰衣草色 */
+const hemi = new THREE.HemisphereLight('#fff1e2', '#9d8bb0', 0.45); scene.add(hemi);
 const keyL = new THREE.DirectionalLight('#fff0d8', 1.5); keyL.position.set(2.5, 10, -3.5); keyL.castShadow = true; keyL.shadow.mapSize.set(1024, 1024);   // 主光從窗戶那一側的高處照下來（和窗光同一側），家具的影子朝房間前方、正面仍受光
 Object.assign(keyL.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 }); keyL.shadow.bias = -0.0005; scene.add(keyL, keyL.target);
-const ceil = new THREE.PointLight('#ffe2b0', 6, 14, 1.6); ceil.position.set(0, 2.8, 0); scene.add(ceil);
+const ceil = new THREE.PointLight('#ffe2b0', 6, 0, 2); ceil.position.set(0, 2.8, 0); scene.add(ceil);
+const winL = new THREE.SpotLight('#fff0dc', 0, 0, 1.0, 1, 2); winL.position.set(1.6, 1.9, -H - 0.8); winL.target.position.set(1.0, 0, -0.6); scene.add(winL, winL.target);   // 窗的天光：燈在窗外，照不到屋裡朝內的牆面
 
 /* ---------- 窗光：從後牆窗戶斜斜照進來的光柱、地上的光斑與光裡飄的微塵 ---------- */
 const WIN = { x: 1.6, y0: 1.25, y1: 2.35, w: 1.6 }, BEAM = new THREE.Vector3(-0.35, -0.62, 1).normalize();
@@ -289,7 +292,7 @@ function rebuild() {
     const m = buildFurniture(f), [w, d] = foot(f, it.r);
     m.position.set(it.x + w / 2 - H, f.cat === 'rug' ? 0.001 : 0, it.z + d / 2 - H); m.rotation.y = -it.r * Math.PI / 2; m.userData.item = it;
     placed.add(m);
-    if (f.light && lights.length < 4) { const l = new THREE.PointLight('#ffd9a0', f.light * 3, 6, 1.6); l.position.set(m.position.x, 1.6, m.position.z); scene.add(l); lights.push(l); }
+    if (f.light && lights.length < 4) { const l = new THREE.PointLight('#ffd9a0', f.light * 3, 0, 2); l.userData.k = f.light; l.position.set(m.position.x * 0.92, 1.6, m.position.z * 0.92); scene.add(l); lights.push(l); }   // 燈往房間中央挪一點：靠牆的燈不會把牆照出一塊白
   });
 }
 
@@ -416,11 +419,13 @@ export function render(dt, night, o) {
   camPos.lerp(new THREE.Vector3(tx, 9 * za, (10.5 + tz) * za), Math.min(1, dt * 3));
   camera.position.copy(camPos); camera.lookAt(tx, 0.6, tz + 0.2);
   const win = shell.userData.win; win.material.emissive.set(night > 0.5 ? '#2a3a6a' : '#cfeeff'); win.material.color.set(night > 0.5 ? '#2a3a6a' : '#cfeeff');
-  keyL.intensity = night > 0.5 ? 0.5 : 2.0; hemi.intensity = night > 0.5 ? 0.7 : 0.95; ceil.intensity = night > 0.5 ? 9 : 3.8;
   // 窗光：白天淡淡的暖白、黃昏轉成金橘色、冬天偏冷白，夜晚沒有
   const g = o.golden || 0, day = 1 - THREE.MathUtils.smoothstep(night, 0.2, 0.6);
+  keyL.intensity = 0.25 + day * 0.4; hemi.intensity = 0.24 + day * 0.18; ceil.intensity = 2.5 + (1 - day) * 14;   // 白天燈開得小，晚上撐起一圈暖光
+  lights.forEach(l => { l.intensity = l.userData.k * (1.2 + (1 - day) * 2.6); });
   beamU.uCol.value.copy(o.winter ? WARM.snow : WARM.day).lerp(WARM.gold, g); beamU.uAmt.value = day * (0.34 + g * 0.36); beamU.uTime.value = o.t || 0;
   beam.spot.material.color.copy(beamU.uCol.value); beam.spot.material.opacity = day * (0.22 + g * 0.25);
+  winL.color.copy(beamU.uCol.value).lerp(WARM.day, 0.4); winL.intensity = day * (34 + g * 10) + (1 - day) * 1.2;
   beam.m.visible = beam.spot.visible = beam.dust.visible = day > 0.02;
   if (o.winter && night <= 0.5) { win.material.emissive.set('#eef4ff'); win.material.color.set('#eef4ff'); }
   if (g > 0.05 && night <= 0.5) { win.material.emissive.lerp(WARM.gold, g * 0.6); }
