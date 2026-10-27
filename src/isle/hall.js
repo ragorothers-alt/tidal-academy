@@ -276,7 +276,7 @@ function reviewItem(x, host, note) {
   const q = x.v || L.Q[x.id]; if (!q) return null;
   const s = subj(q.subject || (L.Q[q.id] || {}).subject), u = unitOf(q), key = [].concat(q.a), pk = [].concat(x.ans == null ? [] : x.ans);
   const ans = note || (q.type === 'fill' ? `${answered(x.ans) ? '你答 ' + ui.esc(x.ans) : '未作答'} · 正解 <b>${ui.esc(keyText(q))}</b>` : `${pk.length ? '你選 ' + pk.map(k => LET[k]).join('') : '未作答'} · 正解 <b>${keyText(q)}</b>`);
-  const d = ui.el('details', 'hrv ' + (x.ok ? 'ok' : 'bad'), `<summary><i>${x.ok ? '✔' : '✘'}</i><span class="hq-sub" style="--c:${s.color}">${ui.esc(s.name)}</span><span class="hrv-q">${ui.esc(ui.plain(q.q).slice(0, 56))}${ui.plain(q.q).length > 56 ? '…' : ''}</span><span class="hrv-a">${ans}</span></summary>
+  const d = ui.el('details', 'hrv ' + (x.ok ? 'ok' : 'bad'), `<summary><i>${x.ok ? '✔' : '✘'}</i><span class="hq-sub" style="--c:${s.color}">${ui.esc(s.name)}</span><span class="hrv-q">${ui.esc(ui.flat(q.q).slice(0, 56))}${ui.flat(q.q).length > 56 ? '…' : ''}</span><span class="hrv-a">${ans}</span></summary>
     <div class="hrv-body">${q.passage ? `<details class="hrv-pass"><summary>閱讀材料</summary><div>${ui.rich(q.passage)}</div></details>` : ''}<div class="hq-stem">${ui.rich(q.q)}</div>
     ${q.o ? `<ol class="hrv-opts">${q.o.map((o, k) => `<li class="${key.includes(k) ? 'key' : pk.includes(k) ? 'pick' : ''}"><kbd>${LET[k]}</kbd><span>${ui.rich(o)}</span></li>`).join('')}</ol>` : ''}
     <div class="hq-ex"><b class="v">解析</b><div>${ui.rich(q.e || '')}</div></div>${u ? '<button type="button" class="btn ghost sm notes">看單元筆記</button>' : ''}${figs.figFor(q) ? '<button type="button" class="btn ghost sm fig">📐 示意圖</button>' : ''}</div>`);

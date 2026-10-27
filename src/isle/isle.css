@@ -922,6 +922,14 @@ body.in-yue-home .tops { margin-top: 0; }
 .dlg.big .dlg-bubble { display: flex; flex-direction: column; flex: 0 1 auto; min-height: min(120px, 30vh); padding: 34px 40px 30px; border-radius: 30px; font-size: 20px; line-height: 1.85; }
 .dlg.big .dlg-text { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 8px; scrollbar-width: thin; scrollbar-color: #e6d6b0 transparent; }
 .dlg.big .dlg-text sup, .dlg.big .dlg-text sub, .dlg.big .choice sup, .dlg.big .choice sub { line-height: 0; }
+/* Σ、∏ 的上下限疊在符號上下（ui.bigOp）：和課本一樣好讀 */
+.bigop { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: .1em .15em .1em .05em; line-height: 1.05; }
+.bigop > span { font-size: .64em; font-weight: 700; white-space: nowrap; }
+.bigop > .bo { font-family: 'Times New Roman', 'Cambria Math', 'STIX Two Text', serif; font-size: 2.2em; line-height: .78; font-weight: 400; }   /* 圓體字型沒有 Σ，用課本那種有襯線的大 Σ */
+.dlg-bubble:has(.bigop) { padding-bottom: 58px; }
+/* 平均數 x̄、ȳ（ui.rich 把組合上橫線換成這個）：橫線畫在字母正上方 */
+.ovl { position: relative; display: inline-block; line-height: 1; }
+.ovl::before { content: ''; position: absolute; left: .08em; right: .04em; top: .06em; border-top: .085em solid currentColor; }   /* 下限不要掉到泡泡的圓弧外 */
 .dlg.big .choices { position: static; flex: 0 1 auto; min-height: 0; max-height: none; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 2px 4px 8px; background: none; box-shadow: none; border-radius: 0; overflow-y: auto; animation: none; }
 .dlg.big .choices:empty { display: none; }
 .dlg.big.long-opts .choices { grid-template-columns: 1fr; }
@@ -930,6 +938,8 @@ body.in-yue-home .tops { margin-top: 0; }
   animation: ac-pop .28s cubic-bezier(.25, 1.6, .45, 1) both; transition: transform .12s, background-color .12s; }
 .dlg.big .choice::before { display: none; }
 .dlg.big .choice:hover, .dlg.big .choice.hl { background: #fff4c2; background-image: none; transform: translateY(-2px); box-shadow: inset 0 0 0 3px var(--ac-mark), 0 6px 0 rgba(107, 79, 58, .16); }
+.dlg.big .choice > .ch-t { flex: 1 1 auto; min-width: 0; }   /* 選項文字是一整塊（ui.ask 包的 span），上下標不會被 flex 拆開 */
+.dlg.big .choice.submit > .ch-t { flex: none; }
 .dlg.big .choice kbd { flex: none; width: 30px; height: 30px; margin: 0; border-radius: 50%; background: #ffe59a; color: #6b4a1a; font: 800 15px/30px var(--font); }
 .dlg.big .choice.on { background: #d8f5ec; box-shadow: inset 0 0 0 3px var(--ac-teal), 0 4px 0 rgba(107, 79, 58, .16); }
 .dlg.big .choice.on kbd { background: var(--ac-teal); color: #fff; }

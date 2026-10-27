@@ -262,7 +262,7 @@ function panelHarness(env) {
     addEventListener() {} focus() {} scrollIntoView() {} remove() {}
   }
   const panels = [], toasts = [], intervals = new Map(); let intervalId = 0;
-  const ui = { el: (...args) => new El(...args), esc: String, rich: String, plain: env.TA.U.plain,
+  const ui = { el: (...args) => new El(...args), esc: String, rich: String, plain: env.TA.U.plain, flat: env.TA.U.plain,
     panel: (title, body, opt) => { panels.at(-1)?.opt.onClose?.(); panels.push({ title, body, opt }); }, toast: t => toasts.push(t), setKeyHook() {}, closePanel: () => panels.at(-1)?.opt.onClose?.() };
   Object.assign(env.ctx, { document: { activeElement: null, createElement: tag => new El(tag) }, matchMedia: () => ({ matches: false }), setInterval: fn => { intervals.set(++intervalId, fn); return intervalId; }, clearInterval: id => intervals.delete(id) });
   const load = (file, extra = {}) => {

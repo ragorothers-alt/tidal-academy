@@ -44,7 +44,9 @@
     return esc(s == null ? '' : s)
       .replace(/&lt;(\/?)(u|b|i|sup|sub)&gt;/g, '<$1$2>')
       .replace(/&lt;br\s*\/?&gt;/g, '<br>')
-      .replace(/\n/g, '<br>');
+      .replace(/\n/g, '<br>')
+      .replace(/([Σ∑∏])<sub>([^<]*)<\/sub><sup>([^<]*)<\/sup>/g, '<span class="bigop"><span>$3</span><span class="bo">$1</span><span>$2</span></span>')   // Σ 的上下限疊在符號上下（課本的排版）
+      .replace(/([A-Za-z])̄|ȳ/g, (m, c) => '<span class="ovl">' + (c || 'y') + '</span>');   // x̄、ȳ 的上橫線用 CSS 畫（字型不會擺組合字元）
   };
   U.plain = s => String(s == null ? '' : s).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '');
 

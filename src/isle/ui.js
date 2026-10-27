@@ -17,7 +17,16 @@ export let keyHook = null;
 export const setKeyHook = fn => { keyHook = fn; };
 export const plain = s => String(s == null ? '' : s).replace(/<br\s*\/?>/g, ' ').replace(/<[^>]+>/g, '');
 export const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-export const rich = s => esc(s == null ? '' : s).replace(/&lt;(\/?)(u|b|i|sup|sub)&gt;/g, '<$1$2>').replace(/&lt;br\s*\/?&gt;/g, '<br>');
+const SUP = Object.fromEntries([...'0123456789+-−=()nixykmabcdet'].map((c, i) => [c, '⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁻⁼⁽⁾ⁿⁱˣʸᵏᵐᵃᵇᶜᵈᵉᵗ'[i]]));
+const SUB = Object.fromEntries([...'0123456789+-−=()aeoxhklmnpstijruv'].map((c, i) => [c, '₀₁₂₃₄₅₆₇₈₉₊₋₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜᵢⱼᵣᵤᵥ'[i]]));
+/** 一行的預覽文字（清單、摘要）：拿掉標記，但上下標換成 Unicode 小字（x²、CO₂），Σ 的上下限寫成 Σ(k=1→10)——不會變成看不懂的「Σk=110」 */
+export const flat = s => plain(String(s == null ? '' : s).replace(/([Σ∑∏])<sub>([^<]*)<\/sub><sup>([^<]*)<\/sup>/g, '$1($2→$3)')
+  .replace(/<(sup|sub)>([^<]*)<\/\1>/g, (m, t, x) => { const T = t === 'sup' ? SUP : SUB; return [...x].every(c => T[c]) ? [...x].map(c => T[c]).join('') : (t === 'sup' ? '^' : '_') + (x.length > 1 ? '(' + x + ')' : x); }));
+/** 數學排版：大型運算子（Σ、∏）題庫寫成 Σ<sub>k=1</sub><sup>10</sup>，排成課本那樣上限在上、下限在下（不是擠在符號右邊的小字）；
+ *  平均數 x̄、ȳ 的上橫線改用 CSS 畫（圓體字型不會擺組合字元，橫線會跑到 x 後面的等號上） */
+const mathMarks = h => h.replace(/([Σ∑∏])<sub>([^<]*)<\/sub><sup>([^<]*)<\/sup>/g, '<span class="bigop"><span>$3</span><span class="bo">$1</span><span>$2</span></span>')
+  .replace(/([A-Za-z])̄|ȳ/g, (m, c) => `<span class="ovl">${c || 'y'}</span>`);
+export const rich = s => mathMarks(esc(s == null ? '' : s).replace(/&lt;(\/?)(u|b|i|sup|sub)&gt;/g, '<$1$2>').replace(/&lt;br\s*\/?&gt;/g, '<br>'));
 export function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 
 /* ---------- 對話 ---------- */
@@ -42,14 +51,18 @@ function speaker(sp) {
 }
 function type(text, pitch, html) {
   const t = $('dlgText'); D.full = text; D.typing = true; $('dlgNext').classList.add('off');
-  clearInterval(D.iv); let i = 0; const src = plain(text);
+  clearInterval(D.iv); let i = 0; const full = html ? rich(text) : esc(plain(text));
   return new Promise(res => {
-    const done = () => { clearInterval(D.iv); D.typing = false; t.innerHTML = html ? rich(text) : esc(src); res(); };
+    const done = () => { clearInterval(D.iv); D.typing = false; t.innerHTML = full; res(); };
     D.finishType = done;
+    // 逐字打出：排版（上下標、Σ 的上下限、粗體）跟著字一起出現（以前打字時是拿掉標記的純文字，x² 會先顯示成 x2）——每一步重建、只留前 k 個字
+    const cut = (e, k) => { for (const c of [...e.childNodes]) { if (k <= 0) { c.remove(); continue; } if (c.nodeType === 3) { if (c.data.length > k) c.data = c.data.slice(0, k); k -= c.data.length; } else k = cut(c, k); } return k; };
+    const show = k => { t.innerHTML = full; cut(t, k); };
+    t.innerHTML = full; t.scrollTop = 0; const src = t.textContent;
     if (!src.length || !read.speed) { done(); return; }   // 文字速度「立即顯示」：不逐字打
-    t.textContent = ''; t.scrollTop = 0;
+    show(0);
     const step = src.length > 100 ? 3 : 1; let n = 0;   // 長題目、長解析打字快一點，不用等太久
-    D.iv = setInterval(() => { i = Math.min(src.length, i + step); t.textContent = src.slice(0, i); if (step > 1) t.scrollTop = t.scrollHeight; if (++n % 2 === 0 && /\S/.test(src[i - 1] || '')) Audio.blip(pitch || 300); if (i >= src.length) done(); }, Math.max(8, 30 / read.speed));
+    D.iv = setInterval(() => { i = Math.min(src.length, i + step); show(i); if (step > 1) t.scrollTop = t.scrollHeight; if (++n % 2 === 0 && /\S/.test(src[i - 1] || '')) Audio.blip(pitch || 300); if (i >= src.length) done(); }, Math.max(8, 30 / read.speed));
   });
 }
 /** 觸控裝置沒有鍵盤：提示文字裡的按鍵改說畫面上的按鈕（「按 E」→「按『動作』」、拿掉「Esc 結束」這類子句） */
@@ -97,7 +110,8 @@ export async function ask(sp, text, options, opt) {
     const multi = !!opt.multi, picked = new Set();
     D.choices = multi ? options.concat(['✓ 送出答案']) : options; D.hl = Math.min(opt.hl || 0, D.choices.length - 1); D.multi = multi; D.at = performance.now();
     const box = $('choices'); box.innerHTML = '';
-    D.choices.forEach((o, i) => { const b = el('button', 'choice', opt.html ? rich(o) : esc(plain(o))); b.type = 'button'; b.style.animationDelay = (i * 0.05) + 's'; b.onclick = e => { e.stopPropagation(); pick(i); }; b.onmouseenter = () => { D.hl = i; hl(); }; box.appendChild(b); });
+    // 選項文字包一層 span：大題目面板的 .choice 是 flex，沒包的話 x²、CO₂ 的上下標會被拆成各自的 flex 項目、中間隔一大段
+    D.choices.forEach((o, i) => { const b = el('button', 'choice', `<span class="ch-t">${opt.html ? rich(o) : esc(plain(o))}</span>`); b.type = 'button'; b.style.animationDelay = (i * 0.05) + 's'; b.onclick = e => { e.stopPropagation(); pick(i); }; b.onmouseenter = () => { D.hl = i; hl(); }; box.appendChild(b); });
     if (opt.keys) [...box.children].forEach((b, i) => { if (opt.abc && multi && i === options.length) return; b.insertAdjacentHTML('afterbegin', opt.abc ? `<kbd data-n="${(i + 1) % 10}">${LETTERS[i] || i + 1}</kbd>` : `<kbd>${(i + 1) % 10}</kbd>`); });
     hl();
     if (multi) box.lastChild.classList.add('submit');
