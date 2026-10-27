@@ -1,4 +1,4 @@
-/* 潮汐小島 · 住宅的整棟室內（v7.6）
+/* 潮汐小島 · 住宅的整棟室內（v7.6；v8.1 起圖書館與博物館也是）
    外觀是怎樣，裡面就是怎樣（同樣的樓層、屋頂斜面、窗形、木架與用色），只是裡面的空間大一些。
    每一戶一個獨立場景：data/interiors_<戶>.js 的 TA.ISLE.INTERIORS[key] = (THREE, kit) => Group（第一次進門時建立，之後重複使用）。
    和在島上一樣走：第三人稱（拖曳轉向、滾輪遠近；碰到牆或天花板鏡頭會拉近）或第一人稱（F），樓梯走上走下、多層樓。
@@ -6,10 +6,11 @@
      spawn [x, y, z, ry]        進門站的位置與面向（ry = 0 面向 +z）
      exit [x, z, r]             一樓走進這個圓就出門（spawn 要在圓外）
      host [x, y, z, ry]         主人在家時站的位置
-     spots [{ x, y, z, r, kind, label, name, lines, alone }]   kind：'study'（複習三題）、'look'（說一句這家的小故事）、'hook:名稱'（主程式的專用互動）
+     spots [{ x, y, z, r, kind, label, name, lines, alone, topic?, subject? }]   kind：'study'（複習三題，subject 指定科目）、'look'（說一句這家的小故事）、'hook:名稱'（主程式的專用互動，topic 傳給它）
      gifts [[x, y, z, ry]]      送給主人的家具擺在這些位置（每格至少 1×1 公尺的空地）
      lights [[x, y, z, 色碼?, 強度倍率?, 光暈?]]   暖色點光，最多 6 盞（光暈大小預設 1；有燈罩的燈給小一點，0 是不要光暈）
      sun [x, y, z]              白天主光（從屋外照進窗戶）的方向，預設前右上方
+     bounce k                   四處反彈的光有住家的幾倍（預設 1）：窗多、牆淺的大廳（圖書館、博物館）光會在裡面來回反射，給 1.5–2.5；陰影也比較暖、霧比較遠
      cols [[x0, y0, z0, x1, y1, z1]]   額外的碰撞箱
      decor { x, y, z }          玩家家：「我的房間」8 × 8 公尺地板的中心（玩家的家具照存檔的格子擺在這裡，牆與地板標 paper 的換成玩家選的壁紙地板）
    零件標記（userData）：walk 可以站的地板與樓梯坡道（可以是隱藏的網格）、solid 擋路（用外框算碰撞箱）、
@@ -18,7 +19,7 @@ import * as THREE from 'three';
 import { camera, U, CURVE, M, skyU, renderer, scene as isle, HZ, sky, WL } from './engine.js';
 import { animate } from './chars.js';
 import { buildFurniture, furn, rbox, foot } from './room.js';
-import { mergeStatic, homes } from './props.js';
+import { mergeStatic, homes, BLDG } from './props.js';
 import * as props3d from './props3d.js';
 import * as grass from './grass.js';
 import * as shadows from './shadows.js';
@@ -95,9 +96,9 @@ function shoot(faces) {
   Object.assign(cam, { fov: s.fov, aspect: s.aspect, near: s.near, zoom: s.zoom }); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
   viewMat.uniforms.uEnv.value = ENV.rt.texture; ENV.on.value = 1; envNight = skyU.night.value;
 }
-/** 進門：找這一戶在島上的房子，從中央拍六個面 */
+/** 進門：找這一戶在島上的房子（圖書館、博物館是公共建築），從中央拍六個面 */
 function envEnter(key) {
-  envHome = homes.find(h => h.owner === key) || null; ENV.on.value = 0; envQ = []; envT = 0; envNight = envGold = -1;
+  envHome = homes.find(h => h.owner === key) || (BLDG[key] ? { g: BLDG[key] } : null); ENV.on.value = 0; envQ = []; envT = 0; envNight = envGold = -1;
   if (!envHome) return;
   const q = new THREE.Quaternion(); envHome.g.updateMatrixWorld(true); envHome.g.getWorldQuaternion(q);
   ENV.rot.value.setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q));   // 室內與房子外觀同一組座標軸（門在 +z）
@@ -243,7 +244,7 @@ function fxTick(dt, t, n, gold) {
   FX.sky.forEach(({ l, w, a }) => { const sunK = Math.max(0, w.out.dot(FX.sd)); l.color.copy(_c).lerp(_c2.set('#ffd9b0'), sunK * 0.4 * day); l.intensity = a * (day * (5.6 + sunK * 3.4 + gold * 1.2) + n * 0.4); });
   FX.halos.forEach((s, i) => { const k = 0.35 + n * 0.65, fl = 1 + Math.sin(t * 2.3 + i * 1.7) * 0.03 * n; s.material.opacity = (0.22 + n * 0.5) * fl; s.scale.setScalar((0.9 + k * 0.7) * fl * s.userData.h); });
   // 屋裡的空氣：只有大房子的深處微微泛霧；霧色是屋裡散射光的亮度（中間調），不會把遠處洗成一片亮白
-  if (scene.fog) { scene.fog.color.set(n > 0.5 ? '#3a2d2e' : '#bfa9b2').lerp(_c.set('#c9a593'), gold * day * 0.6); scene.fog.near = 8 + n * 4; scene.fog.far = 60 + n * 16; }
+  if (scene.fog) { scene.fog.color.set(n > 0.5 ? '#3a2d2e' : '#bfa9b2').lerp(_c.set('#c9a593'), gold * day * 0.6); const bk = cur.ud.bounce || 1; scene.fog.near = (8 + n * 4) * bk; scene.fog.far = (60 + n * 16) * bk; }
 }
 /* ---------- v7.9 燈光設計：分層照明與間接照明 ----------
    照室內設計的原則：至少三層光——環境光（吊燈、燈槽打上天花板的間接光）、任務光（書桌與工作台）、重點光（照亮這家最有故事的一面牆或櫃子）；
@@ -373,8 +374,8 @@ export function refreshDecor(dec) { if (inside && cur && cur.ud.decor) placeDeco
 /** 「我的房間」入口內側（從佈置的俯視畫面回來時站的位置） */
 export const decorAt = () => { const D = cur && cur.ud.decor; return D ? [D.x, D.y, D.z + 3.2, Math.PI] : null; };
 
-/** 進門。opt：host（在家的主人或來作客的島民，或 null）、gifts（送給主人的家具資料）、decor（玩家家：room.ownDecor()）、
-    spawn（改從這裡進來 [x, y, z, ry]）、onExit（出門後主程式把角色放回門口） */
+/** 進門。opt：host（在家的主人或來作客的島民、圖書館員，或 null）、gifts（送給主人的家具資料）、decor（玩家家：room.ownDecor()）、
+    spawn（改從這裡進來 [x, y, z, ry]）、dress（ud => [Object3D]：這次才擺的東西，出門時拿掉）、onExit（出門後主程式把角色放回門口） */
 export function enter(key, opt = {}) {
   if (inside || !P || !has(key)) return false;
   try { cur = build(key); } catch (e) { console.warn('室內建立失敗：' + key, e); return false; }
@@ -385,6 +386,7 @@ export function enter(key, opt = {}) {
     const s = ud.gifts[i], m = buildFurniture(f); m.position.set(s[0], s[1], s[2]); m.rotation.y = s[3] || 0; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
     scene.add(m); extra.push(m); m.updateMatrixWorld(true); if (f.cat !== 'rug') extraCols.push(new THREE.Box3().setFromObject(m));
   });
+  (opt.dress ? opt.dress(ud) || [] : []).forEach(o => { scene.add(o); extra.push(o); });   // 這次進門才擺的東西（博物館捐贈過的展品、展區名牌）
   const sd = new THREE.Vector3(...(ud.sun || [0.45, 0.8, 0.55])).normalize();
   sun.position.copy(cur.ctr).addScaledVector(sd, cur.ext + 6); sun.target.position.copy(cur.ctr);
   Object.assign(sun.shadow.camera, { left: -cur.ext, right: cur.ext, top: cur.ext, bottom: -cur.ext, near: 0.5, far: cur.ext * 2 + 14 }); sun.shadow.camera.updateProjectionMatrix();
@@ -507,9 +509,10 @@ export function tick(dt, t, o) {
   const n = THREE.MathUtils.clamp(o.night || 0, 0, 1), gold = o.golden || 0;
   /* v7.8 真實的室內光：屋裡沒有均勻打亮的補光——光從窗戶（天光與直射進來的陽光）和燈來，照度隨距離平方衰減，
      離窗、離燈越遠越暗，角落與屋子深處自然暗下來；只留一點點四處反彈的光（亮面偏暖、背光面與桌底是薰衣草色） */
-  const day = 1 - n;
+  const day = 1 - n, bk = cur.ud.bounce || 1;
   hemi.color.set(n > 0.5 ? '#d2b296' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#4a3a3c' : '#a893b8');   // v8.0：晚上四處反彈的是燈的暖光（月光只從窗戶進來）
-  hemi.intensity = 0.22 * day + 0.15 * n; fill.intensity = 0.1 * day + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0');
+  if (bk > 1) hemi.groundColor.lerp(_c.set('#d6b89c'), Math.min(1, (bk - 1) * 0.7) * day);   // v8.1 大廳：白天從蜂蜜木地板、奶油牆反彈上來的光偏暖
+  hemi.intensity = 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0');
   sun.intensity = day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b9c0ff' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
   scene.background.set(n > 0.5 ? '#1d1a34' : '#cbb8de');
   extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光

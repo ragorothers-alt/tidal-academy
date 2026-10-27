@@ -510,3 +510,41 @@ test('收藏目錄：每件拿得到的家具都寫得出怎麼拿到，活動�
   assert.ok(J.FURNITURE.some(f => f.src === 'hotel-fixed') ? J.FURNITURE.filter(f => !Q.inCatalog(f)).every(f => f.src === 'hotel-fixed') : true);
   assert.equal(Q.full({ a: 1, b: 2 }, ['a', 'b']), true); assert.equal(Q.full({ a: 1 }, ['a', 'b']), false); assert.equal(Q.full({}, []), false);
 });
+
+/* v8.1 圖書館、博物館的整棟室內：進出、互動點都接得上主程式，博物館每一種展品都有展示位 */
+test('公共建築的整棟室內：出生點、出口、互動點與展示位', t => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, Date, JSON, THREE }; cx.window = cx; cx.globalThis = cx;
+  const c2d = new Proxy(function () {}, { get: (o, k) => (k === 'canvas' ? cv : k === 'measureText' ? () => ({ width: 10 }) : () => c2d), set: () => true });
+  const cv = { width: 64, height: 64, style: {}, getContext: () => c2d, toDataURL: () => '' };
+  cx.document = { createElement: () => Object.assign({}, cv) }; vm.createContext(cx);
+  const std = () => new THREE.MeshStandardMaterial();
+  const kit = { mat: std, rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null };
+  const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8'), hooks = (main.match(/const HOUSE_HOOKS = \{([\s\S]*?)\};/) || ['', ''])[1];
+  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'] };
+  for (const key of ['library', 'museum']) {
+    vm.runInContext(fs.readFileSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`), 'utf8'), cx, { filename: key });
+    const fac = cx.TA && cx.TA.ISLE && cx.TA.ISLE.INTERIORS && cx.TA.ISLE.INTERIORS[key];
+    if (!fac) { t.diagnostic(key + ' 還沒有整棟室內（用舊的房間）'); continue; }
+    const ud = fac(THREE, kit).userData;
+    const [sx, , sz] = ud.spawn, [ex, ez, er] = ud.exit;
+    assert.ok(Math.hypot(sx - ex, sz - ez) > er + 0.4, key + ' 出生點要在出口圈外');
+    assert.ok(Array.isArray(ud.host) && ud.host.length >= 3, key + ' 館員的位置');
+    const kinds = ud.spots.map(s => s.kind);
+    ud.spots.forEach(s => {
+      assert.ok(s.label && s.label.length <= 6 && s.r > 0, key + ' 互動點 ' + s.label);
+      if (s.kind.startsWith('hook:')) assert.match(hooks, new RegExp('\\b' + s.kind.slice(5) + ':'), key + ' 主程式沒有 ' + s.kind);
+      else assert.ok(['look', 'study'].includes(s.kind), key + ' 互動種類 ' + s.kind);
+    });
+    need[key].forEach(h => assert.ok(kinds.includes('hook:' + h), key + ' 少了 hook:' + h));
+    if (key === 'museum') {
+      const L = { fish: I.FISH, bug: I.BUGS, fossil: I.FOSSILS, sea: I.SEALIFE, mineral: I.MINERALS };
+      for (const [k, arr] of Object.entries(L)) {
+        assert.ok(ud.spots.some(s => s.kind === 'hook:wing' && s.topic === k), '博物館少了 ' + k + ' 展區的互動點');
+        assert.ok((ud.exhibits[k] || []).length >= (arr || []).length, `博物館 ${k} 的展示位不夠：${(ud.exhibits[k] || []).length} < ${(arr || []).length}`);
+        assert.ok(ud.wingSigns && ud.wingSigns[k], '博物館 ' + k + ' 的展區名牌');
+      }
+      assert.ok(ud.spots.some(s => s.kind === 'study' && s.subject === 'history'), '博物館的歷史互動點');
+    }
+  }
+});

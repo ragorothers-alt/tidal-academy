@@ -265,7 +265,9 @@ const YUE_HOOKS = {
 };
 yuehome.init(player, earthV, YUE_HOOKS);
 house.init(player);
-const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS.notes, decor: () => houseDecor() };
+const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS.notes, decor: () => houseDecor(),
+  review: () => libAct('rv'), vocab: () => libAct('voc'), mistakes: () => libAct('book'), words: () => libAct('word'), libnotes: () => libAct('notes'),   // v8.1 圖書館的功能點
+  wing: k => museum.openWing(k) };   // 博物館的展區（topic 是展區）
 trip.init(player, () => { const x = PIER.x, z = PIER.z + PIER.len - 1.4; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
 spirit.init(player, () => skyU.night.value > 0.5);
 diy.init(player, myHome, { thumb: id => room.thumb(id), addStorage: (id, n) => room.addStorage(id, n) });
@@ -336,8 +338,8 @@ async function villagerTalk(v) {
   const ml = move.movedLine(v); if (ml) await ui.say(sp(v), ml + tail(v));
   const bl = gifts.isBirthday(v) && ((gifts.pref(v) || {}).lines || {}).birthday, pb = gifts.playerBirthday() && (I.PLAYER_BDAY || {})[v.sid];
   if (bl || pb) await ui.say(sp(v), pick(bl || [pb]) + tail(v)); else
-  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || greetOf(v)) + tail(v));
-  if (weather.typhoon() && (room.inside || yuehome.inside || house.inside) && roomHost === v) await typhoonTalk(v);
+  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside && houseSid !== 'museum' || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || greetOf(v)) + tail(v));
+  if (weather.typhoon() && (room.inside || yuehome.inside || house.inside && houseSid !== 'museum') && roomHost === v) await typhoonTalk(v);
   else if (weather.afterTyphoon()) { const s0 = S(); s0.afterTalk = s0.afterTalk && s0.afterTalk.d === dayKey() ? s0.afterTalk : { d: dayKey(), who: {} }; if (!s0.afterTalk.who[v.sid]) { s0.afterTalk.who[v.sid] = true; save(); await ui.say(sp(v), L5(v.sid, 'after', ['颱風過去了，大家都平安就好。'])); } }
   { const rem = planner.remind(v); if (rem) await ui.say(sp(v), rem); }
   await town.playBond(v, sp(v));
@@ -949,7 +951,7 @@ function act() {
   if (yuehome.inside) { const yh = yuehome.handler(); if (yh) Promise.resolve(yh()).finally(() => paintHud()); return; }
   if (house.inside) {
     const z = house.zone(); if (!z) return;
-    if (z.kind === 'host') { talk(house.hostNow()); return; }
+    if (z.kind === 'host') { const hv = house.hostNow(); if (hv.isLib) libTalk(); else talk(hv); return; }
     if (z.kind === 'furn') { talking = { name: 'house' }; room.itemMenu(z.item).finally(() => { talking = null; ui.closeDialog(); house.refreshDecor(room.ownDecor()); paintHud(); }); return; }   // 自己家的家具：轉向、收起、床可以睡覺
     if (z.kind === 'hook:decor') { houseDecor(); return; }
     const fn = z.kind.startsWith('hook:') ? HOUSE_HOOKS[z.kind.slice(5)] : null, mine = houseSid === 'player';   // 玩家家：來作客的島民不會替你介紹你家的東西
@@ -963,7 +965,7 @@ function act() {
     if (host && Math.hypot(host.mesh.position.x - player.position.x, host.mesh.position.z - player.position.z) < 1.8) { if (host.isLib) libTalk(); else if (host.isHotel) hotelTalk(host); else talk(host); return; }
     const it = room.facingItem(); if (it) { talking = { name: 'room' }; room.itemMenu(it).finally(() => { talking = null; }); } return;
   }
-  if (nearDoor) { if (nearDoor.kind === 'mill') { millTalk(); return; } if (nearDoor.kind === 'mine') enterHome(); else if (nearDoor.kind === 'home') visit(nearDoor.v); else if (nearDoor.kind === 'library') enterLibrary(); else if (nearDoor.kind === 'board') boardMenu(); else if (nearDoor.kind === 'stars') stargaze(); else if (nearDoor.kind === 'museum') { life.cancel(); moveTo = null; museum.enter(); } else if (nearDoor.kind === 'diy') benchMenu(); else if (nearDoor.kind === 'hotel') hotel.enterLobby(); else if (nearDoor.kind === 'shop') { life.cancel(); moveTo = null; if (shopV) { town.interrupt(shopV); if (shopV.sitting) standVillager(shopV); shopV.sitGoal = null; } shopin.enter(); } else building(nearDoor.kind); return; }
+  if (nearDoor) { if (nearDoor.kind === 'mill') { millTalk(); return; } if (nearDoor.kind === 'mine') enterHome(); else if (nearDoor.kind === 'home') visit(nearDoor.v); else if (nearDoor.kind === 'library') enterLibrary(); else if (nearDoor.kind === 'board') boardMenu(); else if (nearDoor.kind === 'stars') stargaze(); else if (nearDoor.kind === 'museum') enterMuseum(); else if (nearDoor.kind === 'diy') benchMenu(); else if (nearDoor.kind === 'hotel') hotel.enterLobby(); else if (nearDoor.kind === 'shop') { life.cancel(); moveTo = null; if (shopV) { town.interrupt(shopV); if (shopV.sitting) standVillager(shopV); shopV.sitGoal = null; } shopin.enter(); } else building(nearDoor.kind); return; }
   if (nearMail) { social.openMail(); return; }
   if (nearV) { talk(nearV); return; }
   { const st = nearSeat(); if (st) { sitDown(st); return; } }
@@ -1394,15 +1396,43 @@ let roomHost = null, houseSid = null;
 /** v7.6：整棟室內的互動點（書桌複習三題、其他說一句這家的小故事）；主人在家由主人說（lines），不在家或在自己家是旁白（alone） */
 async function spotAct(s, host, subject) {
   const own = !!host;
-  const who = own ? sp(host) : { name: s.name || s.label, color: '#a58bc9', voice: 300 };
+  const who = own ? (host.isLib ? library.sp() : sp(host)) : { name: s.name || s.label, color: '#a58bc9', voice: 300 };
   const pool = own ? s.lines : s.alone || s.lines, lines = pool && pool.length ? pool : ['……'];
+  subject = s.subject || (subject && TA.subject(subject) ? subject : null);   // 圖書館、博物館不是科目：書桌的 subject 指定（博物館是歷史）
   if (s.kind === 'study') { await ui.say(who, pick(lines)); ui.closeDialog(); await drill(who, picker(subject ? { mode: 'subject', subject } : { mode: 'mixed' }), 3, {}); return; }
   await ui.say(who, pick(lines));
 }
 const libMesh = chibi(library.LIB()); libMesh.traverse(m => { m.frustumCulled = false; }); actors.dress(libMesh, 'library');
 const LIBHOST = { isLib: true, sid: 'library', mesh: libMesh };
+/** v8.1 圖書館、博物館的整棟室內（house.js）：出館回到門口；建不起來就用舊的房間／展廳 */
+function enterPublic(key, host, door, opt = {}) {
+  const yaw0 = camYaw;
+  nearDoor = null; nearV = null; houseSid = key; roomHost = host;
+  const ok = house.enter(key, { host, dress: opt.dress, onExit: () => {
+    if (opt.after) opt.after();
+    roomHost = null; houseSid = null; moveTo = null; nearDoor = null; nearV = null; camYaw = yaw0;
+    player.position.set(door[0], ground(door[0], door[1]), door[1]); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud();
+  } });
+  if (!ok) { houseSid = null; roomHost = null; return false; }
+  camYaw = house.spawnYaw() + Math.PI; fpPitch = -0.05; return true;
+}
+function enterMuseum() {
+  life.cancel(); moveTo = null;
+  if (house.has('museum')) {
+    const f = SITES.museum, v = villagers.find(x => x.sid === 'history'), at = !!v && !v.away && v.mesh.visible && Math.hypot(v.mesh.position.x - f.front[0], v.mesh.position.z - f.front[1]) < 8;   // 史遙守在博物館門口：她在附近的話，進館後她站在服務台
+    if (at) { town.interrupt(v); if (v.sitting) standVillager(v); v.sitGoal = null; }
+    const back = () => { museum.undress(); if (at) { v.mesh.position.set(f.front[0], ground(f.front[0], f.front[1]), f.front[1]); v.target = v.home.slice(); } };
+    if (enterPublic('museum', at ? v : null, [f.x, f.z + 2.6], { dress: museum.dress, after: back })) { museum.welcome(); return; }
+  }
+  museum.enter();
+}
+async function libAct(k) {
+  if (talking) return; talking = { name: 'library' };
+  try { await library.act(k); } finally { ui.closeDialog(); talking = null; paintHud(); }
+}
 function enterLibrary() {
   life.cancel(); moveTo = null;
+  if (house.has('library')) { const d = SITES.library.door; if (enterPublic('library', LIBHOST, [d[0], d[1] + 0.4])) return; }
   roomHost = LIBHOST;
   room.enter(player, () => { roomHost = null; room.scene.remove(libMesh); scene.add(player); const d = SITES.library.door; player.position.set(d[0], ground(d[0], d[1] + 0.4), d[1] + 0.4); player.rotation.y = 0; camPos.copy(player.position).add(camOff); }, { home: library.room(), sid: 'library' });
   room.scene.add(libMesh); libMesh.position.set(0.5, 0, -1.8); libMesh.rotation.y = 0;
@@ -2151,4 +2181,4 @@ scene.traverse(o => { o.frustumCulled = cullable(o); }); dropTinyShadows(scene);
 paintHud(); paintTools();
 requestAnimationFrame(frame);
 addEventListener('pagehide', () => { if (TA.importing) return; if (!room.inside && !elsewhere()) S().pos = [player.position.x, player.position.z]; TA.Store.flush(); });
-window.__isle = { yuehome, house, shopin, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };
+window.__isle = { yuehome, house, shopin, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, enterLibrary, enterMuseum, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };

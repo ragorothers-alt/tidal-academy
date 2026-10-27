@@ -1,5 +1,7 @@
 /* 潮汐小島 · 博物館內部：從博物館大門走進展廳。左牆是魚類水族箱、右牆是昆蟲標本櫃、後牆是化石、
-   前方兩側是潮池生物與礦物。捐贈過的展品會擺上展示位，走近按 E 看說明；還沒捐的位置是空的。 */
+   前方兩側是潮池生物與礦物。捐贈過的展品會擺上展示位，走近按 E 看說明；還沒捐的位置是空的。
+   v8.1 起新館是整棟室內（data/interiors_museum.js，house.js 走路與燈光）：這裡的 dress() 把捐贈過的展品擺上新館的展示位；
+   這間舊展廳只在新館建不起來時用。 */
 import * as THREE from 'three';
 import { renderer, camera, M, mesh, U, CURVE, scene as mainScene } from './engine.js';
 import { animate } from './chars.js';
@@ -128,9 +130,69 @@ export function enter() {
   sc = build(); inside = true; savedCurve = U.uCurve.value; U.uCurve.value = 0;
   sc.add(P); P.position.set(0, 0, HD - 0.8); P.rotation.y = Math.PI; camPos.set(0, 13.5, HD + 12);
   document.body.classList.add('in-trip'); Audio.sfx('open');
-  const s = S(), n = ['fish', 'bug', 'fossil', 'sea', 'mineral'].reduce((a, k) => a + Object.keys(s.museum[k] || {}).length, 0);
-  ui.toast(`歡迎參觀潮汐博物館！目前館藏 ${n} 件。走到展區前按 E 看完整館藏`);
+  welcome();
 }
+/** 館藏總數（五個展區捐贈過的件數） */
+export const count = () => { const s = S(); return WINGS.reduce((a, w) => a + Object.keys(s.museum[w.k] || {}).length, 0); };
+export const welcome = () => ui.toast(`歡迎參觀潮汐博物館！目前館藏 ${count()} 件。走到展區前按 E 看完整館藏`);
+
+/* ---------- v8.1 新館的展品 ----------
+   新館的 userData：
+     exhibits { fish: [[x, y, z, ry, s?, tilt?], ...], bug, fossil, sea, mineral }   每一種展品一個展示位（依 list(k) 的順序）：(x, y, z) 是展品圖卡的中心，
+                                                                             ry 是圖卡朝向（0 = 面向 +z），s 是邊長（預設 0.42 公尺），tilt 是往後仰的弧度（斜面展示台用，預設 0）；捐贈過才擺上圖卡
+     wingSigns { fish: [x, y, z, ry, w], ... }   展區名牌：寬 w 公尺（高是寬的四分之一），畫上「魚類 12/65」 */
+/* 圖卡畫在同一張圖集上（32×32 的圖示一格 40 像素、四周留 4 像素透明邊，縮小取樣時不會滲到隔壁），全部圖卡合併成一個網格：全館一次繪製 */
+const ATL = { n: 25, cell: 40, cv: null, tex: null, mat: null, at: new Map() };
+function atlasCell(url) {
+  if (!ATL.cv) {
+    ATL.cv = document.createElement('canvas'); ATL.cv.width = ATL.cv.height = 1024;
+    const t = ATL.tex = new THREE.CanvasTexture(ATL.cv); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
+    ATL.mat = new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.3, alphaTest: 0.5, roughness: 0.85 });   // 自己帶一點光：櫃子深處、晚上也看得清楚
+  }
+  if (ATL.at.has(url)) return ATL.at.get(url);
+  const i = ATL.at.size; if (i >= ATL.n * ATL.n) return -1;
+  ATL.at.set(url, i);
+  const im = new Image(); im.onload = () => { const c = ATL.cv.getContext('2d'); c.imageSmoothingEnabled = false; c.drawImage(im, (i % ATL.n) * ATL.cell + 4, Math.floor(i / ATL.n) * ATL.cell + 4, 32, 32); ATL.tex.needsUpdate = true; }; im.src = url;
+  return i;
+}
+/** 一批圖卡（[x, y, z, ry, s, 格, tilt]）合併成一個網格 */
+function cardsMesh(list) {
+  const P = [], N = [], UV = [], IX = [], A = 1024;
+  list.forEach(([x, y, z, ry, s, i, t], k) => {
+    const cx = Math.cos(ry), sx = Math.sin(ry), ct = Math.cos(t), st = Math.sin(t), h = s / 2, u0 = ((i % ATL.n) * ATL.cell + 4) / A, u1 = u0 + 32 / A, v1 = 1 - (Math.floor(i / ATL.n) * ATL.cell + 4) / A, v0 = v1 - 32 / A;
+    // 右方 (cx, 0, -sx)；上方往後仰 (-sx·st, ct, -cx·st)；法線 (sx·ct, st, cx·ct)
+    [[-1, -1, u0, v0], [1, -1, u1, v0], [1, 1, u1, v1], [-1, 1, u0, v1]].forEach(([a, b, u, v]) => { P.push(x + h * (cx * a - sx * st * b), y + h * ct * b, z + h * (-sx * a - cx * st * b)); N.push(sx * ct, st, cx * ct); UV.push(u, v); });
+    const o = k * 4; IX.push(o, o + 1, o + 2, o, o + 2, o + 3);
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setIndex(IX);
+  const m = new THREE.Mesh(g, ATL.mat); m.castShadow = false; m.receiveShadow = true; return m;
+}
+let signs = [];
+function signMesh(w, n, total, [x, y, z, ry, wd]) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const c = cv.getContext('2d');
+  c.fillStyle = '#fbf4e6'; c.fillRect(0, 0, 512, 128); c.fillStyle = w.color; c.fillRect(0, 0, 512, 14); c.fillRect(0, 114, 512, 14);
+  c.fillStyle = '#5a4632'; c.font = '800 62px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${w.name} ${n}/${total}`, 256, 66);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(wd || 1.6, (wd || 1.6) / 4), new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.25, roughness: 0.9 }));
+  m.position.set(x, y, z); m.rotation.y = ry || 0; signs.push(m); return m;
+}
+/** 進新館時呼叫（house.enter 的 dress）：回傳要擺進場景的圖卡與名牌 */
+export function dress(ud) {
+  const s = S(), ex = ud.exhibits || {}, out = [], cards = [];
+  signs = [];
+  WINGS.forEach(w => {
+    const L2 = list(w.k), pos = ex[w.k] || [], got = s.museum[w.k] || {};
+    L2.forEach((sp, i) => {
+      const p = pos[i]; if (!p || !got[sp.id]) return;
+      const c = atlasCell(icon(sp.id, w.k)); if (c >= 0) cards.push([p[0], p[1], p[2], p[3] || 0, p[4] || 0.42, c, p[5] || 0]);
+    });
+    const sg = (ud.wingSigns || {})[w.k]; if (sg) out.push(signMesh(w, L2.filter(x => got[x.id]).length, L2.length, sg));
+  });
+  if (cards.length) { const m = cardsMesh(cards); signs.push(m); out.push(m); }
+  return out;
+}
+/** 出館：名牌的字與這次的圖卡網格每次重做，釋放掉（圖集留著下次用） */
+export function undress() { signs.forEach(m => { m.geometry.dispose(); if (m.material !== ATL.mat) { m.material.map.dispose(); m.material.dispose(); } }); signs = []; }
 /** 離館時釋放這次建立的幾何與專屬材質（共用材質 M() 與圖示貼圖快取不釋放） */
 function dispose() {
   if (!sc) return;
@@ -169,7 +231,7 @@ export function tick(dt, t, ix, iz, len, moving, run, locked) {
 export const hint = () => { if (Math.abs(P.position.x) < 1 && P.position.z > HD - 1.4) return '往下走出博物館'; const z = zone(); return z ? `看${WINGS.find(w => w.k === z.k).name}展區` : ''; };
 export function handler() { const z = zone(); return z ? () => openWing(z.k) : null; }
 const infoOf = (k, x) => k === 'fossil' ? `鑑定科目：${(window.TA.subject(x.sid) || {}).name || ''}` : k === 'mineral' ? `莫氏硬度 ${x.mohs} · ${stars(x.rarity)}` : `${whereName(k, x)}${x.weather === 'rain' ? '（雨天限定）' : ''} · ${k === 'sea' ? '退潮時' : fmtHours(x) + ' · ' + fmtMonths(x)} · ${stars(x.rarity)}`;
-async function openWing(k) {
+export async function openWing(k) {
   const w = WINGS.find(x => x.k === k), s = S(), L2 = list(k), got = L2.filter(x => s.museum[k] && s.museum[k][x.id]);
   const body = ui.el('div', 'dex'), grid = ui.el('div', 'dex-grid'), info = ui.el('div', 'dex-info', `<small class="muted">${w.name}展區館藏 ${got.length} / ${L2.length}。點展品看說明；灰色的是還沒捐贈的。</small>`);
   L2.forEach(x => {

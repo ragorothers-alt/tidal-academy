@@ -24,23 +24,30 @@ export async function talk() {
     opts.push(['翻閱錯題本（清單與詳解）', 'book'], ['每日單字謎', 'word'], ['翻閱單元筆記', 'notes'], ['再見', 'bye']);
     const i = await ui.ask(s, '今天想做什麼呢？', opts.map(o => o[0]));
     const k = opts[i] ? opts[i][1] : 'bye';
-    if (k === 'word') { ui.closeDialog(); words.open(); return; }
     if (k === 'bye') { await ui.say(s, '慢慢來，明天見。'); return; }
-    if (k === 'notes') { ui.closeDialog(); openNotes(); return; }
-    if (k === 'book') { ui.closeDialog(); openMistakes(); return; }
-    if (k === 'rv') {
-      const ids = L.reviewNext(6); if (!ids.length) { await ui.say(s, reviewEmpty() + '。可以翻翻單元筆記，或去讀新單元。'); continue; }
-      await ui.say(s, pick(ids.some(L.isMistake) ? b.mistakes : b.due));
-      const before = L.mistakes().length, r = await drill(s, picker({ mode: 'ids', ids }), ids.length, { praise: b.praise });
-      await result(s, r, before - L.mistakes().length);
-      await ui.say(s, reviewLine() + '。');
-    }
-    if (k === 'voc') {
-      await ui.say(s, pick(b.vocab));
-      const r = await drill(s, picker({ mode: 'vocab' }), 10, { praise: b.praise });
-      await result(s, r);
-    }
+    if (!await act(k)) return;   // 筆記、錯題本、單字謎是面板：打開就結束對話；複習完回到選單
   }
+}
+/** 一項功能（館員選單，或 v8.1 新館裡的功能點直接開始）：rv 今天的複習、voc 單字複習、book 錯題本、word 單字謎、notes 單元筆記。
+    回傳 true＝在對話裡做完了（可以回到選單） */
+export async function act(k) {
+  const b = LIB(), s = sp();
+  if (k === 'word') { ui.closeDialog(); words.open(); return false; }
+  if (k === 'notes') { ui.closeDialog(); openNotes(); return false; }
+  if (k === 'book') { ui.closeDialog(); openMistakes(); return false; }
+  if (k === 'rv') {
+    const ids = L.reviewNext(6); if (!ids.length) { await ui.say(s, reviewEmpty() + '。可以翻翻單元筆記，或去讀新單元。'); return true; }
+    await ui.say(s, pick(ids.some(L.isMistake) ? b.mistakes : b.due));
+    const before = L.mistakes().length, r = await drill(s, picker({ mode: 'ids', ids }), ids.length, { praise: b.praise });
+    await result(s, r, before - L.mistakes().length);
+    await ui.say(s, reviewLine() + '。');
+  }
+  if (k === 'voc') {
+    await ui.say(s, pick(b.vocab));
+    const r = await drill(s, picker({ mode: 'vocab' }), 10, { praise: b.praise });
+    await result(s, r);
+  }
+  return true;
 }
 async function result(s, r, fixed) {
   const b = LIB(), bells = r.ok * 150; S().bells += bells; save();

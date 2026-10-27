@@ -24,6 +24,7 @@ export let wildFlowers = () => {};
 /** 廣場中心（規劃的廣場，套上地形扭曲）：島民聚會、節慶裝飾、雪人都以這裡為準 */
 export const PLAZA = warp(PLAN.sites.plaza.x, PLAN.sites.plaza.z);
 export const SITES = {};
+export const BLDG = {};   // 走得進去的公共建築外觀（圖書館、博物館）：室內拍窗外全景時用（藏起外觀、找中心與朝向）
 export function blocked(x, z, r, skip) {
   for (const c of colliders) {
     if (skip && (c.r ? Math.hypot(c.x - x, c.z - z) < c.r + r : x > c.x0 - r && x < c.x1 + r && z > c.z0 - r && z < c.z1 + r) && skip(c)) continue;
@@ -424,7 +425,7 @@ function museum(x, z) {
   const sg = label('潮汐博物館', '#5b8fd6', 2.6, 0.62); sg.position.set(0, 3.9, 2.56); g.add(sg);
   altBuilding('museum', g, [sg]);
   mergeStatic(g); scene.add(g); register(g); boxC(x - 3.6, z - 2.6, x + 3.6, z + 1.9);
-  SITES.museum = { x, z, front: [x + 0.5, z + 3.6] };
+  SITES.museum = { x, z, front: [x + 0.5, z + 3.6] }; BLDG.museum = g;
 }
 function shop(x, z) {
   const y = groundAt(x, z), g = new THREE.Group(); g.position.set(x, y, z);
@@ -463,7 +464,7 @@ function libraryHall(x, z) {
   const sg = label('潮汐圖書館', '#5a8a5a', 2.2, 0.55); sg.position.set(0, 2.45, 1.66); g.add(sg);
   altBuilding('library', g, [sg]);
   mergeStatic(g); scene.add(g); register(g); boxC(x - 1.95, z - 1.55, x + 1.95, z + 1.55);
-  SITES.library = { x, z, door: [x, z + 2.2] };
+  SITES.library = { x, z, door: [x, z + 2.2] }; BLDG.library = g;
 }
 function examHall(x, z) {
   const y = groundAt(x, z), g = new THREE.Group(); g.position.set(x, y, z); g.scale.setScalar(0.8);
