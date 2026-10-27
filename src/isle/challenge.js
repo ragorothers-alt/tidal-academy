@@ -13,7 +13,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as cooking from './cooking.js';
 import * as memo from './memo.js';
-import { pickQ, pickQU, record, pick, vocabQ, askQ, readSec, quickQ } from './quiz.js';
+import { pickQ, pickQU, record, pick, vocabQ, askQ, readSec, quickQ, confPlan, confNote, askWhy } from './quiz.js';
 import { openNotes } from './library.js';
 import { I, S, save, icon } from './state.js';
 import { MATS } from './diy.js';
@@ -103,21 +103,32 @@ export async function streak(v) {
   return n;
 }
 
+/** v8.4 易混題對照（data/contrast.js）：這一科的一組，兩題都不在冷卻、不是今天的複習；一組練習約三分之一的機會，同一組 7 天內不重複 */
+function contrastFor(sid, rv) {
+  const s = S(), seen = s.contrast = s.contrast || {}, now = Date.now();
+  const list = (I.CONTRAST || []).filter(c => c.sid === sid && L.Q[c.a] && L.Q[c.b] && !L.cooling(c.a) && !L.cooling(c.b) && !rv.includes(c.a) && !rv.includes(c.b) && !(now - (seen[c.a + '|' + c.b] || 0) < 7 * 864e5));
+  if (!list.length || Math.random() > 0.35) return null;
+  const c = pick(list); seen[c.a + '|' + c.b] = now; save(); return c;
+}
 /** 一起練習（v7.1，導師的預設練習）：一組 5 題、不限時，難度照這科的表現調整（連對兩題升一級、答錯降一級）；
     每題答對就拿 100 × 難度鈴錢，後面答錯也不收回；答錯看完解析繼續下一題，最後說這組的結果。想拚紀錄的玩家另選「連續挑戰」。回傳答對題數 */
 export const SET = 5;
 export async function practice(v) {
   const s = S(), sp = H.sp(v), R = rec(), seen = new Set(), st = L.subjectStats(v.sid);
   const okL = v.ok || ['答對了！', '漂亮！', '完全正確！'], badL = v.bad || ['可惜！', '差一點！'];
-  let d = st.attempts < 5 || st.acc < 0.55 ? 1 : st.acc < 0.8 ? 2 : 3, run = 0, got = 0, bells = 0, friend = '', k = 0;
+  let d = st.attempts < 5 || st.acc < 0.55 ? 1 : st.acc < 0.8 ? 2 : 3, run = 0, got = 0, bells = 0, friend = '', k = 0, why = false;
+  const cf = confPlan(SET);   // v8.4 一組 5 題裡有 2 題先問把握
   const rv = L.reviewNext(2, id => L.Q[id].subject === v.sid);   // v7.1：今天的複習清單裡這一科的題目先出（和圖書館、手機同一份）
+  const pair = contrastFor(v.sid, rv);   // v8.4 偶爾最後兩題是一組易混題：表面很像、方法不同
   await ui.say(sp, (R.pIntro ? pick(v.ask || ['我們來練幾題！']) : '我們一起練 5 題：不限時間，難度會照你的狀況調整。答對一題就拿一題的鈴錢，答錯也不會收回，看完解析就換下一題。') + (rv.length ? `先從今天的複習裡挑 ${rv.length} 題你之前做過的。` : ''));
   R.pIntro = 1;
   for (k = 1; k <= SET; k++) {
-    const q = (rv[k - 1] && L.view(L.Q[rv[k - 1]])) || pickQ(v.sid, d, { minD: d, skip: seen, any: true }) || pickQ(v.sid, 3, { skip: seen, any: true }); if (!q) break;
+    const pq = pair && k >= SET - 1 ? L.Q[k === SET - 1 ? pair.a : pair.b] : null;
+    if (pq && k === SET - 1) await ui.say(sp, `接下來兩題很像，先別急著套公式——${pair.ask}`);
+    const q = (pq && L.view(pq)) || (rv[k - 1] && L.view(L.Q[rv[k - 1]])) || pickQ(v.sid, d, { minD: d, skip: seen, any: true }) || pickQ(v.sid, 3, { skip: seen, any: true }); if (!q) break;
     seen.add(q.id);
-    const qd = q.d || d, { ok, ans } = await askQ(sp, q, `【一起練習 第 ${k}/${SET} 題・${rv[k - 1] ? '複習' : DN[qd]}】<br>`);
-    record(q, ok);
+    const qd = q.d || d, { ok, ans, conf } = await askQ(sp, q, `【一起練習 第 ${k}/${SET} 題・${rv[k - 1] ? '複習' : DN[qd]}】<br>`, { conf: cf.has(k - 1) });
+    record(q, ok, { conf }); const lead = confNote(ok, conf);
     if (ok) {
       got++; run++; const b = Math.round(100 * qd * cooking.bellsMul()); bells += b; s.bells += b;
       if ((s.frDay[v.sid] || 0) < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = (s.frDay[v.sid] || 0) + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; if (before >= 20 && bond.overflow(v)) friend = '（多了一段共同回憶，寫進回憶錄了）'; }
@@ -127,8 +138,10 @@ export async function practice(v) {
     } else {
       run = 0; d = Math.max(1, d - 1);
       Audio.sfx('bad'); ui.emote(v.mesh, '💧', '#5fa8ff');
-      await ui.explain(sp, q, ans === -1 ? '時間到！' : pick(badL)); ui.passage(null);
+      await ui.explain(sp, q, ans === -1 ? '時間到！' : lead || pick(badL)); ui.passage(null);
+      if (!why) { why = true; await askWhy(sp, q); }   // v8.4 一組最多問一次錯因
     }
+    if (pq && k === SET) await ui.say(sp, `剛才那兩題差在這裡：${pair.key}`);
   }
   const n = Math.min(SET, k - 1);
   await ui.say(sp, n ? `這組 ${n} 題答對 ${got} 題，拿到 ${bells} 鈴錢。${got === n ? '全對！下次可以挑戰難一點的。' : got ? '答錯的題目記下來了，過幾天會再考你。' : '沒關係，錯的題目過幾天會再出現，到時候就會了。'}${H.tail(v)}${friend}` : '題目都被你答完了！');

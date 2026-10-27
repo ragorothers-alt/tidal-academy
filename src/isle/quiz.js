@@ -2,7 +2,8 @@
    剛答過（20 分鐘內）的題目先冷卻，不會剛看完解析又考同一題；每次出題選項順序都打亂（L.view）。 */
 import * as ui from './ui.js';
 import * as miles from './miles.js';
-import { dayKey as stateDayKey } from './state.js';
+import * as Audio from './audio.js';
+import { S, dayKey as stateDayKey } from './state.js';
 
 const TA = window.TA, L = TA.L;
 /** 科目題目。題目再長都能出（放不下時對話框自動換成大題目面板），不因版面挑題。
@@ -33,16 +34,33 @@ export async function askQ(sp, q, head, opt) {
     const ans = await ui.input(sp, (head || '') + '（選填題：算出答案後輸入）' + q.q, Object.assign({ html: true }, opt));
     return { ok: ans !== -1 && L.check(q, ans), ans };
   }
-  const multi = q.type === 'multi';
-  const ans = await ui.ask(sp, (head || '') + (multi && !/多選/.test(q.q) ? '（多選題：選出所有正確的選項再送出）' : '') + q.q, q.o, Object.assign({ html: true, keys: true, abc: true, multi, answer: q.a }, opt));
-  return { ok: multi ? Array.isArray(ans) && L.check(q, ans) : ans === q.a, ans };
+  const multi = q.type === 'multi', conf = !!(opt && opt.conf) && !(opt && opt.timer) && !multi && !q.vocab;
+  const ans = await ui.ask(sp, (head || '') + (multi && !/多選/.test(q.q) ? '（多選題：選出所有正確的選項再送出）' : '') + q.q, q.o, Object.assign({ html: true, keys: true, abc: true, multi, answer: q.a }, opt, { conf }));
+  return { ok: multi ? Array.isArray(ans) && L.check(q, ans) : ans === q.a, ans, conf: conf ? ui.lastConf() : null };
+}
+/** v8.4 一組題目裡問「有把握嗎」的題號（不限時、3 題以上的組才問；一組問 2 題，不會每題都多一步） */
+export function confPlan(n, opt) {
+  if (n < 3 || (opt && opt.timer) || (S().settings || {}).noConf) return new Set();
+  const ks = [...Array(n).keys()].sort(() => Math.random() - 0.5); return new Set(ks.slice(0, 2));
+}
+/** v8.4 作答後的後設認知回饋：猜對的明天再確認；很有把握卻答錯，先看差在哪裡。回傳解析的開頭（答錯時用） */
+export function confNote(ok, conf) {
+  if (ok && conf === 'guess') { ui.toast('猜對了：這題先不往後排，明天再確認一次'); return ''; }
+  if (!ok && conf === 'sure') return '很有把握卻答錯了——這種題目最值得看清楚差在哪裡。';
+  return '';
+}
+/** v8.4 答錯看完解析後，標一下錯在哪裡（一組最多問一次；可以跳過）。錯題本會依錯因分組 */
+export async function askWhy(sp, q) {
+  if (!q || q.vocab || !L.Q[q.id] || (S().settings || {}).noWhy) return;
+  const K = Object.keys(L.WHY), i = await ui.ask(sp, '這題錯在哪裡？標一下，錯題本會幫你分組（也可以跳過）。', K.map(k => L.WHY[k]).concat(['先跳過']), { keys: true });
+  if (i >= 0 && i < K.length) { L.tagWhy(q.id, K[i]); Audio.sfx('tick'); }
 }
 /** 限時題依閱讀量加時間（秒）：長題目、題組的閱讀材料、多選題不會因為字多而來不及 */
 export const readSec = q => Math.round((ui.plain(q.q).length + (q.o || []).reduce((a, o) => a + ui.plain(o).length, 0) + ui.plain(q.passage || '').length * 0.6) / 9) + (q.type === 'multi' ? 8 : q.type === 'fill' ? 25 : 0);   // 選填題要計算，多給時間
 /** 小遊戲的限時：一般長度的題目維持原本的秒數，比較長的題目照多出來的閱讀量加時間 */
 export const fairSec = (base, q) => base + Math.max(0, readSec(q) - 12);
 /** 記錄作答（寫入同一份學習進度） */
-export function record(q, ok, opt) { if (q.vocab) L.recordVocab(q.vocab.w, ok); else L.record(q, ok, { silent: false, combo: opt && opt.combo }); if (ok) miles.add('quiz'); else miles.check(); }
+export function record(q, ok, opt) { if (q.vocab) L.recordVocab(q.vocab.w, ok); else L.record(q, ok, { silent: false, combo: opt && opt.combo, conf: opt && opt.conf }); if (ok) miles.add('quiz'); else miles.check(); }
 
 /** 單字題：英文 → 中文 */
 export function vocabQ(opt) {

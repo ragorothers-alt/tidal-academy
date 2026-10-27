@@ -31,8 +31,10 @@ export function el(tag, cls, html) { const e = document.createElement(tag); if (
 
 /* ---------- 對話 ---------- */
 /** 上一次 ask 從選項出現到作答的毫秒數 */
-let lastMs = 0;
+let lastMs = 0, lastConfV = null;
 export const answerMs = () => lastMs;
+/** v8.4 上一題自己標的把握：'sure' 有把握、'guess' 有點猜、null 沒問 */
+export const lastConf = () => lastConfV;
 const D = { open: false, typing: false, resolve: null, choices: null, hl: 0, timer: 0, full: '', quiz: false };
 /** 閱讀設定（手機「設定」）：speed 打字速度倍率（0 = 立即顯示整句）、timer 限時倍率（1.5 = 寬鬆、0 = 不限時） */
 export const read = { speed: 1, timer: 1 };
@@ -115,7 +117,8 @@ export async function ask(sp, text, options, opt) {
   if (!opt.waitType) { await shown; }
   const tAsk = performance.now();
   return new Promise(res => {
-    const multi = !!opt.multi, picked = new Set();
+    const multi = !!opt.multi, picked = new Set(), confWant = !!opt.conf && opt.answer != null && !multi;
+    let conf = null, confRow = null; lastConfV = null; D.confPick = null;
     D.choices = multi ? options.concat(['✓ 送出答案']) : options; D.hl = Math.min(opt.hl || 0, D.choices.length - 1); D.multi = multi; D.at = performance.now();
     const box = $('choices'); box.innerHTML = '';
     // 選項文字包一層 span：大題目面板的 .choice 是 flex，沒包的話 x²、CO₂ 的上下標會被拆成各自的 flex 項目、中間隔一大段
@@ -125,9 +128,17 @@ export async function ask(sp, text, options, opt) {
     if (multi) box.lastChild.classList.add('submit');
     const pick = i => {
       if (!D.choices) return;
+      if (confWant && i >= 0 && conf == null) {   // v8.4 揭曉前先問把握：E／Enter 有把握、G 有點猜；按別的選項就是改答案
+        if (confRow) confRow.remove();
+        [...box.children].forEach((b, j) => b.classList.toggle('on', j === i));
+        confRow = el('div', 'conf-row', `<span>選 ${opt.abc ? LETTERS[i] || i + 1 : i + 1}——有把握嗎？</span>`);
+        const setConf = v => { conf = v; D.confPick = null; if (confRow) { confRow.remove(); confRow = null; } [...box.children].forEach(b => b.classList.remove('on')); pick(i); };
+        [['🙂 有把握', 'sure', 'E'], ['🤔 有點猜', 'guess', 'G']].forEach(([t, v, k], n) => { const b = el('button', 'btn sm' + (n ? ' ghost' : ''), `${COARSE.matches ? '' : `<kbd>${k}</kbd>`}${t}`); b.type = 'button'; b.onclick = e => { e.stopPropagation(); setConf(v); }; confRow.appendChild(b); });
+        D.confPick = setConf; box.appendChild(confRow); Audio.sfx('tick'); return;
+      }
       if (multi && i >= 0 && i < options.length) { picked.has(i) ? picked.delete(i) : picked.add(i); box.children[i].classList.toggle('on', picked.has(i)); Audio.sfx('tick'); return; }
       if (multi && i === options.length && !picked.size) { Audio.sfx('bad'); return; }
-      D.choices = null; D.multi = false; clearTimer(); lastMs = performance.now() - tAsk;
+      D.choices = null; D.multi = false; D.confPick = null; clearTimer(); lastMs = performance.now() - tAsk; lastConfV = conf;
       const out = multi && i >= 0 ? [...picked].sort((a, b) => a - b) : i;
       if (opt.answer != null) {   // 對錯揭曉（v7.0）：正解變綠打勾、選錯的變紅並抖一下，沒選到的正解框出來；停一下再繼續，答錯停久一點好對照
         const A = [].concat(opt.answer), right = multi ? i >= 0 && out.length === A.length && out.every(x => A.includes(x)) : A.includes(i);
@@ -233,6 +244,7 @@ export function dialogKey(e) {
     return false;
   }
   if (!D.choices) return false;
+  if (D.confPick) { if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space') { D.confPick('sure'); return true; } if (e.code === 'KeyG') { D.confPick('guess'); return true; } }   // v8.4 把握
   if (/^(Digit|Numpad)[0-9]$/.test(e.code)) { const n = +e.code.slice(-1), i = n === 0 ? 9 : n - 1; if (i < D.choices.length) D.pick(i); return true; }   // 1–9、0（第十個選項）
   if (D.multi && e.code === 'Enter') { D.submit(); return true; }
   if (e.code === 'ArrowUp' || e.code === 'ArrowDown' || e.code === 'KeyW' || e.code === 'KeyS') { const up = e.code === 'ArrowUp' || e.code === 'KeyW'; D.hl = (D.hl + (up ? -1 : 1) + D.choices.length) % D.choices.length; hl(); Audio.sfx('tick'); return true; }

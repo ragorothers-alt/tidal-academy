@@ -10,9 +10,9 @@ import * as mind from './mind.js';
 import * as shake from './shake.js';
 
 const TA = window.TA;
-export const VERSION = '8.3.0';
+export const VERSION = '8.4.0';
 export const hooks = {};   // main.js 掛上來的開關（第一人稱視角）
-const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, phoneAll: false, fs: 1, speed: 1, timer: 1, shake: true, haptic: true };
+const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, phoneAll: false, noConf: false, noWhy: false, fs: 1, speed: 1, timer: 1, shake: true, haptic: true };
 /** 設定值：原地補上預設值（不換掉物件——設定面板拿著同一個物件改，換掉的話後面的修改就存不進去） */
 const cfg = () => { const s = S(); if (!s.settings || typeof s.settings !== 'object') s.settings = {}; for (const k in DEF) if (!(k in s.settings)) s.settings[k] = DEF[k]; return s.settings; };
 /** 閱讀設定：文字大小（CSS 變數 --fs，只放大文字區塊）、打字速度、作答時間 */
@@ -50,6 +50,8 @@ export function open() {
     if (hooks.fp) body.appendChild(row('第一人稱視角', '從角色的眼睛看出去（在島上）：拖曳畫面轉頭，搖桿或 WASD 照視線方向走。也可以按 F，或把鏡頭拉到最近再繼續拉近', toggle(hooks.fp.get(), () => { hooks.fp.set(!hooks.fp.get()); draw(); })));
     body.appendChild(row('島民主動出題', '每隔 3–5 分鐘，附近的島民會走過來考你一題（優先出錯題），答對有隨機獎勵', toggle(c.popQuiz, () => { c.popQuiz = !c.popQuiz; save(); draw(); })));
     body.appendChild(row('答對後邀請繼續挑戰', '釣魚、抓蟲、石碑等答對後，偶爾問你要不要接著連續挑戰（每隔幾分鐘最多問一次）', toggle(c.keepGoing, () => { c.keepGoing = !c.keepGoing; save(); draw(); })));
+    body.appendChild(row('作答時標示把握', '一組練習裡有 2 題，選完答案先問「有把握嗎」：猜對的題目明天再確認一次，很有把握卻答錯的會在錯題本標出來', toggle(!c.noConf, () => { c.noConf = !c.noConf; save(); draw(); })));   // v8.4
+    body.appendChild(row('答錯後標記錯因', '一組練習的第一道錯題，看完解析後選「觀念、計算、漏看條件、用猜的」；錯題本會依錯因分組（可以跳過）', toggle(!c.noWhy, () => { c.noWhy = !c.noWhy; save(); draw(); })));
     body.appendChild(row('手機顯示全部 App', '剛開始玩的前幾天，手機先列常用的 App，其他收在「更多」裡；打開這個就一直全部列出', toggle(c.phoneAll, () => { c.phoneAll = !c.phoneAll; save(); draw(); })));
     const sb = ui.el('button', 'btn gold', c.season && c.season !== 'auto' ? seasons.NAMES[c.season] + '天' : `自動（${seasons.NAMES[seasons.auto()]}）`); sb.type = 'button';
     sb.onclick = () => { const o = seasons.ORDER; c.season = o[(o.indexOf(c.season || 'auto') + 1) % o.length]; save(); draw(); setTimeout(() => seasons.banner(), 300); };

@@ -646,6 +646,14 @@ body.stargazing .jump-btn, body.photo .jump-btn, body.focusing .jump-btn, body.t
 .pn-head { position: relative; }
 .td-borrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 10px 0; padding: 10px 12px; border-radius: 16px; background: #fff3d6; font-size: 14px; } .td-borrow > span { flex: 1 1 100%; }   /* v8.3 今日學習的借閱中 */
 .nt-borrow { margin-top: 10px; }
+.conf-row { grid-column: 1 / -1; justify-self: stretch; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px 2px 2px; font-size: 15px; font-weight: 800; }   /* v8.4 揭曉前的「有把握嗎」 */
+.conf-row kbd { margin-right: 4px; }
+.conf-row > span { padding: 5px 12px; border-radius: 99px; background: #fff6cf; color: #6b4a1a; box-shadow: 0 2px 0 rgba(176, 120, 20, .2); }
+.choice.on { outline: 3px solid #f0a020; outline-offset: 1px; }
+.rp-ev { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 6px; } .rp-ev li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,.6); font-size: 14px; } .rp-ev b { text-align: right; }
+.hm-why { margin-top: 4px; }
+.hx-timer.behind { color: #d0602a; }   /* v8.4 節奏練習：落後建議進度 */
+.hr-pace { padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,.55); font-size: 14px; line-height: 1.7; } .hr-pace p { margin: 0 0 4px; }
 .pn-box:not(.hall-p):not(.fig-p) > .pn-head { position: sticky; top: 0; z-index: 4; margin: -6px -20px 8px; padding: 6px 20px; background: inherit; }   /* v8.2 長面板往下捲時，標題與 ✕ 留在上方 */
 .pn-head > b { display: inline-block; padding: 6px 22px 7px; border-radius: 999px; background: #ffd36b; color: #6b4a1a; font-size: 18px; letter-spacing: 1px; transform: rotate(-2deg); box-shadow: 0 4px 0 rgba(176, 120, 20, .25); }
 .pn-x { width: 38px; height: 38px; border-radius: 50%; background: #f1e3c2; color: var(--ac-ink); font-weight: 800; transition: transform .15s, background .15s; }

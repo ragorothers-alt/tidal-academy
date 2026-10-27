@@ -1,7 +1,7 @@
 /* 潮汐小島 · 連續作答：在對話框裡做一組題目（支援多選題與題組閱讀材料），寫入共用的間隔複習紀錄。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
-import { record, pick, vocabQ, askQ } from './quiz.js';
+import { record, pick, vocabQ, askQ, confPlan, confNote, askWhy } from './quiz.js';
 
 const TA = window.TA, L = TA.L;
 
@@ -33,16 +33,18 @@ export function picker(focus) {
 /** 做 n 題。回傳 {ok, n} */
 export async function drill(sp, next, n, opt) {
   opt = opt || {};
-  let ok = 0, done = 0;
+  let ok = 0, done = 0, why = false;
+  const cf = confPlan(n, opt);   // v8.4 一組裡有 2 題先問把握
   for (let k = 0; k < n; k++) {
     const q0 = next(k); if (!q0) break;
     const q = L.view(q0);   // 選項順序打亂（解析代號跟著換）
     const sub = q.subject ? TA.subject(q.subject).name : q.vocab ? '單字' : '';
     const head = `第 ${k + 1} / ${n} 題${sub ? '（' + sub + '）' : ''}：`;   // 多選題的提示由 askQ 加上
-    const { ok: good } = await askQ(sp, q, head, { timer: opt.timer });
-    record(q, good); done++; Audio.sfx(good ? 'ok' : 'bad');
+    const { ok: good, conf } = await askQ(sp, q, head, { timer: opt.timer, conf: cf.has(k) });
+    record(q, good, { conf }); done++; Audio.sfx(good ? 'ok' : 'bad');
+    const lead = confNote(good, conf);
     if (good) { ok++; if (opt.praise) await ui.praise(sp, pick(opt.praise), q); }
-    else await ui.explain(sp, q);
+    else { await ui.explain(sp, q, lead); if (!why && !opt.timer) { why = true; await askWhy(sp, q); } }
   }
   ui.passage(null);
   return { ok, n: done };

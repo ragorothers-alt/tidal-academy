@@ -164,6 +164,12 @@
   L.wrDue = w => { const r = TA.S.written[w.id]; return !!r && r.due <= today(); };
   L.wrEq = w => WR_EQ[w.kind] || 2;
   /** 記一次非選題練習：got 自評分數（0–w.pts）。回傳 { xp, k 得分率 } */
+  /** v8.4 答錯後自己標的錯因（觀念、計算、漏看條件、用猜的）：記在這一題上，錯題本依錯因分組，週報統計 */
+  L.WHY = { concept: '觀念不清楚', calc: '計算或粗心', miss: '漏看條件', guess: '用猜的' };
+  L.tagWhy = function (id, why) {
+    const r = TA.S.q[id]; if (!r || !L.WHY[why]) return;
+    r.why = why; const d = dayRec(), w = d.why = d.why && typeof d.why === 'object' ? d.why : {}; w[why] = (w[why] || 0) + 1; TA.Store.save();
+  };
   /** v8.2 「夜航者」「晨光讀書人」：在那個時段真的作答才算（以前只看遊戲開著的時間） */
   const markHour = () => { const h = new Date().getHours(); if (h >= 23 || h < 2) TA.S._night = true; if (h >= 5 && h < 7) TA.S._dawn = true; };
   L.recordWritten = function (w, got) {
@@ -189,19 +195,26 @@
     // 舊存檔第 0 格沒有 lastWrong：以尚未覆寫的最後作答時間保守推定，保留既有進度。
     if (!r.lastWrong && r.s === 0 && r.wr > 0 && r.last) r.lastWrong = r.last;
     r.n++; if (!opts.blank) r.last = now;
+    let verified = false;
     if (correct) {
       r.c++;
       // 還沒到期就又答對（同一天重複、剛看完解析）不升格：錯題要在不同天答對才算修好，間隔才有意義
       const early = !firstTime && !canAdvance(r, t, now);
-      if (!early) { r.s = Math.min(6, firstTime ? 2 : r.s + 1); r.due = t + INT[r.s]; }
+      if (opts.conf === 'guess') {   // v8.4 自己說是猜的：答對也不往後排，明天再確認一次（第一次見到的題目只排到第 1 格）
+        r.gs = (r.gs || 0) + 1;
+        if (firstTime) { r.s = 1; r.due = t + INT[1]; } else r.due = Math.min(r.due, t + 1);
+      } else if (!early) { r.s = Math.min(6, firstTime ? 2 : r.s + 1); r.due = t + INT[r.s]; verified = wasReview; }
     } else {
       r.wr++; r.s = 0; r.due = t; r.lastWrong = now;
+      if (opts.conf === 'sure') r.hc = (r.hc || 0) + 1;   // v8.4 很有把握卻答錯：最值得回頭看的錯題
     }
     const uid = q.unit || (L.Q[q.id] || {}).unit;
     if (uid) { const recent = S.unitRecent[uid] = S.unitRecent[uid] || []; recent.push(correct ? 1 : 0); S.unitRecent[uid] = recent.slice(-20); }
     // 讀書計畫／週報用 last 判定實際練過；空白保留 last，靠 lastWrong 保存記錯時間。
     if (opts.blank) { TA.Store.save(); return { xp: 0, gems: 0, levelUp: 0 }; }
     const d = dayRec(); d.q++; if (correct) d.c++; if (wasReview) d.rv = (d.rv || 0) + 1; markHour();
+    if (verified) d.vf = (d.vf || 0) + 1;   // v8.4 跨日驗證成功：到期的複習題在不同天答對、往後排
+    if (opts.conf) { const cf = d.cf = Array.isArray(d.cf) ? d.cf : [0, 0, 0, 0]; cf[(opts.conf === 'guess' ? 2 : 0) + (correct ? 0 : 1)]++; }   // 把握：[有把握答對, 有把握答錯, 猜對, 猜錯]
     let xp = correct ? 10 + (q.d - 1) * 3 : 2;
     if (correct && opts.combo > 1) xp += Math.min(10, opts.combo - 1);
     const out = L.gain(xp, 0);

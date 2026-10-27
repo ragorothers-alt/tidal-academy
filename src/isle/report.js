@@ -10,25 +10,31 @@ const rec = d => (TA.S.days || {})[key(d)] || { q: 0, c: 0, voc: 0, min: 0, xp: 
 /** end：週報的最後一天（含），預設今天 */
 export function compute(end) {
   end = end || new Date();
-  const days = [], prev = { q: 0, c: 0, voc: 0, min: 0 }, cur = { q: 0, c: 0, voc: 0, min: 0 };
-  for (let k = -6; k <= 0; k++) { const d = dayOf(end, k), r = rec(d); days.push({ d, r }); ['q', 'c', 'voc', 'min'].forEach(f => { cur[f] += r[f] || 0; }); }
-  for (let k = -13; k <= -7; k++) { const r = rec(dayOf(end, k)); ['q', 'c', 'voc', 'min'].forEach(f => { prev[f] += r[f] || 0; }); }
+  // v8.4 非選題（wq 折算題數）、概念練習（cq）、到期複習（rv）、跨日驗證成功（vf）也算；把握（cf）與錯因（why）另外統計
+  const F = ['q', 'c', 'voc', 'min', 'wq', 'cq', 'rv', 'vf'], zero = () => Object.fromEntries(F.map(f => [f, 0]));
+  const days = [], prev = zero(), cur = zero(), cf = [0, 0, 0, 0], why = {};
+  for (let k = -6; k <= 0; k++) { const d = dayOf(end, k), r = rec(d); days.push({ d, r }); F.forEach(f => { cur[f] += r[f] || 0; }); if (Array.isArray(r.cf)) r.cf.forEach((n, i) => { cf[i] += n || 0; }); if (r.why && typeof r.why === 'object') Object.entries(r.why).forEach(([w, n]) => { why[w] = (why[w] || 0) + n; }); }
+  for (let k = -13; k <= -7; k++) { const r = rec(dayOf(end, k)); F.forEach(f => { prev[f] += r[f] || 0; }); }
   const start = dayOf(end, -6); start.setHours(0, 0, 0, 0); const stop = dayOf(end, 1); stop.setHours(0, 0, 0, 0);
   const subj = TA.SUBJECTS.map(s => {
     const ids = L.BY_SUBJECT[s.id] || [], week = ids.filter(id => { const r = TA.S.q[id]; return r && r.last >= start.getTime() && r.last < stop.getTime(); }).length, st = L.subjectStats(s.id);
     return { s, week, st };
   });
-  const active = days.filter(x => x.r.q > 0).length;
-  return { days, cur, prev, subj, active, weak: L.weakUnits(3), streak: L.streakAlive(), goal: TA.S.profile.dailyGoal || 30 };
+  const active = days.filter(x => L.effort(x.r) > 0 || x.r.voc || x.r.min).length;   // 有任何學習（科目題、非選、概念、單字、專注）的天數
+  return { days, cur, prev, subj, active, cf, why, weak: L.weakUnits(3), streak: L.streakAlive(), goal: TA.S.profile.dailyGoal || 30 };
 }
 const pctS = (a, b) => (b ? Math.round(a / b * 100) + '%' : '—');
 const diff = (a, b) => (b ? `${a >= b ? '▲' : '▼'} ${Math.abs(Math.round((a - b) / b * 100))}%` : a ? '▲ 新開始' : '—');
 export function summary(r) {
   const low = r.subj.filter(x => x.st.seen).sort((a, b) => a.st.acc - b.st.acc)[0];
   const start = r.weak.length ? `\n可以先從「${r.weak[0].unit.name}」開始。` : '';
+  const more = [r.cur.wq ? `非選題折算 ${r.cur.wq} 題` : '', r.cur.cq ? `概念練習 ${r.cur.cq} 題` : '', r.cur.min ? `專注 ${r.cur.min} 分鐘` : ''].filter(Boolean).join('、');
+  const proof = r.cur.vf ? `\n跨日驗證成功 ${r.cur.vf} 題：隔了幾天再答對、往後排的題目，是最可靠的學習證據。` : '';
+  const hc = r.cf[1] ? `\n有 ${r.cf[1]} 題是很有把握卻答錯的，錯題本可以用「很有把握卻答錯」篩出來先看。` : '';
+  if (!r.cur.q && (r.cur.wq || r.cur.cq)) return `這一期沒有科目選擇題的紀錄，但你做了${more}${r.cur.voc ? `，單字複習 ${r.cur.voc} 次` : ''}。${proof}${start}`;
   if (!r.cur.q) return (r.cur.voc || r.cur.min ? `這一期沒有科目題的作答紀錄；單字複習 ${r.cur.voc} 次，專注學習 ${r.cur.min} 分鐘。` : '這一期沒有作答紀錄。沒關係，休息也是讀書的一部分；從每天幾題開始，慢慢把節奏找回來吧。') + start;
   return [
-    `這一期你答了 ${r.cur.q} 題（${diff(r.cur.q, r.prev.q)}），正確率 ${pctS(r.cur.c, r.cur.q)}，單字複習 ${r.cur.voc} 次，有 ${r.active} 天練習科目題。`,
+    `這一期你答了 ${r.cur.q} 題（${diff(r.cur.q, r.prev.q)}），正確率 ${pctS(r.cur.c, r.cur.q)}，單字複習 ${r.cur.voc} 次${more ? `，另外${more}` : ''}，有 ${r.active} 天在學習。${proof}${hc}`,
     low ? `目前累計正確率最低的科目是${low.s.name}（${Math.round(low.st.acc * 100)}%），可以到圖書館做錯題特訓。` : '',
     r.weak.length ? `最需要加強的單元：${r.weak.map(w => `${w.subject.name}「${w.unit.name}」`).join('、')}。` : ''
   ].filter(Boolean).join('\n');
@@ -44,6 +50,15 @@ export function weekly(sendLetter) {
   sendLetter({ fromName: '史遙', title: `學習週報（${dayOf(end, -6).getMonth() + 1}/${dayOf(end, -6).getDate()}–${end.getMonth() + 1}/${end.getDate()}）`, open: '呼呼，這是上一週的學習航海日誌：', text: summary(r), giftLine: '手機「考科航線」裡的「學習週報」另提供截至今天的近 7 天圖表。', close: '—— 博物館館長 史遙' });
   return true;
 }
+/** v8.4 這週的學習：投入（做了多少）和證據（真的記住了多少）分開看；把握與錯因是自己標的，只看自己的變化 */
+function evidence(r) {
+  const c = r.cur, row = (k, v) => `<li><span>${k}</span><b>${v}</b></li>`, W = L.WHY || {};
+  const put = [c.q ? `科目題 ${c.q}` : '', c.wq ? `非選（折算）${c.wq}` : '', c.cq ? `概念練習 ${c.cq}` : '', c.voc ? `單字卡 ${c.voc}` : '', c.min ? `專注 ${c.min} 分` : ''].filter(Boolean).join('、') || '—';
+  const cfN = r.cf.reduce((a, b) => a + b, 0), wy = Object.keys(W).filter(k => r.why[k]).map(k => `${W[k]} ${r.why[k]}`).join('、');
+  return `<h4>這週的學習：投入與證據</h4><ul class="rp-ev">${row('投入', put)}${row('到期複習', `${c.rv} 題`)}${row('跨日驗證成功', `${c.vf} 題`)}
+    ${cfN ? row('自己標的把握', `有把握答對 ${r.cf[0]}・有把握答錯 ${r.cf[1]}・猜對 ${r.cf[2]}・猜錯 ${r.cf[3]}`) : ''}${wy ? row('自己標的錯因', wy) : ''}</ul>
+    <p class="muted">正確率只算科目選擇題；非選題是自評，分開記。「跨日驗證成功」是隔天以後再答對、往後排的題目——比當天連對更能說明真的記住了。</p>`;
+}
 export function open() {
   const r = compute(), body = ui.el('div', 'report');
   const W = 320, H = 120, max = Math.max(r.goal, ...r.days.map(x => x.r.q), 1), bw = W / 7;
@@ -54,6 +69,7 @@ export function open() {
   body.innerHTML = `<div class="rp-top"><div><b>${r.cur.q}</b><small>近 7 天答題 ${diff(r.cur.q, r.prev.q)}</small></div><div><b>${pctS(r.cur.c, r.cur.q)}</b><small>正確率（前 7 天 ${pctS(r.prev.c, r.prev.q)}）</small></div><div><b>${r.cur.voc}</b><small>單字複習次數</small></div><div><b>${r.active}/7</b><small>科目作答天數 · 連續 ${r.streak} 天</small></div></div>
     <svg viewBox="0 0 ${W} ${H}" class="rp-chart"><line x1="0" x2="${W}" y1="${gy}" y2="${gy}" stroke="#5aa845" stroke-dasharray="4 3"/>${bars}</svg>
     <p class="muted">深色是答對的題數，虛線是每日目標 ${r.goal} 題。</p>
+    ${evidence(r)}
     <h4>各科熟練度與近 7 天練習</h4>${subj}
     ${r.weak.length ? `<h4>最需要加強的單元</h4><ul>${r.weak.map(w => `<li>${w.subject.name}「${ui.esc(w.unit.name)}」${w.st.attempts ? `（正確率 ${Math.round(w.st.acc * 100)}%）` : '（還沒練過）'}</li>`).join('')}</ul><p class="muted">可以到潮汐圖書館做錯題特訓，或接受導師的弱點委託。</p>` : ''}`;
   ui.panel('學習週報', body, { cls: 'phone' });

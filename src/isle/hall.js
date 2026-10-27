@@ -8,6 +8,7 @@ import * as Audio from './audio.js';
 import * as figs from './figs.js';
 
 const TA = window.TA, L = TA.L, U = TA.U;
+const S = () => (TA.S.isle = TA.S.isle || {}), save = () => TA.Store.save();   // 小島的存檔（v8.4 模考的節奏設定與觀察）
 const LET = 'ABCDEFGHIJ', TYPE = { multi: '多選題', fill: '選填題', bank: '文意選填' };
 export const subj = sid => TA.subject(sid) || { name: '', color: '#7cc7ff', short: '' };
 const unitOf = q => L.UNITS[(L.Q[q.id] || q).unit];
@@ -114,7 +115,7 @@ export const keyIndex = e => { if (/^(Digit|Numpad)[0-9]$/.test(e.code)) { const
 /* ---------- 模擬考 ---------- */
 /** 模擬考設定：考科、題數、限時、最近成績 */
 export function openMock() {
-  let group = TA.GROUPS.includes('社會') ? '社會' : TA.GROUPS[0], n = 20, drill = '';
+  let group = TA.GROUPS.includes('社會') ? '社會' : TA.GROUPS[0], n = 20, drill = '', pace = !!(S().settings || {}).mockPace;
   const body = ui.el('div', 'hall hs');
   const paint = () => {
     const cfg = L.MOCK[group], sizes = cfg.subjects.includes('math') ? [6, 12] : group === '國文' ? [10, 20] : [10, 20, 30];
@@ -124,10 +125,12 @@ export function openMock() {
     if (n !== 'full' && !short.includes(n)) n = short[short.length - 1];
     const hist = TA.S.exams.slice(-8).reverse(), full = n === 'full';
     body.innerHTML = `<div class="hall-scroll">
+      ${(S().mockNotes || []).length ? `<p class="hs-info">上次模考你記下：「${ui.esc(S().mockNotes.slice(-1)[0].note)}」</p>` : ''}
       <p class="hs-lead">作答時不顯示對錯，可以前後翻題、標記；交卷後看分數、單元表現與逐題詳解。多選題依學測方式部分給分（錯 1 個選項得 0.6、錯 2 個得 0.2；空白 0 分）。</p>
       <div class="hs-label">考科</div><div class="hs-grid g3">${L.MOCK_GROUPS.map(g => { const subs = L.MOCK[g].subjects, tot = subs.reduce((a, s) => a + (L.BY_SUBJECT[s] || []).filter(id => L.mockEligible(g, L.Q[id])).length, 0); return `<button type="button" class="hs-pick${g === group ? ' on' : ''}" data-g="${g}" style="--c:${subj(subs[0]).color}"><b>${g}</b><small>${tot} 題題庫</small></button>`; }).join('')}</div>
       <div class="hs-label">題數</div><div class="hs-grid g3">${[...short.map((k, i) => [k, ['短版小考', '短版練習', '短版大考'][i]]), ['full', '整卷']].map(([k, t]) => `<button type="button" class="hs-pick${k === n ? ' on' : ''}" data-n="${k}"><b>${k === 'full' ? `整卷 · ${cfg.realN} 題` : k + ' 題'}</b><small>${t}</small></button>`).join('')}</div>
       <div class="hs-label">題型</div><div class="hs-grid g3">${[['', '各題型都有'], ...drills.map(k => [k, `${L.drillCount(group, k)} 題`])].map(([k, t]) => `<button type="button" class="hs-pick${k === drill ? ' on' : ''}" data-d="${k}"><b>${k ? L.DRILLS[k].name : '完整考卷'}</b><small>${t}</small></button>`).join('')}</div>
+      <div class="hs-label">節奏</div><div class="hs-grid g3"><button type="button" class="hs-pick${pace ? '' : ' on'}" data-p="0"><b>一般作答</b><small>照自己的方式</small></button><button type="button" class="hs-pick${pace ? ' on' : ''}" data-p="1"><b>節奏練習</b><small>先做會的、標記卡住的、最後留 1/6 時間檢查；計時旁邊顯示建議進度</small></button></div>
       <p class="hs-info">限時 <b>${fmtT(L.mockSeconds(group, n))}</b>（${full ? `整卷採學測${group}正式節次 ${cfg.realMin} 分鐘` : `短版按純選擇作答時間估算，約每題 ${(cfg.choiceMin / cfg.realN).toFixed(1)} 分鐘`}）</p>
       <p class="muted">短版提供 ${short.join('／')} 題；整卷題數依 115 學測選擇（填）題，包含混合題中的選擇題；非選題、翻譯與作文請到手機「自由練習」→「非選練習」，寫完對照參考答案自評。完整題組一起抽取，短版題數若無法整組湊齊會略少；這是原創練習卷，題型配分與難度不等同正式試卷。</p>
       ${hist.length ? `<div class="hs-label">最近成績</div><div class="hs-hist">${hist.map(e => { const rate = (e.pts != null ? e.pts : e.c) / e.n; return `<div><span>${new Date(e.at).toLocaleDateString('zh-TW')}</span><b>${e.group}${e.drill && L.DRILLS[e.drill] ? `<small> · ${L.DRILLS[e.drill].name}</small>` : ''}</b><span>${e.n} 題</span><i style="--k:${rate.toFixed(3)}"></i><b>${Math.round(rate * 100)} 分</b></div>`; }).join('')}</div>` : ''}
@@ -135,18 +138,21 @@ export function openMock() {
     body.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { group = b.dataset.g; Audio.sfx('tick'); paint(); });
     body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { n = b.dataset.n === 'full' ? 'full' : +b.dataset.n; if (n === 'full') drill = ''; Audio.sfx('tick'); paint(); });
     body.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { drill = b.dataset.d; Audio.sfx('tick'); paint(); });
-    body.querySelector('.go').onclick = () => runMock(group, n, drill);
+    body.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { pace = b.dataset.p === '1'; const st = S(); st.settings = st.settings || {}; st.settings.mockPace = pace; save(); Audio.sfx('tick'); paint(); });   // v8.4
+    body.querySelector('.go').onclick = () => runMock(group, n, drill, pace);
   };
   paint();
   open('潮汐考場 · 模擬考', body);
-  keyFn = e => { if (e.code === 'Enter') { runMock(group, n, drill); return true; } return false; };
+  keyFn = e => { if (e.code === 'Enter') { runMock(group, n, drill, pace); return true; } return false; };
 }
 
-function runMock(group, n, drill) {
+function runMock(group, n, drill, pace) {
   const ids = L.pickMock(group, n, drill), views = ids.map(id => L.view(L.Q[id])), label = `${group} ${drill ? L.DRILLS[drill].name + '專練' : '模擬考'}`;
   if (!ids.length) { ui.toast('這一科的題目還沒準備好'); return; }
   const limit = L.mockSeconds(group, n === 'full' ? n : ids.length), t0 = Date.now(), answers = {}, flags = {};
-  let i = 0, done = false, clock = 0;
+  let i = 0, done = false, clock = 0, at = Date.now();
+  const spent = {}, first = {};   // v8.4 每題停留的秒數、第一次選的答案（看改答案改對還是改錯）
+  const stay = () => { const id = ids[i]; spent[id] = (spent[id] || 0) + (Date.now() - at) / 1000; at = Date.now(); };
   const body = ui.el('div', 'hall hx');
   body.innerHTML = `<div class="hx-bar"><b class="hx-title">${label} · ${ids.length} 題</b><span class="hx-timer"></span></div><div class="hall-scroll hx-main"></div>
     <div class="hx-foot"><button type="button" class="btn ghost prev">← 上一題</button><button type="button" class="btn ghost flag">標記</button><div class="hx-pal"></div><button type="button" class="btn ghost next">下一題 →</button><button type="button" class="btn submit">交卷</button></div>`;
@@ -157,21 +163,26 @@ function runMock(group, n, drill) {
     const id = ids[i], q = views[i];
     view = renderQ(q, {
       no: `${i + 1} / ${ids.length}`, pick: answers[id],
-      onPick: k => { if (q.type === 'multi') { const a = [].concat(answers[id] || []); const at = a.indexOf(k); if (at >= 0) a.splice(at, 1); else a.push(k); answers[id] = a.sort((x, y) => x - y); } else answers[id] = k; view.setPick(answers[id]); Audio.sfx('tick'); paintPal(); },
+      onPick: k => { if (q.type !== 'multi' && !(id in first)) first[id] = k; if (q.type === 'multi') { const a = [].concat(answers[id] || []); const at = a.indexOf(k); if (at >= 0) a.splice(at, 1); else a.push(k); answers[id] = a.sort((x, y) => x - y); } else answers[id] = k; view.setPick(answers[id]); Audio.sfx('tick'); paintPal(); },
       onFill: v => { if (v) answers[id] = v; else delete answers[id]; paintPal(); },
       onEnter: () => go(i + 1),
     });
     main.innerHTML = ''; main.appendChild(view.el); main.scrollTop = 0; paintPal();
     if (view.input && !touch()) setTimeout(() => view.input.focus(), 30);
   };
-  const go = k => { if (k < 0 || k >= ids.length || done) return; i = k; Audio.sfx('tick'); show(); };
-  const tick = () => { const left = Math.max(0, limit - (Date.now() - t0) / 1000); timer.textContent = `⏱ ${fmtT(left)}`; timer.classList.toggle('warn', left < 60); if (left <= 0) submit(true); };
+  const go = k => { if (k < 0 || k >= ids.length || done) return; stay(); i = k; Audio.sfx('tick'); show(); };
+  const tick = () => { const el = (Date.now() - t0) / 1000, left = Math.max(0, limit - el); timer.textContent = `⏱ ${fmtT(left)}`; timer.classList.toggle('warn', left < 60);
+    if (pace) {   // v8.4 節奏練習：照「留 1/6 時間檢查」換算現在大概該做到第幾題
+      const per = limit * 5 / 6 / ids.length, want = Math.min(ids.length, Math.floor(el / per) + 1), got = ids.filter(id => answered(answers[id])).length;
+      timer.textContent += el > limit * 5 / 6 ? ' · 檢查時間：回頭看標記的題目' : ` · 建議進度 第 ${want} 題${got < want - 2 ? '（先跳過卡住的）' : ''}`; timer.classList.toggle('behind', got < want - 2);
+    }
+    if (left <= 0) submit(true); };
   const submit = async force => {
     if (done) return;
     const blank = ids.filter(id => !answered(answers[id])).length;
     if (!force && !(await confirmIn(body, '確定交卷？', blank ? `還有 ${blank} 題沒作答，沒作答的題目以 0 分計。` : '全部作答完畢，交卷後會顯示分數與詳解。', '交卷'))) return;
     if (done) return;
-    done = true; clearInterval(clock);
+    stay(); done = true; clearInterval(clock);
     let xp = 0, correct = 0;
     const log = ids.map((id, k) => {
       const q = views[k], a = answers[id], has = answered(a), ok = has && L.check(q, a), score = has ? L.multiScore(q, a) : 0;
@@ -184,7 +195,7 @@ function runMock(group, n, drill) {
     TA.S.exams.push(Object.assign({ at: Date.now(), group, n: ids.length, c: correct, pts, secs, units }, drill ? { drill } : {}));   // 題型專練另外標記：不算進級分估算
     xp += L.gain(log.filter(x => x.ans !== null).length * 3, 0).xp; const gems = Math.round(pct / 5); if (gems) L.gain(0, gems);
     L.checkAch(); TA.Store.save();
-    showResult({ mode: 'mock', title: label, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, n, drill) });
+    showResult({ mode: 'mock', title: label, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, n, drill, pace), extra: paceHtml(ids, views, answers, first, spent, flags, pace), onBody: paceBind(group) });
   };
   body.querySelector('.prev').onclick = () => go(i - 1);
   body.querySelector('.next').onclick = () => go(i + 1);
@@ -201,6 +212,22 @@ function runMock(group, n, drill) {
   };
   show(); tick(); clock = setInterval(tick, 1000);
 }
+
+/** v8.4 交卷後看這次的節奏：花最久的三題、改答案改對／改錯、標記幾題；節奏練習再選一句自己的觀察 */
+function paceHtml(ids, views, answers, first, spent, flags, pace) {
+  const top = ids.map((id, k) => [k, spent[id] || 0]).sort((a, b) => b[1] - a[1]).slice(0, 3).filter(x => x[1] >= 1);
+  let fixd = 0, broke = 0; ids.forEach((id, k) => { if (!(id in first) || answers[id] === first[id]) return; const q = views[k]; if (L.check(q, answers[id])) fixd++; else if (L.check(q, first[id])) broke++; });
+  const avg = ids.reduce((a, id) => a + (spent[id] || 0), 0) / Math.max(1, ids.length), nf = ids.filter(id => flags[id]).length;
+  const notes = ['卡在一題太久', '時間夠，檢查得到', '最後太趕', '改答案反而改錯', '先做會的很有用'];
+  return `<div class="hs-label">這次的節奏</div><div class="hr-pace">
+    <p>${top.length ? `花最久的題目：${top.map(([k, s]) => `第 ${k + 1} 題 ${fmtT(s)}`).join('、')}（平均每題 ${fmtT(avg)}）` : '每題停留的時間都很短。'}</p>
+    <p>改答案：改對 <b>${fixd}</b> 題、改錯 <b>${broke}</b> 題${nf ? `；標記了 ${nf} 題` : ''}。${broke > fixd ? '改錯比改對多：沒有新的理由時，先相信第一個答案。' : fixd ? '回頭檢查有幫上忙。' : ''}</p>
+    ${pace ? `<div class="hm-chips"><span class="muted">這次最像哪一句？</span>${notes.map(t => `<button type="button" data-pn="${t}">${t}</button>`).join('')}</div>` : ''}</div>`;
+}
+const paceBind = group => body => body.querySelectorAll('[data-pn]').forEach(b => b.onclick = () => {
+  const s = S(); s.mockNotes = (s.mockNotes || []).concat([{ at: Date.now(), group, note: b.dataset.pn }]).slice(-20); save();
+  body.querySelectorAll('[data-pn]').forEach(x => x.classList.toggle('on', x === b)); Audio.sfx('tick'); ui.toast('記下來了：下次模考前會提醒你');
+});
 
 /* ---------- 練習組：一題一題作答、答完看解析 ---------- */
 /** 依序作答一組題目（錯題複習、弱點單元、重練錯題、單元試煉、每日潮汐）。
@@ -315,6 +342,7 @@ export function showResult(r) {
     retry.onclick = () => runSet('重練錯題', wrongIds, { review: true });
   }
   if (r.again) body.querySelector('.again').onclick = () => r.again();
+  if (r.onBody) r.onBody(body);
   body.querySelector('.done').onclick = () => ui.closePanel();
   open(r.mode === 'mock' ? '潮汐考場 · 成績' : r.title + ' · 結果', body, { onClose: () => clearInterval(retryClock) });
   if ((r.mode === 'mock' && r.pct >= 80) || (r.mode === 'set' && r.correct === r.total && r.total >= 5)) Audio.sfx('catch'); else Audio.sfx('coin');
@@ -340,24 +368,28 @@ export function reviewGo(n) {
   runSet('今天的複習', ids, { review: true, again: () => reviewGo(n) });
 }
 export function openMistakes(sid) {
-  let filter = sid || '';
+  let filter = sid || '', why = '';   // v8.4 why：依自己標的錯因（或「很有把握卻答錯」hc）篩選
   const body = ui.el('div', 'hall hm');
   const paint = () => {
     const counts = {}, dues = {}; TA.SUBJECTS.forEach(s => { counts[s.id] = L.mistakes(s.id).length; dues[s.id] = L.dueList(s.id).filter(id => !L.isMistake(id)).length; });
-    const total = L.mistakes().length, due = Object.values(dues).reduce((a, b) => a + b, 0), ids = L.pickReview(9999, filter || null), today = U.dayNum();
+    const total = L.mistakes().length, due = Object.values(dues).reduce((a, b) => a + b, 0), all = L.pickReview(9999, filter || null), today = U.dayNum();
+    const whyOf = id => { const r = L.rec(id) || {}; return why === 'hc' ? r.hc > 0 && L.isMistake(id) : r.why === why && L.isMistake(id); };
+    const ids = why ? all.filter(whyOf) : all, wc = {}; all.filter(L.isMistake).forEach(id => { const r = L.rec(id) || {}; if (r.why) wc[r.why] = (wc[r.why] || 0) + 1; if (r.hc) wc.hc = (wc.hc || 0) + 1; });
     const fixed = Object.values(TA.S.q).filter(r => r.wr > 0 && r.s >= 3).length;
     body.innerHTML = `<div class="hall-scroll">
       <div class="hm-today">🔁 ${reviewLine()}<small>圖書館、睡覺做夢、潮靈、導師的一起練習也都從這份清單出題</small></div>
       <div class="hm-hero"><div><b>${total}</b><small>真正錯題</small></div><div><b>${due}</b><small>到期複習（不含錯題）</small></div><div><b>${fixed}</b><small>已修復</small></div></div>
       <p class="muted hm-rule">答錯的題目會回到第 0 格；須跨日且距最後答錯至少 8 小時，到期答對才升一格，間隔 1→2→4→8→16→35 天，升到第 3 格算修復。當天答錯後再答對會記次數與正確數，不升格。錯題複習與重練錯題排除 ${L.COOL_MIN} 分鐘內剛答過的題目；全部冷卻時請稍後再來。</p>
       <div class="hm-chips"><button type="button" data-s="" class="${filter ? '' : 'on'}">全部 <b>錯 ${total} · 到期 ${due}</b></button>${TA.SUBJECTS.filter(s => counts[s.id] || dues[s.id]).map(s => `<button type="button" data-s="${s.id}" class="${filter === s.id ? 'on' : ''}" style="--c:${s.color}">${s.name} <b>錯 ${counts[s.id]} · 到期 ${dues[s.id]}</b></button>`).join('')}</div>
+      ${Object.keys(wc).length ? `<div class="hm-chips hm-why"><span class="muted">錯因：</span><button type="button" data-w="" class="${why ? '' : 'on'}">不分</button>${Object.keys(L.WHY).concat(['hc']).filter(k => wc[k]).map(k => `<button type="button" data-w="${k}" class="${why === k ? 'on' : ''}">${k === 'hc' ? '很有把握卻答錯' : L.WHY[k]} <b>${wc[k]}</b></button>`).join('')}</div>` : ''}
       <div class="hr-list"></div></div>
       <div class="hx-foot"><span class="muted">${ids.length > 80 ? `先列出最需要複習的 80 題` : ''}</span><span class="spacer"></span><button type="button" class="btn go"${ids.length ? '' : ' disabled'}>${filter ? '開始複習（最多 15 題）' : '繼續今天的複習'}</button></div>`;
     const list = body.querySelector('.hr-list');
     if (!ids.length) list.innerHTML = '<p class="muted hm-empty">這片海域很乾淨，沒有錯題或到期複習。</p>';
-    ids.slice(0, 80).forEach(id => { const r = L.rec(id); const d = reviewItem({ id, ok: !L.isMistake(id), ans: null }, body, `${L.isMistake(id) ? `真正錯題 · 答錯 ${r.wr} 次` : '到期複習'} · ${r.due <= today ? '今天到期' : `${r.due - today} 天後到期`}${L.cooling(id) ? ' · 冷卻中' : ''}`); if (d) list.appendChild(d); });
+    ids.slice(0, 80).forEach(id => { const r = L.rec(id); const d = reviewItem({ id, ok: !L.isMistake(id), ans: null }, body, `${L.isMistake(id) ? `真正錯題 · 答錯 ${r.wr} 次` : '到期複習'} · ${r.due <= today ? '今天到期' : `${r.due - today} 天後到期`}${L.cooling(id) ? ' · 冷卻中' : ''}${r.why && L.WHY[r.why] && L.isMistake(id) ? ` · 錯因：${L.WHY[r.why]}` : ''}${r.hc && L.isMistake(id) ? ' · 有把握卻答錯' : ''}${r.gs && !L.isMistake(id) ? ' · 上次是猜對的' : ''}`); if (d) list.appendChild(d); });
     body.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { filter = b.dataset.s; Audio.sfx('tick'); paint(); });
-    body.querySelector('.go').onclick = () => { if (!filter && L.reviewNext(1).length) { reviewGo(15); return; } const pick = L.pickReview(15, filter || null); runSet(filter ? `${subj(filter).name}錯題複習` : '錯題複習', pick, { review: true, again: () => openMistakes(filter) }); };   // 全部：今天的複習（只排要考的考科）；挑一科：那一科全部
+    body.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { why = b.dataset.w; Audio.sfx('tick'); paint(); });
+    body.querySelector('.go').onclick = () => { if (why) { runSet(`錯題複習 · ${why === 'hc' ? '很有把握卻答錯' : L.WHY[why]}`, ids.slice(0, 15), { review: true, again: () => openMistakes(filter) }); return; } if (!filter && L.reviewNext(1).length) { reviewGo(15); return; } const pick = L.pickReview(15, filter || null); runSet(filter ? `${subj(filter).name}錯題複習` : '錯題複習', pick, { review: true, again: () => openMistakes(filter) }); };   // 全部：今天的複習（只排要考的考科）；挑一科：那一科全部
   };
   paint();
   open('錯題本', body);
