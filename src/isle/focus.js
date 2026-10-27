@@ -42,8 +42,10 @@ export function open(paint) {
   body.appendChild(grid);
   ui.panel('專注時光', body, { cls: 'shop-p' });
 }
-function start(m, sid, paint) {
-  S().focusRun = { min: m, total: m * 60, endAt: Date.now() + m * 60000, sid: sid || null }; S().restRun = null; save();
+/** v8.3 從圖書館的讀書椅直接開始：place 寫在專注畫面上 */
+export function begin(m, sid, paint, place) { if (run()) { show(paint); return; } start(m, sid, paint, place); }
+function start(m, sid, paint, place) {
+  S().focusRun = { min: m, total: m * 60, endAt: Date.now() + m * 60000, sid: sid || null, place: place || null }; S().restRun = null; save();
   hidePill(); ui.closePanel(); Audio.sfx('ok'); show(paint);
 }
 function show(paint) {
@@ -62,7 +64,7 @@ function draw() {
   const r = run(); if (!r) { hide(); return; }
   const l = left(r), k = 1 - l / r.total, sub = r.sid ? (TA.subject(r.sid) || {}).name : '';
   box.querySelector('.fv-time').textContent = fmt(l);
-  box.querySelector('.fv-sub').textContent = `專注中${sub ? ' · ' + sub : ''} · ${r.min} 分鐘${r.paused != null ? '（已暫停）' : ''}`;
+  box.querySelector('.fv-sub').textContent = `專注中${sub ? ' · ' + sub : ''} · ${r.min} 分鐘${r.place ? ' · ' + r.place : ''}${r.paused != null ? '（已暫停）' : ''}`;
   box.querySelector('.fg').style.strokeDashoffset = (326.7 * (1 - k)).toFixed(1);
   box.querySelector('.fv-pause').textContent = r.paused != null ? '繼續' : '暫停';
   box.querySelector('.fv-tip').textContent = TIPS[Math.floor((r.total - l) / 300) % TIPS.length];

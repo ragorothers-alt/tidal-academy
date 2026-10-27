@@ -266,8 +266,10 @@ const YUE_HOOKS = {
 yuehome.init(player, earthV, YUE_HOOKS);
 house.init(player);
 const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS.notes, decor: () => houseDecor(),
-  review: () => libAct('rv'), vocab: () => libAct('voc'), mistakes: () => libAct('book'), words: () => libAct('word'), libnotes: () => libAct('notes'),   // v8.1 圖書館的功能點
-  wing: k => museum.openWing(k) };   // 博物館的展區（topic 是展區）
+  review: () => libAct('rv'), vocab: () => libAct('voc'), mistakes: () => libAct('book'), words: () => libAct('word'),   // v8.1 圖書館的功能點
+  libnotes: sid => { ui.closeDialog(); library.openNotes(sid || shelfSid()); },   // v8.3 十科書架：面向哪一格就翻開哪一科
+  wing: k => museum.openWing(k),   // 博物館的展區（topic 是展區）
+  exhibit: t => museum.exhibitCard(t.k, t.id), theme: () => themeAct(), box: () => donationBox(), guestbook: () => guestbook() };   // v8.3 展品、小特展、捐贈箱、留言簿
 trip.init(player, () => { const x = PIER.x, z = PIER.z + PIER.len - 1.4; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
 spirit.init(player, () => skyU.night.value > 0.5);
 diy.init(player, myHome, { thumb: id => room.thumb(id), addStorage: (id, n) => room.addStorage(id, n) });
@@ -451,15 +453,16 @@ async function appraise(v) {
   await ui.say(sp(v), '全部鑑定完了！要捐給博物館嗎？');
 }
 async function donate(v) {
-  const s = S(); let n = 0;
+  const s = S(), got = []; let n = 0;
   for (let i = 0; i < s.pockets.length; i++) {
     const it = s.pockets[i]; if (!it || !KINDS[it.k] || s.museum[it.k][it.id]) continue;
-    const spc = find(it.k, it.id); s.museum[it.k][it.id] = Date.now(); s.pockets[i] = null; n++; save(); miles.add('donate');
+    const spc = find(it.k, it.id); s.museum[it.k][it.id] = Date.now(); s.pockets[i] = null; n++; got.push(it); save(); miles.add('donate');
     Audio.sfx('ok');
     await ui.say(sp(v), `喔喔！這是${spc ? spc.name : it.id}！${spc && spc.desc ? spc.desc : ''}`);
   }
   s.bells += n * 200; save();
   await ui.say(sp(v), n ? `謝謝你捐了 ${n} 件展品！博物館又更豐富了。這是 ${n * 200} 鈴錢的謝禮，呼呼。` : '目前沒有可以捐的東西呢。');
+  if (n) await afterDonate(got, sp(v));
 }
 
 /* ---------- 商店 ---------- */
@@ -777,6 +780,7 @@ function phoneToday() {
       ${st.extra.rest ? `<div class="td-task opt done"><i>🌙</i><span><b>${st.extra.name}</b><small>最後幾天，睡飽比多寫一份考卷更有用</small></span><code></code></div>` : row('extra', '✨', `加碼（可選）：${st.extra.name}`, st.extra.all ? '三項加碼都完成了！' : '想多練一點再做；不做也算完成今天', st.extra.v, st.extra.need, `${st.extra.v} / ${st.extra.need}`, true)}
     </div>
     ${weekHtml()}
+    ${borrowHtml()}
     <div class="rt-quiet">${route.quiet() ? `<span>🌿 ${route.quietWhy()}：島民不會主動找你出題</span>` : '<span>想安靜逛逛的話：</span>'}<button type="button" class="btn ghost rt-walk">${st.walk ? '結束散步模式' : st.shut ? '回到學習模式' : '🌿 散步模式'}</button></div>
     <div class="rv-slot"></div>
     <ul class="rt-stat"><li>錯題本 <b>${mis}</b> 題</li><li>到期單字 <b>${vd}</b> 個</li><li>連續學習 <b>${L.streakAlive()}</b> 天</li></ul>
@@ -790,6 +794,7 @@ function phoneToday() {
     if (st.chest) daySummary();
   };
   { const w = body.querySelector('.rt-wk'); if (w) w.onclick = () => lab.openBook(tutors()); }
+  body.querySelectorAll('[data-bw]').forEach(b => { b.onclick = () => borrowAct(b.dataset.bw); });
   body.querySelector('.rt-walk').onclick = () => { if (st.walk) route.setWalk(false); else if (st.shut) route.shut(false); else route.setWalk(true); Audio.sfx('tick'); paintHud(); phoneToday(); };
   body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => (st.study.cram ? cram.open(paintHud) : voyage.openDaily()), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
   body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { ui.setBack(phoneToday, '今日學習'); ({ daily: () => voyage.openDaily(), vocab: () => lexicon.open(), track: phoneTrack, free: phoneFree })[b.dataset.h](); }; });
@@ -967,6 +972,7 @@ function act() {
   if (house.inside) {
     const z = house.zone(); if (!z) return;
     if (z.kind === 'host') { const hv = house.hostNow(); if (hv.isLib) libTalk(); else talk(hv); return; }
+    if (z.kind === 'guest') { talk(z.v); return; }   // v8.3 來館裡的島民
     if (z.kind === 'furn') { talking = { name: 'house' }; room.itemMenu(z.item).finally(() => { talking = null; ui.closeDialog(); house.refreshDecor(room.ownDecor()); paintHud(); }); return; }   // 自己家的家具：轉向、收起、床可以睡覺
     if (z.kind === 'hook:decor') { houseDecor(); return; }
     const fn = z.kind.startsWith('hook:') ? HOUSE_HOOKS[z.kind.slice(5)] : null, mine = houseSid === 'player';   // 玩家家：來作客的島民不會替你介紹你家的東西
@@ -1421,30 +1427,131 @@ async function spotAct(s, host, subject) {
   const who = own ? (host.isLib ? library.sp() : sp(host)) : { name: s.name || s.label, color: '#a58bc9', voice: 300 };
   const pool = own ? s.lines : s.alone || s.lines, lines = pool && pool.length ? pool : ['……'];
   subject = s.subject || (subject && TA.subject(subject) ? subject : null);   // 圖書館、博物館不是科目：書桌的 subject 指定（博物館是歷史）
+  if (houseSid === 'library' && s.id === 'reading_corner') { await seatMenu(who, lines); return; }   // v8.3 夾層的讀書椅：坐下來專注
   if (s.kind === 'study') { await ui.say(who, pick(lines)); ui.closeDialog(); await drill(who, picker(subject ? { mode: 'subject', subject } : { mode: 'mixed' }), 3, {}); return; }
   await ui.say(who, pick(lines));
 }
 const libMesh = chibi(library.LIB()); libMesh.traverse(m => { m.frustumCulled = false; }); actors.dress(libMesh, 'library');
 const LIBHOST = { isLib: true, sid: 'library', mesh: libMesh };
+/* ---------- v8.3 新館：十科書架、讀書椅、借閱、展品與小特展、捐贈箱、留言簿、來館的島民 ---------- */
+const SHELF = ['chinese', 'english', 'math', 'history', 'geography', 'civics', 'physics', 'chemistry', 'biology', 'earth'];   // 圖書館十科書架由左到右（data/interiors_library.js 的名牌順序）
+const shelfSid = () => SHELF[Math.max(0, Math.min(9, Math.round((player.position.x + 5.04) / 1.12)))];
+const libSpots = () => SHELF.map((sid, i) => ({ x: -5.04 + 1.12 * i, y: 0, z: -4.9, r: 0.72, kind: 'hook:libnotes', topic: sid, label: `翻開${(TA.subject(sid) || {}).name || ''}筆記` }));
+const wait = ms => new Promise(r => setTimeout(r, ms));
+/** 今天誰來館裡：博物館（史遙在時找她聊天、不在時來看展）、圖書館（下雨天來避雨，晴天偶爾來看書）；一棟一天最多兩次 */
+function hallVisitor(kind) {
+  const h = hourOverride ?? nowHour(), s = S(), day = dayKey();
+  if (!s.hallVisit || s.hallVisit.d !== day) s.hallVisit = { d: day, n: {} };
+  if ((s.hallVisit.n[kind] || 0) >= 2) return null;
+  const rain = weather.raining(), V = I.HALL_VISITS || {};
+  let pool = villagers.filter(v => !v.shop && !v.guest && v.sid !== 'history' && !v.away && v !== talking && !v.chatting && v.mesh.visible && whereOf(v, h) === 'out' && (V[v.sid] || town.chatsFor('history', v.sid).length));
+  if (!pool.length || Math.random() > (kind === 'library' && rain ? 0.85 : 0.4)) return null;
+  const v = (kind === 'library' && rain && pool.find(x => x.sid === 'biology')) || pick(pool);
+  town.interrupt(v); if (v.sitting) standVillager(v); v.sitGoal = null;
+  s.hallVisit.n[kind] = (s.hallVisit.n[kind] || 0) + 1; save();
+  return v;
+}
+/** 走近館裡的島民：先說一句（博物館裡史遙在的話，兩人聊一段原本在島上聊的雙人閒聊） */
+async function hallChat(v, kind, host) {
+  for (let k = 0; k < 240; k++) { await wait(500); if (!house.inside || !house.guestsNow().includes(v)) return; if (!talking && !ui.dialogOpen() && Math.hypot(player.position.x - v.mesh.position.x, player.position.z - v.mesh.position.z) < 4.5) break; }
+  if (!house.inside || !house.guestsNow().includes(v)) return;
+  const V = (I.HALL_VISITS || {})[v.sid] || {}, cs = host && host.sid === 'history' ? town.chatsFor('history', v.sid) : [];
+  const own = kind === 'library' ? (weather.raining() ? V.rain : V.library) : V.museum;
+  const lines = cs.length && (Math.random() < 0.7 || !own) ? pick(cs).lines : own && own.length ? [[v.sid, pick(own)]] : [];
+  for (const [sid, t] of lines) {
+    if (!house.inside || !house.guestsNow().includes(v)) return;
+    const m = sid === v.sid ? v.mesh : host && sid === host.sid ? host.mesh : null; if (!m) continue;
+    const ms = 2600 + String(t).length * 85; ui.bubble(m, t, ms); await wait(ms + 250);
+  }
+}
+/** 夾層的讀書椅：坐下來專注（現成的專注時光），或聽一段小故事 */
+async function seatMenu(who, lines) {
+  const b = S().borrow, sub = b && b.sid ? `（帶著「${b.name}」）` : '';
+  const i = await ui.ask(library.sp(), pick(['這張讀書椅靠窗，光線剛好。要坐下來專心一下嗎？', '這盞燈替你留著。想休息也可以，想專心也可以。']) + sub, ['專注 15 分鐘', '專注 25 分鐘', '先坐一下就好', '離開']);
+  if (i === 0 || i === 1) { ui.closeDialog(); focus.begin(i ? 25 : 15, b ? b.sid : null, paintHud, '圖書館・夾層的讀書椅'); return; }
+  if (i === 2) await ui.say(who, pick(lines));
+}
+/** 今日學習的「借閱中」 */
+function borrowHtml() {
+  const b = S().borrow; if (!b) return '';
+  return `<div class="td-borrow"><span>📌 借閱中：<b>${ui.esc((TA.subject(b.sid) || {}).name || '')}「${ui.esc(b.name)}」</b></span><button type="button" class="btn sm" data-bw="read">接著讀</button><button type="button" class="btn sm" data-bw="try">用新題試試</button><button type="button" class="btn ghost sm" data-bw="back">還書</button></div>`;
+}
+function borrowAct(k) {
+  const b = S().borrow; if (!b) return;
+  if (k === 'read') { ui.setBack(phoneToday, '今日學習'); library.openNotes(b.sid, b.unit); return; }
+  if (k === 'try') { const ids = L.pickUnit(b.unit, 5); if (!ids.length) { ui.toast('這個單元暫時沒有題目'); return; } hall.runSet(`${b.name} · 讀完試試`, ids, { again: phoneToday }); return; }
+  S().borrow = null; save(); ui.toast(`「${b.name}」還回書架了`); phoneToday();
+}
+/** 捐完：館裡馬上擺上新展品；問要不要去看看它的位置（小光點指路） */
+async function afterDonate(got, who) {
+  if (!house.inside || houseSid !== 'museum' || !got.length) return;
+  house.redress(); house.setVisitSpots(museum.spots());
+  const it = got[got.length - 1], at = museum.where(it.k, it.id); if (!at) return;
+  const i = await ui.ask(who, `「${itemName(it)}」已經擺上${museum.wingName(it.k)}展區了。要去看看它的位置嗎？`, ['去看看', '先不用']);
+  if (i === 0) { ui.closeDialog(); house.mark(at[0], at[1] + 0.5, at[2]); ui.toast(`${museum.wingName(it.k)}展區：跟著小光點走`); }
+}
+/** 捐贈箱：館長不在也能捐（已經鑑定好、館裡還沒有的），之後收到一封收件信 */
+async function donationBox() {
+  if (talking) return; talking = { name: 'box' };
+  const NAR = { name: '捐贈箱', color: '#c9a05a', voice: 300 };
+  try {
+    const s = S(), can = s.pockets.map((it, i) => [it, i]).filter(([it]) => it && KINDS[it.k] && !s.museum[it.k][it.id]);
+    const raw = s.pockets.filter(x => x && (x.k === 'unk' || x.k === 'ore')).length;
+    if (!can.length) { await ui.say(NAR, '投入口旁貼著一張小卡：「已經鑑定好、館裡還沒有的展品，可以放進來。」' + (raw ? `口袋裡有 ${raw} 件還沒鑑定的東西：化石請史遙、礦石請岳先看看吧。` : '口袋裡目前沒有可以捐的東西。')); return; }
+    const i = await ui.ask(NAR, `口袋裡有 ${can.length} 件館裡還沒有的展品：${can.map(([it]) => itemName(it)).join('、')}。要放進捐贈箱嗎？`, ['全部放進去', '先不要']);
+    if (i !== 0) return;
+    const got = can.map(([it, idx]) => { s.museum[it.k][it.id] = Date.now(); s.pockets[idx] = null; miles.add('donate'); return it; });
+    s.bells += got.length * 200; save(); Audio.sfx('ok');
+    await ui.say(NAR, `咚——${got.length} 件展品落進箱子裡。箱子上的小牌子亮了一下：「謝謝你，謝禮 ${got.length * 200} 鈴錢已經放進錢包。」`);
+    const facts = got.map(it => find(it.k, it.id)).filter(x => x && x.desc).slice(0, 2).map(x => `「${x.name}」：${x.desc}`).join('\n');
+    social.sendLetter({ from: 'history', title: '捐贈箱的收件信', open: `${TA.S.profile.name || '你'}好：`, text: `今天在捐贈箱收到 ${got.map(it => itemName(it)).join('、')}，我已經替${got.length > 1 ? '它們' : '它'}擺上展示位了。${facts ? '\n' + facts : ''}`, close: '—— 史遙' });
+    await afterDonate(got, NAR);
+  } finally { talking = null; ui.closeDialog(); paintHud(); }
+}
+/** 留言簿：寫一句「我今天第一次知道……」，下次來翻得到（也收進回憶錄） */
+async function guestbook() {
+  if (talking) return; talking = { name: 'guestbook' };
+  const NAR = { name: '留言簿', color: '#a58bc9', voice: 300 };
+  let write = false;
+  try {
+    const g = S().guestbook || [], last = g.slice(-3).reverse().map(e => `${e.d}「${e.t}」`).join('　');
+    const i = await ui.ask(NAR, g.length ? `翻到你寫過的幾頁：${last}` : '扉頁上史遙寫著：「我喜歡看大家記下自己的第一次。」後面的頁子還空著。', ['寫一句', '闔上']);
+    write = i === 0;
+  } finally { talking = null; ui.closeDialog(); paintHud(); }
+  if (!write) return;
+  const body = ui.el('div', 'mm-write', `<label>我今天第一次知道……<textarea maxlength="60" rows="2" placeholder="例如：菊石的殼越往外越大，是一圈一圈長出來的。"></textarea></label><p class="muted">會留在博物館的留言簿，也收進回憶錄。</p>`);
+  const ta = body.querySelector('textarea'), ok = ui.el('button', 'btn gold', '寫上去'); ok.type = 'button';
+  ok.onclick = () => { const t = ta.value.trim(); if (!t) { ui.toast('寫一點什麼吧'); return; } const d = new Date(), s = S(); s.guestbook = (s.guestbook || []).concat([{ d: `${d.getMonth() + 1}/${d.getDate()}`, t }]).slice(-40); save(); ui.closePanel(); memo.add('博物館留言簿', t, { icon: '🖋' }); Audio.sfx('catch'); ui.toast('寫進留言簿了'); };
+  body.appendChild(ok); ui.panel('潮汐博物館 · 留言簿', body, { cls: 'memo-p' }); setTimeout(() => ta.focus(), 50);
+}
+/** 圓廳的特展台 */
+async function themeAct() {
+  if (talking) return; talking = { name: 'theme' };
+  try { const hv = house.hostNow(), who = hv && hv.sid === 'history' ? sp(hv) : { name: '特展台', color: '#c9a05a', voice: 300 }; await museum.openTheme(who, { memo: (a, b) => memo.add(a, b, { icon: '🏛' }), paint: paintHud }); }
+  finally { talking = null; paintHud(); }
+}
 /** v8.1 圖書館、博物館的整棟室內（house.js）：出館回到門口；建不起來就用舊的房間／展廳 */
 function enterPublic(key, host, door, opt = {}) {
   const yaw0 = camYaw;
   nearDoor = null; nearV = null; houseSid = key; roomHost = host;
-  const ok = house.enter(key, { host, dress: opt.dress, onExit: () => {
+  const ok = house.enter(key, { host, dress: opt.dress, spots: opt.spots, guests: opt.guests, onExit: () => {
     if (opt.after) opt.after();
     roomHost = null; houseSid = null; moveTo = null; nearDoor = null; nearV = null; camYaw = yaw0;
     player.position.set(door[0], ground(door[0], door[1]), door[1]); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud();
   } });
   if (!ok) { houseSid = null; roomHost = null; return false; }
-  camYaw = house.spawnYaw() + Math.PI; fpPitch = -0.05; return true;
+  camYaw = house.spawnYaw() + Math.PI; fpPitch = -0.05;
+  (opt.guests || []).forEach(g => hallChat(g.v, key, host && !host.isLib ? host : null));
+  return true;
 }
 function enterMuseum() {
   life.cancel(); moveTo = null;
   if (house.has('museum')) {
     const f = SITES.museum, v = villagers.find(x => x.sid === 'history'), at = !!v && !v.away && v.mesh.visible && Math.hypot(v.mesh.position.x - f.front[0], v.mesh.position.z - f.front[1]) < 8;   // 史遙守在博物館門口：她在附近的話，進館後她站在服務台
     if (at) { town.interrupt(v); if (v.sitting) standVillager(v); v.sitGoal = null; }
-    const back = () => { museum.undress(); if (at) { v.mesh.position.set(f.front[0], ground(f.front[0], f.front[1]), f.front[1]); v.target = v.home.slice(); } };
-    if (enterPublic('museum', at ? v : null, [f.x, f.z + 2.6], { dress: museum.dress, after: back })) { museum.welcome(); return; }
+    const gv = hallVisitor('museum'), guests = gv ? [{ v: gv, at: (at ? [[4.75, 0, 3.9, -0.7], [5.0, 0, 5.6, -2.3], [2.9, 0, 4.0, 0.9]] : []).concat([[-1.6, 0, -1.6, -0.8], [1.6, 0, -1.6, 0.8], [-6.6, 0, 1.6, 2.4]]) }] : [];   // v8.3 偶爾有島民來找史遙（或來看展）
+    const back = () => { museum.undress(); if (at) { v.mesh.position.set(f.front[0], ground(f.front[0], f.front[1]), f.front[1]); v.target = v.home.slice(); } if (gv) { gv.target = gv.home.slice(); } };
+    if (enterPublic('museum', at ? v : null, [f.x, f.z + 2.6], { dress: museum.dress, spots: ud => museum.spots(ud), guests, after: back })) { museum.welcome(); return; }
   }
   museum.enter();
 }
@@ -1454,7 +1561,10 @@ async function libAct(k) {
 }
 function enterLibrary() {
   life.cancel(); moveTo = null;
-  if (house.has('library')) { const d = SITES.library.door; if (enterPublic('library', LIBHOST, [d[0], d[1] + 0.4])) return; }
+  if (house.has('library')) {
+    const d = SITES.library.door, gv = hallVisitor('library'), guests = gv ? [{ v: gv, at: [[1.6, 0, 2.4, -2.4], [-1.6, 0, 2.4, 2.4], [2.2, 0, 4.9, -2.2], [-2.6, 0, 0.4, 2.0]] }] : [];   // v8.3 下雨天島民會來避雨看書（晴天偶爾）
+    if (enterPublic('library', LIBHOST, [d[0], d[1] + 0.4], { spots: libSpots, guests, after: () => { if (gv) gv.target = gv.home.slice(); } })) return;
+  }
   roomHost = LIBHOST;
   room.enter(player, () => { roomHost = null; room.scene.remove(libMesh); scene.add(player); const d = SITES.library.door; player.position.set(d[0], ground(d[0], d[1] + 0.4), d[1] + 0.4); player.rotation.y = 0; camPos.copy(player.position).add(camOff); }, { home: library.room(), sid: 'library' });
   room.scene.add(libMesh); libMesh.position.set(0.5, 0, -1.8); libMesh.rotation.y = 0;

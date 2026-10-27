@@ -352,6 +352,23 @@ function build(key) {
 function snapshot(o) { return o && { parent: o.parent, position: o.position.clone(), quaternion: o.quaternion.clone(), visible: o.visible }; }
 function restore(o, s) { if (!o || !s) return; o.removeFromParent(); if (s.parent) s.parent.add(o); o.position.copy(s.position); o.quaternion.copy(s.quaternion); o.visible = s.visible; o.updateMatrixWorld(true); }
 
+let guests = [], visitSpots = [], dressObjs = [], dressFn = null, beacon = null;
+/** v8.3 館裡的客人（main.js 播他們的對話） */
+export const guestsNow = () => guests.map(o => o.v);
+/** v8.3 重新擺「這次進門才有的東西」（博物館捐贈後馬上看得到新展品） */
+export function redress() { if (!inside || !dressFn) return; dressObjs.forEach(o => scene.remove(o)); dressObjs = dressFn(cur.ud) || []; dressObjs.forEach(addDress); }
+/** 擺上這次的東西；userData.solid 的（例如特展台）會擋路 */
+function addDress(o) { scene.add(o); if (o.userData.solid) { o.updateMatrixWorld(true); extraCols.push(new THREE.Box3().setFromObject(o)); } }
+/** v8.3 換掉這次進門才有的互動點 */
+export function setVisitSpots(list) { visitSpots = (list || []).map(s => Object.assign({ y: 0, r: 1.1 }, s)); }
+/** v8.3 指路的小光點：浮在 (x, y, z) 上方慢慢轉，走到旁邊或 40 秒後消失 */
+export function mark(x, y, z) {
+  unmark(); if (!inside) return;
+  beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), new THREE.MeshBasicMaterial({ color: '#ffe27a', transparent: true, opacity: 0.9, depthTest: false }));
+  beacon.renderOrder = 9; beacon.position.set(x, y, z); beacon.userData = { y, left: 40 }; scene.add(beacon);
+}
+function unmark() { if (!beacon) return; scene.remove(beacon); beacon.geometry.dispose(); beacon.material.dispose(); beacon = null; }
+
 /* 玩家家「我的房間」：照存檔的格子把家具擺進整棟室內（每件可以按 E 查看；入口有「佈置房間」） */
 let decorObjs = [], decorCols = [], decorSpots = [];
 function placeDecor(dec) {
@@ -386,7 +403,8 @@ export function enter(key, opt = {}) {
     const s = ud.gifts[i], m = buildFurniture(f); m.position.set(s[0], s[1], s[2]); m.rotation.y = s[3] || 0; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
     scene.add(m); extra.push(m); m.updateMatrixWorld(true); if (f.cat !== 'rug') extraCols.push(new THREE.Box3().setFromObject(m));
   });
-  (opt.dress ? opt.dress(ud) || [] : []).forEach(o => { scene.add(o); extra.push(o); });   // 這次進門才擺的東西（博物館捐贈過的展品、展區名牌）
+  dressFn = opt.dress || null; dressObjs = (dressFn ? dressFn(ud) || [] : []); dressObjs.forEach(addDress);   // 這次進門才擺的東西（博物館捐贈過的展品、展區名牌）
+  visitSpots = opt.spots ? (opt.spots(ud) || []).map(s => Object.assign({ y: 0, r: 1.1 }, s)) : [];   // v8.3 這次進門才有的互動點（展品、書架的各科）
   const sd = new THREE.Vector3(...(ud.sun || [0.45, 0.8, 0.55])).normalize();
   sun.position.copy(cur.ctr).addScaledVector(sd, cur.ext + 6); sun.target.position.copy(cur.ctr);
   Object.assign(sun.shadow.camera, { left: -cur.ext, right: cur.ext, top: cur.ext, bottom: -cur.ext, near: 0.5, far: cur.ext * 2 + 14 }); sun.shadow.camera.updateProjectionMatrix();
@@ -399,6 +417,15 @@ export function enter(key, opt = {}) {
     host.mesh.userData.look = host.mesh.userData.look || new THREE.Vector3();
     extraCols.push(new THREE.Box3(new THREE.Vector3(h[0] - 0.3, h[1], h[2] - 0.3), new THREE.Vector3(h[0] + 0.3, h[1] + 1.4, h[2] + 0.3)));
   }
+  guests = (opt.guests || []).filter(o => o.v && o.v.mesh && o.at).map(o => {   // v8.3 來館裡的客人（例如來找史遙聊天的島民）
+    // at 可以是幾個候選位置：挑第一個站得住、不擋任何互動點與主人的
+    const hp = ud.host || [0, 0, -1], cands = Array.isArray(o.at[0]) ? o.at : [o.at], allS = cur.spots.concat(visitSpots);
+    const a = cands.find(c => standAt(c[0], c[2], c[1]) !== null && allS.every(s => Math.hypot(s.x - c[0], s.z - c[2]) > (s.r || 1) + 0.5) && Math.hypot(hp[0] - c[0], hp[2] - c[2]) > 0.9);
+    if (!a) return null;
+    const m = o.v.mesh, snap = snapshot(m); scene.add(m); m.position.set(a[0], a[1], a[2]); m.rotation.set(0, a[3] || 0, 0); m.visible = true;
+    m.userData.look = m.userData.look || new THREE.Vector3(); extraCols.push(new THREE.Box3(new THREE.Vector3(a[0] - 0.3, a[1], a[2] - 0.3), new THREE.Vector3(a[0] + 0.3, a[1] + 1.4, a[2] + 0.3)));
+    return { v: o.v, snap, face: a[3] || 0 };
+  }).filter(Boolean);
   onExit = opt.onExit || null;
   savedCurve = U.uCurve.value; U.uCurve.value = 0; inside = true;
   envEnter(key);   // 窗外：從這棟房子在島上的位置拍全景
@@ -412,6 +439,7 @@ export function enter(key, opt = {}) {
 export function leave(o) {
   if (!inside) return null; inside = false;
   restore(P, savedP); if (host) restore(host.mesh, hostSaved); host = null;
+  guests.forEach(o => restore(o.v.mesh, o.snap)); guests = []; visitSpots = []; dressObjs.forEach(o => scene.remove(o)); dressObjs = []; dressFn = null; unmark();
   scene.remove(cur.g); extra.forEach(x => scene.remove(x)); extra.length = 0; extraCols.length = 0; placeDecor(null);
   U.uCurve.value = savedCurve || CURVE; document.body.classList.remove('in-house'); ui.iris(); Audio.sfx('open');
   const cb = onExit; onExit = null; if (o && o.keep) return cb;
@@ -453,9 +481,10 @@ function updateCam(dt, k, yaw, pitch, tilt, zoom) {
 export function zone() {
   if (!inside || !P) return null;
   if (host) { const m = host.mesh.position; if (Math.abs(m.y - P.position.y) < 1 && Math.hypot(m.x - P.position.x, m.z - P.position.z) < 1.7) return { kind: 'host', label: '聊天' }; }
+  for (const o of guests) { const m = o.v.mesh.position; if (Math.abs(m.y - P.position.y) < 1 && Math.hypot(m.x - P.position.x, m.z - P.position.z) < 1.5) return { kind: 'guest', label: '聊天', v: o.v }; }   // v8.3 來館裡的島民
   const fp = fpNow > 0.5, fx = fp ? -Math.sin(yawNow) : Math.sin(P.rotation.y), fz = fp ? -Math.cos(yawNow) : Math.cos(P.rotation.y);
   let best = null, bd = Infinity;
-  (decorSpots.length ? cur.spots.concat(decorSpots) : cur.spots).forEach(s => {
+  (decorSpots.length || visitSpots.length ? cur.spots.concat(decorSpots, visitSpots) : cur.spots).forEach(s => {
     if (Math.abs(s.y - P.position.y) > 0.9) return;
     const dx = s.x - P.position.x, dz = s.z - P.position.z, d = Math.hypot(dx, dz);
     if (d > s.r || d >= bd || (d > 0.35 && (dx * fx + dz * fz) / d < 0.15)) return;
@@ -507,6 +536,8 @@ export function tick(dt, t, o) {
     if (Math.hypot(P.position.x - m.position.x, P.position.z - m.position.z) < 6) m.rotation.y = angLerp(m.rotation.y, want, Math.min(1, dt * 3));
     m.userData.look.copy(P.position); m.userData.look.y += 1.1; animate(m, dt, 0, t);
   }
+  guests.forEach(o => { const m = o.v.mesh, near = Math.hypot(P.position.x - m.position.x, P.position.z - m.position.z) < 2.2; m.rotation.y = angLerp(m.rotation.y, near ? Math.atan2(P.position.x - m.position.x, P.position.z - m.position.z) : o.face, Math.min(1, dt * 2.5)); m.userData.look.copy(near ? P.position : m.position).y += 1.1; animate(m, dt, 0, t); });
+  if (beacon) { beacon.position.y = beacon.userData.y + Math.sin(t * 3) * 0.06; beacon.rotation.y += dt * 1.8; if ((beacon.userData.left -= dt) <= 0 || Math.hypot(P.position.x - beacon.position.x, P.position.z - beacon.position.z) < 1.1) unmark(); }
   const n = THREE.MathUtils.clamp(o.night || 0, 0, 1), gold = o.golden || 0;
   /* v7.8 真實的室內光：屋裡沒有均勻打亮的補光——光從窗戶（天光與直射進來的陽光）和燈來，照度隨距離平方衰減，
      離窗、離燈越遠越暗，角落與屋子深處自然暗下來；只留一點點四處反彈的光（亮面偏暖、背光面與桌底是薰衣草色） */

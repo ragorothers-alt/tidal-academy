@@ -36,7 +36,7 @@ export function homeHours(v) { if (v.shop || v.sid === 'history') return ''; con
 
 /* ================= 閒聊 ================= */
 let chatT = 20, active = null;
-const chatsFor = (a, b) => (I.CHATS || []).filter(c => (c.a === a && c.b === b) || (c.a === b && c.b === a));
+export const chatsFor = (a, b) => (I.CHATS || []).filter(c => (c.a === a && c.b === b) || (c.a === b && c.b === a));
 export function update(dt, hour, player, busy) {
   if (active) {
     const { A, B, c } = active;

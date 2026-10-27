@@ -68,7 +68,10 @@ export function openNotes(sid, unitId) {
       const b = ui.el('button', 'unit-btn' + (mis ? ' hot' : ''), `${ui.esc(u.name)}${mis ? `<i>${mis}</i>` : ''}`); b.type = 'button';
       b.onclick = () => { [...list.children].forEach(c => c.classList.remove('on')); b.classList.add('on'); view.innerHTML = (u.notes || []).map(n => `<div class="letter-note"><b>${ui.rich(n.t)}</b><div>${ui.rich(n.b)}</div></div>`).join('') || '<p class="muted">這個單元還沒有筆記。</p>'; view.scrollTop = 0; Audio.sfx('pop');
         const fs = figs.forUnit(u.id);   // 這個單元的互動示意圖：列在筆記上面，關掉後回到這一頁
-        if (fs.length) { const row = ui.el('div', 'fig-links'); fs.forEach(f => { const fb = ui.el('button', 'btn', '📐 ' + ui.esc(f.title)); fb.type = 'button'; fb.onclick = () => figs.open(f, () => setTimeout(() => openNotes(sid, u.id), 0)); row.appendChild(fb); }); view.prepend(row); } };
+        if (fs.length) { const row = ui.el('div', 'fig-links'); fs.forEach(f => { const fb = ui.el('button', 'btn', '📐 ' + ui.esc(f.title)); fb.type = 'button'; fb.onclick = () => figs.open(f, () => setTimeout(() => openNotes(sid, u.id), 0)); row.appendChild(fb); }); view.prepend(row); }
+        const bw = S().borrow, mine = bw && bw.unit === u.id, bb = ui.el('button', 'btn ghost sm nt-borrow', mine ? '✔ 借閱中（今日學習會提醒你接著讀）' : '📌 帶著這本（下次接著讀）'); bb.type = 'button';   // v8.3 借閱：一次帶一本，沒有期限
+        bb.onclick = () => { if (mine) return; S().borrow = { sid, unit: u.id, name: u.name, at: Date.now() }; save(); Audio.sfx('pop'); ui.toast(`帶著「${u.name}」：手機的今日學習會提醒你接著讀，也可以用新題試試`); bb.textContent = '✔ 借閱中（今日學習會提醒你接著讀）'; };
+        view.appendChild(bb); };
       list.appendChild(b);
     });
   };

@@ -644,6 +644,8 @@ body.stargazing .jump-btn, body.photo .jump-btn, body.focusing .jump-btn, body.t
 .pn-box { background: radial-gradient(130% 100% at 20% 0%, #fffef4, var(--ac-cream) 45%, var(--ac-cream2)); color: var(--ac-ink); box-shadow: var(--ac-shadow), 0 40px 80px rgba(40, 28, 10, .22);
   animation: ac-pop .32s cubic-bezier(.25, 1.6, .45, 1) both; scrollbar-width: thin; scrollbar-color: #e6d6b0 transparent; }
 .pn-head { position: relative; }
+.td-borrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 10px 0; padding: 10px 12px; border-radius: 16px; background: #fff3d6; font-size: 14px; } .td-borrow > span { flex: 1 1 100%; }   /* v8.3 今日學習的借閱中 */
+.nt-borrow { margin-top: 10px; }
 .pn-box:not(.hall-p):not(.fig-p) > .pn-head { position: sticky; top: 0; z-index: 4; margin: -6px -20px 8px; padding: 6px 20px; background: inherit; }   /* v8.2 長面板往下捲時，標題與 ✕ 留在上方 */
 .pn-head > b { display: inline-block; padding: 6px 22px 7px; border-radius: 999px; background: #ffd36b; color: #6b4a1a; font-size: 18px; letter-spacing: 1px; transform: rotate(-2deg); box-shadow: 0 4px 0 rgba(176, 120, 20, .25); }
 .pn-x { width: 38px; height: 38px; border-radius: 50%; background: #f1e3c2; color: var(--ac-ink); font-weight: 800; transition: transform .15s, background .15s; }

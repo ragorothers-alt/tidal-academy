@@ -8,7 +8,7 @@ import { animate } from './chars.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as post from './post.js';
-import { S, list, icon, whereName, stars, fmtMonths, fmtHours } from './state.js';
+import { S, save, list, icon, whereName, stars, fmtMonths, fmtHours } from './state.js';
 
 const W = 18, D = 14, HW = W / 2, HD = D / 2;
 export let inside = false;
@@ -155,6 +155,35 @@ function atlasCell(url) {
   const im = new Image(); im.onload = () => { const c = ATL.cv.getContext('2d'); c.imageSmoothingEnabled = false; c.drawImage(im, (i % ATL.n) * ATL.cell + 4, Math.floor(i / ATL.n) * ATL.cell + 4, 32, 32); ATL.tex.needsUpdate = true; }; im.src = url;
   return i;
 }
+/** 一批四邊形（[x, y, z, ry, 寬, 高, tilt, u0, v0, u1, v1]）合併成一個網格：右方 (cx, 0, -sx)、上方往後仰 (-sx·st, ct, -cx·st) */
+function quads(list, mat) {
+  const P = [], N = [], UV = [], IX = [];
+  list.forEach(([x, y, z, ry, w, h, t, u0, v0, u1, v1], k) => {
+    const cx = Math.cos(ry), sx = Math.sin(ry), ct = Math.cos(t), st = Math.sin(t), hw = w / 2, hh = h / 2;
+    [[-1, -1, u0, v0], [1, -1, u1, v0], [1, 1, u1, v1], [-1, 1, u0, v1]].forEach(([a, b, u, v]) => { P.push(x + hw * cx * a - hh * sx * st * b, y + hh * ct * b, z - hw * sx * a - hh * cx * st * b); N.push(sx * ct, st, cx * ct); UV.push(u, v); });
+    const o = k * 4; IX.push(o, o + 1, o + 2, o, o + 2, o + 3);
+  });
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); g.setIndex(IX);
+  const m = new THREE.Mesh(g, mat); m.castShadow = false; m.receiveShadow = true; return m;
+}
+/* ---------- v8.3 名牌：每件捐贈過的展品下面一塊小牌子（名字、捐贈日期；你的第一件會署名），全部畫在同一張圖集、合併成一次繪製 ---------- */
+const NL = { cv: null, tex: null, mat: null, W: 2048, H: 1024, cw: 128, ch: 48 };
+function plateAtlas() {
+  if (!NL.cv) {
+    NL.cv = document.createElement('canvas'); NL.cv.width = NL.W; NL.cv.height = NL.H;
+    NL.tex = new THREE.CanvasTexture(NL.cv); NL.tex.colorSpace = THREE.SRGBColorSpace; NL.tex.anisotropy = 4;
+    NL.mat = new THREE.MeshStandardMaterial({ map: NL.tex, emissiveMap: NL.tex, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.28, roughness: 0.9 });
+  }
+  const c = NL.cv.getContext('2d'); c.clearRect(0, 0, NL.W, NL.H); return c;
+}
+const PLATE_N = Math.floor(2048 / 128) * Math.floor(1024 / 48);
+function drawPlate(c, i, name, sub, color) {
+  const n = NL.W / NL.cw, x = (i % n) * NL.cw, y = Math.floor(i / n) * NL.ch;
+  c.fillStyle = '#fbf4e6'; c.fillRect(x + 2, y + 2, NL.cw - 4, NL.ch - 4); c.fillStyle = color; c.fillRect(x + 2, y + 2, NL.cw - 4, 4);
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#4a3a2a'; c.font = '800 19px system-ui, "Microsoft JhengHei", sans-serif'; c.fillText(name, x + NL.cw / 2, y + (sub ? 20 : 26), NL.cw - 10);
+  if (sub) { c.fillStyle = '#8a6a4a'; c.font = '700 12px system-ui, "Microsoft JhengHei", sans-serif'; c.fillText(sub, x + NL.cw / 2, y + 37, NL.cw - 10); }
+  return [x / NL.W, 1 - (y + NL.ch) / NL.H, (x + NL.cw) / NL.W, 1 - y / NL.H];
+}
 /** 一批圖卡（[x, y, z, ry, s, 格, tilt]）合併成一個網格 */
 function cardsMesh(list) {
   const P = [], N = [], UV = [], IX = [], A = 1024;
@@ -170,29 +199,106 @@ function cardsMesh(list) {
 let signs = [];
 function signMesh(w, n, total, [x, y, z, ry, wd]) {
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const c = cv.getContext('2d');
-  c.fillStyle = '#fbf4e6'; c.fillRect(0, 0, 512, 128); c.fillStyle = w.color; c.fillRect(0, 0, 512, 14); c.fillRect(0, 114, 512, 14);
-  c.fillStyle = '#5a4632'; c.font = '800 62px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(`${w.name} ${n}/${total}`, 256, 66);
+  const full = total > 0 && n >= total;   // v8.3 捐齊的展區：名牌換成金色
+  c.fillStyle = full ? '#fff3c8' : '#fbf4e6'; c.fillRect(0, 0, 512, 128); c.fillStyle = full ? '#d8a830' : w.color; c.fillRect(0, 0, 512, 14); c.fillRect(0, 114, 512, 14);
+  c.fillStyle = '#5a4632'; c.font = '800 62px system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(full ? `★ ${w.name} 全部捐齊` : `${w.name} ${n}/${total}`, 256, 66, 490);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(wd || 1.6, (wd || 1.6) / 4), new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.25, roughness: 0.9 }));
   m.position.set(x, y, z); m.rotation.y = ry || 0; signs.push(m); return m;
 }
 /** 進新館時呼叫（house.enter 的 dress）：回傳要擺進場景的圖卡與名牌 */
+let placed = new Map(), spotList = [];
 export function dress(ud) {
-  const s = S(), ex = ud.exhibits || {}, out = [], cards = [];
-  signs = [];
+  undress();   // 捐贈後重擺（house.redress）：先釋放上一次的
+  const s = S(), ex = ud.exhibits || {}, out = [], cards = [], plates = [];
+  placed = new Map(); spotList = [];
+  const me = (window.TA.S.profile || {}).name || '我';
+  let first = null; WINGS.forEach(w => Object.entries(s.museum[w.k] || {}).forEach(([id, at]) => { if (typeof at === 'number' && (!first || at < first.at)) first = { k: w.k, id, at }; }));
+  const pc = plateAtlas(); let pi = 0;
   WINGS.forEach(w => {
     const L2 = list(w.k), pos = ex[w.k] || [], got = s.museum[w.k] || {};
     L2.forEach((sp, i) => {
       const p = pos[i]; if (!p || !got[sp.id]) return;
-      const c = atlasCell(icon(sp.id, w.k)); if (c >= 0) cards.push([p[0], p[1], p[2], p[3] || 0, p[4] || 0.42, c, p[5] || 0]);
+      const [x, y, z] = p, ry = p[3] || 0, sz = p[4] || 0.42, t = p[5] || 0;
+      const c = atlasCell(icon(sp.id, w.k)); if (c >= 0) cards.push([x, y, z, ry, sz, c, t]);
+      placed.set(w.k + ':' + sp.id, [x, y, z]);
+      spotList.push({ x, y: 0, z, r: 1.05, kind: 'hook:exhibit', label: `看看「${sp.name}」`, topic: { k: w.k, id: sp.id } });   // v8.3 走到展品前按 E 看這一件
+      if (pi < PLATE_N) {
+        const at = got[sp.id], d = typeof at === 'number' ? new Date(at) : null, mine = first && first.k === w.k && first.id === sp.id;
+        const uv = drawPlate(pc, pi++, sp.name, mine ? `★ ${me}的第一件` : d ? `${d.getMonth() + 1}/${d.getDate()} 捐贈` : '', w.color);
+        // 圖卡正下方有空位就掛在下面；排得很密的水族格、標本櫃（下面緊接著另一格）改成貼在圖卡下緣的一條名牌
+        const ct = Math.cos(t), st = Math.sin(t), sx = Math.sin(ry), cx = Math.cos(ry), ph0 = sz * 1.15 * NL.ch / NL.cw;
+        const tight = pos.some((q, j) => q && j !== i && Math.abs(q[0] - x) < sz && Math.abs(q[2] - z) < 0.35 && q[1] < y && y - q[1] < sz / 2 + (q[4] || 0.42) / 2 + ph0 + 0.05);
+        const pw = tight ? sz : sz * 1.15, ph = pw * NL.ch / NL.cw, off = tight ? sz / 2 - ph / 2 : sz / 2 + ph / 2 + 0.03, f = tight ? 0.004 : 0;
+        plates.push([x + off * sx * st + f * sx * ct, y - off * ct + f * st, z + off * cx * st + f * cx * ct, ry, pw, ph, t, ...uv]);
+      }
     });
     const sg = (ud.wingSigns || {})[w.k]; if (sg) out.push(signMesh(w, L2.filter(x => got[x.id]).length, L2.length, sg));
   });
   if (cards.length) { const m = cardsMesh(cards); signs.push(m); out.push(m); }
+  if (plates.length) { NL.tex.needsUpdate = true; const m = quads(plates, NL.mat); signs.push(m); out.push(m); }
+  const th = themeStand(ud); if (th) { th.children.forEach(o => signs.push(o)); out.push(th); }
   return out;
 }
+/** v8.3 這次進館的互動點：每件捐贈過的展品＋圓廳的特展台 */
+export const spots = ud => { const t = ud && ud.themeAt || THEME_AT; return spotList.concat(themeNow() ? [{ x: t[0], y: 0, z: t[2], r: 1.2, kind: 'hook:theme', label: '看看本週小特展' }] : []); };
+/** 展品在館裡的位置（捐完指路用） */
+export const where = (k, id) => placed.get(k + ':' + id) || null;
+export const wingName = k => (WINGS.find(w => w.k === k) || {}).name || '';
+/** 走到展品前按 E：這一件的名字、捐贈日期與說明 */
+export async function exhibitCard(k, id) {
+  const x = list(k).find(o => o.id === id), at = (S().museum[k] || {})[id]; if (!x) return;
+  const d = typeof at === 'number' ? new Date(at) : null, w = WINGS.find(o => o.k === k);
+  await ui.card({ icon: icon(id, k), title: x.name, sub: ui.esc(x.desc || ''), extra: `<span class="era">${w.name}展區 · ${ui.esc(infoOf(k, x))}</span>${d ? `<em>${d.getMonth() + 1}/${d.getDate()} 捐贈</em>` : ''}` });
+}
+
+/* ---------- v8.3 本週小特展：三件展品一個主題（data/museum_themes.js），湊齊就完成；圓廳有一座特展台 ---------- */
+const THEME_AT = [0, 0, 2.7, 0];   // 中央走道、恐龍骨架前面，面向入口
+const weekNo = () => { const d = new Date(); return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5 + 3) / 7); };
+export function themeNow() { const T = (window.TA.ISLE.MUSEUM_THEMES || []).filter(t => t.items && t.items.every(([k, id]) => list(k).some(o => o.id === id))); return T.length ? T[weekNo() % T.length] : null; }
+const themeGot = t => t.items.filter(([k, id]) => (S().museum[k] || {})[id]).length;
+function themeStand(ud) {
+  const t = themeNow(); if (!t) return null;
+  const a = ud.themeAt || THEME_AT, cv = document.createElement('canvas'); cv.width = 512; cv.height = 640; const c = cv.getContext('2d');
+  c.fillStyle = '#fbf4e6'; c.fillRect(0, 0, 512, 640); c.fillStyle = '#c9a05a'; c.fillRect(0, 0, 512, 16); c.fillRect(0, 624, 512, 16);
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#8a6a4a'; c.font = '700 30px system-ui, "Microsoft JhengHei", sans-serif'; c.fillText('本週小特展', 256, 62);
+  c.fillStyle = '#4a3a2a'; c.font = '800 40px system-ui, "Microsoft JhengHei", sans-serif'; c.fillText(t.title, 256, 122, 480);
+  const n = themeGot(t); c.font = '700 28px system-ui, "Microsoft JhengHei", sans-serif'; c.fillStyle = n >= 3 ? '#b07a10' : '#8a6a4a'; c.fillText(n >= 3 ? '★ 三件都到齊了' : `館藏 ${n} / 3`, 256, 590);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  t.items.forEach(([k, id], i) => {   // 三格：捐了的畫圖示，還沒捐的畫問號
+    const x = 46 + i * 150, y = 190, has = (S().museum[k] || {})[id]; c.fillStyle = has ? '#f1e2c0' : '#e6dccb'; c.fillRect(x, y, 120, 120);
+    c.fillStyle = '#4a3a2a'; c.font = '700 22px system-ui, "Microsoft JhengHei", sans-serif'; const nm = (list(k).find(o => o.id === id) || {}).name || '';
+    c.fillText(has ? nm : '？', x + 60, y + 150, 140);
+    if (has) { const im = new Image(); im.onload = () => { c.imageSmoothingEnabled = false; c.drawImage(im, x + 12, y + 12, 96, 96); tex.needsUpdate = true; }; im.src = icon(id, k); }
+    else { c.fillStyle = '#b9a88c'; c.font = '800 64px system-ui'; c.fillText('?', x + 60, y + 62); }
+  });
+  const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: '#8a5a34', roughness: 0.7 });
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 1.2), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.3, roughness: 0.9 }));
+  board.scale.setScalar(0.85); board.position.set(0, 1.05, 0.035);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.1, 0.06), wood); back.position.set(0, 1.05, 0);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.5, 10), wood.clone()); post.position.set(0, 0.25, 0);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.06, 20), wood.clone()); base.position.set(0, 0.03, 0);
+  [board, back, post, base].forEach(o => { o.castShadow = o.receiveShadow = true; g.add(o); });
+  g.position.set(a[0], 0, a[2]); g.rotation.y = a[3]; g.userData.solid = true; return g;
+}
+/** 特展台：主題介紹、三件展品（捐了的有說明）；第一次湊齊有謝禮與回憶 */
+export async function openTheme(sp, hooks) {
+  const t = themeNow(); if (!t) return;
+  const s = S(), n = themeGot(t); s.themes = s.themes || {};
+  const items = t.items.map(([k, id, cap]) => { const x = list(k).find(o => o.id === id) || {}, has = (s.museum[k] || {})[id]; return `<li>${has ? '✔' : '○'} <b>${ui.esc(x.name || id)}</b>（${wingName(k)}）${has ? `<br><small>${ui.esc(cap || '')}</small>` : '<br><small class="muted">還沒有捐贈——' + ui.esc(howTo(k)) + '</small>'}</li>`; }).join('');
+  await ui.say(sp, t.intro);
+  const body = ui.el('div', 'wb', `<p class="rt-sum-lead">${ui.esc(t.title)}</p><ul class="wb-list">${items}</ul><p class="muted">館藏 ${n} / 3 · 每週換一個主題；捐過的展品都算。</p>`);
+  ui.closeDialog(); ui.panel('本週小特展', body, { cls: 'letter-p' });
+  if (n >= 3 && !s.themes[t.id]) {
+    s.themes[t.id] = Date.now(); s.bells += 1500; save(); Audio.sfx('catch');
+    ui.toast(`小特展「${t.title}」完成！史遙送你 1,500 鈴錢`);
+    if (hooks && hooks.memo) hooks.memo(`小特展「${t.title}」`, t.done);
+    if (hooks && hooks.paint) hooks.paint();
+  }
+}
+const howTo = k => ({ fish: '去釣魚', bug: '去捉蟲', fossil: '挖化石再請史遙鑑定', sea: '退潮時去潮池', mineral: '敲石頭、請岳鑑定礦石' })[k] || '';
 /** 出館：名牌的字與這次的圖卡網格每次重做，釋放掉（圖集留著下次用） */
-export function undress() { signs.forEach(m => { m.geometry.dispose(); if (m.material !== ATL.mat) { m.material.map.dispose(); m.material.dispose(); } }); signs = []; }
+export function undress() { signs.forEach(m => { m.geometry.dispose(); if (m.material !== ATL.mat && m.material !== NL.mat) { if (m.material.map) m.material.map.dispose(); m.material.dispose(); } }); signs = []; }
 /** 離館時釋放這次建立的幾何與專屬材質（共用材質 M() 與圖示貼圖快取不釋放） */
 function dispose() {
   if (!sc) return;
