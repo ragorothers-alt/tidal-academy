@@ -28,7 +28,8 @@
       iron: kit.mat('#4d382e', { metalness: .7, roughness: .4 }, 'metal'),
       navyMetal: kit.mat('#354c70', { metalness: .7, roughness: .4 }, 'metal'),
       blueMetal: kit.mat('#8aaebe', { metalness: .7, roughness: .4 }, 'metal'),
-      glow: kit.lamp('#ffcb82'), glass: kit.glass()
+      hood: kit.mat('#b8763d', { metalness:.65, roughness:.48, side:THREE.DoubleSide }, 'metal'),
+      lanternShade: kit.shade('#ffd8ad'), diff: kit.lamp('#ffd8ad'), glow: kit.lamp('#ffcb82'), glass: kit.glass()
     };
     const shapes=new Map();
     function shape(key,make) {if(!shapes.has(key))shapes.set(key,make());return shapes.get(key);}
@@ -110,11 +111,22 @@
       q.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
       mesh(q,M.floor,x,y,z,{walk:true});
     }
-    function lantern(x,y,z) {
-      box(x,y,z,.30,.43,.30,M.glow);
-      for(const dx of [-.22,.22])for(const dz of [-.22,.22])rod([x+dx,y-.3,z+dz],[x+dx,y+.3,z+dz],.022,M.iron,5);
-      for(const yy of [y-.32,y+.32])box(x,yy,z,.55,.08,.55,M.honey);
-      mesh(new THREE.ConeGeometry(.40,.2,4),M.brass,x,y+.45,z).rotation.y=Math.PI/4;
+    function shade(x,y,z,r=.34) {
+      mesh(new THREE.CylinderGeometry(r*.3,r,.24,16,1,true),M.hood,x,y+.072,z);
+      mesh(new THREE.CylinderGeometry(Math.min(r*.74,.16),Math.min(r*.74,.16),.016,16),M.diff,x,y+.03,z);rock(x,y+.22,z,.065,M.brass);
+    }
+    function lamp(x,y,z,top) {
+      shade(x,y,z);rod([x,y+.26,z],[x,top,z],.018,M.charcoal,6);box(x,top-.018,z,.14,.035,.14,M.brass);
+    }
+    function lantern(x,y,z,top) {
+      mesh(new THREE.CylinderGeometry(.14,.14,.36,12),M.lanternShade,x,y,z);
+      mesh(new THREE.CylinderGeometry(.055,.055,.10,12),M.diff,x,y,z);
+      for(const yy of [y-.22,y+.22])mesh(new THREE.CylinderGeometry(.23,.23,.06,12),M.hood,x,yy,z);
+      for(let j=0;j<4;j++){const a=j*Math.PI/2;rod([x+.19*Math.cos(a),y-.22,z+.19*Math.sin(a)],[x+.19*Math.cos(a),y+.22,z+.19*Math.sin(a)],.018,M.iron,6);}
+      mesh(new THREE.ConeGeometry(.27,.16,12),M.hood,x,y+.33,z);rod([x,y+.41,z],[x,top,z],.018,M.charcoal,6);
+    }
+    function sconce(x,y,z) {
+      box(x+.25,y+.072,z,.045,.32,.24,M.hood);rod([x+.23,y+.122,z],[x,y+.122,z],.024,M.brass);shade(x,y,z,.22);
     }
     function table(x,y,z,w,d,h=1.05) {
       mesh(kit.rbox(w,.18,d,.055),M.honey,x,y+h,z,{solid:true});
@@ -602,33 +614,29 @@
     cluster('屋頂・背風處的防水器材長箱',8.42,10.7,-5.96,0,()=>{
       trunk(0,0,0,3.66,.65,.78);rolls(-1.0,.91,0,4);books(.80,.91,0,3);
     });
-    const lightPositions=[[-6.75,2.4,-3.3],[-1.3,3.1,1.8],[-2.2,6.8,1.9],[7.4,7.4,.2],[8.6,9.9,-5.1],[4.5,13.3,-3.8]];
-    lightPositions.forEach(p=>lantern(...p));
-    rod([-6.75,2.96,-3.3],[-6.75,3.35,-3.3],.018,M.charcoal,5);
-    rod([-1.3,3.66,1.8],[-1.3,3.76,1.8],.018,M.charcoal,5);
-    rod([-2.2,7.36,1.9],[-2.2,9.65,1.9],.018,M.charcoal,5);
-    for(const [x,y,z] of lightPositions)for(let yy=y+.65;yy<(y<4?3.75:y<7?9.6:y+.7);yy+=.22) {
-      const link=mesh(new THREE.TorusGeometry(.042,.009,4,8),M.brass,x,yy,z);link.rotation.y=Math.round(yy*10)%2?Math.PI/2:0;
-    }
+    // 銅罩讓星圖桌保有焦點，圓燈籠照樓梯與觀星平台。
+    lamp(-1.3,3.1,1.8,3.76);lamp(-2.2,6.8,1.9,9.5879);sconce(7.45,1.728,3.45);
+    lantern(7.4,7.4,.2,8.1);lantern(8.6,9.9,-5.1,10.46);lantern(4.5,13.3,-3.8,14);
+    const aim=new THREE.Vector3(0,-1.95,-.86).normalize(),collar=mesh(new THREE.CylinderGeometry(.10,.17,.16,16,1,true),M.hood,-.5,3.2621,-4.9049);
+    collar.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),aim.clone().negate());
     box(8.4,6.4,.2,.16,3.4,.16,M.dark,true);rod([8.4,8.1,.2],[7.4,8.1,.2],.065,M.honey);
-    rod([7.4,8.1,.2],[7.4,7.96,.2],.018,M.charcoal,5);
     box(5.8,12.35,-3.8,.18,3.3,.18,M.dark,true);rod([5.8,14,-3.8],[4.5,14,-3.8],.07,M.honey);
-    rod([4.5,14,-3.8],[4.5,13.86,-3.8],.018,M.charcoal,5);
-    g.userData={
-      // 木屋前牆與閣樓燈槽鋪暖光，淺色礦物標本是焦點；書架層板與星圖桌補任務光，屋頂軟榻腳引導夜間步伐。
+    Object.assign(g.userData,{
+      // 星圖與地球儀聚焦，書架下燈補標籤，樓梯壁燈與低櫃腳光引導夜間步伐。
       glow:[
         {kind:'cove',a:[-3,3.15,6.58],b:[-1.2,3.15,6.58],n:[0,-1],c:'#bc8a55'},
-        {kind:'under',a:[.1,1.923,-6.165],b:[1,1.923,-6.165]},
+        {kind:'under',a:[0.1,1.923,-6.165],b:[1,1.923,-6.165]},
+        {kind:'kick',a:[4.2,0.107,3.935],b:[7,0.107,3.935],n:[0,1]},
         {kind:'cove',a:[-7.55,7.25,1.3],b:[-7.55,7.25,2.95],n:[1,0],c:'#bc8a55'},
         {kind:'under',a:[-6.035,6.108,-4.6],b:[-6.035,6.108,-2]},
-        {kind:'kick',a:[.4,10.807,.72],b:[2.3,10.807,.72],n:[0,-1]},
-        {kind:'kick',a:[-6.3,.107,4.195],b:[-3.7,.107,4.195],n:[0,-1]},
-        {kind:'spot',p:[-5.5,3.5,-4.8],t:[-5.51,1.85,-5.94],r:.85},
-        {kind:'spot',p:[-1.95,3.55,-5.2],t:[-1.95,1.225,-5.7],r:.65}
+        {kind:'kick',a:[-6.3,0.107,4.195],b:[-3.7,0.107,4.195],n:[0,-1]},
+        {kind:'kick',a:[0.4,10.807,0.72],b:[2.3,10.807,0.72],n:[0,-1]},
+        {kind:'spot',p:[-0.5,3.5,-4.8],t:[-0.5,1.55,-5.66],r:0.6},
+        {kind:'spot',p:[-1.95,3.55,-5.2],t:[-1.95,1.225,-5.7],r:0.65}
       ],
       spawn:[2.1,0,5.1,Math.PI],exit:[2.1,6.55,.6],host:[-3,0,-1.1,.35],sun:[-.7,.8,.55],
       gifts:[[4.8,0,4.8,0],[-6.4,0,1.8,0],[5.5,0,-5.7,0],[0,4,4.5,0],[-.1,4,-4.2,0],[1.3,10.7,-4.8,0]],
-      lights:lightPositions.map((p,j)=>p.concat(['#ffd49b',j===1||j===2?1.7:1.3])),
+      lights:[[7.45,1.728,3.45,'#ffd8ad',0.65,0.35],[-1.3,3.1,1.8,'#ffd8ad',1.05,0.5],[-2.2,6.8,1.9,'#ffd8ad',1.05,0.5],[7.4,7.4,0.2,'#ffd8ad',1,0.85],[8.6,9.9,-5.1,'#ffd8ad',0.95,0.85],[4.5,13.3,-3.8,'#ffd8ad',0.9,0.85]],
       spots:[
         {x:-1.8,y:0,z:-4.2,r:1.2,kind:'study',label:'讀讀星圖',name:'岳的星圖與地球儀書桌',lines:['湯還要煮一會兒，陪我讀一小題吧。','先認清圖上的方向，再慢慢找線索。','地球在轉，星空的位置也得配合時間看。'],alone:['星圖旁的地球儀停在海洋那一面。','書頁夾著便條：先看方向，想累了就喝湯。']},
         {x:-5.25,y:0,z:-4.36,r:1.1,kind:'hook:dex',label:'看看礦物',name:'分格礦物標本櫃',lines:['這些石頭各有脾氣，拿在手裡慢慢看。','顏色只是一條線索，硬度和條痕也有用。','先翻圖鑑，不急著替它取名字。'],alone:['標本下的小紙卡記著硬度與條痕。','櫃角的放大鏡被擦得很乾淨。']},
@@ -638,7 +646,7 @@
         {x:3.25,y:10.7,z:-.1,r:1.3,kind:'look',label:'看看遠鏡',name:'屋頂平台的黃銅望遠鏡',lines:['扶著欄杆慢慢走，我把椅子留在旁邊。','星圖要對上日期和時刻，才找得到方向。','白天我把鏡頭蓋好，晚上再陪你看一會兒。'],alone:['大型黃銅鏡筒架在三腳架上，旁邊留著藍椅。','深藍星旗在欄杆旁，日期刻盤停在觀測頁。']}
       ],
       architecture:{levels:[0,4,10.7],landings:[2,7.35],stairs,windows:{groundArches:4,frontDormerArch:1,doorTransom:1},chimney:'左後側石砌煙囪',roofDeck:'右半部開放觀星平台',exteriorFunctionalProps:'百葉箱與天氣黑板留在外觀既有位置'}
-    };
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

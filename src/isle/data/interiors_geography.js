@@ -116,7 +116,19 @@
       face([[x - width / 2, y, z], [x + width / 2, y, z], [x + width / 2, y + rise, z - len], [x - width / 2, y + rise, z - len]], M.honey, true);
       for (const side of [-1, 1]) { const xx = x + side * (width / 2 + .10); for (let i = 0; i < n; i++) beam([xx, y + .9 + i * rise / n, z - i * len / n], [xx, y + .9 + (i + 1) * rise / n, z - (i + 1) * len / n], .06, M.honey, true); beam([xx, y - .12, z], [xx, y + rise - .12, z - len], .12, M.dark); for (let i = 0; i <= n; i += 2) box(xx, y + i * rise / n + .45, z - i * len / n, .07, .9, .07, M.wood, true); }
     }
-    function lamp(x, y, z) { beam([x, y + .37, z], [x, y + .16, z], .022, M.brass); box(x, y, z, .27, .35, .27, glow); for (const xx of [-.17, .17]) for (const zz of [-.17, .17]) box(x + xx, y, z + zz, .025, .43, .025, M.iron); for (const yy of [-.23, .23]) box(x, y + yy, z, .43, .07, .43, M.brass); }
+    function lamp(x,y,z,top){
+      box(x,y+.18,z,.43,.035,.43,M.brass);for(const u of [-.205,.205])box(x+u,y+.085,z,.025,.18,.40,M.iron);
+      for(const d of [-.205,.205])box(x,y+.085,z+d,.40,.18,.025,M.iron);
+      box(x,y+.03,z,.16,.016,.16,glow);beam([x,y+.2,z],[x,top,z],.018,M.brass);
+    }
+    function draftingLamp(){
+      const brass=kit.mat('#b58b46',{metalness:.8,roughness:.44},'metal'),reflector=kit.mat('#ead8b8',{metalness:.25,roughness:.6},'metal');
+      mesh(new THREE.CylinderGeometry(.13,.15,.08,20),brass,-3.15,1.19,-4.98);beam([-3.15,1.23,-4.98],[-3.15,1.82,-4.98],.025,brass);ball(-3.15,1.82,-4.98,.055,brass);
+      beam([-3.15,1.82,-4.98],[-3.15,2.045,-4.98],.024,brass);beam([-3.15,2.045,-4.98],[-2.95,2.045,-4.42],.024,brass);beam([-2.95,2.045,-4.42],[-2.95,2.005,-4.42],.022,brass);
+      soft(-2.95,1.99,-4.42,.70,.035,.34,brass);for(const d of [-.17,.17])box(-2.95,1.93,-4.42+d,.70,.12,.025,brass);
+      for(const x of [-3.30,-2.60])box(x,1.93,-4.42,.025,.12,.34,brass);
+      box(-2.95,1.97,-4.42,.64,.025,.28,reflector);box(-2.95,1.945,-4.42,.16,.012,.12,glow);
+    }
     function plant(x, y, z) { mesh(new THREE.CylinderGeometry(.22, .16, .34, 8), M.ceramic, x, y + .17, z); for (let j = 0; j < 5; j++) { const a = j * 2.4; beam([x, y + .3, z], [x + Math.sin(a) * .28, y + .65 + j * .07, z + Math.cos(a) * .24], .018, M.leaf); const b = ball(x + Math.sin(a) * .27, y + .64 + j * .07, z + Math.cos(a) * .24, .13 + (j % 3) * .025, j % 2 ? M.leaf : M.pink, .8 + (j % 2) * .35, .25 + j * .07, 1.2 + (j % 3) * .25); b.rotation.z = a; } }
     function map(x, y, z, w, d) {
       box(x, y, z, w, .04, d, M.cream);
@@ -309,9 +321,10 @@
     bench(8.2,8,4.45,2.15,.9,M.coral);plant(9.65,8,4.55);crate(7,8,-4.5,1.3,.7,.65,true);stool(7.1,8,-2.8);plant(6.65,8,2.8);
     // Low compass inlay and a second portable field glass keep the open deck legible.
     for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5])face([[6.9,8.065,1.5],[6.9+Math.sin(a+.12)*.46,8.065,1.5+Math.cos(a+.12)*.46],[6.9+Math.sin(a)*.66,8.065,1.5+Math.cos(a)*.66]],M.cream);
-    const lights = [[-2, 2.9, -3.2, '#ffdb9e', 1.15], [3, 2.9, 2.6, '#ffdb9e', 1.05], [-1.5, 6.8, .2, '#ffdb9e', 1.2], [7.1, 6.7, -.6, '#ffdb9e', 1.1], [7, 10.65, 2.8, '#ffdb9e', 1.15], [9.3, 2.9, .35, '#ffdb9e', 1.1]]; lights.forEach(p => {lamp(...p.slice(0, 3));chain(p[0],p[1]+.36,p[2],p[1]<4?3.75:p[1]<8?(p[0]>6?7.78:10.02-Math.abs(p[0])*.516):12.6);});
+    // 製圖桌取代圖前裸燈，其餘樓層改用黃銅遮光罩。
+    draftingLamp();lamp(-1.5,6.8,.2,9.246);lamp(7.1,6.7,-.6,7.78);lamp(7,10.65,2.8,12.6);lamp(9.3,2.9,.35,3.75);
     g.userData.spawn = [-.45, 0, 3.9, Math.PI]; g.userData.exit = [-.45, 5.55, .6]; g.userData.host = [-.8, 0, -1.6, .4];
-    g.userData.gifts = [[.7, 0, -4.9, 0], [7.3, 0, 2.3, 0], [.1, 4, 4.8, 0], [7, 4, 2.6, 0]]; g.userData.lights = lights; g.userData.sun = [-.8, .7, .25];
+    g.userData.gifts = [[.7, 0, -4.9, 0], [7.3, 0, 2.3, 0], [.1, 4, 4.8, 0], [7, 4, 2.6, 0]]; g.userData.sun = [-.8, .7, .25];
     g.userData.spots = [
       { x: -2.7, y: 0, z: -3.35, r: 1.15, kind: 'study', label: '讀讀路線圖', name: '旅行等高線桌', lines: ['這條紅線是昨天的路，圓點是點心站！', '等高線越密，坡通常越陡，我就繞個彎。', '先看比例尺，才知道回家還要走多久。', '陪我看三題吧，明天一起挑條新路！'], alone: ['地圖圈起陡坡，旁邊另畫了一條緩路。', '嵐寫著：「回程也要留力氣看海。」'] },
       { x: 7.1, y: 0, z: -1.9, r: 1.1, kind: 'look', label: '看看採集箱', name: '石頭與葉片採集櫃', lines: ['嘿，這顆圓石是河邊撿的，我有記地點！', '同一條路的葉子，也會有不同顏色。', '不能只看標本，下次一起看看它住的地方。'], alone: ['抽屜分裝石頭與葉片，卡片標著採集地點。', '一張卡片寫著：「陪森走的那天，腳步很輕。」'] },
@@ -319,19 +332,21 @@
       { x: 7.1, y: 4, z: -3.25, r: 1.1, kind: 'look', label: '看看方位簿', name: '塔內方位觀察簿', lines: ['先找北方，再記今天雲往哪裡走。', '風向說的是風從哪裡來，別跟風向袋尾巴跑！', '這一頁留給明天，散步總有新的方向。'], alone: ['觀察簿畫了方位箭頭，每一頁都有日期。', '書籤是一張曬得有點捲的綠色小旗。'] },
       { x: 10.9, y: 8, z: 1.35, r: 1.15, kind: 'look', label: '看看遠方', name: '開放瞭望台望遠鏡', lines: ['上來啦！先喘口氣，海一直都在。', '近處的樹遮住小路，站高一點就接得起來。', '望遠鏡收好，我們再下樓吃點心！'], alone: ['黃銅鏡筒朝向海灣，腳邊嵌著八向羅盤。', '風向袋垂在木柱旁，欄杆留著蜂蜜色的暖光。'] }
     ];
-    // 環境以門側燈槽、側牆與塔內洗牆串起三層；書架下補任務光，旅行地圖牆為焦點，投光兼顧製圖桌，座床底留柔光。
-    Object.assign(g.userData, { glow: [
-      { kind: 'cove', a: [-3.62, 3.32, 5.8], b: [-2.6, 3.32, 5.8], n: [0, -1], c: '#f2e8d6' },
-      { kind: 'wash', a: [-5.8, 3.56, -3.65], b: [-5.8, 3.56, -2.6], n: [1, 0], c: '#8b6a45' },
-      { kind: 'wash', a: [-5.8, 6.85, -4.9], b: [-5.8, 6.85, -4.1], n: [1, 0], c: '#8b6a45' },
-      { kind: 'wash', a: [11.8, 7.6, -4.2], b: [11.8, 7.6, -3.2], n: [-1, 0], c: '#8b6a45' },
-      { kind: 'under', a: [.85, 2.74, -5.55], b: [2.15, 2.74, -5.55] },
-      { kind: 'kick', a: [7.3, 8.1, 4], b: [9.05, 8.1, 4], n: [0, -1] },
-      { kind: 'kick', a: [-5.55, .11, 2.415], b: [-4.6, .11, 2.415], n: [0, -1] },
-      { kind: 'kick', a: [-5.1, 4.11, -2.19], b: [-3.25, 4.11, -2.19], n: [0, 1] },
-      { kind: 'spot', p: [-3.8, 3.55, -3.3], t: [-3.8, 2.35, -5.818], r: 1.3 },
-      { kind: 'spot', p: [-2.7, 3.55, -3.75], t: [-2.7, 1.15, -4.45], r: 1.1 }
-    ] });
+    // 等高線圖是焦點，製圖罩下與書架補光，樓梯下保持柔暗。
+    Object.assign(g.userData,{
+      lights:[[-2.95,1.915,-4.42,'#ffdb9e',.5,.35],[-1.5,6.8,.2,'#ffdb9e',.95,.5],[7.1,6.7,-.6,'#ffdb9e',.9,.5],[7,10.65,2.8,'#ffdb9e',.9,.5],[9.3,2.9,.35,'#ffdb9e',.85,.5]],
+      glow:[
+        {kind:'spot',p:[-3.8,3.55,-3.3],t:[-3.8,2.35,-5.818],r:1.3},
+        {kind:'cove',a:[2.5,3.32,-5.8],b:[3.3,3.32,-5.8],n:[0,1],c:'#8b6a45'},
+        {kind:'under',a:[-3.25,1.88,-4.42],b:[-2.65,1.88,-4.42]},
+        {kind:'under',a:[.85,2.72,-5.55],b:[2.15,2.72,-5.55]},
+        {kind:'wash',a:[-5.8,6.85,-4.9],b:[-5.8,6.85,-4.1],n:[1,0],c:'#8b6a45'},
+        {kind:'wash',a:[11.8,7.6,-4.2],b:[11.8,7.6,-3.2],n:[-1,0],c:'#8b6a45'},
+        {kind:'kick',a:[-5.55,.11,2.415],b:[-4.6,.11,2.415],n:[0,-1]},
+        {kind:'kick',a:[-5.1,4.11,-2.19],b:[-3.25,4.11,-2.19],n:[0,1]},
+        {kind:'kick',a:[7.3,8.1,4],b:[9.05,8.1,4],n:[0,-1]}
+      ]
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

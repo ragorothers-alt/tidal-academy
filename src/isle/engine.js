@@ -330,7 +330,7 @@ const SEA_GLSL = `
         #endif
 `;
 /* ---------- 每一盞燈都真的照亮（v6.83）：世界座標的燈光格子 ----------
-   島上切成 2 公尺一格，每一格記下照得到它的燈（最多 16 盞，依在格子裡的亮度排序；glow.js 建表）。
+   島上切成 2 公尺一格，每一格記下照得到它的燈（最多 16 盞，依在格子裡的亮度排序；glow.js 建表）。v8.0：燈可以有光錐（第三列：照射方向與光錐邊緣的 cos）。
    材質（bend 的標準材質）在每個像素查自己那一格，逐盞用和 three.js 點光源同一套公式算漫射與高光，
    所以畫面裡看得到的每一扇窗、每一盞燈都真的照在牆面、地面與角色身上；畫面外沒有像素，也就不用算。白天（uLOn = 0）整段跳過 */
 export const LGRID = { s: 2, o: -58, n: 58, q: 4, max: 1024 };
@@ -356,12 +356,15 @@ const LG_GLSL = `
           lgn += 1.0;
           int li = int( id ) - 1;
           vec4 lp = texelFetch( uLData, ivec2( li, 0 ), 0 );
-          float lcode = floor( lp.w * 0.01 ), lr = lp.w - lcode * 100.0;   // w：照射距離 + 100 × 窗戶朝向（0 四面發光、1 +x、2 -x、3 +z、4 -z）
+          float lcone = step( 1000.0, lp.w ), lw = lp.w - lcone * 1000.0;   // w：照射距離 + 100 × 窗戶朝向（0 四面發光、1 +x、2 -x、3 +z、4 -z）+ 1000（有光錐）
+          float lcode = floor( lw * 0.01 ), lr = lw - lcode * 100.0;
           vec3 Lw = lp.xyz - vWP; float ld = length( Lw );
           if ( ld >= lr ) continue;
           if ( lcode > 0.5 && dot( Lw, lcode < 2.5 ? vec3( 3.0 - 2.0 * lcode, 0.0, 0.0 ) : vec3( 0.0, 0.0, 7.0 - 2.0 * lcode ) ) > 0.85 ) continue;   // 窗戶的燈只照牆外那一側：牆後、屋後不會被照亮
           vec4 lc = texelFetch( uLData, ivec2( li, 1 ), 0 );
           vec3 lcol = lc.rgb * getDistanceAttenuation( max( ld, 0.55 ), lr, lc.a );   // 燈有柔和的發光半徑：貼著燈泡的燈罩、燈框不會被照到爆白（v6.93）
+          if ( lcone > 0.5 ) { vec4 la = texelFetch( uLData, ivec2( li, 2 ), 0 ); lcol *= smoothstep( la.w, mix( la.w, 1.0, 0.45 ), dot( Lw, la.xyz ) / -ld ); }   // v8.0 有燈罩的燈只照光錐裡面：柱燈與路燈往下、樹的投光往上、窗光往外往下（不再把整面牆洗白）
+          if ( dot( lcol, lcol ) < 1e-8 ) continue;
           #ifdef STANDARD
           if ( lgn < 2.5 && material.roughness < 0.75 ) {   // 這一格最亮的兩盞照在光滑的表面（屋瓦、金屬、玻璃）：漫射＋高光，和 three.js 的點光源一樣
             directLight.direction = normalize( ( viewMatrix * vec4( Lw, 0.0 ) ).xyz );   // 用世界座標算方向：遠處被滾筒彎下去的牆面也照得對
@@ -1130,7 +1133,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
           cc += sunCol * smoothstep(edgeW * 6.0, 0.0, body + bump) * (0.1 + 0.25 * max(toward, 0.0)) * lit * (1.0 - night);   // 雲頂受光的金邊
           cc = mix(cc, mix(bot, top, 0.1) * 1.05, smoothstep(0.05, -0.01, e) * 0.55);   // 雲腳融進地平線的空氣裡
           float rimN = smoothstep(edgeW * 9.0, 0.0, body + bump);   // 夜晚：月光只照亮雲頂的邊緣
-          vec3 ncc = mix(vec3(0.03, 0.028, 0.1), vec3(0.42, 0.38, 0.56), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v7.6：夜裡的雲是紫藍的雲體、淡紫的雲緣
+          vec3 ncc = mix(vec3(0.022, 0.03, 0.088), vec3(0.32, 0.34, 0.52), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v7.6：夜裡的雲是紫藍的雲體、淡紫的雲緣（v8.0 收暗、偏冷一點）
           c = mix(c, mix(cc, ncc, night), cm * 0.98);   // 夜晚的雲是深藍的雲體、銀白的雲緣
         }
       }
@@ -1243,7 +1246,7 @@ export const SEA = { day: '#8bb9cf' };   // 白天海面的底色（受強烈日
    fn／ff：這個時段的線性霧距（公尺；雨天由 weather.js 再拉近） */
 /* v7.6 夢幻風（Codex 第三輪 consult3 §3、§5）：天頂粉藍／薰衣草、低空粉紫、地平線桃粉；主光奶油色、天光補光薰衣草、地面補光偏紫——
    影子是淡紫色而不是灰藍；黃金時段不再是一片橘金。夜晚是紫藍的天、不是深靛 */
-const NIGHT = { top: '#211d4c', mid: '#3d3c6c', bot: '#5f5d94', sea: '#1c2658', sun: '#c8ccff', si: 0.4, hs: '#8580b3', hg: '#3f365b', hi: 0.36, fog: '#46446f', exp: 1.06, night: 1, fn: 65, ff: 180 };   // 夜色：紫藍的天、月光是淡紫藍的主光；地面只剩月光與燈光
+const NIGHT = { top: '#151d46', mid: '#28325f', bot: '#474f84', sea: '#16224c', sun: '#b6c4ff', si: 0.36, hs: '#7584b8', hg: '#2a2e4e', hi: 0.32, fog: '#2e3662', exp: 1.06, night: 1, fn: 75, ff: 200 };   // 夜色：深靛藍的天、月光是冷藍的主光（v8.0 燈光設計：環境光收暗、冷暖對比清楚，暖色的燈才是夜裡的主角；仍帶一點薰衣草）
 const KEYS = [
   [0, NIGHT],
   [4.8, { top: '#2a2866', mid: '#4a4486', bot: '#7a6a9e', sea: '#232a62', sun: '#bcb8ff', si: 0.46, hs: '#8a86c0', hg: '#3a3450', hi: 0.4, fog: '#4e4a80', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],

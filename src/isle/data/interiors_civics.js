@@ -18,7 +18,7 @@
       paleStone:kit.mat(C.cream,{},'stone'), greenStone:kit.mat(C.leaf,{},'stone'), column:kit.mat(C.cream,{},'plaster')
     };
     const covers = new Map([[M.cream,S.paper],[M.leaf,S.greenCover],[M.honey,S.honeyThread]]);
-    const glow = kit.lamp('#ffdb9e');
+    const glow = kit.lamp('#ffd0a0');
     const oak = ['#bcaa8a','#c3b193','#b5a387'].map(c => kit.mat(c,{},'wood'));
     const viewSurface = kit.view().clone(); viewSurface.uniforms = kit.view().uniforms; viewSurface.transparent = true; viewSurface.depthWrite = false;
     const cubes=new Map(),spheres=new Map(),rings=new Map(),petal=new THREE.SphereGeometry(.055,6,4);
@@ -116,7 +116,18 @@
       face([[x - width / 2, y, z], [x + width / 2, y, z], [x + width / 2, y + rise, z - len], [x - width / 2, y + rise, z - len]], M.honey, true);
       for (const side of [-1, 1]) { const xx = x + side * (width / 2 + .10); for (let i = 0; i < n; i++) beam([xx, y + .9 + i * rise / n, z - i * len / n], [xx, y + .9 + (i + 1) * rise / n, z - (i + 1) * len / n], .06, M.honey, true); beam([xx, y - .12, z], [xx, y + rise - .12, z - len], .12, M.dark); for (let i = 0; i <= n; i += 2) box(xx, y + i * rise / n + .45, z - i * len / n, .07, .9, .07, M.wood, true); }
     }
-    function lamp(x, y, z) { beam([x, y + .37, z], [x, y + .16, z], .022, M.brass); box(x, y, z, .27, .35, .27, glow); for (const xx of [-.17, .17]) for (const zz of [-.17, .17]) box(x + xx, y, z + zz, .025, .43, .025, S.iron); for (const yy of [-.23, .23]) box(x, y + yy, z, .43, .07, .43, M.brass); }
+    const shadeLinen=kit.shade('#eee2cb');
+    function drum(x,y,z,r){
+      mesh(new THREE.CylinderGeometry(r*.88,r,.30,16,1,true),shadeLinen,x,y,z);
+      for(const yy of [y-.15,y+.15])mesh(new THREE.CylinderGeometry(yy<y?r:r*.88,yy<y?r:r*.88,.025,16,1,true),M.brass,x,yy,z);
+      mesh(new THREE.CylinderGeometry(.16,.16,.018,16),glow,x,y-.08,z);mesh(new THREE.CylinderGeometry(r*.88,r*.88,.018,16),shadeLinen,x,y+.15,z);
+      beam([x,y+.15,z],[x,3.72,z],.014,M.brass);
+    }
+    function taskLamp(base,head){
+      const [x,y,z]=base,[hx,hy,hz]=head;
+      mesh(new THREE.CylinderGeometry(.14,.17,.05,12),M.brass,x,y+.025,z);beam([x,y+.05,z],[x,y+.47,z],.025,M.brass);beam([x,y+.47,z],[hx,hy+.09,hz],.022,M.brass);
+      mesh(new THREE.CylinderGeometry(.13,.25,.19,12,1,true),shadeLinen,hx,hy+.045,hz);mesh(new THREE.CylinderGeometry(.14,.14,.014,12),glow,hx,hy+.015,hz);mesh(new THREE.CylinderGeometry(.13,.13,.016,12),M.brass,hx,hy+.14,hz);
+    }
     function plant(x, y, z) { mesh(new THREE.CylinderGeometry(.22, .16, .34, 8), S.ceramic, x, y + .17, z); for (let j = 0; j < 5; j++) { const a = j * 2.4; beam([x, y + .3, z], [x + Math.sin(a) * .28, y + .65 + j * .07, z + Math.cos(a) * .24], .018, M.leaf); const b = ball(x + Math.sin(a) * .27, y + .64 + j * .07, z + Math.cos(a) * .24, .16, j % 2 ? M.leaf : M.pink, 1, .5, 1.4); b.rotation.z = a; } }
     g.userData.cols = [];
     // A broad colonnaded welcome room beneath a hipped roof; the upper floor is a quiet correspondence loft.
@@ -187,7 +198,7 @@
     for(let j=0;j<24;j++)box(-7.65+j*.665,3.78,5.5,.64,.06,4.0,j%2?S.linen:M.coral);
     box(4.8,.62,5.85,2.6,.18,1.05,M.honey,true);box(4.8,1.15,6.3,2.6,1.1,.16,M.honey,true);for(const x of [3.45,6.15]){box(x,.94,5.85,.12,.13,1.15,M.wood,true);for(const z of [5.45,6.2])beam([x,.65,z],[x,3.72,z],.018,M.brass);}
     soft(4.15,.89,6.15,.6,.5,.15,M.coral);soft(4.85,.84,6.15,.6,.4,.15,S.linen);soft(5.55,.9,6.15,.6,.55,.15,M.lavender);
-    for(let i=0;i<13;i++){const x=-7.2+i*1.2,y=3.48-.3*Math.sin(i/12*Math.PI);if(i)beam([x-1.2,3.48-.3*Math.sin((i-1)/12*Math.PI),3.5],[x,y,3.5],.016,M.dark);ball(x,y-.14,3.5,.075,glow);}
+    for(let i=0;i<13;i++){const x=-7.2+i*1.2,y=3.48-.3*Math.sin(i/12*Math.PI);if(i)beam([x-1.2,3.48-.3*Math.sin((i-1)/12*Math.PI),3.5],[x,y,3.5],.016,M.dark);ball(x,y-.14,3.5,.055,S.honeyCeramic);}
     box(-5.2,.43,5.85,2.6,.66,.85,M.honey,true);box(-5.2,1.04,6.2,2.6,.95,.14,M.honey,true);soft(-5.2,.83,5.85,2.45,.16,.78,S.linen);for(const x of [-5.9,-4.5])soft(x,1.04,6.08,.55,.4,.12,M.coral);
     for(let j=0;j<3;j++){box(-7.7,1.7+j*.55,4.8,.45,.08,1.6,M.honey);for(let k=0;k<4;k++)box(-7.65,1.95+j*.55,4.2+k*.36,.3,.4,.23,[M.coral,S.paper,M.lavender][(j+k)%3]);}
     // Sleeping corner, letter desk and a physical balance model in the two dormer alcoves.
@@ -342,8 +353,10 @@
     // Diverse upright books include one gently leaning volume at each shelf end.
     for(let j=0;j<7;j++){const start=g.children.length;book(6.3+j*.16,5.27,-2.4,.13,.31+(j%3)*.08,.24,[M.cream,M.coral,M.leaf][j%3]);if(j===6)for(const o of g.children.slice(start))o.rotation.z=-.12;}
     g.children.slice(dressingStart).forEach(o=>{o.userData.dress3=true;});
-    const lights=[[-3,3.1,-.45,'#ffdb9e',1.15],[4,3.1,.2,'#ffdb9e',1.1],[0,3.4,5.5,'#ffdb9e',1.15],[1.4,7.15,.1,'#ffdb9e',1.1],[-3.5,7,5.3,'#ffdb9e',.9],[3.5,7,5.3,'#ffdb9e',.9]];lights.forEach(p=>{lamp(...p.slice(0,3));chain(p[0],p[1]+.36,p[2],p[1]<4?3.72:p[2]>4?8.35:8.85);});
-    g.userData.spawn=[0,0,5.4,Math.PI];g.userData.exit=[0,7.05,.6];g.userData.host=[1,0,-1.9,-.4];g.userData.gifts=[[-1.7,0,5.8,0],[1.7,0,5.8,0],[6.8,0,-2.5,0],[1.3,4,2.3,0]];g.userData.lights=lights;g.userData.sun=[.15,.75,.85];
+    // 長桌與茶席用亞麻罩，三張書寫桌改用近桌任務燈。
+    drum(-3,3.1,-.45,.46);drum(4,3.1,.2,.34);drum(0,3.4,5.5,.29);
+    taskLamp([4.2,.955,-4.12],[4.05,1.72,-3.93]);taskLamp([-2.74,4.965,6.96],[-2.85,5.6,6.9]);taskLamp([4.24,4.965,6.94],[4.18,5.75,6.88]);
+    g.userData.spawn=[0,0,5.4,Math.PI];g.userData.exit=[0,7.05,.6];g.userData.host=[1,0,-1.9,-.4];g.userData.gifts=[[-1.7,0,5.8,0],[1.7,0,5.8,0],[6.8,0,-2.5,0],[1.3,4,2.3,0]];g.userData.sun=[.15,.75,.85];
     g.userData.spots=[
       {x:-2.25,y:0,z:-4.55,r:1.2,kind:'study',label:'讀讀分工表',name:'野餐議事板',lines:['先說說每個人的需要，我會慢慢記下來。','有人不能搬重物，也許很會寫邀請卡。','多數同意之後，也要聽聽少數的擔心。','陪我想三題吧，公平的做法可以一起商量。'],alone:['便條分成準備、分享與收拾，每欄都留了空格。','衡寫著：「先說需要，再談誰能幫忙。」']},
       {x:4,y:0,z:1.65,r:1.15,kind:'look',label:'讀讀邀請卡',name:'圓桌空椅邀請卡',lines:['這裡留一張空椅，不用先答應表演。','參加是邀請，你也可以帶本書安靜坐著。','我先問大家願不願意，再把名字寫進分工表。'],alone:['小卡上畫了一張空椅，名字的位置還空著。','背面寫著：「願意來就來，也可以下次再見。」']},
@@ -351,18 +364,20 @@
       {x:-3.5,y:4,z:5.55,r:1.15,kind:'look',label:'讀讀回信',name:'左老虎窗回信桌',lines:['我把每封回信放在這裡，不用急著回答。','不同意見也值得讀完，先弄懂對方在意什麼。','這扇窗的風很輕，剛好陪我慢慢想一句話。'],alone:['奶油色信封分成待讀與已回，沒有貼上評分。','桌角留著空白卡片，窗簾綁了一小束花。']},
       {x:3.5,y:4,z:5.55,r:1.15,kind:'look',label:'看看天秤',name:'右老虎窗天秤架',lines:['這座小天秤，提醒我把兩邊的理由都聽完。','同樣分一份，未必剛好照顧到不同的需要。','先把問題說清楚，再一起找能接受的做法。'],alone:['兩只黃銅秤盤停在同樣的高度，旁邊擺著筆記。','封面寫著：「聽完，再商量。」']}
     ];
-    // 環境以議事廳雙燈槽與兩座老虎窗洗牆鋪暖光；回信桌投光供書寫，野餐議事板是焦點，書架下與座床底補暗角。
-    Object.assign(g.userData,{glow:[
-      {kind:'cove',a:[-2.72,3.31,-5.8],b:[-1.62,3.31,-5.8],n:[0,1],c:'#fbf3e4'},
-      {kind:'cove',a:[1.65,3.31,-5.8],b:[2.7,3.31,-5.8],n:[0,1],c:'#fbf3e4'},
-      {kind:'wash',a:[-4.58,7.6,4.8],b:[-4.58,7.6,6.85],n:[1,0],c:'#fbf3e4'},
-      {kind:'wash',a:[4.58,7.6,4.8],b:[4.58,7.6,6.85],n:[-1,0],c:'#fbf3e4'},
-      {kind:'under',a:[7.44,1.795,-.9],b:[7.44,1.795,.85]},
-      {kind:'kick',a:[4.75,.12,2.66],b:[6.55,.12,2.66],n:[0,-1]},
-      {kind:'kick',a:[2.55,4.11,-.85],b:[4.65,4.11,-.85],n:[0,1]},
-      {kind:'spot',p:[-2.25,3.55,-3.5],t:[-2.25,2.2,-5.625],r:1.2},
-      {kind:'spot',p:[-3.5,8.35,5.4],t:[-3.5,5.04,6.6],r:.9}
-    ]});
+    // 議事板是焦點，桌燈補閱讀，短燈槽與座床底留暖光。
+    Object.assign(g.userData,{
+      lights:[[-3,2.99,-.45,'#ffd0a0',1.05,.5],[4,2.99,.2,'#ffd0a0',.95,.5],[0,3.29,5.5,'#ffd0a0',.8,.45],[4.05,1.705,-3.93,'#ffd0a0',.6,.35],[-2.85,5.585,6.9,'#ffd0a0',.5,.32],[4.18,5.735,6.88,'#ffd0a0',.5,.32]],
+      glow:[
+        {kind:'cove',a:[-2.72,3.31,-5.8],b:[-1.62,3.31,-5.8],n:[0,1],c:'#fbf3e4'},
+        {kind:'cove',a:[1.65,3.31,-5.8],b:[2.7,3.31,-5.8],n:[0,1],c:'#fbf3e4'},
+        {kind:'wash',a:[-4.58,7.6,5.15],b:[-4.58,7.6,6.15],n:[1,0],c:'#fbf3e4'},
+        {kind:'wash',a:[4.58,7.6,5.15],b:[4.58,7.6,6.15],n:[-1,0],c:'#fbf3e4'},
+        {kind:'under',a:[7.44,1.795,-.45],b:[7.44,1.795,.45]},
+        {kind:'kick',a:[5.35,.12,2.66],b:[6,.12,2.66],n:[0,-1]},
+        {kind:'kick',a:[3.2,4.11,-.85],b:[4,4.11,-.85],n:[0,1]},
+        {kind:'spot',p:[-2.25,3.55,-3.5],t:[-2.25,2.2,-5.625],r:.78}
+      ]
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

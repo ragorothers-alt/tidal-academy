@@ -25,7 +25,8 @@
       seed: kit.mat('#eed3a6', {}, 'foliage'),
       iron: kit.mat('#526f43', { metalness: .65, roughness: .4 }, 'metal'),
       blade: kit.mat('#c7b9a3', { metalness: .75, roughness: .4 }, 'metal'),
-      glow: kit.lamp('#ffdb9b'), glass: kit.glass()
+      shade: kit.shade('#70845c'), shelfWood: kit.mat('#d4c5ab', {}, 'wood'),
+      glow: kit.lamp('#ffd8ad'), glass: kit.glass()
     };
     const shapes=new Map();
     function shape(key,make) {if(!shapes.has(key))shapes.set(key,make());return shapes.get(key);}
@@ -108,10 +109,18 @@
         if (flowers && i % 2 === 0) flower(xx, y + (.68 + i * .05) * s, zz, .13 * s);
       }
     }
-    function lamp(x, y, z) {
-      ball(x, y, z, .22, M.glow, .8, 1.35, .8);
-      for (const dx of [-.22, .22]) beam([x + dx, y - .3, z], [x + dx, y + .3, z], .024, M.brass);
-      for (const yy of [y - .32, y + .32]) box(x, yy, z, .55, .06, .48, M.honey);
+    function shade(x,y,z,r=.38,h=.30) {
+      add(new THREE.CylinderGeometry(r*.3,r,h,12,1,true),M.shade,x,y+h*.3,z);
+      add(new THREE.CylinderGeometry(Math.min(r*.74,.16),Math.min(r*.74,.16),.016,16),M.glow,x,y+.03,z);
+      for(let j=0;j<3;j++){const a=j*Math.PI*2/3,o=ball(x+r*.47*Math.cos(a),y+h*.4,z+r*.47*Math.sin(a),r*.60,M.shade,1.25,.22,.60);o.rotation.y=-a;}
+    }
+    function lamp(x,y,z,top) {
+      shade(x,y,z);add(new THREE.CylinderGeometry(.07,.09,.08,10),M.brass,x,y+.26,z);beam([x,y+.27,z],[x,top,z],.016,M.brass);box(x,top-.018,z,.14,.035,.14,M.brass);
+    }
+    function deskLamp(x,y,z) {
+      add(new THREE.CylinderGeometry(.17,.19,.045,16),M.brass,x+.25,y-.7215,z-.28);
+      beam([x+.25,y-.699,z-.28],[x+.25,y+.006,z-.28],.022,M.brass);
+      beam([x+.25,y+.006,z-.28],[x,y+.14,z],.022,M.brass);shade(x,y,z,.23,.22);
     }
     function table(x, y, z, w, d) {
       add(kit.rbox(w, .16, d, .055), M.honey, x, y + 1.05, z, { solid: true });
@@ -603,29 +612,27 @@
       drawers(0,0,0,1.35,2.35,.73);soft(0,.92,.30,1.26,.20,1.18,M.leafCloth,.09);
       soft(0,1.06,.29,1.12,.12,.62,M.pink,.06);basket(0,0,-.58);stack(0,.86,-.62,3);
     });
-    // Every functional light has a visible suspended shade and an actual attachment.
-    for (const p of [[-2,3.1,1.4],[2.1,3.05,-3.6],[-5.7,2.9,-2.2],[-2.2,7,1.5],[.8,6.8,-4.8],[7.8,6.6,-1.15]]) {
-      lamp(...p);const [x,y,z]=p;
-      add(new THREE.ConeGeometry(.40,.25,8),M.brass,x,y+.45,z);
-      const ceiling=y<4?3.78:(x>7?10.3:10.4-Math.abs(x+1.8)*.28);
-      beam([x,y+.58,z],[x,ceiling,z],.018,M.brass);
-      for(let yy=y+.68;yy<ceiling;yy+=.28)bud(x,yy,z,.028,M.brass);
-    }
-    g.userData = {
-      // 一樓燈槽與閣樓木飾線洗牆分層鋪光，葉背圖與種子書架聚焦，育苗層板和觀察桌補任務光、茶角書櫃腳留柔光。
-      glow: [
-        { kind: 'cove', a: [-.7, 3.5, -5.9], b: [1.2, 3.5, -5.9], n: [0, 1], c: '#f3ead8' },
-        { kind: 'under', a: [-1.65, 2.303, 5.21], b: [0, 2.303, 5.21] },
-        { kind: 'wash', a: [-6.9, 7.27, -.9], b: [-6.9, 7.27, -.1], n: [1, 0], c: '#8a5a3b' },
-        { kind: 'under', a: [-6.315, 2.048, -1.35], b: [-6.315, 2.048, .5] },
-        { kind: 'under', a: [8.01, 6.353, -2.45], b: [8.01, 6.353, -1.5] },
-        { kind: 'kick', a: [1.8, .107, 2.855], b: [2.6, .107, 2.855], n: [0, 1] },
-        { kind: 'spot', p: [-1.7, 3.76, -3.9], t: [-1.7, 2.55, -5.7], r: .75 },
-        { kind: 'spot', p: [-3.45, 3.7, -4.2], t: [-3.45, 1.21, -4.85], r: .65 }
+    // 葉罩藏住燈泡，育苗層板由樓板懸吊，不把支架裝進窗洞。
+    for(const p of [[-1.45,2.76,1.35,3.96],[2.1,3.05,-3.6,3.96],[-2.2,7,1.5,10.3376],[.8,6.8,-4.8,9.664],[7.8,6.6,-1.15,10.2]])lamp(...p);
+    deskLamp(-3.25,1.874,-5.02);
+    box(2.55,2.90,-5.32,2.65,.12,.54,M.shelfWood);box(2.55,2.79,-5.032,2.65,.18,.035,M.shelfWood);
+    for(const x of [1.4,3.7]){beam([x,2.98,-5.32],[x,3.96,-5.32],.014,M.brass);box(x,3.942,-5.32,.14,.035,.14,M.brass);}
+    Object.assign(g.userData,{
+      // 後牆葉背標本是焦點，花茶葉罩、日記桌燈與育苗層板補任務光，植物間保留暗部。
+      glow:[
+        {kind:'cove',a:[-0.7,3.5,-5.9],b:[1.2,3.5,-5.9],n:[0,1],c:'#f3ead8'},
+        {kind:'under',a:[1.35,2.818,-5.07],b:[3.75,2.818,-5.07]},
+        {kind:'under',a:[-1.65,2.303,5.21],b:[0,2.303,5.21]},
+        {kind:'under',a:[-6.315,2.048,-1.35],b:[-6.315,2.048,0.5]},
+        {kind:'wash',a:[-6.9,7.27,-0.9],b:[-6.9,7.27,-0.1],n:[1,0],c:'#8a5a3b'},
+        {kind:'under',a:[8.01,6.353,-2.45],b:[8.01,6.353,-1.5]},
+        {kind:'kick',a:[1.8,0.107,2.855],b:[2.6,0.107,2.855],n:[0,1]},
+        {kind:'spot',p:[-1.7,3.76,-3.9],t:[-1.7,2.55,-5.7],r:0.75},
+        {kind:'spot',p:[-3.45,3.7,-4.2],t:[-3.45,1.21,-4.85],r:0.65}
       ],
       spawn: [-3.15, 0, 4.15, Math.PI], exit: [-3.15, 5.6, .6], host: [-.65, 0, -1.8, .2],
       gifts: [[-.2, 0, 3.4, 0], [1.8, 0, 1.1, 0], [-5.8, 0, 3.5, 0], [1.5, 4.2, 2.1, 0], [0, 4.2, 4.4, 0]],
-      lights: [[-2, 3.1, 1.4, '#ffdbab', 1.4], [2.1, 3.05, -3.6, '#ffdcad', 1.35], [-5.7, 2.9, -2.2, '#ffe4bf', 1], [-2.2, 7, 1.5, '#ffdcad', 1.6], [.8, 6.8, -4.8, '#ffe5bf', 1.4], [7.8, 6.6, -1.15, '#ffdcad', 1.2]],
+      lights:[[-1.45,2.76,1.35,'#ffd8ad',1,0.5],[2.1,3.05,-3.6,'#ffd8ad',0.95,0.5],[-3.25,1.874,-5.02,'#ffd8ad',0.4,0.35],[-2.2,7,1.5,'#ffd8ad',1.05,0.5],[0.8,6.8,-4.8,'#ffd8ad',0.9,0.5],[7.8,6.6,-1.15,'#ffd8ad',0.9,0.5]],
       sun: [1, .85, .35],
       spots: [
         { x: -3.4, y: 0, z: -3.25, r: 1.2, kind: 'study', label: '讀讀葉背', name: '葉背觀察日記', lines: ['你、你想一起看看葉子的背面嗎？', '氣孔讓植物交換氣體，也會散失水分。', '我先把看見的畫下來，畫歪也沒關係。'], alone: ['攤開的日記畫著葉背與小小的氣孔。', '頁角寫著：今天比昨天多看見一點，就很好。'] },
@@ -636,7 +643,7 @@
         { x: -3.3, y: 4.2, z: -1.60, r: 1.2, kind: 'look', label: '看看葉被', name: '樹冠下的葉片拼被床', lines: ['這些葉片是布做的，不會被我澆濕。', '夜裡把觀察本合起來，眼睛也要休息。', '明天的小芽，我們明天再看就好。'], alone: ['葉片拼被上縫著幾朵小花。', '床頭的日記已合上，書籤停在今天。'] }
       ],
       architecture: { levels: [0, 4.2], stairs: [{ from: [5.5, 0, 3.9], to: [5.5, 4.2, -1.3], width: 1.8, steps: 18, slope: angle * 180 / Math.PI }], windows: { groundArches: 6, gableCircles: 2, eastDormerCircle: 1 }, palette: '外觀奶油灰泥、蜂蜜木、苔綠、粉櫻' }
-    };
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

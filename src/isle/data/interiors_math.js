@@ -19,7 +19,7 @@
     const timber = swatches('wood', 'ink plum soft');
     const stone = swatches('stone', 'wall');
     const floorM=['#b5a48f','#ad9d8b','#bdad99'].map(c=>kit.mat(c,finish.wood,'wood'));
-    const view=kit.view(),glass=kit.glass(),glow=kit.lamp('#ffdda0');const farView=view.clone();farView.uniforms=view.uniforms;farView.transparent=true;farView.depthWrite=false;farView.fragmentShader=view.fragmentShader.replace('texture2D(map, vUv)','texture2D(map, vec2(.5+.5*sin(vUv.x*6.2831853),vUv.y))');const cols=[];
+    const view=kit.view(),glass=kit.glass(),glow=kit.lamp('#ffd0a0');const farView=view.clone();farView.uniforms=view.uniforms;farView.transparent=true;farView.depthWrite=false;farView.fragmentShader=view.fragmentShader.replace('texture2D(map, vUv)','texture2D(map, vec2(.5+.5*sin(vUv.x*6.2831853),vUv.y))');const cols=[];
     function mesh(q,m,x=0,y=0,z=0,solid=false,walk=false){const o=new THREE.Mesh(q,m);o.position.set(x,y,z);o.userData.solid=solid;o.userData.walk=walk;g.add(o);return o;}
     function box(x,y,z,w,h,d,m,solid=false,r=0){return mesh(r?kit.rbox(w,h,d,r):new THREE.BoxGeometry(w,h,d),m,x,y,z,solid);}
     function polar(a,r,y=0){return [Math.sin(a)*r,y,Math.cos(a)*r];}
@@ -114,7 +114,13 @@
     function books(x,y,z,n){for(let j=0;j<n;j++){const h=.42+(j%3)*.09;box(x+j*.18,y+h/2,z,.14,h,.32,j%2?print.violet:print.plum);box(x+j*.18,y+.13,z+.17,.08,.03,.02,M.gold);}}
     function plant(x,y,z){mesh(new THREE.CylinderGeometry(.25,.20,.40,8),glaze.ivory,x,y+.20,z);mesh(new THREE.CylinderGeometry(.255,.255,.07,8),glaze.violet,x,y+.15,z);for(let j=0;j<5;j++){const a=j*2.4,xx=x+Math.sin(a)*.25,zz=z+Math.cos(a)*.25;beam([x,y+.35,z],[xx,y+.95+j%3*.09,zz],.018,M.leaf);ball(xx,y+.76,zz,.14,M.leaf,1,.5,1);for(let k=0;k<2;k++)ball(xx,y+.93+k*.09,zz,.075,petal.plum,.65,1,.65);}}
     function polyModel(x,y,z,r){const geo=new THREE.IcosahedronGeometry(r,0),edges=new THREE.EdgesGeometry(geo),p=edges.attributes.position;for(let j=0;j<p.count;j+=2)beam([x+p.getX(j),y+p.getY(j),z+p.getZ(j)],[x+p.getX(j+1),y+p.getY(j+1),z+p.getZ(j+1)],.012,M.gold);geo.dispose();edges.dispose();}
-    function lamp(x,y,z){mesh(new THREE.CylinderGeometry(.28,.23,.55,8),glow,x,y,z);for(let j=0;j<8;j++){const a=j*Math.PI/4;beam([x+Math.sin(a)*.28,y-.31,z+Math.cos(a)*.28],[x+Math.sin(a)*.28,y+.31,z+Math.cos(a)*.28],.022,M.gold);}mesh(new THREE.ConeGeometry(.38,.24,8),M.gold,x,y+.41,z);mesh(new THREE.CylinderGeometry(.34,.34,.08,8),M.gold,x,y-.34,z);}
+    const lightLinen=kit.shade('#f5ead6');
+    function lamp(x,y,z,top){
+      mesh(new THREE.CylinderGeometry(.30,.40,.26,8,1,true),lightLinen,x,y,z);
+      for(const yy of [y-.13,y+.13])mesh(new THREE.CylinderGeometry(yy<y?.405:.305,yy<y?.405:.305,.025,8,1,true),M.gold,x,yy,z);
+      mesh(new THREE.CylinderGeometry(.16,.16,.018,8),glow,x,y-.065,z);mesh(new THREE.CylinderGeometry(.30,.30,.018,8),lightLinen,x,y+.13,z);
+      beam([x,y+.15,z],[x,top,z],.021,M.ink);mesh(new THREE.CylinderGeometry(.09,.09,.03,8),M.gold,x,top,z);
+    }
     function metronome(x,y,z,s=1){shapeMesh([[-.22*s,0],[.22*s,0],[.12*s,.85*s],[-.12*s,.85*s]],.28*s,M.wood,x,y,z-.14*s);beam([x,y+.14*s,z+.17*s],[x+.13*s,y+.78*s,z+.17*s],.025*s,M.gold);box(x+.09*s,y+.62*s,z+.19*s,.18*s,.11*s,.05*s,M.gold);}
     // Upright piano has playable-looking individual keys and real music on its open score.
     box(-4.55,.57,-2.8,2.65,1.14,.85,M.wood,true,.06);box(-4.55,1.38,-3.04,2.65,1.22,.43,M.honey,true,.06);box(-4.55,1.03,-2.38,2.7,.17,.45,timber.ink,true);
@@ -147,8 +153,9 @@
     }
     // The weather-vane spindle is suggested by a non-moving metronome-shaped roof boss inside.
     metronome(0,11.45,0,1.15);beam([0,11.45,0],[0,12.8,0],.055,M.gold);
-    const lamps=[[-3.6,3.0,-2.0],[3.2,3.1,2.0],[.4,3.0,-4.4],[-3.4,7.15,2.6],[3.1,7.15,-3.2],[0,10.3,0]];for(const p of lamps)lamp(...p);
-    beam([0,10.7,0],[0,12.6,0],.045,M.gold);
+    // 八角罩吊燈沿樓板與斜頂吊掛，幾何島另有一盞。
+    lamp(-3.6,3,-2,3.9);lamp(3.2,3.1,2,3.9);lamp(-3.4,7.15,2.6,10.0379);lamp(3.9,2.85,-3.62,3.9);
+
     // Round two: Xian's ordered purple-and-brass music salon, with geometric craft details.
     function dot(x,y,z,r,m,sx=1,sy=1,sz=1){const o=mesh(new THREE.SphereGeometry(r,5,3),m,x,y,z);o.scale.set(sx,sy,sz);return o;}
     function lavender(x,y,z,s=1){for(let j=0;j<5;j++){const a=j*2.4,xx=x+Math.sin(a)*.17*s,zz=z+Math.cos(a)*.17*s;beam([x,y,z],[xx,y+(.5+j%2*.14)*s,zz],.012*s,M.leaf);dot(xx,y+.28*s,zz,.12*s,M.leaf,1,.35,.7);for(let k=0;k<3;k++)dot(xx,y+(.41+k*.10+j%2*.13)*s,zz,.065*s,j%2?petal.plum:petal.violet,.8,1,.8);}}
@@ -161,7 +168,7 @@
     function mug(x,y,z){mesh(new THREE.CylinderGeometry(.12,.10,.23,10),glaze.ivory,x,y+.115,z);const h=mesh(new THREE.TorusGeometry(.085,.025,5,12),glaze.ivory,x+.15,y+.13,z);h.rotation.y=Math.PI/2;mesh(new THREE.CylinderGeometry(.10,.10,.008,10),glaze.wood,x,y+.234,z);dot(x,y+.12,z+.108,.069,glaze.ink,1,1.25,.25);dot(x,y+.10,z+.13,.048,glaze.ivory,1,1.1,.25);dot(x,y+.145,z+.135,.022,glaze.gold,1,.5,.5);}
     function vase(x,y,z,s=.8){dot(x,y+.18*s,z,.24*s,glaze.gold,.9,1,1);mesh(new THREE.CylinderGeometry(.10*s,.12*s,.13*s,8),glaze.gold,x,y+.38*s,z);lavender(x,y+.4*s,z,s);}
     function basket(x,y,z){mesh(new THREE.CylinderGeometry(.31,.25,.42,10),M.honey,x,y+.21,z);for(let j=0;j<4;j++){const r=mesh(new THREE.TorusGeometry(.26+j*.013,.018,4,14),M.wood,x,y+.06+j*.105,z);r.rotation.x=Math.PI/2;}for(let j=0;j<4;j++)mesh(new THREE.CylinderGeometry(.045,.045,.57,6),M.paper,x-.14+j*.09,y+.43,z);}
-    function deskLamp(x,y,z){mesh(new THREE.CylinderGeometry(.18,.22,.07,12),M.gold,x,y+.035,z);beam([x,y+.07,z],[x,y+.55,z],.035,M.gold);beam([x,y+.55,z],[x-.21,y+.76,z],.035,M.gold);const c=mesh(new THREE.ConeGeometry(.25,.22,12,1,true),M.gold,x-.23,y+.71,z);c.rotation.z=-.25;const b=mesh(new THREE.CircleGeometry(.20,12),glow,x-.25,y+.61,z);b.rotation.x=Math.PI/2;}
+    function deskLamp(x,y,z){mesh(new THREE.CylinderGeometry(.18,.22,.07,12),M.gold,x,y+.035,z);beam([x,y+.07,z],[x,y+.55,z],.035,M.gold);beam([x,y+.55,z],[x-.21,y+.76,z],.035,M.gold);mesh(new THREE.CylinderGeometry(.06,.25,.22,12,1,true),M.gold,x-.25,y+.71,z);mesh(new THREE.CylinderGeometry(.06,.06,.016,12),M.gold,x-.25,y+.82,z);const b=mesh(new THREE.CircleGeometry(.17,12),glow,x-.25,y+.64,z);b.rotation.x=Math.PI/2;}
     function curtain(a,y,w=1.6,h=2.5){for(const sign of [-1,1]){for(let j=0;j<3;j++)fb(a,sign*(w/2+.19)+j*.065,y+h/2,A-.23,.09,h,.12,j%2?M.soft:M.plum);fb(a,sign*(w/2+.25),y+h*.40,A-.33,.31,.075,.10,M.gold);}fb(a,0,y+h+.05,A-.25,w+.8,.055,.07,M.gold);}
     // Each facade bay gets low panel mouldings, paired capitals and violet diagonal brackets.
     for(let j=0;j<8;j++){const a=j*Math.PI/4;for(const fy of [0,Y]){
@@ -171,7 +178,6 @@
       // Fine radial roof boarding follows the original eight conical soffits.
       const a0r=a+Math.PI/8,a1r=a0r+Math.PI/4,rr=A/Math.cos(Math.PI/8);for(let k=1;k<=5;k++){const t=k/6;beam(polar(a0r,rr*t,12.73+(H-.18-12.73)*t),polar(a1r,rr*t,12.73+(H-.18-12.73)*t),.025,M.honey);}for(const t of [.33,.67]){const p0=polar(a0r,rr,H-.20),p1=polar(a1r,rr,H-.20);beam([0,12.68,0],[p0[0]+(p1[0]-p0[0])*t,H-.20,p0[2]+(p1[2]-p0[2])*t],.04,M.violet);}
     }
-    for(const p of lamps){const rr=Math.max(Math.abs(p[0]),Math.abs(p[2]),(Math.abs(p[0])+Math.abs(p[2]))/Math.SQRT2),top=p[1]<Y?3.90:12.73+(H-.18-12.73)*rr/A-.08;beam([p[0],p[1]+.55,p[2]],[p[0],top,p[2]],.021,M.ink);for(let y=p[1]+.58;y<top;y+=.18){const link=mesh(new THREE.TorusGeometry(.05,.012,4,8),M.gold,p[0],y,p[2]);link.rotation.y=Math.round(y*10)%2*Math.PI/2;}}
     // Musical wall shelves are actual five-line staves, filled with books, geometry and plants.
     for(const j of [1,3,5,7]){const a=j*Math.PI/4;for(const fy of [0,Y]){const u=j%4===1?-1.93:1.93;for(let k=0;k<5;k++)fb(a,u,fy+2.0+k*.12,A-.34,1.10,.025,.035,M.ink);for(const yy of [2.08,2.83]){fb(a,u,fy+yy,A-.39,1.10,.09,.40,M.honey);for(let k=0;k<4;k++)fb(a,u-.37+k*.20,fy+yy+.28,A-.38,.14,.46+(k%3)*.08,.26,k%2?print.plum:print.violet);}const p=face(a,u+.32,fy+3.52,A-.46);polyModel(...p,.19);const n=face(a,u-.32,fy+1.84,A-.44);note(...n,.60,1);trail(...face(a,u+.48,fy+2.83,A-.5),9);}}
     // Cabinet fronts, brass pulls and coloured folio labels make the original blocks read as joinery.
@@ -265,20 +271,19 @@
     walkBatches.forEach(list=>{if(list.length<2)return;const P=[],N=[],UV=[],v=new THREE.Vector3(),normal=new THREE.Matrix3();for(const o of list){const ge=o.geometry,pa=ge.attributes.position,na=ge.attributes.normal,uv=ge.attributes.uv,ix=ge.index,n=ix?ix.count:pa.count;normal.getNormalMatrix(o.matrixWorld);for(let i=0;i<n;i++){const k=ix?ix.getX(i):i;v.fromBufferAttribute(pa,k).applyMatrix4(o.matrixWorld);P.push(v.x,v.y,v.z);v.fromBufferAttribute(na,k).applyMatrix3(normal).normalize();N.push(v.x,v.y,v.z);UV.push(uv?uv.getX(k):0,uv?uv.getY(k):0);}}const ge=new THREE.BufferGeometry();ge.setAttribute('position',new THREE.Float32BufferAttribute(P,3));ge.setAttribute('normal',new THREE.Float32BufferAttribute(N,3));ge.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));const o=mesh(ge,list[0].material,0,0,0,false,true);o.visible=list[0].visible;o.name='合併可走樓板';for(const old of list){g.remove(old);old.geometry.dispose();}});
 
     Object.assign(g.userData,{
-      // 環境以短燈槽與樓上洗牆分層，五線譜層板和證明桌補任務光，白色鋼琴樂譜為重點，床與譜櫃底柔光收邊。
+      // 琴譜是焦點，桌燈服務書寫，短底光保留深紫暗部。
       glow:[
         {kind:'cove',a:[-6.88,3.5,-2.05],b:[-6.88,3.5,-1.25],n:[1,0],c:'#bcb5df'},
         {kind:'under',a:face(5*Math.PI/4,-2.4,2.78,6.45),b:face(5*Math.PI/4,-1.5,2.78,6.45)},
-        {kind:'wash',a:[-2.05,7.75,-6.8],b:[-1.25,7.75,-6.8],n:[0,1],c:'#bcb5df'},
+        {kind:'wash',a:[-1.95,7.75,-6.8],b:[-1.3,7.75,-6.8],n:[0,1],c:'#bcb5df'},
         {kind:'under',a:face(5*Math.PI/4,-2.4,6.98,6.45),b:face(5*Math.PI/4,-1.5,6.98,6.45)},
-        {kind:'kick',a:[-5.35,4.3,-1.4],b:[-3.45,4.3,-1.4],n:[0,1]},
-        {kind:'kick',a:[3.75,.1,3.6],b:[4.95,.1,3.6],n:[0,1]},
-        {kind:'spot',p:[-4.6,3.78,-1],t:[-4.55,1.55,-2.75],r:.55},
-        {kind:'spot',p:[.1,3.75,-4.5],t:[-.35,1.2,-4.6],r:.75}
+        {kind:'kick',a:[-4.7,4.3,-1.4],b:[-4.1,4.3,-1.4],n:[0,1]},
+        {kind:'kick',a:[4.05,.1,3.6],b:[4.65,.1,3.6],n:[0,1]},
+        {kind:'spot',p:[-4.6,3.78,-1],t:[-4.55,1.55,-2.75],r:.55}
       ],
       spawn:[0,0,4.9,Math.PI],exit:[0,6.48,.62],host:[-1.55,0,.4,.4],cols,
       gifts:[[2.55,0,-1.6,0],[-2.55,0,1.6,0],[-4.9,Y,2.0,Math.PI/2],[3.2,Y,-4.2,0]],
-      lights:lamps.map((p,j)=>[...p,'#ffdda8',j===5?1.1:1.25]),sun:[0,.85,1],
+      lights:[[-3.6,2.905,-2,'#ffd0a0',1.17,.5],[3.2,3.005,2,'#ffd0a0',1.17,.5],[-3.4,7.055,2.6,'#ffd0a0',1.17,.5],[3.9,2.755,-3.62,'#ffd0a0',1.17,.5],[-1.31,1.74,-4.9,'#ffd0a0',.6,.35],[-1.19,5.89,-4.9,'#ffd0a0',.6,.35]],sun:[0,.85,1],
       spots:[
         {x:.1,y:0,z:-3.1,r:1.15,kind:'study',label:'合拍解題',name:'座標草稿與證明書桌',lines:['先把條件排好，我們再決定下一拍。','式子每移一步，都要帶著等號的平衡。','圖上的座標很守時，只有我的橡皮擦遲到。','卡住就放慢，我陪你把這一小節接起來。'],alone:['草稿依條件、推導、檢查分成整齊三欄。','尺與鉛筆並排，旁邊畫了一尾小魚。']},
         {x:-3.3,y:0,z:-1.15,r:1.05,kind:'look',label:'聽聽琴鍵',name:'直立鋼琴與小節樂譜',lines:['這裡是練琴區，錯一拍也能接回來。','八度很像走一圈，回到熟悉的位置。','節拍器不會催你，它只是很有規律地點頭。'],alone:['黑白琴鍵上擺著一本攤開的樂譜。','小節線與草稿上的分欄，有相似的節奏。']},

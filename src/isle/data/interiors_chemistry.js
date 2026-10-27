@@ -10,7 +10,7 @@
       roof:kit.mat('#4f8f7a',{},'roof'),mint:kit.mat('#62c9a0',{metalness:.7,roughness:.4},'metal'),stone:kit.mat('#d8c8ac',{},'stone'),
       cream:kit.mat('#fff2ce',{},'ceramic'),pink:kit.mat('#ff9ec4',{},'fabric'),amber:kit.mat('#ffc66b',{},'foliage'),aqua:kit.mat('#8fe3c8',{},'wood'),
       leaf:kit.mat('#5d874e',{},'foliage'),lime:kit.mat('#93b55f',{},'foliage'),lavender:kit.mat('#b8a0dc',{},'foliage'),
-      copper:kit.mat('#b8763d',{metalness:.65,roughness:.3},'metal'),cloth:kit.mat('#f1d5d8',{},'fabric'),lamp:kit.lamp('#ffe3ac')
+      copper:kit.mat('#b8763d',{metalness:.65,roughness:.3},'metal'),cloth:kit.mat('#f1d5d8',{},'fabric'),lamp:kit.lamp('#ffd8ad')
     };
     // 同色的釉陶、軟布、紙張和塗漆木作各共用一份，不在單件物件內建材質。
     const S={
@@ -20,11 +20,11 @@
       amberCover:kit.mat('#ffc66b',{},'fabric'),violetCover:kit.mat('#b8a0dc',{},'fabric'),
       terracotta:kit.mat('#a77648',{},'ceramic'),darkWood:kit.mat('#68482f',{},'wood'),ink:kit.mat('#68482f',{},'paper'),woodInk:kit.mat('#a77648',{},'paper'),
       pinkPaper:kit.mat('#ff9ec4',{},'paper'),aquaPaper:kit.mat('#8fe3c8',{},'paper'),mintPaper:kit.mat('#62c9a0',{},'paper'),greenThread:kit.mat('#5d874e',{},'fabric'),
-      paleMetal:kit.mat('#fff2ce',{metalness:.7,roughness:.4},'metal'),shade:kit.lamp('#fff2ce')
+      paleMetal:kit.mat('#fff2ce',{metalness:.7,roughness:.4},'metal'),shade:kit.shade('#fff0da')
     };
     const covers=new Map([[M.cream,S.paper],[M.mint,S.mintFabric],[M.amber,S.amberCover],[M.aqua,S.aquaFabric],[M.lavender,S.violetCover]]);
     const bottleCeramics=new Map([[M.pink,S.pinkCeramic],[M.amber,S.amberCeramic],[M.aqua,S.aquaCeramic]]);
-    const bottleGlass=new Map([M.pink,M.amber,M.aqua].map(m=>{const glass=kit.glass().clone();glass.color.copy(m.color);glass.opacity=.38;glass.roughness=.15;glass.side=THREE.DoubleSide;return [m,glass];}));
+    const bottleGlass=new Map([[M.pink,kit.shade('#ff9ec4')],[M.amber,kit.shade('#ffc66b')],[M.aqua,kit.shade('#8fe3c8')]]);
     const cols=[];
     function add(q,m,x=0,y=0,z=0,ud){const o=new THREE.Mesh(q,m);o.position.set(x,y,z);if(ud)Object.assign(o.userData,ud);g.add(o);return o;}
     function box(x,y,z,w,h,d,m,solid=false){return add(new THREE.BoxGeometry(w,h,d),m,x,y,z,solid?{solid:true}:null);}
@@ -70,6 +70,13 @@
       if(hanging)for(const dx of [-.25,.25])beam([x+dx*s,y+.43*s,z],[x,y+1.2*s,z],.018,M.dark);
     }
     function pendant(x,y,z,s=1,m=M.amber){beam([x,y+.9*s,z],[x,y+.56*s,z],.022,M.dark);bottle(x,y,z,s,m,true);}
+    function flaskLamp(x,y,z,top) {
+      const glass=kit.shade('#fff1da');
+      const profile=[[.10,0],[.24,.08],[.26,.23],[.15,.36],[.065,.46],[.065,.57]];
+      add(new THREE.LatheGeometry(profile.map(p=>new THREE.Vector2(...p)),20),glass,x,y,z);
+      cyl(x,y+.20,z,.07,.08,.12,M.lamp);add(new THREE.CylinderGeometry(.27,.27,.045,20,1,true),M.copper,x,y+.04,z);
+      cyl(x,y+.59,z,.095,.095,.065,M.copper);beam([x,y+.63,z],[x,top,z],.014,M.dark);box(x,top-.018,z,.14,.035,.14,M.copper);
+    }
     function shelf(x,y,z,w,ry=0){const n=new THREE.Group();g.add(n);const before=g.children.length;for(const dx of [-w/2,w/2])box(dx,y+1.55,0,.09,3.1,.48,M.wood,true);for(let row=0;row<4;row++){box(0,y+.35+row*.75,0,w+.14,.10,.55,M.wood,true);for(let j=0;j<5;j++)bottle(-w*.4+j*w*.2,y+.41+row*.75,0,.7,[M.pink,M.amber,M.aqua][(row+j)%3]);}const children=g.children.slice(before);children.forEach(o=>n.add(o));n.position.set(x,0,z);n.rotation.y=ry;return n;}
     // The cottage is tall and narrow; the attached conservatory is a broad, ONE-storey glass drum.
     floor(-4,0,8,10,0);
@@ -148,7 +155,7 @@
     const citrusPicture=add(new THREE.CylinderGeometry(.28,.28,.04,12),M.amber,-2.4,6.35,4.73);citrusPicture.rotation.x=Math.PI/2;
     for(let j=0;j<8;j++){const a=j*Math.PI/4;beam([-2.4,6.35,4.70],[-2.4+Math.cos(a)*.25,6.35+Math.sin(a)*.25,4.70],.012,S.paper);}
     beam([-4.9,5.98,4.71],[-4.9,6.72,4.71],.018,M.leaf);for(let j=0;j<5;j++)ball(-4.9+(j%2?.13:-.13),6.08+j*.11,4.70,.13,M.leaf,1,.52,.18);
-    for(const [x,y,z] of [[-3.2,2.8,.3],[3.4,5.4,.2],[-3.2,6.6,1],[-6.9,3,-2.4]])pendant(x,y,z,.95,M.amber);
+    for(const [x,y,z] of [[-3.2,2.8,.3],[-3.2,6.6,1],[-6.9,4.25,-2.4]])pendant(x,y,z,.95,M.amber);
     // Round two: an inhabited citrus-tea conservatory, distinct from Rayne's copper workshop.
     // Small foliage uses shared low-poly geometry; everything remains deterministic and kit-only.
     function ring(x,y,z,r,t,m,rx=0,ry=0){const o=add(new THREE.TorusGeometry(r,t,5,20),m,x,y,z);o.rotation.set(rx,ry,0);return o;}
@@ -202,8 +209,8 @@
     }
     for(const y of [4.3,5.08,7.05])box(-.22,y,.7,.08,.08,8.2,M.wood);
     for(const z of [-4.4,-.25,4.4]){box(-.23,5.65,z,.10,2.8,.12,M.wood);beam([-.23,6.85,z],[ -.23,6.4,z+.45],.05,M.wood);}
-    // Chain/rope and flared cream shade anchor each main warm bottle light to its ceiling.
-    for(const [x,y,z,top] of [[-3.2,2.8,.3,3.76],[3.4,5.4,.2,8.65],[-3.2,6.6,1,9.43],[-6.9,3,-2.4,3.8]]){
+    // 奶油罩遮住瓶頸上方；轉角瓶燈抬高，平台留兩公尺淨高。
+    for(const [x,y,z,top] of [[-3.2,2.8,.3,3.96],[-3.2,6.6,1,9.6999],[-6.9,4.25,-2.4,7.9545]]){
       beam([x,y+.72,z],[x,top,z],.017,M.dark);cyl(x,y+.67,z,.11,.32,.17,S.shade,12);ring(x,y+.81,z,.05,.014,M.copper);
     }
     for(const [x,y,z] of [[1.5,3.9,2.9],[2.55,3.68,2.9],[3.6,3.68,2.9],[4.65,3.9,2.9]]){
@@ -366,19 +373,26 @@
       basket(-5.2,4.2,-.1,.66,.49,.64,false);book(-5.2,4.74,-.1,.35,.29,M.lavender,true);
       soft(-4.7,4.44,2.1,.75,.42,.65,M.wood);soft(-4.7,4.70,2.1,.76,.15,.66,M.cloth,true,.065);
     });
-    g.userData={
-      // 燈槽柔亮廚房與閣樓，瓶架和配方書層板補光、櫥腳消暗角；工作投光照備料檯，植物畫是閣樓焦點。
+    // 備料島燒瓶燈與廚房短層板，保留後窗右側的空牆。
+    flaskLamp(-4.45,2.05,-1.8,2.8636);
+    box(-2.725,2.84,-4.62,1.65,.12,.52,paleOakShade);box(-2.725,2.765,-4.338,1.65,.13,.035,paleOakShade);
+    for(const x of [-3.3,-2.15])box(x,2.65,-4.83,.06,.38,.07,M.copper);
+    Object.assign(g.userData,{
+      // 廚房燈槽與檯面下燈鋪暖光，瓶架三層標籤光最清楚，閣樓植物畫保留焦點。
       glow:[
         {kind:'cove',a:[-3.7,3.52,-4.88],b:[-1.3,3.52,-4.88],n:[0,1],c:'#f6f1e4'},
+        {kind:'under',a:[-3.45,2.768,-4.4],b:[-2,2.768,-4.4]},
         {kind:'under',a:[1.5,1.798,-3.515],b:[4.1,1.798,-3.515]},
-        {kind:'cove',a:[-.12,6.65,-2.95],b:[-.12,6.65,-1.5],n:[-1,0],c:'#fff2ce'},
-        {kind:'under',a:[-.47,6.148,1.2],b:[-.47,6.148,2.8]},
-        {kind:'kick',a:[-4.0,.12,-3.67],b:[-1.8,.12,-3.67],n:[0,1]},
-        {kind:'spot',p:[-2.55,3.7,-3.5],t:[-2.55,1.145,-4.15],r:.8},
-        {kind:'spot',p:[-6.7,8.0,2.9],t:[-4.9,6.35,4.735],r:.6}
+        {kind:'kick',a:[-4,0.12,-3.67],b:[-1.8,0.12,-3.67],n:[0,1]},
+        {kind:'cove',a:[-0.12,6.65,-2.95],b:[-0.12,6.65,-1.5],n:[-1,0],c:'#fff2ce'},
+        {kind:'under',a:[-0.47,6.148,1.2],b:[-0.47,6.148,2.8]},
+        {kind:'under',a:[1.5,1.048,-3.49],b:[3.6,1.048,-3.49]},
+        {kind:'under',a:[1.5,2.548,-3.515],b:[4.1,2.548,-3.515]},
+        {kind:'spot',p:[-2.55,3.7,-3.5],t:[-2.55,1.145,-4.15],r:0.8},
+        {kind:'spot',p:[-6.7,8,2.9],t:[-4.9,6.35,4.735],r:0.6}
       ],
       spawn:[-3.2,0,3.4,Math.PI],exit:[-3.2,4.85,.62],host:[-2,0,-.3,0],cols,sun:[.95,.9,.35],
-      lights:[[-3.2,3.1,.3,'#ffe3ba',1.3],[3.4,5.7,.2,'#ffdcac',1.7],[-3.2,6.9,1,'#ffe5bd',1.25],[-6.9,3.3,-2.4,'#ffe3ba',.8],[2.5,4.1,2.9,'#ffd6aa',.7],[5.7,3.1,-2.2,'#ffdfb4',.7]],
+      lights:[[-3.2,3.0375,0.3,'#ffd8ad',0.85,0.85],[-4.45,2.25,-1.8,'#ffd8ad',0.95,0.8],[-3.2,6.8375,1,'#ffd8ad',0.9,0.85],[-6.9,4.4875,-2.4,'#ffd8ad',0.8,0.8],[2.55,3.8635,2.9,'#ffd8ad',0.8,0.8],[5.7,2.975,-2.2,'#ffd8ad',0.8,0.8]],
       gifts:[[-3.5,0,.1,0],[-2,0,-2.1,0],[1.8,0,2.2,0],[-3.5,4.2,-.1,0],[-1,4.2,2,0]],
       spots:[
         {x:3.4,y:0,z:.7,r:1.15,kind:'study',label:'讀讀配方',name:'半圓果茶配方台',lines:['啵啵，先核對材料和標籤，再開始吧。','同樣體積的茶，糖量不同，濃度也不同。','我把用量記好了，一起試三個小問題。'],alone:['配方簿用粉、黃、綠三色分好欄位。','旁邊的量杯已經洗淨晾乾。']},
@@ -388,7 +402,7 @@
         {x:-3.25,y:4.2,z:2.8,r:1.1,kind:'look',label:'翻翻食譜',name:'山牆窗下的配方書桌',lines:['我把每次用量寫在這裡，連沒成功的也留。','比較味道前，水量和溫度要先固定。','這一圈杯痕，是我們聊天聊太久的記號。'],alone:['食譜夾著果茶色的書籤，字寫得圓圓的。','窗光落在一圈淡淡的茶杯痕上。']},
         {x:-1.55,y:4.2,z:.2,r:1.05,kind:'look',label:'看看乾香草',name:'閣樓的薄荷乾燥架',lines:['洗好的薄荷掛高一點，風比較走得過去。','水分慢慢離開，葉子的觸感也會改變。','收好今天的觀察，剩下時間陪你聊聊。'],alone:['薄荷束一束束掛好，下面的小盤接住碎葉。','便條寫著日期，也畫了一張開心的笑臉。']}
       ]
-    };
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

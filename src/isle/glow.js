@@ -3,37 +3,49 @@
    材質的著色器（engine.bend）在每個像素查自己那一格，逐盞用和 three.js 點光源同一套公式算漫射與高光：
    畫面裡看得到的每一扇窗、每一盞燈都真的照在牆面、地面、樹與角色身上——不再只有離鏡頭最近的 14 盞，
    也不必在地上鋪假的光斑。畫面外沒有像素，也就不用算；白天整段跳過。
-   燈籠、路燈與水晶另外有一團空氣中的光暈（加法混色），整個城鎮遠遠看也是一盞盞亮著的燈火。 */
+   燈籠、路燈與水晶另外有一團空氣中的光暈（加法混色），整個城鎮遠遠看也是一盞盞亮著的燈火。
+   v8.0 室外燈光設計：分層（月光的冷藍環境、步道低燈的動線光、廣場與地標的重點光、門窗的建築光）、明暗有節奏（光圈—暗—光圈），
+   有燈罩的燈只照光錐裡面（cone：光錐邊緣的 cos；axis：照射方向）——路燈與柱燈往下、樹的投光往上、窗光往外往下灑在窗台與地上，不再把整面牆洗白。 */
 import * as THREE from 'three';
 import { scene, camera, skyU, U, LGRID } from './engine.js';
 import { groundAt } from './terrain.js';
 
-/** 每種光源：顏色、強度（燭光）、照射距離、衰減、空氣光暈的大小（公尺） */
+/** 每種光源：顏色、強度（燭光）、照射距離、衰減、空氣光暈的大小（公尺）、光錐（cos，沒有就是四面發光） */
 const KIND = {
-  window:  { color: '#ffd39d', power: 3.5, range: 4.5, decay: 1.7, halo: 0 },   // 窗仍由 scan 自動登記；暖奶油光留在窗邊，不把整面牆洗白
-  lantern: { color: '#ffd39d', power: 2.8, range: 4.5, decay: 1.8, halo: 0.48 },
-  lamp:    { color: '#ffd39d', power: 6.4, range: 7.2, decay: 1.85, halo: 0.72 },
-  garden:  { color: '#ffd39d', power: 3.8, range: 5.5, decay: 1.9, halo: 0.58 },
-  crystal: { color: '#a99acb', power: 3.6, range: 7, decay: 1.6, halo: 0.85, day: 0.25 },
-  beacon:  { color: '#ffd39d', power: 21, range: 26, decay: 1.6, halo: 2.4 }
+  window:  { color: '#ffd4a3', power: 3.0, range: 4.2, decay: 1.8, halo: 0, cone: -0.3 },   // 窗仍由 scan 自動登記；光往外往下：照窗台、牆腳與門前的地，不洗白整面牆
+  lantern: { color: '#ffc58a', power: 2.3, range: 3.6, decay: 2, halo: 0.3, cone: -0.35 },   // 門邊的小燈籠：照門廊與台階
+  lamp:    { color: '#ffd09a', power: 5.8, range: 6.6, decay: 1.9, halo: 0.45, cone: -0.2 },   // 路燈：燈罩往下，地上一圈光，不照亮樹冠與二樓
+  garden:  { color: '#ffd39d', power: 2.6, range: 4.4, decay: 2, halo: 0.4 },
+  crystal: { color: '#a99acb', power: 2.4, range: 4.8, decay: 1.8, halo: 0.55, day: 0.12 },   // 奇幻的淡紫，不比暖色的動線亮
+  beacon:  { color: '#ffd09a', power: 9, range: 11, decay: 1.9, halo: 1.5 },   // 燈室：遠遠就認得出，塔身與海岸仍是冷暗的
+  bollard: { color: '#ffd09a', power: 1.9, range: 3.0, decay: 2, halo: 0.1, cone: 0.375 },   // 步道柱燈：高 0.6 公尺，出光口藏在帽下，地上一圈約 2.5 公尺的光
+  rail:    { color: '#ffd6a3', power: 2.4, range: 2.8, decay: 2, halo: 0, cone: 0 },   // 橋欄杆牆腳藏在小擋簷下的燈帶：照橋面
+  step:    { color: '#ffd6a3', power: 1.2, range: 2.2, decay: 2, halo: 0, cone: 0.3 },   // 階梯側牆的嵌燈：照下一階的踏面
+  uplight: { color: '#ffd3a0', power: 9, range: 7.5, decay: 2, halo: 0, cone: 0.8 },   // 樹的投光：從地面往上照亮樹冠下緣
+  accent:  { color: '#ffd7aa', power: 4, range: 4, decay: 2, halo: 0, cone: 0.78 },   // 地標的重點投光
+  festoon: { color: '#ffc789', power: 0.9, range: 4.0, decay: 2, halo: 0, cone: -0.3 },   // 串燈：一串小燈泡只配一兩個實光點
+  eave:    { color: '#ffd5a3', power: 1.0, range: 2.6, decay: 2, halo: 0, cone: 0.1 }   // 雨棚、簷下的短燈帶：照攤位的商品與門廊
 };
 const emitters = [];
-const HALO_TINT = new THREE.Color('#ebc2bc');
+const HALO_TINT = new THREE.Color('#ffd0a0');
 /** 每一格最多照幾盞（省電模式由 settings.js 設成 6） */
 export const setPool = n => { U.uLMax.value = n; };
 let dirty = true;
 /**
- * 登記一個發光點。o：{ x, y, z, kind, nx, nz（窗戶朝外的方向）, color, power（倍數）}。回傳記錄（給 unemit）。
+ * 登記一個發光點。o：{ x, y, z, kind, nx, nz（窗戶朝外的方向）, color, power（倍數）, axis（照射方向 [x, y, z]）, cone（光錐邊緣的 cos）}。回傳記錄（給 unemit）。
  * 窗戶的光源放在窗外一點的地方：光從窗口灑到門前的地上
  */
 export function emit(o) {
-  const k = KIND[o.kind] || KIND.lantern, e = { x: o.x, y: o.y, z: o.z, kind: o.kind, k, nx: o.nx || 0, nz: o.nz || 0, col: new THREE.Color(o.color || k.color), pw: o.power || 1 };
-  e.haloCol = e.col.clone().lerp(HALO_TINT, o.color || o.kind === 'crystal' ? 0 : 0.45);
+  const k = KIND[o.kind] || KIND.lantern, e = { x: o.x, y: o.y, z: o.z, kind: o.kind, k, nx: o.nx || 0, nz: o.nz || 0, col: new THREE.Color(o.color || k.color), pw: o.power ?? 1 };
+  e.haloCol = e.col.clone().lerp(HALO_TINT, o.color || o.kind === 'crystal' ? 0 : 0.2);
+  e.cone = o.cone ?? k.cone; if (e.cone != null) e.axis = new THREE.Vector3(...(o.axis || [e.nx * 0.75, -0.75, e.nz * 0.75])).normalize();   // 沒給方向：往下（窗與門燈往外往下）
   e.lx = e.x + e.nx * 0.55; e.lz = e.z + e.nz * 0.55; e.ly = e.y - (o.kind === 'window' ? 0.15 : 0);   // 光源的位置
   e.gy = groundAt(e.lx, e.lz);
   emitters.push(e); dirty = true; return e;
 }
 export function unemit(e) { const i = emitters.indexOf(e); if (i < 0) return; emitters.splice(i, 1); dirty = true; }
+/** 附近已經有的發光點（擺新燈具時避開：同一個地方不疊兩盞） */
+export const around = (x, z, r) => emitters.filter(e => Math.hypot(e.x - x, e.z - z) < r);
 const GRID = { cells: 0, maxPer: 0, dropped: 0 };
 /** 除錯：發光點的數量（依種類）與燈光格子的使用情形 */
 export const stats = () => emitters.reduce((m, e) => (m[e.kind] = (m[e.kind] || 0) + 1, m), { cells: GRID.cells, maxPerCell: GRID.maxPer, dropped: GRID.dropped });
@@ -76,11 +88,11 @@ export function scan(g, isGlass) {
 }
 
 /* ---------- 燈光格子：兩張浮點貼圖（engine.LGRID 的格式）----------
-   uLData：每盞燈兩列——(位置, 照射距離 + 100 × 窗戶朝向)、(顏色 × 強度, 衰減)
+   uLData：每盞燈三列——(位置, 照射距離 + 100 × 窗戶朝向 + 1000（有光錐）)、(顏色 × 強度, 衰減)、(照射方向, 光錐邊緣的 cos)
    uLGrid：每格 4 個像素 × 4 個通道 = 16 個燈的編號（+1，0 是空的），依在這一格的亮度由大到小排；在這一格幾乎看不出來的（比月光的 3% 還暗）不列 */
 const { s: GS, o: GO, n: GN, q: GQ, max: MAXE } = LGRID, MAXL = GQ * 4;
 const gridTex = new THREE.DataTexture(new Float32Array(GN * GQ * GN * 4), GN * GQ, GN, THREE.RGBAFormat, THREE.FloatType);
-const dataTex = new THREE.DataTexture(new Float32Array(MAXE * 2 * 4), MAXE, 2, THREE.RGBAFormat, THREE.FloatType);
+const dataTex = new THREE.DataTexture(new Float32Array(MAXE * 3 * 4), MAXE, 3, THREE.RGBAFormat, THREE.FloatType);
 [gridTex, dataTex].forEach(t => { t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; });
 U.uLGrid.value = gridTex; U.uLData.value = dataTex;
 /** 和著色器的 getDistanceAttenuation 一樣（three.js 的點光源衰減） */
@@ -91,8 +103,9 @@ function buildGrid() {
   GRID.dropped = Math.max(0, emitters.length - MAXE);
   list.forEach((e, i) => {
     const pw = e.k.power * e.pw, win = e.nx || e.nz, R = e.k.range;
-    D.set([e.lx, e.ly, e.lz, R + 100 * (e.nx > 0 ? 1 : e.nx < 0 ? 2 : e.nz > 0 ? 3 : e.nz < 0 ? 4 : 0)], i * 4);
+    D.set([e.lx, e.ly, e.lz, R + 100 * (e.nx > 0 ? 1 : e.nx < 0 ? 2 : e.nz > 0 ? 3 : e.nz < 0 ? 4 : 0) + (e.axis ? 1000 : 0)], i * 4);
     D.set([e.col.r * pw, e.col.g * pw, e.col.b * pw, e.k.decay], (MAXE + i) * 4);
+    if (e.axis) D.set([e.axis.x, e.axis.y, e.axis.z, e.cone], (MAXE * 2 + i) * 4);
     const h = Math.max(e.ly - e.gy, 0) * 0.7, Ln = e.lx * e.nx + e.lz * e.nz;
     const c0 = Math.max(0, Math.floor((e.lx - R - GO) / GS)), c1 = Math.min(GN - 1, Math.floor((e.lx + R - GO) / GS));
     const r0 = Math.max(0, Math.floor((e.lz - R - GO) / GS)), r1 = Math.min(GN - 1, Math.floor((e.lz + R - GO) / GS));
@@ -100,7 +113,9 @@ function buildGrid() {
       const x0 = GO + cx * GS, z0 = GO + cz * GS, dx = Math.max(x0 - e.lx, 0, e.lx - x0 - GS), dz = Math.max(z0 - e.lz, 0, e.lz - z0 - GS), dmin = Math.hypot(dx, dz);
       if (dmin >= R) continue;
       if (win) { const maxPn = e.nx > 0 ? x0 + GS : e.nx < 0 ? -x0 : e.nz > 0 ? z0 + GS : -z0; if (Ln - maxPn > 0.85) continue; }   // 整格都在牆後
-      const imp = pw * atten(Math.max(Math.hypot(dmin, h), 0.3), R, e.k.decay); if (imp < 0.03) continue;   // 在這一格最亮也不到月光的 3%：看不出來
+      let imp = pw * atten(Math.max(Math.hypot(dmin, h), 0.3), R, e.k.decay);
+      if (e.axis) { const c = (dmin * Math.hypot(e.axis.x, e.axis.z) - h * e.axis.y) / (Math.hypot(dmin, h) || 1); imp *= Math.max(THREE.MathUtils.smoothstep(c, e.cone, e.cone + (1 - e.cone) * 0.45), 0.15); }   // 地面在光錐外的格子排後面（牆面仍可能照到，不整個剔掉）
+      if (imp < 0.03) continue;   // 在這一格最亮也不到月光的 3%：看不出來
       const k = cz * GN + cx; let a = cells.get(k); if (!a) cells.set(k, a = []);
       a.push([imp, i + 1]);
     }
@@ -153,6 +168,6 @@ export function update(dt, target, show) {
   haloMat.uniforms.uScale.value = camera.projectionMatrix.elements[5] * innerHeight * 0.5;   // 世界大小 → 畫面像素（和透視一樣）
   if (Math.abs(lit - lastLit) < 0.002) return; lastLit = lit;
   const list = halos.userData.list, C = halos.geometry.attributes.aCol;
-  for (let i = 0; i < list.length; i++) { const e = list[i], on = Math.max(lit, (e.k.day || 0) * 0.6) * 0.3; C.setXYZ(i, e.haloCol.r * on, e.haloCol.g * on, e.haloCol.b * on); }
+  for (let i = 0; i < list.length; i++) { const e = list[i], on = Math.max(lit, (e.k.day || 0) * 0.6) * 0.24; C.setXYZ(i, e.haloCol.r * on, e.haloCol.g * on, e.haloCol.b * on); }
   C.needsUpdate = true;
 }

@@ -8,7 +8,7 @@
      host [x, y, z, ry]         主人在家時站的位置
      spots [{ x, y, z, r, kind, label, name, lines, alone }]   kind：'study'（複習三題）、'look'（說一句這家的小故事）、'hook:名稱'（主程式的專用互動）
      gifts [[x, y, z, ry]]      送給主人的家具擺在這些位置（每格至少 1×1 公尺的空地）
-     lights [[x, y, z, 色碼?, 強度倍率?]]   暖色點光，最多 6 盞
+     lights [[x, y, z, 色碼?, 強度倍率?, 光暈?]]   暖色點光，最多 6 盞（光暈大小預設 1；有燈罩的燈給小一點，0 是不要光暈）
      sun [x, y, z]              白天主光（從屋外照進窗戶）的方向，預設前右上方
      cols [[x0, y0, z0, x1, y1, z1]]   額外的碰撞箱
      decor { x, y, z }          玩家家：「我的房間」8 × 8 公尺地板的中心（玩家的家具照存檔的格子擺在這裡，牆與地板標 paper 的換成玩家選的壁紙地板）
@@ -222,9 +222,9 @@ function fxEnter() {
     return { l, w, a: Math.min(w.w * w.h, 4) };
   });
   // 燈的光暈（暖色、晚上比較大比較亮）
-  FX.halos = (cur.ud.lights || []).slice(0, 6).map(([x, y, z, c]) => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(c || '#ffd6a0'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-    s.position.set(x, y, z); s.renderOrder = 6; scene.add(s); extra.push(s); return s;
+  FX.halos = (cur.ud.lights || []).slice(0, 6).filter(l => l[5] !== 0).map(([x, y, z, c, , h]) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(c || '#ffd6a0').multiply(WARM), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    s.position.set(x, y, z); s.renderOrder = 6; s.userData.h = h ?? 1; scene.add(s); extra.push(s); return s;
   });
   scene.fog = new THREE.Fog('#bfa9b2', 8, 60);
 }
@@ -241,9 +241,9 @@ function fxTick(dt, t, n, gold) {
   dustU.uScale.value = camera.projectionMatrix.elements[5] * renderer.domElement.height * 0.5;
   _c.copy(skyU.mid.value).lerp(skyU.bot.value, 0.5).lerp(_c2.set('#fff0dc'), 0.55);   // 天光：當下天色、帶暖（屋裡的牆與木頭把天光反射成暖色）
   FX.sky.forEach(({ l, w, a }) => { const sunK = Math.max(0, w.out.dot(FX.sd)); l.color.copy(_c).lerp(_c2.set('#ffd9b0'), sunK * 0.4 * day); l.intensity = a * (day * (5.6 + sunK * 3.4 + gold * 1.2) + n * 0.4); });
-  FX.halos.forEach((s, i) => { const k = 0.35 + n * 0.65, fl = 1 + Math.sin(t * 2.3 + i * 1.7) * 0.03 * n; s.material.opacity = (0.22 + n * 0.5) * fl; s.scale.setScalar((0.9 + k * 0.7) * fl); });
+  FX.halos.forEach((s, i) => { const k = 0.35 + n * 0.65, fl = 1 + Math.sin(t * 2.3 + i * 1.7) * 0.03 * n; s.material.opacity = (0.22 + n * 0.5) * fl; s.scale.setScalar((0.9 + k * 0.7) * fl * s.userData.h); });
   // 屋裡的空氣：只有大房子的深處微微泛霧；霧色是屋裡散射光的亮度（中間調），不會把遠處洗成一片亮白
-  if (scene.fog) { scene.fog.color.set(n > 0.5 ? '#2a2442' : '#bfa9b2').lerp(_c.set('#c9a593'), gold * day * 0.6); scene.fog.near = 8 + n * 4; scene.fog.far = 60 + n * 16; }
+  if (scene.fog) { scene.fog.color.set(n > 0.5 ? '#3a2d2e' : '#bfa9b2').lerp(_c.set('#c9a593'), gold * day * 0.6); scene.fog.near = 8 + n * 4; scene.fog.far = 60 + n * 16; }
 }
 /* ---------- v7.9 燈光設計：分層照明與間接照明 ----------
    照室內設計的原則：至少三層光——環境光（吊燈、燈槽打上天花板的間接光）、任務光（書桌與工作台）、重點光（照亮這家最有故事的一面牆或櫃子）；
@@ -257,7 +257,7 @@ function fxTick(dt, t, n, gold) {
      { kind: 'spot',  p: [x, y, z], t: [x, y, z], r? }   重點投射燈：p 燈在天花板或樑下，t 照的中心（畫、書櫃、黑板），r 光圈半徑（預設 0.9 公尺）
    燈帶是面光源（RectAreaLight：照度隨面積、距離與角度自然變化，不投影）＋一條發亮的燈條（被擋板或櫃子擋住）。 */
 RectAreaLightUniformsLib.init();
-const GLOW = { col: new THREE.Color('#ffd0a0'), spot: new THREE.Color('#ffdcb2'), k: { cove: 13, wash: 9, under: 24, kick: 18 }, rects: [8, 6, 3][LEVEL], spots: [2, 2, 1][LEVEL] };
+const GLOW = { col: new THREE.Color('#ffc690'), spot: new THREE.Color('#ffcf9c'), k: { cove: 13, wash: 9, under: 24, kick: 18 }, rects: [8, 6, 3][LEVEL], spots: [2, 2, 1][LEVEL] };   // v8.0：燈帶與投射燈再暖一點（2700K）
 const stripMat = new THREE.MeshBasicMaterial({ color: GLOW.col.clone() }), stripDim = stripMat.clone();   // 燈條：顏色超過 1（HDR），泛光會讓它微微發亮
 const _gx = new THREE.Vector3(), _gy = new THREE.Vector3(), _gz = new THREE.Vector3(), _gm = new THREE.Matrix4(), UPV = new THREE.Vector3(0, 1, 0);
 /** 一個物件的朝向：本地 x 沿著 t（燈帶方向），本地 -z 朝著 d（光照出去的方向） */
@@ -277,7 +277,7 @@ function glowEnter() {
       const d = t.clone().sub(p).normalize(), side = Math.abs(d.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : UPV.clone().cross(d);
       glowBox(0.12, 0.12, 0.2, kit.mat('#4a4150', { metalness: 0.6, roughness: 0.4 }, 'metal'), p.clone().addScaledVector(d, -0.04), side, d);   // 小小的投射燈罩（燈泡藏在罩子裡，從旁邊看不到）
       glowBox(0.08, 0.08, 0.01, stripMat, p.clone().addScaledVector(d, 0.065), side, d);
-      FX.glow.push({ l, k: 5 * dist * dist });   // 照到的地方比四周亮幾倍、但不會把淺色的畫照成一片白（照度 = 強度 ÷ 距離²）：這家的視覺焦點
+      FX.glow.push({ l, k: 4 * dist * dist });   // 照到的地方比四周亮幾倍、但不會把淺色的畫照成一片白（照度 = 強度 ÷ 距離²）：這家的視覺焦點
       continue;
     }
     if (nr >= GLOW.rects || !GLOW.k[f.kind]) continue; nr++;
@@ -305,7 +305,8 @@ function glowTick(n) {
 }
 const _c = new THREE.Color(), _c2 = new THREE.Color();
 const glassMat =new THREE.MeshStandardMaterial({ color: '#eef6ff', transparent: true, opacity: 0.18, roughness: 0.08, metalness: 0, depthWrite: false });
-const lampMats = new Set();
+const lampMats = new Set(), shadeMats = new Set();
+const WARM = new THREE.Color('#ffe8cc');   // v8.0 2700K 的濾色：資料檔寫的燈色多半是奶油白（#ffe0b0），晚上整間看起來是偏冷的白光；乘上它變成琥珀色的暖光
 /** 給室內模型用的工具（和住宅外觀的 kit 同一套材質：同色同參數共用；匯出給檢查工具直接建室內） */
 export const kit = {
   mat: (c, o, k) => M(c, o, k),
@@ -313,6 +314,8 @@ export const kit = {
   view: () => viewMat,
   glass: () => glassMat,
   lamp: c => { const m = M(c || '#ffd9a0', { emissive: new THREE.Color(c || '#ffcf8a'), emissiveIntensity: 1.1 }); lampMats.add(m); return m; },
+  /** 透光的燈罩（布、紙、霧玻璃）：晚上燈罩本身透出一層暖光，看得到光、看不到燈泡 */
+  shade: c => { const m = M(c || '#f6e6cc', { emissive: new THREE.Color(c || '#f6e6cc').multiply(WARM).multiply(WARM), emissiveIntensity: 0, roughness: 0.9, side: THREE.DoubleSide }, 'fabric'); shadeMats.add(m); return m; },
   furn: id => { const f = furn(id); return f ? buildFurniture(f) : null; },
 };
 
@@ -361,7 +364,7 @@ function placeDecor(dec) {
     m.position.set(x, D.y + (f.cat === 'rug' ? 0.001 : 0), z); m.rotation.y = -it.r * Math.PI / 2; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
     scene.add(m); decorObjs.push(m);
     if (f.cat !== 'rug') { m.updateMatrixWorld(true); decorCols.push(new THREE.Box3().setFromObject(m)); decorSpots.push({ x, y: D.y, z, r: Math.max(w, d) / 2 + 0.85, kind: 'furn', label: f.cat === 'bed' ? '睡一覺' : '查看家具', item: it }); }
-    if (f.light && nl < 6) { const l = new THREE.PointLight('#ffd9a0', 1, 0, 2); l.position.set(x, D.y + 1.6, z); l.userData.k = f.light * 0.8; scene.add(l); decorObjs.push(l); nl++; }
+    if (f.light && nl < 6) { const l = new THREE.PointLight(new THREE.Color('#ffd9a0').multiply(WARM), 1, 0, 2); l.position.set(x, D.y + 1.6, z); l.userData.k = f.light * 0.8; scene.add(l); decorObjs.push(l); nl++; }
   });
   decorSpots.push({ x: D.x, y: D.y, z: D.z + 3.3, r: 1.2, kind: 'hook:decor', label: '佈置房間' });
 }
@@ -377,7 +380,7 @@ export function enter(key, opt = {}) {
   try { cur = build(key); } catch (e) { console.warn('室內建立失敗：' + key, e); return false; }
   const { g, ud } = cur; scene.add(g);
   extraCols.length = 0;
-  (ud.lights || []).slice(0, 6).forEach(([x, y, z, c, k]) => { const l = new THREE.PointLight(c || '#ffd6a0', 1, 0, 2); l.position.set(x, y, z); l.userData.k = k || 1; scene.add(l); extra.push(l); });
+  (ud.lights || []).slice(0, 6).forEach(([x, y, z, c, k]) => { const l = new THREE.PointLight(new THREE.Color(c || '#ffd6a0').multiply(WARM), 1, 0, 2); l.position.set(x, y, z); l.userData.k = k || 1; scene.add(l); extra.push(l); });
   (opt.gifts || []).slice(0, (ud.gifts || []).length).forEach((f, i) => {
     const s = ud.gifts[i], m = buildFurniture(f); m.position.set(s[0], s[1], s[2]); m.rotation.y = s[3] || 0; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
     scene.add(m); extra.push(m); m.updateMatrixWorld(true); if (f.cat !== 'rug') extraCols.push(new THREE.Box3().setFromObject(m));
@@ -505,12 +508,13 @@ export function tick(dt, t, o) {
   /* v7.8 真實的室內光：屋裡沒有均勻打亮的補光——光從窗戶（天光與直射進來的陽光）和燈來，照度隨距離平方衰減，
      離窗、離燈越遠越暗，角落與屋子深處自然暗下來；只留一點點四處反彈的光（亮面偏暖、背光面與桌底是薰衣草色） */
   const day = 1 - n;
-  hemi.color.set(n > 0.5 ? '#9a92d0' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#3e3558' : '#a893b8');
-  hemi.intensity = 0.22 * day + 0.15 * n; fill.intensity = 0.1 * day + 0.04 * n; fill.color.set(n > 0.5 ? '#c8c4f0' : '#ffdfd0');
+  hemi.color.set(n > 0.5 ? '#d2b296' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#4a3a3c' : '#a893b8');   // v8.0：晚上四處反彈的是燈的暖光（月光只從窗戶進來）
+  hemi.intensity = 0.22 * day + 0.15 * n; fill.intensity = 0.1 * day + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0');
   sun.intensity = day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b9c0ff' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
   scene.background.set(n > 0.5 ? '#1d1a34' : '#cbb8de');
   extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光
-  lampMats.forEach(m => { m.emissiveIntensity = 0.8 + n * 1.1; });
+  lampMats.forEach(m => { m.emissiveIntensity = 0.6 + n * 0.6; });   // v8.0：燈泡與擴散片收一點（以前晚上 1.9，泛光把小小的擴散片暈成一片白）
+  shadeMats.forEach(m => { m.emissiveIntensity = 0.04 + n * 0.3; });   // 透光的燈罩：晚上透出一層琥珀色的光
   viewMat.uniforms.uNight.value = n;
   envTick(dt, n, gold);   // 窗外的全景：天色變了就重拍（在擺好室內鏡頭之前，拍完鏡頭已還原）
   fxTick(dt, t, n, gold);

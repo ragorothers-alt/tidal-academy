@@ -18,7 +18,7 @@
       iron:kit.mat('#3d4a6b',{roughness:.36,metalness:.8},'metal'), bambooWood:kit.mat('#94a773',{},'wood'),
       whitePetal:kit.mat('#fff0cf',{},'foliage'), pollen:kit.mat('#b99a61',{},'foliage'), inkStone:kit.mat('#2d2f35',{},'stone'),
       brush:kit.mat('#fff0cf',{},'fabric'), artGrey:kit.mat('#a5a5b0',{},'paper'), seal:kit.mat('#ab645d',{},'stone'),
-      lamp:kit.lamp('#ffd9a0')
+      shade:kit.shade('#fff0cf'), lanternShade:kit.shade('#ffd9a0'), lamp:kit.lamp('#ffd9a0')
     };
     // Repeated ceramics, scroll ends and leaf clusters share immutable primitive geometry.
     const primitiveCache=new Map();
@@ -98,7 +98,7 @@
       const o=add(geo,P.floor,0,0,0,{walk:true});o.visible=false;return len;
     }
     function paperLamp(x,y,z){
-      const o=add(sph(.29,12,8),P.lamp,x,y,z);o.scale.set(1,1.2,1);
+      const o=add(sph(.29,12,8),P.lanternShade,x,y,z);o.scale.set(1,1.2,1);add(sph(.055,8,6),P.lamp,x,y,z);
       for(const dy of [-.31,.31])add(cyl(.12,.12,.06,8),P.timber,x,y+dy,z);
       for(const yy of [-.17,0,.17]){const q=add(tor(.29*Math.sqrt(1-(yy/.36)**2),.011,4,20),P.cedar,x,y+yy,z);q.rotation.x=Math.PI/2;}
       const ceiling=y<3?3.48:topY(Math.min(1,Math.abs(x)/6.8))-.2;
@@ -318,7 +318,7 @@
     // Hanging poem cloths have dark borders, tassels and a pair of bamboo stem motifs.
     for(const x of [-5.8,-4.3,-2.8])for(const dx of [-.29,.29]){rod([x+dx,1.15,7.77],[x+dx,.92,7.77],.012,P.brass,5);add(cone(.045,.16,5),P.roof,x+dx,.85,7.77);}
     for(const x of [-.6,.6]){rod([x+.05,2.85,5.95],[x+.05,2.45,5.95],.012,P.brass,4);soft(x,2.05,5.94,.55,1.05,.04,P.roof,.02);for(let j=0;j<4;j++)b(x,1.65+j*.25,5.91,.32,.025,.018,P.linen);}
-    [[-3.3,2.7,2.4],[-3.6,2.7,-3.6],[-2.1,6.45,2.45],[2.9,6.45,-3.35],[5,6.35,.4],[-4.3,2.7,7.05]].forEach(p=>paperLamp(...p));
+    [[-3.3,2.7,2.4],[-3.6,2.7,-3.6],[-4.3,2.7,7.05]].forEach(p=>paperLamp(...p));
 
     // Third pass: connected poetry, tea and reading vignettes occupy the room itself.
     // The central north/south aisle, every interaction and all five gift squares stay open.
@@ -414,22 +414,34 @@
     soft(-2.4,.17,-2.15,.85,.34,.8,P.cloth,.1);
     soft(-3.25,.17,-3.8,.6,.34,.9,P.roof,.1);
     b(-2.4,.346,-2.15,.58,.012,.035,P.linen);b(-3.25,.346,-3.8,.35,.012,.035,P.linen);
-    g.userData={
-      // 環境用茶廳與月室洗牆，藏書層板和筆洗、書法案補任務光，山月詩畫為重點，茶座與床沿留柔和地光。
+    // 紙罩檯燈立在既有桌面，樓梯下留小紙燈。
+    function deskPaperLamp(bx,baseY,bz,x,y,z,s=1){
+      add(cyl(.15*s,.17*s,.045*s,16),P.timber,bx,baseY,bz);add(cyl(.105*s,.105*s,.014*s,16),P.brass,bx,baseY+.03*s,bz);
+      rod([bx,baseY+.03*s,bz],[bx,y+.22*s,bz],.018*s,P.brass,10);rod([bx,y+.22*s,bz],[x,y+.22*s,z],.018*s,P.brass,10);rod([x,y+.22*s,z],[x,y+.12*s,z],.014*s,P.brass,10);
+      add(cyl(.13*s,.235*s,.25*s,16,1,true),P.shade,x,y,z);add(cyl(.13*s,.13*s,.016*s,16),P.brass,x,y+.125*s,z);
+      for(const [dy,r] of [[-.125,.235],[.125,.13]]){const o=add(tor(r*s,.012*s,5,24),P.brass,x,y+dy*s,z);o.rotation.x=Math.PI/2;}
+      add(sph(.04*s,8,6),P.lamp,x,y,z);
+    }
+    function cabinetLamp(x,y,z){
+      b(x,y-.32,z,.42,.06,.38,P.timber);b(x,y-.275,z,.34,.03,.30,P.brass);b(x,y,z,.36,.43,.32,P.lanternShade);add(sph(.055,8,6),P.lamp,x,y,z);
+      for(const dx of [-.19,.19])for(const dz of [-.17,.17])b(x+dx,y,z+dz,.018,.48,.018,P.brass);
+      for(const dy of [-.24,.24])b(x,y+dy,z,.41,.025,.37,P.timber);
+      const h=add(tor(.06,.012,6,16),P.brass,x,y+.28,z);h.scale.y=.65;
+    }
+    deskPaperLamp(2.97,.74,-1.72,2.93,1.30,-1.72,.85);deskPaperLamp(4.34,4.74,-4.22,3.94,5.38,-4.22);
+    cabinetLamp(5.8,1.23,.22);b(2.06,.731,-1.30,.75,.012,.55,P.paper);
+    Object.assign(g.userData,{
+      // 山月掛軸是焦點，短層板補光，床與沙發底保持暗部。
       glow:[
-        {kind:'wash',a:[-7.9,3.23,-4.9],b:[-7.9,3.23,-3.9],n:[1,0],c:'#79614b'},
-        {kind:'under',a:[-6.1,2.55,-5.065],b:[-3,2.55,-5.065]},
-        {kind:'wash',a:[-6.38,6.9,-2.7],b:[-6.38,6.9,-1.4],n:[1,0],c:'#79614b'},
-        {kind:'under',a:[1.65,2.705,-5.78],b:[5.1,2.705,-5.78]},
-        {kind:'under',a:[-5.8,6.35,-4.065],b:[-3.2,6.35,-4.065]},
-        {kind:'kick',a:[.8,.11,1.775],b:[2.2,.11,1.775],n:[0,1]},
-        {kind:'kick',a:[-5.95,3.91,-.45],b:[-4.55,3.91,-.45],n:[0,1]},
-        {kind:'spot',p:[-6.7,3.4,-3.1],t:[-7.91,2.1,-3.1],r:.95},
-        {kind:'spot',p:[2.7,7.85,-3.5],t:[2.15,4.75,-3.95],r:.8}
+        {kind:'spot',p:[-1.1,3.38,-4.25],t:[-1.1,2,-5.91],r:.68},
+        {kind:'under',a:[2.35,2.705,-5.78],b:[4.15,2.705,-5.78]},
+        {kind:'cove',a:[-7.82,2.95,-4.9],b:[-7.82,2.95,-3.9],n:[1,0],c:'#79614b'},
+        {kind:'under',a:[-5.65,2.55,-5.065],b:[-3.85,2.55,-5.065]},
+        {kind:'under',a:[-5.3,6.35,-4.065],b:[-3.7,6.35,-4.065]}
       ],
       spawn:[2.8,0,4.3,Math.PI],exit:[2.8,5.7,.6],host:[-.8,0,-1.5,.4],cols,
       gifts:[[.9,0,2.6,0],[-.7,0,-4,0],[-6.9,0,.2,0],[.5,3.8,-1.2,0],[-4.4,3.8,.2,0]],
-      lights:[[-3.3,2.7,2.4,'#ffd9a0',1.2],[-3.6,2.7,-3.6,'#ffd9a0',1.1],[-2.1,6.45,2.45,'#ffe0ad',1.3],[2.9,6.45,-3.35,'#ffd9a0',1.2],[5,6.35,.4,'#ffd9a0',1],[-4.3,2.7,7.05,'#ffd9a0',1.1]],sun:[-.15,.65,1],
+      lights:[[-3.3,2.7,2.4,'#ffd9a0',.9,.6],[-3.6,2.7,-3.6,'#ffd9a0',1,.6],[2.93,1.3,-1.72,'#ffd9a0',.55,.35],[3.94,5.38,-4.22,'#ffd9a0',.6,.35],[5.8,1.23,.22,'#ffd9a0',.85,.4],[-4.3,2.7,7.05,'#ffd9a0',.8,.6]],sun:[-.15,.65,1],
       spots:[
         {x:-.85,y:0,z:2.4,r:1.1,kind:'look',label:'坐看茶煙',name:'留白茶席',lines:['喵……水還沒滾，先陪我等一會兒。','茶煙升起來，很像一句還沒寫完的詩。','留一點空白，話才有地方慢慢落下。'],alone:['茶席留著一只空杯，杯口朝向窗邊。','淡淡茶香停在竹編席上。']},
         {x:-4.6,y:0,z:-3.6,r:1.1,kind:'look',label:'讀讀詩箋',name:'山月詩箋與藏書',lines:['喵……我把喜歡的句子，抄在這裡。','同一個月字，放進不同句子就有不同心情。','你也可以挑一句，留給今天的自己。'],alone:['紙上有山、有月，角落鈐著小小的朱印。','書脊旁夾了一張寫到一半的詩箋。']},
@@ -437,7 +449,7 @@
         {x:-2.1,y:3.8,z:.7,r:1.2,kind:'look',label:'望望月窗',name:'新月格柵與觀月茶席',lines:['喵……窗框把天空留成了一輪月。','借景也像寫詩，選好邊界，意思就不同了。','今晚若有風，就讓它替我翻一頁。'],alone:['一弧木格柵收住窗景，另一半留給天空。','茶桌上的書翻到一頁寫著月的短詩。']},
         {x:1.1,y:3.8,z:-1.7,r:1.15,kind:'study',label:'展卷讀字',name:'墨言的書法案',lines:['喵……先讀懂這一句，再挑答案。','字音拿不準時，試著想想它在句裡的意思。','不用急，文字會把線索留在前後。'],alone:['宣紙上壓著毛筆，旁邊放著一本國文手札。','一枚朱印旁寫著：讀句，也讀前後。']}
       ]
-    };
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

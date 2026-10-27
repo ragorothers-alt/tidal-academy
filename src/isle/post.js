@@ -141,7 +141,7 @@ const COMP = new THREE.ShaderMaterial({
         c = mix(c, fcol, fa);
       }
       // 泛光：白天輕、黃金時段與夜晚（燈光）較強；b1 是貼著光源的柔光、b2 是寬廣的光暈
-      c += texture2D(b1, vUv).rgb * (0.06 + g * 0.03 + night * 0.04) + texture2D(b2, vUv).rgb * (0.11 + g * 0.045 + night * 0.075);   // v7.6 夢幻風：亮邊與小光源柔化，寬光暈克制（城堡不白化）   // v7.4：黃金時段的寬光暈少一點（0.16 → 0.09）：太陽常在城堡後面，整片暈開會蓋掉塔群
+      c += texture2D(b1, vUv).rgb * (0.06 + g * 0.03 + night * 0.03) + texture2D(b2, vUv).rgb * (0.11 + g * 0.045 + night * 0.025);   // v8.0：夜裡的燈清楚、不泛成一片霧（寬光暈 0.185 → 0.135）   // v7.6 夢幻風：亮邊與小光源柔化，寬光暈克制（城堡不白化）   // v7.4：黃金時段的寬光暈少一點（0.16 → 0.09）：太陽常在城堡後面，整片暈開會蓋掉塔群
       // 逆光光束
       c += texture2D(rays, vUv).rgb * sunCol * (0.22 + g * 0.3) * vis * clear;   // v7.6：0.45 → 0.3，清出城堡尖塔與拱橋   // v7.4：黃金時段的光束收一點（0.85 → 0.45）：只讀得到兩三道大方向，城堡不被光幕洗白
       // 太陽光暈：大片暖色霧光＋亮核＋鏡頭光斑
@@ -251,7 +251,7 @@ export function render(time, sc0, cam0) {
     } else { renderer.setRenderTarget(main); renderer.render(scene, camera); }
     const aspect = w / h, g = fx.golden * fx.clear;
     // 泛光
-    PRE.uniforms.tex.value = src.texture; PRE.uniforms.px.value.set(1 / w, 1 / h); PRE.uniforms.thr.value = 1.14 - g * 0.08 - fx.night * 0.18; PRE.uniforms.knee.value = 0.5; pass(PRE, pre);   // v7.6：黃金時段門檻不再壓那麼低（整片暈開）
+    PRE.uniforms.tex.value = src.texture; PRE.uniforms.px.value.set(1 / w, 1 / h); PRE.uniforms.thr.value = 1.14 - g * 0.08 - fx.night * 0.1; PRE.uniforms.knee.value = 0.5; pass(PRE, pre);   // v7.6：黃金時段門檻不再壓那麼低（整片暈開）
     let s = pre; for (const m of mips) { DOWN.uniforms.tex.value = s.texture; DOWN.uniforms.px.value.set(1 / s.width, 1 / s.height); pass(DOWN, m); s = m; }
     for (let i = mips.length - 1; i > 0; i--) { const a = mips[i], b = mips[i - 1]; UP.uniforms.tex.value = a.texture; UP.uniforms.px.value.set(1 / a.width, 1 / a.height); UP.uniforms.k.value = 0.85; pass(UP, b, true); }
     // 景深用的模糊版本：半解析度與四分之一解析度各模糊一次

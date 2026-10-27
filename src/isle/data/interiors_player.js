@@ -18,7 +18,8 @@
       ceramic: kit.mat('#fff0cf', {}, 'ceramic'), tea: kit.mat('#4b342d', {}, 'ceramic'), lilacGlaze: kit.mat('#ac88c5', {}, 'ceramic'),
       leaf: kit.mat('#8c9d61', {}, 'foliage'), petal: kit.mat('#ac88c5', {}, 'foliage'), pinkPetal: kit.mat('#e3a0b9', {}, 'foliage'), whitePetal: kit.mat('#fff0cf', {}, 'foliage'), pollen: kit.mat('#d4aa59', {}, 'foliage'),
       paper: kit.mat('#fff0cf', {}, 'paper'), blue: kit.mat('#8dafbd', {}, 'paper'), artLilac: kit.mat('#ac88c5', {}, 'paper'), artPink: kit.mat('#e3a0b9', {}, 'paper'),
-      glow: kit.lamp('#ffd9a0'), fire: kit.lamp('#ff9a4a').clone(), fireCore: kit.lamp('#ffd15b').clone(), fireInner: kit.lamp('#ffe7a0').clone()
+      shade: kit.shade('#fff0da'), lilacMetal: kit.mat('#ac88c5', { roughness:.8 }, 'metal'),
+      glow: kit.lamp('#ffd8ad'), fire: kit.lamp('#ff9a4a').clone(), fireCore: kit.lamp('#ffd15b').clone(), fireInner: kit.lamp('#ffe7a0').clone()
     };
     // Flame-only copies keep their colour at night instead of inheriting the lantern brightness boost.
     for(const [mat,k] of [[m.fire,.65],[m.fireCore,.85],[m.fireInner,1]]){mat.color.set('#000000');mat.emissiveIntensity=k;}
@@ -81,11 +82,18 @@
       for(let k=0;k<=n;k++){const x=a[0]+(b[0]-a[0])*k/n,z=a[1]+(b[1]-a[1])*k/n;box(x,y+.52,z,.075,1.04,.075,m.honey);}
       const dx=Math.abs(b[0]-a[0]),dz=Math.abs(b[1]-a[1]);box((a[0]+b[0])/2,y+.55,(a[1]+b[1])/2,dx+.09,1.1,dz+.09,m.honey,{solid:true}).visible=false;
     }
-    function lamp(x,y,z) {
-      box(x,y,z,.26,.4,.26,m.glow);for(const dx of [-.18,.18])for(const dz of [-.18,.18])beam([x+dx,y-.26,z+dz],[x+dx,y+.24,z+dz],.025,m.gold);
-      box(x,y-.25,z,.43,.06,.43,m.oak);mesh(new THREE.ConeGeometry(.33,.23,4),m.honey,x,y+.39,z).rotation.y=Math.PI/4;
-      const ceiling=y<4?3.65:Math.abs(z)>8?y+.9:x>5.4&&Math.abs(z)<1.5?8.7-Math.abs(z)*.43:11.65-Math.abs(x)*.525;
-      beam([x,y+.5,z],[x,ceiling,z],.022,m.dark);
+    function shade(x,y,z,r=.30) {
+      mesh(new THREE.CylinderGeometry(r*.3,r,.30,16,1,true),m.shade,x,y+.09,z);
+      mesh(new THREE.CylinderGeometry(Math.min(r*.74,.16),Math.min(r*.74,.16),.016,16),m.glow,x,y+.03,z);
+      for(let j=0;j<12;j++){const a=j*Math.PI/6;ball(x+r*.943*Math.cos(a),y-.04,z+r*.943*Math.sin(a),.042,m.shade,.55);}
+    }
+    function lamp(x,y,z,top) {
+      shade(x,y,z);mesh(new THREE.CylinderGeometry(.07,.09,.08,10),m.gold,x,y+.26,z);beam([x,y+.26,z],[x,top,z],.018,m.dark);box(x,top-.018,z,.14,.035,.14,m.gold);
+    }
+    function floorLamp(x,y,z) {
+      mesh(new THREE.CylinderGeometry(.16,.18,.06,20),m.lilacMetal,x-.08,.035,z,{solid:true});
+      beam([x-.08,.065,z],[x-.08,y,z],.022,m.lilacMetal).userData.solid=true;
+      beam([x-.08,y,z],[x,y+.09,z],.022,m.lilacMetal);shade(x,y,z);
     }
     function pot(x,y,z,s=1) {
       mesh(new THREE.CylinderGeometry(.28*s,.2*s,.4*s,8),m.ceramic,x,y+.2*s,z);
@@ -427,24 +435,26 @@
     fern(-6.4,4,-5.8,.9);fern(-7.15,4,3.2,.85);
     // Balcony planting is above the walking envelope; the two-metre circuit stays passable.
     for(const z of [-9.6,9.6])for(const x of [-6,-2.8,3.2,6.2])flowerBox(x,5.9,z,1.9,z<0?0:Math.PI);
-    [[0,2.65,4.5],[3.8,2.65,-4.7],[-5.5,6.65,-5.8],[-2.3,7.3,4.5],[6.6,6.6,.2],[0,6.7,-9.1]].forEach(p=>lamp(...p));
-    lamp(-4,2.65,-4); // The private room has a ceiling light while its floor and low walls stay empty.
-    g.userData = {
-      // 客廳與閣樓燈槽襯托航路桌、書牆，廚房和手札桌補任務光；我的房間只用固定牆頂燈槽，櫥腳柔光留在公共區。
+    // 奶油波浪罩收住光，閱讀燈留在公共區椅旁。
+    [[3.8,2.65,-4.7,3.76],[-5.5,6.65,-5.8,8.7883],[-2.3,7.3,4.5,10.4683],[6.6,6.6,.2,8.8216],[0,6.7,-9.1,7.6],[-4,2.65,-4,3.76]].forEach(p=>lamp(...p));
+    floorLamp(1.03,1.94,-1.75);
+    Object.assign(g.userData,{
+      // 花茶便條牆聚焦，廚房雙層下燈與閱讀落地燈補任務光，我的房間維持固定高位燈槽。
       glow:[
-        {kind:'cove',a:[-2.5,3.35,7.83],b:[-.3,3.35,7.83],n:[0,-1],c:'#f4e6d0'},
-        {kind:'under',a:[-7.45,.863,2.3],b:[-5.75,.863,2.3]},
-        {kind:'cove',a:[-7.85,7.2,-3.85],b:[-7.85,7.2,-2.85],n:[1,0],c:'#f4e6d0'},
+        {kind:'cove',a:[-2.5,3.35,7.83],b:[-0.3,3.35,7.83],n:[0,-1],c:'#f4e6d0'},
         {kind:'under',a:[4.2,1.883,-7.72],b:[6.9,1.883,-7.72]},
-        {kind:'under',a:[-7.1,6.403,-.9],b:[-7.1,6.403,1.3]},
-        {kind:'cove',a:[-.18,3.32,-6.3],b:[-.18,3.32,-2],n:[-1,0],c:'#f4e6d0'},
-        {kind:'kick',a:[1.1,.1,-6.885],b:[6.4,.1,-6.885],n:[0,1]},
-        {kind:'spot',p:[-4.6,3.5,3.6],t:[-4.7,.99,4.1],r:.65},
-        {kind:'spot',p:[-3.1,7.35,7.65],t:[-3.2,4.995,6.5],r:.75}
+        {kind:'kick',a:[1.1,0.1,-6.885],b:[6.4,0.1,-6.885],n:[0,1]},
+        {kind:'under',a:[-7.45,0.863,2.3],b:[-5.75,0.863,2.3]},
+        {kind:'cove',a:[-7.85,7.2,-3.85],b:[-7.85,7.2,-2.85],n:[1,0],c:'#f4e6d0'},
+        {kind:'under',a:[-7.1,6.403,-0.9],b:[-7.1,6.403,1.3]},
+        {kind:'cove',a:[-0.18,3.32,-6.3],b:[-0.18,3.32,-2],n:[-1,0],c:'#f4e6d0'},
+        {kind:'under',a:[4.2,2.713,-7.72],b:[6.9,2.713,-7.72]},
+        {kind:'spot',p:[3.8,3.45,-6.7],t:[4,2.3,-7.82],r:0.6},
+        {kind:'spot',p:[-3.1,7.35,7.65],t:[-3.2,4.995,6.5],r:0.75}
       ],
       spawn:[2.6,0,6.2,Math.PI], exit:[2.6,7.6,.6], host:[.8,0,3.2,0], decor:{x:-4,y:0,z:-4},
       gifts:[[-.5,0,6.4,0],[3.5,0,1.5,0],[1.6,0,-.9,0],[-1.5,4,-2,0],[1.7,4,2.5,0]],
-      lights:[[0,2.65,4.5,'#ffd9a0',1.35],[3.8,2.65,-4.7,'#ffd9a0',1.25],[-5.4,4.92,-6.92,'#ff9a4a',1.35],[-2.3,7.3,4.5,'#ffdfa6',1.4],[6.6,6.6,.2,'#ffd9a0',1.1],[-4,2.65,-4,'#ffd9a0',1.1]], sun:[.15,.7,1],
+      lights:[[1.03,1.94,-1.75,'#ffd8ad',0.55,0.35],[3.8,2.65,-4.7,'#ffd8ad',1,0.5],[-5.4,4.92,-6.92,'#ffd8ad',0.6,0],[-2.3,7.3,4.5,'#ffd8ad',1.05,0.5],[6.6,6.6,0.2,'#ffd8ad',0.9,0.5],[-4,2.65,-4,'#ffd8ad',1,0.5]], sun:[.15,.7,1],
       spots:[
         {x:-4.3,y:0,z:2.35,r:1.1,kind:'look',label:'看看航路',name:'潮汐航路桌',lines:['這條空白航線，留給今天的腳步。','沿著海岸慢慢走，會遇到新的風景。','先認出自己在哪裡，再決定下一站吧。'],alone:['木桌上的小島地圖，夾著浪花書籤。','紅色虛線繞過海灣，停在尚未命名的小路。']},
         {x:3.1,y:0,z:-5.4,r:1.1,kind:'look',label:'泡杯花茶',name:'蜂蜜木小廚房',lines:['走了一圈，先喝點溫熱的花茶吧。','茶罐旁的便條，記著今天想完成的事。','小小的進步，也值得替自己慶祝。'],alone:['奶油色茶壺旁，排著曬乾的花瓣。','便條上畫了一顆星星，還留著一個空格。']},
@@ -452,7 +462,7 @@
         {x:-1.3,y:4,z:4.8,r:1.15,kind:'study',label:'翻翻手札',name:'尖拱窗下的潮汐手札',lines:['先回想今天學過的，再翻開手札吧。','不同科目的小線索，也可能在同一頁相遇。','把不懂的問題夾好，明天再來看看。'],alone:['手札攤在尖拱窗下，頁角壓著紫藤花。','書籤提醒你：先回想，再翻答案。']},
         {x:3.1,y:4,z:4.7,r:1.1,kind:'look',label:'看看星圖',name:'黃銅望遠鏡',lines:['白天先認方向，晚上再找星星。','望遠鏡旁的空白，留著今晚的新發現。','慢慢看，同一片天空也會有不同細節。'],alone:['黃銅鏡筒朝著尖拱窗外，腳架穩穩張開。','星圖上畫了一彎月亮，旁邊還沒有日期。']}
       ]
-    };
+    });
     // house.mergeStatic preserves camThrough objects. Batch those static window faces here,
     // retaining the original materials, positions, normals, UVs and camera-through flag.
     g.updateMatrixWorld(true);

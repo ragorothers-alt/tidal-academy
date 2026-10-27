@@ -56,7 +56,6 @@
       if(shutters) for(const side of [-1,1]){const u=op.x+side*(r+.34);for(let j=0;j<9;j++)localBox(x,z,u,lo+.12+j*(h-.25)/8,-.13,.43,.10,.08,M.blue,a);for(const edge of [-1,1])localBox(x,z,u+edge*.22,lo+h/2,-.14,.045,h,.09,M.blue,a);}
     }
     function floor(x,z,w,d,y) {box(x,y-.14,z,w,.28,d,floorM[0],false,true);box(x,y-.30,z,w,.045,d,M.cream);let j=0;for(let u=x-w/2;u<x+w/2-.01;u+=.7){const bw=Math.min(.69,x+w/2-u-.01);box(u+bw/2,y-.014,z,bw,.03,d-.02,floorM[j++%3]);}}
-    function lamp(x,y,z) {box(x,y+.26,z,.48,.09,.48,M.gold);box(x,y,z,.30,.44,.30,glow,false,false,.045);box(x,y-.25,z,.45,.07,.45,M.gold);for(const a of [-1,1])for(const b of [-1,1])box(x+a*.18,y,z+b*.18,.035,.47,.035,M.gold);beam([x,y+.3,z],[x,y+.7,z],.035,M.gold);}
     const glyph={A:[[[0,0],[.5,1],[1,0]],[[.2,.42],[.8,.42]]],B:[[[0,0],[0,1],[.65,1],[1,.76],[.6,.52],[0,.52]],[[.15,.52],[.7,.52],[1,.24],[.65,0],[0,0]]],C:[[[1,.86],[.7,1],[.2,1],[0,.75],[0,.2],[.2,0],[.7,0],[1,.16]]],W:[[[0,1],[.2,0],[.5,.5],[.8,0],[1,1]]],O:[[[.2,0],[.8,0],[1,.2],[1,.8],[.8,1],[.2,1],[0,.8],[0,.2],[.2,0]]],R:[[[0,0],[0,1],[.65,1],[1,.75],[.65,.5],[0,.5]],[[.6,.5],[1,0]]],D:[[[0,0],[0,1],[.65,1],[1,.75],[1,.25],[.65,0],[0,0]]],H:[[[0,0],[0,1]],[[1,0],[1,1]],[[0,.5],[1,.5]]],I:[[[.5,0],[.5,1]],[[0,1],[1,1]],[[0,0],[1,0]]],T:[[[0,1],[1,1]],[[.5,0],[.5,1]]]};
     function word(text,x,y,z,size,m=M.paper,flip=false) {const px=u=>x+(flip?((text.length-1)*.85+.62)*size-u:u);for(let j=0;j<text.length;j++)for(const stroke of glyph[text[j]]||[])for(let k=1;k<stroke.length;k++)beam([px(j*size*.85+stroke[k-1][0]*size*.62),y+stroke[k-1][1]*size,z],[px(j*size*.85+stroke[k][0]*size*.62),y+stroke[k][1]*size,z],size*.04,m);}
     function books(x,y,z,n) {for(let j=0;j<n;j++){const h=.34+(j%4)*.075;box(x+j*.17,y+h/2,z,.13,h,.32,[print.blue,print.pink,print.lilac,print.rose][j%4]);box(x+j*.17,y+h*.25,z+.17,.07,.035,.02,M.gold);}}
@@ -138,7 +137,6 @@
     // Loose cards, flowers, hanging letter bunting and book-shaped wall ornaments.
     for(const p of [[-5.3,0,4.9],[1.5,0,-4.9],[-5.2,Y,4.5],[2.3,Y,-4.9]])plant(...p);
     for(const y of [3.25,Y+2.75])for(let j=0;j<5;j++){const x=-4.2+j*1.25,yy=y-.22*Math.sin(j*Math.PI/4);profile([[-.32,0],[.32,0],[0,-.58]],.025,x,yy,4.7,[M.pink,cloth.blue,cloth.gold][j%3]);word('ABC'[j%3],x-.13,yy-.41,4.74,.34,M.paper,true);if(j)beam([x-1.25,y-.22*Math.sin((j-1)*Math.PI/4),4.7],[x,yy,4.7],.014,cloth.dark);}
-    for(const p of [[-4.8,2.9,5.3],[1.8,3.0,2],[0,3.05,-2.5],[-3.1,Y+2.9,2.1],[2,Y+2.8,-3.7]])lamp(...p);
     // A lived-in postcard gallery and trailing leaves break up the broad plaster panels.
     function postcard(x,y,z,a,colour) {
       localBox(x,z,0,y,0,1.15,1.25,.09,M.honey,a);
@@ -183,7 +181,6 @@
     }
     for(const sign of [-1,1])for(let j=1;j<curve.length;j++){const a=curve[j-1],b=curve[j];for(let k=1;k<=3;k++){const t=k/4,z=sign*(a[0]+(b[0]-a[0])*t),y=a[1]+(b[1]-a[1])*t-.15;if(sign>0&&z>3){box(-4.48,y,z,2.9,.045,.065,M.honey);box(3.65,y,z,4.5,.045,.065,M.honey);}else box(0,y,z,11.7,.045,.065,M.honey);}}
     for(const x of [-4,-2,0,2,4])for(const sign of [-1,1])for(let j=1;j<curve.length;j++){const a=curve[j-1],b=curve[j];if(sign>0&&j>=4&&x>-2.9&&x<1.3)continue;beam([x,a[1]-.17,sign*a[0]],[x,b[1]-.17,sign*b[0]],.055,M.wood);}
-    for(const p of [[-4.8,2.9,5.3],[1.8,3,2],[0,3.05,-2.5],[-3.1,Y+2.9,2.1],[2,Y+2.8,-3.7]]){let top=3.86;if(p[1]>Y){const z=Math.abs(p[2]);for(let j=1;j<curve.length;j++)if(z<=curve[j][0]){const a=curve[j-1],b=curve[j];top=a[1]+(b[1]-a[1])*(z-a[0])/(b[0]-a[0])-.20;break;}}beam([p[0],p[1]+.7,p[2]],[p[0],top,p[2]],.018,iron.dark);for(let yy=p[1]+.75;yy<top;yy+=.18){const link=mesh(new THREE.TorusGeometry(.055,.012,4,8),M.gold,p[0],yy,p[2]);link.rotation.y=Math.round(yy*10)%2*Math.PI/2;}}
     curtain(-2.3,7.40,0,1.15,2.3,2.62);curtain(-6,0,.4,1.05,2.45,2,-Math.PI/2);curtain(6,0,.4,1.05,2.45,2,Math.PI/2);curtain(0,-5.30,-.3,1,2.5,2.7,Math.PI);curtain(-.8,5.28,0,Y+.9,2.75,2.9);curtain(-6,0,0,Y+1,2.3,2.05,-Math.PI/2);
     // Floral bay seat: drawer fronts, piping, gingham and appliqued cushions.
     for(let j=0;j<3;j++){const x=-3.2+j*.9;box(x,.43,6.30,.80,.43,.07,M.honey);box(x,.43,6.25,.65,.30,.05,M.blue);soft(x,.45,6.20,.065,M.gold);box(x,.975,6.84,.83,.035,.85,M.rose,false,false,.01);cushion(x,1.24,7.07,j===1?cloth.blue:M.pink,j===1);}
@@ -222,7 +219,6 @@
     for(const yy of [.12,.23,.63]){const o=mesh(new THREE.TorusGeometry(yy<.3?.29:.20,.04,5,16),M.honey,-2.3,yy,2.6);o.rotation.x=Math.PI/2;}
     for(const fy of [0,Y])for(const x of [-4.95,1.95]){postcard(x,fy+2.6,-5.12,Math.PI,print.rose);vine(x+.48,fy+3.05,-5.08,8,Math.PI);}
     box(-.8,Y+.95,4.73,.68,.07,.74,M.lilac);for(let j=0;j<5;j++)box(-1.1+j*.15,Y+.99,4.73,.025,.01,.72,cloth.paper);
-    for(const p of [[.35,1.31,4.94],[-.75,Y+1.04,-4.58]]){mesh(new THREE.CylinderGeometry(.14,.18,.06,8),M.gold,p[0],p[1]+.03,p[2]);beam([p[0],p[1]+.05,p[2]],[p[0],p[1]+.35,p[2]],.03,M.gold);mesh(new THREE.CylinderGeometry(.12,.23,.27,8),glow,p[0],p[1]+.47,p[2]);for(const yy of [.34,.61])mesh(new THREE.CylinderGeometry(yy<.4?.24:.13,yy<.4?.24:.13,.035,8),M.gold,p[0],p[1]+yy,p[2]);}
     box(2.85,.29,-5.0,.72,.58,.65,M.wood,true);for(const yy of [.10,.28,.46])box(2.85,yy,-4.66,.74,.12,.045,M.honey);for(const x of [2.58,3.12])box(x,.29,-4.63,.07,.58,.04,M.wood);stack(2.85,.59,-5.0,2);
 
     // Round three: small social scenes fill the floor, with the entrance, gifts and story spots reserved.
@@ -265,22 +261,46 @@
 
     corner('床側睡前書凳',-2.70,Y,-2.90,0,()=>{box(0,.16,0,.72,.32,.68,M.honey,false,false,.07);box(0,.35,0,.75,.07,.71,cloth.blue,false,false,.06);box(0,.406,0,.49,.035,.36,M.pink);box(0,.429,0,.40,.009,.30,M.paper);});
 
+    // 書頁罩藏住亮芯，桌面用細臂燈補光。
+    const lightCream=kit.shade('#f3e4d3'),lightBlue=kit.mat('#7fa5ba',{roughness:.82},'wood'),lightBrass=kit.mat('#b88c4c',{metalness:.72,roughness:.42},'metal'),lightDiff=kit.lamp('#f5c98d');
+    function bookLamp(x,y,z,top){
+      box(x,y+.19,z,.70,.05,.40,lightCream,false,false,.015);
+      for(const u of [-.33,.33])box(x+u,y+.09,z,.04,.18,.40,lightBlue);
+      for(const d of [-.18,.18]){box(x,y+.09,z+d,.62,.18,.04,lightCream);for(let j=0;j<10;j++)box(x-.28+j*.062,y+.10,z+d,.016,.18+Math.abs(j-4.5)*.006,.055,lightCream);}
+      box(x,y+.03,z,.16,.018,.14,lightDiff);beam([x,y+.215,z],[x,top,z],.012,lightBrass);
+      box(x,top+.025,z,.16,.05,.16,lightBlue,false,false,.015);
+    }
+    function tableLamp(x,y,z){
+      mesh(new THREE.CylinderGeometry(.12,.16,.045,12),lightBrass,x,y-.44,z);beam([x,y-.415,z],[x,y-.06,z],.022,lightBrass);
+      box(x,y+.11,z,.36,.045,.30,lightBlue,false,false,.015);
+      for(const d of [-.14,.14])box(x,y+.045,z+d,.36,.13,.02,lightCream);
+      for(const u of [-.17,.17])box(x+u,y+.045,z,.02,.13,.26,lightCream);
+      box(x,y+.03,z,.16,.012,.14,lightDiff);
+    }
+    bookLamp(0,3.08,-2.5,4.075);bookLamp(-3.1,7.30,2.1,10.30);
+    tableLamp(.35,1.7525,4.94);tableLamp(-.65,5.8825,-4.58);
+    function writingLamp(){
+      mesh(new THREE.CylinderGeometry(.11,.13,.035,12),lightBrass,-4.42,1.0925,-4.15);
+      beam([-4.42,1.11,-4.15],[-4.42,1.86,-4.15],.018,lightBrass);beam([-4.42,1.86,-4.15],[-3.82,1.89,-3.90],.018,lightBrass);
+      box(-3.82,1.90,-3.90,.86,.06,.18,lightBlue,false,false,.012);for(const d of [-.08,.08])box(-3.82,1.86,-3.90+d,.86,.06,.02,lightBrass);
+    }
+    writingLamp();
+
     // Ground spawn is 1.4 m from the exit centre; gifts have their own reserved floor squares.
     Object.assign(g.userData,{
-      // 環境用兩層洗牆柔光，層板與書桌補任務光，筆友留言板為重點，床座與凸窗沙發留低位柔光。
+      // 黑板是焦點，短頂槽與層板補光，座床底留低位導引。
       glow:[
-        {kind:'wash',a:[-5.88,3.98,2.8],b:[-5.88,3.98,4.1],n:[1,0],c:'#fff4ee'},
-        {kind:'wash',a:[2.35,3.9,-5.37],b:[3.5,3.9,-5.37],n:[0,1],c:'#fff4ee'},
-        {kind:'wash',a:[-4.65,7.7,-5.37],b:[-3.25,7.7,-5.37],n:[0,1],c:'#fff4ee'},
+        {kind:'under',a:[-4.22,1.85,-3.9],b:[-3.42,1.85,-3.9]},
+        {kind:'cove',a:[-5.88,3.65,2.8],b:[-5.88,3.65,4.1],n:[1,0],c:'#f3e4d3'},
         {kind:'under',a:[-5.43,2.095,-3.9],b:[-5.43,2.095,-2.4]},
-        {kind:'kick',a:[-3.5,.1,6.325],b:[-1.1,.1,6.325],n:[0,-1]},
-        {kind:'kick',a:[-5.2,4.5,-2.25],b:[-3.3,4.5,-2.25],n:[0,1]},
-        {kind:'spot',p:[1.4,3.85,-3.4],t:[1.6,2.55,-5.07],r:.7},
-        {kind:'spot',p:[-3.3,3.8,-3.6],t:[-3.45,1.18,-3.8],r:.7}
+        {kind:'spot',p:[-3.3,3.88,-3.6],t:[-3.3,2.65,-5.075],r:.8},
+        {kind:'kick',a:[-3.5,.1,6.45],b:[-1.1,.1,6.45],n:[0,-1]},
+        {kind:'cove',a:[-4.1,7.5,-5.37],b:[-2.9,7.5,-5.37],n:[0,1],c:'#f3e4d3'},
+        {kind:'kick',a:[-5.2,4.5,-2.38],b:[-3.3,4.5,-2.38],n:[0,1]}
       ],
       spawn:[3,0,3.55,Math.PI],exit:[3,5.02,.62],host:[.65,0,1.8,-.8],
       gifts:[[1.2,0,-1.0,0],[-4.5,0,.65,Math.PI/2],[1.6,Y,.2,0],[-.2,Y,-.9,0]],
-      lights:[[-4.8,2.9,5.3,'#ffe0b0',1.15],[1.8,3,2,'#ffe0ad',1.2],[0,3.05,-2.5,'#ffdfb5',1.15],[-3.1,Y+2.9,2.1,'#ffe0ad',1.2],[2,Y+2.8,-3.7,'#ffdfb5',1.25]],sun:[-.3,.9,1],
+      lights:[[0,3.08,-2.5,'#ffe0b0',1.1,.5],[-3.1,7.3,2.1,'#ffe0b0',1.1,.5],[.35,1.7525,4.94,'#ffe0b0',.55,.32],[-.65,5.8825,-4.58,'#ffe0b0',.6,.32]],sun:[-.3,.9,1],
       spots:[
         {x:-2.3,y:0,z:5.25,r:1.2,kind:'look',label:'窗邊故事',name:'三面凸窗閱讀角',lines:['坐這裡嘛，雲也會來旁聽故事。','這杯貼了單字，喝茶也能交朋友！','故事讀到一半，書籤就替我守住冒險。'],alone:['粉色坐墊還留著一本翻開的故事書。','三面窗把海風與光一起收進閱讀角。']},
         {x:-3.3,y:0,z:-2.4,r:1.15,kind:'study',label:'今日單字',name:'日常單字故事桌',lines:['挑一個單字，我們把它寫進故事吧！','先猜上下文，答案常藏在前後句。','我把容易忘的字，貼在最愛的杯子上。','念錯也沒關係，開口就是新的第一頁。'],alone:['桌上的單字卡連成一段小小的故事。','馬克杯、書籤和筆筒都有字母標籤。']},

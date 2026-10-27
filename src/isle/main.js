@@ -72,6 +72,7 @@ import * as ledger from './ledger.js';
 import * as highland from './highland.js';
 import * as details from './details.js';
 import * as hotel from './hotel.js';
+import * as nightlights from './nightlights.js';   // v8.0 室外燈光設計：步道柱燈、橋與階梯的藏燈、樹與地標的投光
 import * as dreamisle from './dreamisle.js';
 import * as actors from './actors.js';
 import * as props3d from './props3d.js';

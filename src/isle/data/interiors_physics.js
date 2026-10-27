@@ -19,6 +19,7 @@
       paper:kit.mat('#fff0d5',{},'paper'), ceramic:kit.mat('#fff0d5',{},'ceramic'), paleWood:kit.mat('#fff0d5',{},'wood'),
       violetPetal:kit.mat('#b79acb',{},'foliage'), honeyThread:kit.mat('#be8950',{},'fabric'),
       floorTile:kit.mat('#b8ab93',{},'stone'), cyanCover:kit.mat('#5ee7f0',{},'fabric'), tea:kit.mat('#5b4031',{},'ceramic'),
+      diff:kit.lamp('#ffd8ad'), hood:kit.mat('#b8763d',{metalness:.65,roughness:.48,side:THREE.DoubleSide},'metal'),
       brassDome:kit.mat('#d5ad56',{metalness:.8,roughness:.36,side:THREE.DoubleSide},'metal')
     };
     const covers = new Map([[M.cream,S.paper],[M.cyan,S.cyanCover]]);
@@ -52,7 +53,18 @@
     }
     function gear(x,y,z,r,n=12) { ring(x,y,z,r*.74,r*.14,M.brass);for(let i=0;i<n;i++){const a=i*Math.PI*2/n;const o=box(x+Math.cos(a)*r*.95,y+Math.sin(a)*r*.95,z,r*.28,r*.21,.11,M.copper);o.rotation.z=a;}for(let i=0;i<5;i++){const a=i*Math.PI*2/5;beam([x,y,z],[x+Math.cos(a)*r*.68,y+Math.sin(a)*r*.68,z],.04,M.brass);}ball(x,y,z+.08,r*.17,M.dark); }
     function planter(x,y,z,s=1) { const p=mesh(new THREE.CylinderGeometry(.26*s,.19*s,.42*s,8),S.ceramic,x,y+.21*s,z);p.userData.solid=true;for(let j=0;j<7;j++){const a=j*2.4;beam([x,y+.4*s,z],[x+Math.sin(a)*.25*s,y+(.7+j%3*.1)*s,z+Math.cos(a)*.25*s],.025*s,M.leaf);ball(x+Math.sin(a)*.25*s,y+(.72+j%3*.1)*s,z+Math.cos(a)*.25*s,.16*s,j%3?M.leaf:S.violetPetal,1,.6,1);} }
-    function lantern(x,y,z) { beam([x,y+.5,z],[x,y+.23,z],.03,M.dark);box(x,y,z,.32,.44,.32,M.lamp);for(const a of [-1,1])for(const b of [-1,1])box(x+a*.19,y,z+b*.19,.035,.52,.035,M.copper);box(x,y+.28,z,.48,.09,.48,M.brass);box(x,y-.28,z,.43,.07,.43,M.brass); }
+    function shade(x,y,z,r=.36) {
+      mesh(new THREE.CylinderGeometry(r*.3,r,.24,16,1,true),S.hood,x,y+.072,z);
+      mesh(new THREE.CylinderGeometry(Math.min(r*.74,.16),Math.min(r*.74,.16),.016,16),S.diff,x,y+.03,z);
+      mesh(new THREE.CylinderGeometry(.07,.09,.08,10),M.brass,x,y+.22,z);
+    }
+    function lamp(x,y,z,top,r=.36) {
+      shade(x,y,z,r);beam([x,y+.26,z],[x,top,z],.016,M.dark);box(x,top-.018,z,.14,.035,.14,M.brass);
+    }
+    function taskLamp(x,y,z) {
+      mesh(new THREE.CylinderGeometry(.16,.18,.04,12),M.brass,x+.23,y-.32,z);
+      beam([x+.23,y-.30,z],[x+.23,y+.18,z],.023,M.copper);beam([x+.23,y+.18,z],[x,y+.26,z],.023,M.copper);shade(x,y,z,.22);
+    }
     function table(x,y,z,w,d) { mesh(kit.rbox(w,.16,d,.055),M.honey,x,y+1,z,{solid:true});for(const a of [-1,1])for(const b of [-1,1])box(x+a*(w/2-.14),y+.45,z+b*(d/2-.14),.14,.9,.14,M.oak,true); }
     function chest(x,y,z,w=1.3) { box(x,y+.4,z,w,.8,.75,M.oak,true);for(const a of [-1,1])box(x+a*w*.35,y+.42,z+.4,.07,.72,.05,M.brass);box(x,y+.72,z,w+.08,.12,.84,M.honey);box(x,y+.46,z+.43,.19,.09,.05,M.dark); }
     // Expanded from the exterior's asymmetric volumes: tall cottage on the LEFT,
@@ -113,13 +125,13 @@
     pipe([[1.55,1,-4.7],[1.55,3.8,-4.7],[2,4.1,-4.7],[3,4.1,-4.7],[3,3.3,-4.7],[3.5,3.2,-4.7]]);
     for(const x of [1.55,2.1]){mesh(new THREE.CylinderGeometry(.22,.22,.8,12),M.copper,x,2.1,-4.65);ball(x,2.1,-4.36,.15,M.cyan);ring(x,2.1,-4.33,.17,.035,M.brass);}
     gear(2.7,2.7,-4.73,.4);gear(3.24,3.2,-4.73,.28);gear(2.42,3.37,-4.73,.23);
-    lantern(5.5,1.42,-3.9);beam([5.75,1.3,-3.8],[6.05,1.55,-3.8],.04,M.copper);beam([6.05,1.55,-3.8],[6.05,1.55,-3.5],.07,M.dark);
+    taskLamp(5.5,1.42,-3.9);beam([5.75,1.3,-3.8],[6.05,1.55,-3.8],.04,M.copper);beam([6.05,1.55,-3.8],[6.05,1.55,-3.5],.07,M.dark);
     // Tool rack and blueprint board; each peg is geometry rather than a photograph.
     box(7.23,2.15,2.85,.13,1.8,2.8,M.oak);for(let j=0;j<5;j++){const z=1.8+j*.48;beam([7.1,2.55,z],[7.1,1.8,z],.035,M.brass);ring(7.1,2.6,z,.1,.025,M.dark,Math.PI/2);}
     box(-.5,2.1,-4.8,2.1,1.45,.1,M.oak);box(-.5,2.1,-4.72,1.9,1.25,.06,M.board);
     const graph=[[-1.3,1.7,-4.67],[-.95,1.95,-4.67],[-.6,1.9,-4.67],[-.25,2.35,-4.67],[.25,2.55,-4.67]];for(let i=0;i<4;i++)beam(graph[i],graph[i+1],.014,S.paper);
     table(6.35,0,3.85,1.45,1.1);for(let i=0;i<4;i++)box(6.35,1.15+i*.12,3.85,.7,.1,.5,i%2?S.cyanCover:S.paper);
-    lantern(6.35,1.85,3.85);beam([6.6,1.65,3.85],[6.9,1.85,3.85],.04,M.copper);beam([6.9,1.85,3.85],[6.9,1.85,3.55],.06,M.dark);
+    taskLamp(6.35,1.85,3.85);beam([6.6,1.65,3.85],[6.9,1.85,3.85],.04,M.copper);beam([6.9,1.85,3.85],[6.9,1.85,3.55],.06,M.dark);
     // Living area: repaired sofa, stove/chimney, low rug, tea table and parts library.
     box(-.7,.43,2.4,1.9,.7,1.1,M.oak,true);mesh(kit.rbox(2,.9,.26,.10),M.pink,-.7,.87,2.72,{solid:true});mesh(kit.rbox(1.7,.24,.85,.10),M.cream,-.7,.85,2.2);for(const x of [-1.55,.15])mesh(kit.rbox(.2,.65,1.1,.055),M.honey,x,.85,2.25,{solid:true});
     mesh(kit.rbox(.5,.46,.18,.075),M.lavender,-1.1,1.1,2.48);mesh(kit.rbox(.5,.46,.18,.075),M.rug,-.3,1.1,2.48);
@@ -130,7 +142,7 @@
     chest(-4.15,0,-3.9);planter(-4.5,0,4.5,.9);planter(6.75,0,-4.3,.9);planter(2,0,4.25,1.1);
     // Attic is a real bedroom plus drawing nook, not another copy of the workshop.
     box(-2.2,4.28,-3.5,2.1,.56,2.7,M.oak,true);mesh(kit.rbox(2,.22,2.6,.10),M.cream,-2.2,4.65,-3.5,{solid:true});mesh(kit.rbox(2,.12,1.9,.055),M.lavender,-2.2,4.81,-3.15);for(const x of [-2.72,-1.68])mesh(kit.rbox(.84,.24,.5,.10),M.pink,x,4.86,-4.35);box(-2.2,4.8,-4.85,2.15,1.3,.14,M.honey,true);
-    table(-3.25,4,3.8,2.5,1.1);box(-3.25,5.11,3.8,1.35,.035,.7,S.paper);gear(-3.7,5.2,3.65,.16,10);lantern(-2.3,5.45,3.8);
+    table(-3.25,4,3.8,2.5,1.1);box(-3.25,5.11,3.8,1.35,.035,.7,S.paper);gear(-3.7,5.2,3.65,.16,10);taskLamp(-2.3,5.42,3.8);
     chest(-.15,4,-3.6,1.1);planter(-4.4,4,-4.3,.85);planter(-4.3,4,4.4,.8);
     // Wall-mounted inventions: the loft's broad plaster panels carry Rayne's own sketches.
     for(const [x,z] of [[-4.35,-4.83],[-.65,4.83]]){
@@ -142,7 +154,6 @@
     box(-1.3,4.03,.25,3,.04,2.4,M.lavender);for(let i=0;i<6;i++)box(-4.75,5.1+i*.22,-3.5,.12,.15,1.8,i%2?M.honey:S.paleWood);
     // The windmill's shaft and gear train terminate at the loft front, matching its exterior site.
     beam([-3.55,7.6,2],[-3.55,10.2,2],.075,M.copper);gear(-3.55,7.5,2,.48);gear(-2.87,7.35,2,.25);
-    for(const p of [[-3,2.85,.3],[4,3.9,.6],[-2,6.3,.4],[4.5,4.3,-1.5]])lantern(...p);
     // Round two: honey timber, repair marks and collected inventions, following Rayne's concept.
     // Keep the west stair, host's metre of clearance and all gift/interaction footprints intact.
     function soft(x,y,z,w,h,d,m,solid=false){return mesh(kit.rbox(w,h,d,Math.min(.065,w*.24,h*.45,d*.24)),m,x,y,z,solid?{solid:true}:null);}
@@ -198,10 +209,8 @@
       const len=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.ceil(len/.32);
       for(let j=1;j<n;j++){const t=j/n;box(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t-.14,0,.025,.035,9.9,M.honey);}
     }
-    for(const [x,y,z,end] of [[-3,2.85,.3,3.54],[4,3.9,.6,5.25],[-2,6.3,.4,9.1],[4.5,4.3,-1.5,5.35]]){
-      beam([x,y+.32,z],[x,end,z],.023,M.dark);mesh(new THREE.CylinderGeometry(.12,.43,.28,12),M.brass,x,y+.39,z);ball(x,y-.08,z,.105,M.lamp);
-      for(let j=0;j<3;j++)ring(x,y+.75+j*.15,z,.045,.012,M.copper,j%2*Math.PI/2);
-    }
+    // 銅罩只露出內縮擴散片，小車桌保留最亮的工作光。
+    for(const p of [[-3,2.85,.3,3.74],[4,3.9,.6,5.3583],[-2,6.3,.4,9.2719],[4.5,4.3,-1.5,6.8],[-2,2.598,-1.95,3.74]])lamp(...p);
     // Layered ochre workshop rug: bound edge and fringe, flat enough to walk across.
     soft(4.35,.018,1.25,3.35,.03,2.65,M.rug);soft(4.35,.038,1.25,3.08,.015,2.38,M.cream);soft(4.35,.049,1.25,2.88,.012,2.18,M.rug);
     for(const z of [-.1,2.6])for(let j=0;j<17;j++)box(2.84+j*.19,.025,z,.055,.025,.22,S.honeyThread);
@@ -341,22 +350,22 @@
       gear(-4.52,5.25,1.18,.22,10);scroll(-4.55,4.97,-.5);jar(-4.55,4.97,.75,.85);
       soft(-4.1,4.21,4.0,.65,.42,.62,M.oak);soft(-4.1,4.47,4,.65,.13,.62,M.pink);
     });
-    g.userData = {
-      // 環境用客廳書牆燈槽、工具牆與閣樓洗牆；書架與零件架下供任務光，焦點是舷窗工作台與樓上奶油紙草圖，座床底補柔光。
+    Object.assign(g.userData,{
+      // 書牆與閣樓鋪暖光，銅罩和投射燈聚焦小車拆修桌，沙發底留短段柔光。
       glow:[
         {kind:'cove',a:[-2.9,3.42,-4.8],b:[-1.05,3.42,-4.8],n:[0,1],c:'#f0e6d8'},
         {kind:'under',a:[-2.1,2.795,-4.46],b:[-1.05,2.795,-4.46]},
-        {kind:'wash',a:[.66,6.85,-3.8],b:[.66,6.85,-.4],n:[-1,0],c:'#f0e6d8'},
+        {kind:'kick',a:[-0.95,0.1,1.84],b:[0.05,0.1,1.84],n:[0,-1]},
         {kind:'under',a:[6.87,2.595,-3.05],b:[6.87,2.595,-1.5]},
-        {kind:'wash',a:[7.3,4.1,1.25],b:[7.3,4.1,2.5],n:[-1,0],c:'#f0e6d8'},
-        {kind:'kick',a:[-.95,.1,1.84],b:[.05,.1,1.84],n:[0,-1]},
+        {kind:'wash',a:[0.66,6.85,-3.8],b:[0.66,6.85,-0.4],n:[-1,0],c:'#f0e6d8'},
+        {kind:'under',a:[0.295,5.74,-1.6],b:[0.295,5.74,0.1]},
         {kind:'kick',a:[-3.1,4.11,-2.15],b:[-1.3,4.11,-2.15],n:[0,1]},
-        {kind:'under',a:[.295,5.74,-1.6],b:[.295,5.74,.1]},
-        {kind:'spot',p:[5.6,4.6,-3.2],t:[4.35,1.128,-3.95],r:1.2},
-        {kind:'spot',p:[-2.2,9.3,-3.2],t:[-2.2,6.22,-4.84],r:.75}
+        {kind:'wash',a:[7.3,4.1,1.25],b:[7.3,4.1,2.5],n:[-1,0],c:'#f0e6d8'},
+        {kind:'spot',p:[-1.2,3.45,-2.5],t:[-2,1.6,-1.98],r:0.7},
+        {kind:'spot',p:[-2.2,9.3,-3.2],t:[-2.2,6.22,-4.84],r:0.75}
       ],
       spawn:[-2.7,0,3.4,Math.PI],exit:[-2.7,4.85,.62],host:[3,0,-.4,0],cols,
-      sun:[.6,.65,.8],lights:[[-3,2.85,.3,'#ffd6a0',1.2],[4,3.9,.6,'#ffdbac',1.5],[-2,6.3,.4,'#ffe0ba',1.3],[5.5,1.42,-3.9,'#ffd59b',.65],[4.5,4.3,-1.5,'#ffdbad',.8]],
+      sun:[.6,.65,.8],lights:[[-3,2.85,0.3,'#ffd8ad',0.75,0.5],[4,3.9,0.6,'#ffd8ad',0.8,0.5],[-2,6.3,0.4,'#ffd8ad',0.8,0.5],[5.5,1.42,-3.9,'#ffd8ad',0.4,0.35],[4.5,4.3,-1.5,'#ffd8ad',0.7,0.45],[-2,2.598,-1.95,'#ffd8ad',0.85,0.5]],
       gifts:[[-3.7,0,-1.8,0],[5.8,0,.2,0],[2.5,0,2.1,0],[-.2,4,1.9,0],[-3.4,4,-.8,0]],
       spots:[
         {x:4.35,y:0,z:-2.65,r:1.15,kind:'study',label:'試試草圖',name:'舷窗發明工作台',lines:['先把單位寫好，再替小車找出發方向。','一次只換一個零件，才知道誰幫了忙。','叮咚，陪我用三個小問題試試看吧。'],alone:['工作台攤著小車草圖，旁邊排好螺帽。','紙角用海邊的小石頭壓住了。']},
@@ -365,7 +374,7 @@
         {x:-3.25,y:4,z:2.55,r:1.1,kind:'look',label:'看看風車',name:'風車傳動草圖桌',lines:['風車的軸從屋頂一路接到這裡。','大齒輪帶小齒輪，轉速也會跟著變。','我想做個收紙條的抽屜，先想想防水。'],alone:['黃銅軸穿過斜樑，接到一對小齒輪。','草圖上畫著一個還沒完成的小抽屜。']},
         {x:-2.2,y:4,z:-1.35,r:1.1,kind:'look',label:'翻翻筆記',name:'閣樓床邊的明日筆記',lines:['睡前只記一個卡住的地方就好。','明早醒來，再找最省力的那一步。','小風車休息了，我們也晚安吧。'],alone:['床邊筆記夾著一片風車形書籤。','最後一行寫著：明天先找不見的螺帽。']}
       ]
-    };
+    });
     return g;
   };
 })(typeof window !== 'undefined' ? window : globalThis);
