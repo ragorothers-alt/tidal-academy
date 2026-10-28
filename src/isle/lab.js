@@ -96,6 +96,22 @@ export function week() {
   return s.weekPlan;
 }
 export function setWeek(sid) { const W = week(); W.sid = sid; save(); }
+/** v8.5 本週的小成果：大階段要好幾週才到的時候，這週也有一個做得完的目標——練 12 道這一科的不同題目，研究筆記多一頁（300 鈴錢、回憶錄）。
+    只算練過的不同題目，不繞過大階段的熟練條件 */
+export const SMALL = 12;
+export function weekSmall(villagers) {
+  const W = week(), v = W.sid && villagers.find(x => x.sid === W.sid); if (!v) return null;
+  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); const start = d.getTime();
+  const n = (TA.L.BY_SUBJECT[v.sid] || []).filter(id => { const r = TA.S.q[id]; return r && r.last >= start; }).length;
+  return { v, n: Math.min(n, SMALL), need: SMALL, done: !!W.small };
+}
+export function claimSmall(villagers) {
+  const W = week(), o = weekSmall(villagers); if (!o || W.small || o.n < o.need) return null;
+  W.small = Date.now(); S().bells += 300; save();
+  const sub = (TA.subject(o.v.sid) || {}).name || '';
+  memo.add(`和${o.v.name}的研究筆記`, `這週一起練了 ${SMALL} 道${sub}題，研究筆記多了一頁。`, { icon: '📓' });
+  return `本週小成果：和${o.v.name}的研究筆記多了一頁（+300 鈴錢）`;
+}
 /** 今日學習與任務欄用：本週計畫的一行說明（沒選或已全部完成時回傳 null） */
 export function weekLine(villagers) {
   const W = week(), v = W.sid && villagers.find(x => x.sid === W.sid), R = v && (I.RESEARCH || {})[v.sid];

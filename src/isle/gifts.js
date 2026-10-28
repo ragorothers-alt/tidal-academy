@@ -5,6 +5,7 @@ import { I, S, save, find, itemName, itemIcon, KINDS } from './state.js';
 import { pick, dayKey } from './quiz.js';
 import * as miles from './miles.js';
 import * as memo from './memo.js';
+import * as bond from './bond.js';
 
 let roomApi = null;
 export function init(r) { roomApi = r; }
@@ -56,7 +57,7 @@ export async function give(v, sp) {
   const r = rate(v, g), bday = isBirthday(v), L = (pref(v) || {}).lines || {};
   if (g.type === 'pocket') s.pockets[g.i] = null; else { s.storage[g.id]--; if (s.storage[g.id] <= 0) delete s.storage[g.id]; }
   const gain = [0, 1, 2, 3][r] * (bday ? 2 : 1);
-  if (!v.guest) s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + gain);
+  if (!v.guest) { bond.addFr(v, gain); bond.note(v, 'gift', { item: g.name || '' }); }
   s.giftDay = s.giftDay || {}; s.giftDay[key(v)] = dayKey();
   // 送的家具會被珍惜地擺進他家（最多留最近 5 件）
   if (g.type === 'furn' && !v.guest && r >= 1) { s.treasure = s.treasure || {}; const T = (s.treasure[v.sid] = (s.treasure[v.sid] || []).filter(x => x !== g.id)); T.push(g.id); if (T.length > 5) T.shift(); }

@@ -6,6 +6,7 @@ import { pickQ, record, pick, dayKey } from './quiz.js';
 import { drill, picker } from './drill.js';
 import * as miles from './miles.js';
 import * as ledger from './ledger.js';
+import * as bond from './bond.js';
 
 const TA = window.TA, L = TA.L;
 let VS = [];  // 島民（不含店長）
@@ -121,7 +122,7 @@ async function complete(v, sp, r, slot, remote, bonus) {
   if (slot >= 0) s.pockets[slot] = null;
   r.done = true;
   const bells = bonus || 800 + Math.floor(Math.random() * 8) * 100; ledger.mark('request'); s.bells += bells;
-  s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + 2); s.stats = s.stats || {}; s.stats.reqs = (s.stats.reqs || 0) + 1; save();
+  bond.addFr(v, 2); bond.note(v, 'req'); s.stats = s.stats || {}; s.stats.reqs = (s.stats.reqs || 0) + 1; save();
   if (!remote) await ui.say(sp, pick((lines(v.sid).req || {}).thanks || ['謝謝你！']));
   else hooks.toast && hooks.toast(`${v.name}的委託完成了！`);
   await ui.card({ icon: icon('bells', 'bells'), title: `委託完成：${bells} 鈴錢`, sub: `${v.name}的好感度提升了` });
@@ -174,7 +175,9 @@ function claimGift(s, m) {
 function trimMail(s) {
   let auto = 0;
   while (s.mail.length > 30) {
-    let i = s.mail.length - 1; for (let j = s.mail.length - 1; j >= 0; j--) if (s.mail[j].read) { i = j; break; }
+    let i = -1; for (let j = s.mail.length - 1; j >= 0; j--) if (s.mail[j].read && !s.mail[j].keep) { i = j; break; }   // v8.5 收藏的信不丟
+    if (i < 0) for (let j = s.mail.length - 1; j >= 0; j--) if (!s.mail[j].keep) { i = j; break; }
+    if (i < 0) i = s.mail.length - 1;
     const [m] = s.mail.splice(i, 1);
     if (!m.read && m.gift && !m.gotGift) { claimGift(s, m); auto++; }
   }
@@ -187,7 +190,7 @@ export function openMail() {
   const s = S(), body = ui.el('div', 'ph-list');
   (s.mail || []).forEach(m => {
     const v = vOf(m.from) || { name: m.fromName || '潮汐小島', color: '#ffb86b', sub: { short: '✉' } };
-    const row = ui.el('button', 'ph-row mail' + (m.read ? '' : ' new'), `<span class="av" style="--c:${v.color}">${m.read ? '✉' : '!'}</span><div><b>${ui.esc(m.title)}</b><small>${m.date}${m.gift ? ' · 附禮物' : ''}</small></div>`);
+    const row = ui.el('button', 'ph-row mail' + (m.read ? '' : ' new'), `<span class="av" style="--c:${v.color}">${m.keep ? '⭐' : m.read ? '✉' : '!'}</span><div><b>${ui.esc(m.title)}</b><small>${m.date}${m.gift ? ' · 附禮物' : ''}</small></div>`);
     row.type = 'button'; row.onclick = () => readLetter(m); body.appendChild(row);
   });
   if (!body.children.length) body.appendChild(ui.el('p', 'muted', '信箱是空的。明天再來看看吧！'));
@@ -205,5 +208,8 @@ function readLetter(m) {
     ${m.giftLine ? `<p class="gift">🎁 ${ui.esc(m.giftLine)}</p>` : ''}
     <p class="sign">${ui.esc(m.close || '')}</p>`);
   const back = ui.el('button', 'btn', '← 回信箱'); back.type = 'button'; back.onclick = openMail; body.appendChild(back);
+  const kept = (s.mail || []).filter(x => x.keep).length, kp = ui.el('button', 'btn ghost', m.keep ? '⭐ 已收藏（點一下取消）' : `☆ 收藏這封（${kept} / 5）`); kp.type = 'button';   // v8.5 重要的信可以收藏，信箱滿了也不會被丟掉
+  kp.onclick = () => { if (!m.keep && kept >= 5) { ui.toast('最多收藏 5 封：先取消一封'); return; } m.keep = !m.keep; save(); Audio.sfx('tick'); readLetter(m); };
+  body.appendChild(kp);
   ui.panel(m.title, body, { cls: 'letter-p' });
 }

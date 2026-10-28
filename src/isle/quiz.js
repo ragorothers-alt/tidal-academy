@@ -81,4 +81,16 @@ export function vocabQ(opt) {
   return { id: 'voc:' + v.w, vocab: v, d: 1, q: `${v.w}（${v.pos || ''}）是什麼意思？`, o, a, e: `${v.w} ${v.pos || ''}：${v.zh}${v.ex ? '。例句：' + v.ex + (v.exZh ? '（' + v.exZh + '）' : '') : ''}` };
 }
 export const pick = a => a[Math.floor(Math.random() * a.length)];
+/** v8.5 洗牌袋：同一組台詞輪完一輪才重複，剛說過的那句不會馬上又出現（以前每次獨立抽，三次見面常常重複） */
+const bags = new Map();
+export function bag(key, arr) {
+  if (!arr || !arr.length) return ''; if (arr.length === 1) return arr[0];
+  let b = bags.get(key);
+  if (!b || b.src !== arr || !b.left.length) {
+    const last = b && b.src === arr ? b.last : -1, left = arr.map((_, i) => i).sort(() => Math.random() - 0.5);
+    if (left[left.length - 1] === last) left.unshift(left.pop());
+    b = { src: arr, left, last }; bags.set(key, b);
+  }
+  b.last = b.left.pop(); return arr[b.last];
+}
 export const dayKey = stateDayKey;

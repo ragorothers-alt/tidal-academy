@@ -87,7 +87,13 @@ async function talk() {
     return;
   }
   const left = W.frags.filter(f => !f.got).length;
-  if (left) { await ui.say(SP, `還有 ${left} 片碎片在島上……答錯過的題目，可以再看看解析、想一想，再試著回答。`); return; }
+  if (left) {   // v8.5 可以問最近的一片在哪個方向（想自己找的就不用問）
+    const i = await ui.ask(SP, `還有 ${left} 片碎片在島上……答錯過的題目，可以再看看解析、想一想，再試著回答。`, ['最近的一片在哪個方向？', '我自己找找看']);
+    if (i === 0) { const f = W.frags.filter(x => !x.got).sort((a, b) => Math.hypot(a.x - P.position.x, a.z - P.position.z) - Math.hypot(b.x - P.position.x, b.z - P.position.z))[0], dx = f.x - P.position.x, dz = f.z - P.position.z, d = Math.hypot(dx, dz);
+      const dir = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'][Math.round(((Math.atan2(dx, -dz) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI / 4)) % 8];
+      await ui.say(SP, d < 8 ? '就在你附近，看看四周有沒有一點藍光！' : `往${dir}走，大約 ${Math.round(d / 5) * 5} 公尺。小地圖的北方在上面喔。`); }
+    return;
+  }
   W.state = 'done'; const s = S(), b = 600 + W.frags.length * 200; s.bells += b; TA.S.gems = (TA.S.gems || 0) + 10; s.stats = s.stats || {}; s.stats.wisp = (s.stats.wisp || 0) + 1; save();
   await ui.say(SP, '全部都回來了！謝謝你把這些題目重新答對。之後再複習幾次，會記得更穩。');
   await ui.card({ icon: '', title: '潮靈的謝禮', sub: `${b} 鈴錢與 10 潮晶<br>錯題重新答對後，會依間隔複習安排之後再確認一次。` });

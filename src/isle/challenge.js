@@ -115,6 +115,7 @@ function contrastFor(sid, rv) {
 export const SET = 5;
 export async function practice(v) {
   const s = S(), sp = H.sp(v), R = rec(), seen = new Set(), st = L.subjectStats(v.sid);
+  bond.note(v, 'practice', { subject: (TA.subject(v.sid) || {}).name || '' });   // v8.5 第一次一起練習
   const okL = v.ok || ['答對了！', '漂亮！', '完全正確！'], badL = v.bad || ['可惜！', '差一點！'];
   let d = st.attempts < 5 || st.acc < 0.55 ? 1 : st.acc < 0.8 ? 2 : 3, run = 0, got = 0, bells = 0, friend = '', k = 0, why = false;
   const cf = confPlan(SET);   // v8.4 一組 5 題裡有 2 題先問把握

@@ -71,6 +71,7 @@ function suggestions(max) {
   const s = S(), env = ENV() || {}, h = env.hour != null ? env.hour : new Date().getHours(), day = dayKey(), out = [];
   const add = (t, act) => { if (t && out.length < max && !out.some(o => o.t === t)) out.push({ t, act }); };
   if (env.tourney) return [{ t: '大賽進行中：時間內盡量多釣（抓），答對題目才算分！' }];
+  { const pn = H.pin && H.pin(); if (pn) add(`📌 ${pn.done ? '✔ 完成了：' : '我選的：'}${pn.t}`, 'pin'); }   // v8.5 自己在今日學習挑的一件事，固定在最上面
   const pk = s.pockets.filter(Boolean);
   // 1. 手上就能處理的事
   if (pk.some(x => x.k === 'unk')) add('口袋裡有未鑑定的化石：帶去博物館給史遙鑑定');
@@ -124,7 +125,7 @@ export function init(hooks) {
   el.addEventListener('click', e => {
     if (e.target.closest('.q-toggle')) { open = !open; paint(); return; }
     const a = e.target.closest('[data-act]');
-    if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday, cram: H.openCram, passport: H.openPassport }[a.dataset.act]; if (f) { f(); return; } }
+    if (a) { const f = { mail: H.openMail, plan: H.openPlanner, reqs: H.openReqs, vocab: H.openVocab, today: H.openToday, cram: H.openCram, passport: H.openPassport, pin: H.openPin }[a.dataset.act]; if (f) { f(); return; } }
     if (data().fin && H.openToday) H.openToday();   // 點今日路線：打開手機的今日學習（改時長、開寶箱、收工）
   });
   miles.listen(onEvent);

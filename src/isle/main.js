@@ -94,7 +94,7 @@ import * as passport from './passport.js';
 /** 在神秘島或博物館裡（不在主島場景） */
 const elsewhere = () => trip.inside || museum.inside || dreamisle.inside || shopin.inside || yuehome.inside || house.inside;
 import { drill, picker } from './drill.js';
-import { pickQ, pickQU, askQ, record, pick, dayKey } from './quiz.js';
+import { pickQ, pickQU, askQ, record, pick, bag, dayKey } from './quiz.js';
 import * as figs from './figs.js';
 import { env, I, S, save, KINDS, list, find, itemName, itemPrice, itemIcon, icon, removeAt, addItem, newDay, stars, fmtHours, fmtMonths, WHERE, whereName, POCKET_N, available, onConcept } from './state.js';
 
@@ -320,7 +320,11 @@ function birthdayNews() {
 const flag = new THREE.Group();
 if (myHome) { const fx = myHome.x + 1.9 * 1, fz = myHome.z + 1.6; flag.position.set(fx + 0.22, ground(fx, fz) + 1.05, fz); flag.add(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.4, 0.03), bend(new THREE.MeshStandardMaterial({ color: '#888' })))); const fl = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.14, 0.2), bend(new THREE.MeshStandardMaterial({ color: '#ef3f3f' }))); fl.position.set(0, 0.14, 0.1); flag.add(fl); scene.add(flag); }
 const mailPos = myHome ? [myHome.x + 1.9, myHome.z + 1.6] : [0, 0];
-const greetOf = v => { const h = new Date().getHours(), g = v.greet || {}; const arr = Array.isArray(g) ? g : (h < 5 || h >= 21 ? g.night : h < 11 ? g.morning : h < 17 ? g.day : g.evening) || g.day || ['你好！']; return pick(arr); };
+const greetOf = v => {
+  const L7 = (I.LINES7 || {})[v.sid]; if (weather.raining() && L7 && L7.rain && Math.random() < 0.6) return bag('r:' + v.sid, L7.rain);   // v8.5 雨天的招呼
+  const h = new Date().getHours(), g = v.greet || {}, slot = h < 5 || h >= 21 ? 'night' : h < 11 ? 'morning' : h < 17 ? 'day' : 'evening';
+  const arr = Array.isArray(g) ? g : g[slot] || g.day || ['你好！']; return bag(`g:${v.sid}:${slot}`, arr);   // 洗牌袋：輪完一輪才重複
+};
 const tail = v => (v.catch && Math.random() < 0.5 ? v.catch : '');
 
 /* ---------- 對話 ---------- */
@@ -340,7 +344,7 @@ async function villagerTalk(v) {
   const ml = move.movedLine(v); if (ml) await ui.say(sp(v), ml + tail(v));
   const bl = gifts.isBirthday(v) && ((gifts.pref(v) || {}).lines || {}).birthday, pb = gifts.playerBirthday() && (I.PLAYER_BDAY || {})[v.sid];
   if (bl || pb) await ui.say(sp(v), pick(bl || [pb]) + tail(v)); else
-  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside && houseSid !== 'museum' || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || greetOf(v)) + tail(v));
+  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside && houseSid !== 'museum' || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || bond.recall(v) || greetOf(v)) + tail(v));
   if (weather.typhoon() && (room.inside || yuehome.inside || house.inside && houseSid !== 'museum') && roomHost === v) await typhoonTalk(v);
   else if (weather.afterTyphoon()) { const s0 = S(); s0.afterTalk = s0.afterTalk && s0.afterTalk.d === dayKey() ? s0.afterTalk : { d: dayKey(), who: {} }; if (!s0.afterTalk.who[v.sid]) { s0.afterTalk.who[v.sid] = true; save(); await ui.say(sp(v), L5(v.sid, 'after', ['颱風過去了，大家都平安就好。'])); } }
   { const rem = planner.remind(v); if (rem) await ui.say(sp(v), rem); }
@@ -378,10 +382,10 @@ async function villagerTalk(v) {
     const k = opts[i] ? opts[i][0] : 'bye';
     if (k === 'fn') { const r = await opts[i][2](); paintHud(); if (r === 'exit') return; continue; }
     if (k === 'bye') { await ui.say(sp(v), pick(['下次見！', '要常來找我喔！', '加油喔！']) + tail(v)); return; }
-    if (k === 'practice') { await ledger.run('practice', () => challenge.practice(v)); paintHud(); }
+    if (k === 'practice') { await ledger.run('practice', () => challenge.practice(v)); paintHud(); const t = lab.claimSmall(tutors()); if (t) ui.toast(t); }
     if (k === 'quiz') { await ledger.run('streak', () => challenge.streak(v)); paintHud(); }
     if (k === 'tip') { const n = (s.tips[v.sid] || 0) % (v.tips || []).length; s.tips[v.sid] = n + 1; save(); await ui.say(sp(v), (v.tips || ['多練習就會進步！'])[n] || '多練習就會進步！'); }
-    if (k === 'chat') await ui.say(sp(v), pick(v.chat || ['今天天氣真好。']) + tail(v));
+    if (k === 'chat') await ui.say(sp(v), bag('c:' + v.sid, v.chat || ['今天天氣真好。']) + tail(v));
     if (k === 'appraise') await appraise(v);
     if (k === 'donate') await donate(v);
     if (k === 'specimen') await specimen(v);
@@ -699,6 +703,7 @@ function phoneTrack() {
   const groups = L.trackGroups(), main = L.mainGroups(), body = ui.el('div', 'phone-sec hub');
   const top = ui.el('div', 'hub-top', `<span><b>要考：${groups.join('、')}</b><small>${main.length ? `主力考科：${main.join('、')}（每日潮汐的新題多一倍）` : '還沒選主力考科'}${L.phase() ? ` · ${L.phase() === 'final' ? '考前一週' : '考前 30 天'}` : ''}</small></span>`);
   const ed = ui.el('button', 'btn ghost sm', '調整航線'); ed.type = 'button'; ed.onclick = () => { ui.setBack(phoneTrack, '考科航線'); openProfile(); }; top.appendChild(ed); body.appendChild(top);
+  { const sm = semesterHtml(); if (sm) body.appendChild(ui.el('div', '', sm)); }   // v8.5 我的學期
   const weak = L.weakUnits(40).filter(w => w.weak), list = ui.el('div', 'hub-groups');
   groups.forEach(g => {
     const e = L.estimate(g === '數學' ? '數學A' : g), subs = TA.SUBJECTS.filter(x => x.group === g), w = weak.find(x => x.subject.group === g);
@@ -780,6 +785,7 @@ function phoneToday() {
       ${st.extra.rest ? `<div class="td-task opt done"><i>🌙</i><span><b>${st.extra.name}</b><small>最後幾天，睡飽比多寫一份考卷更有用</small></span><code></code></div>` : row('extra', '✨', `加碼（可選）：${st.extra.name}`, st.extra.all ? '三項加碼都完成了！' : '想多練一點再做；不做也算完成今天', st.extra.v, st.extra.need, `${st.extra.v} / ${st.extra.need}`, true)}
     </div>
     ${weekHtml()}
+    ${pinHtml()}
     ${borrowHtml()}
     <div class="rt-quiet">${route.quiet() ? `<span>🌿 ${route.quietWhy()}：島民不會主動找你出題</span>` : '<span>想安靜逛逛的話：</span>'}<button type="button" class="btn ghost rt-walk">${st.walk ? '結束散步模式' : st.shut ? '回到學習模式' : '🌿 散步模式'}</button></div>
     <div class="rv-slot"></div>
@@ -795,6 +801,7 @@ function phoneToday() {
   };
   { const w = body.querySelector('.rt-wk'); if (w) w.onclick = () => lab.openBook(tutors()); }
   body.querySelectorAll('[data-bw]').forEach(b => { b.onclick = () => borrowAct(b.dataset.bw); });
+  body.querySelectorAll('[data-pin]').forEach(b => { b.onclick = () => { pinSet(b.dataset.pin); phoneToday(); }; });
   body.querySelector('.rt-walk').onclick = () => { if (st.walk) route.setWalk(false); else if (st.shut) route.shut(false); else route.setWalk(true); Audio.sfx('tick'); paintHud(); phoneToday(); };
   body.querySelectorAll('[data-t]').forEach(b => { b.onclick = () => ({ study: () => (st.study.cram ? cram.open(paintHud) : voyage.openDaily()), life: () => { ui.closePanel(); ui.toast('島上的事任選一件：釣魚、捉蟲、挖化石、接委託、捐贈、送禮、澆花……'); }, extra: () => ({ daily: () => voyage.openDaily(), vocab: () => lexicon.flash(S0.vocLv || 0), focus: () => { ui.closePanel(); focus.open(paintHud); } })[st.extra.id]() })[b.dataset.t](); });
   body.querySelectorAll('[data-h]').forEach(b => { b.onclick = () => { ui.setBack(phoneToday, '今日學習'); ({ daily: () => voyage.openDaily(), vocab: () => lexicon.open(), track: phoneTrack, free: phoneFree })[b.dataset.h](); }; });
@@ -804,8 +811,10 @@ const tutors = () => villagers.filter(v => !v.shop && !v.guest);
 /** 本週計畫（lab.js）：今日學習裡的一行；還沒有導師願意聊研究時不顯示 */
 function weekHtml() {
   if (!tutors().some(v => lab.available(v))) return '';
-  const w = lab.weekLine(tutors());
-  return `<button type="button" class="rt-wk">${w ? `📌 本週計畫：${ui.esc(w.v.name)}「${ui.esc(w.title)}」第 ${w.stage} 階段${w.done ? ' ✔ 這週推進了' : w.ready ? `<b>可以推進了！找${ui.esc(w.v.name)}聊天</b>` : `<small>還差：${ui.esc(w.left.join('、'))}</small>`}` : '📌 選一個本週計畫：一次追蹤一位導師的研究，做完一個階段就是小島的永久成果'}</button>`;
+  const w = lab.weekLine(tutors()), sm = lab.weekSmall(tutors());
+  { const t = lab.claimSmall(tutors()); if (t) setTimeout(() => ui.toast(t), 300); }   // v8.5 本週小成果
+  const small = sm ? `<small class="rt-small">本週小成果：練 ${sm.need} 道${ui.esc((TA.subject(sm.v.sid) || {}).name || '')}題 ${sm.done ? '✔' : `${sm.n}/${sm.need}`}</small>` : '';
+  return small + `<button type="button" class="rt-wk">${w ? `📌 本週計畫：${ui.esc(w.v.name)}「${ui.esc(w.title)}」第 ${w.stage} 階段${w.done ? ' ✔ 這週推進了' : w.ready ? `<b>可以推進了！找${ui.esc(w.v.name)}聊天</b>` : `<small>還差：${ui.esc(w.left.join('、'))}</small>`}` : '📌 選一個本週計畫：一次追蹤一位導師的研究，做完一個階段就是小島的永久成果'}</button>`;
 }
 /** 鈴錢帳本（ledger.js）：最近 7 天的收入與支出，依來源分 */
 function openLedger() {
@@ -1339,7 +1348,7 @@ function sitTick(dt) {
       if (sitting.said === 1) {
         const s = S(), d = dayKey(); s.sitDay = s.sitDay && s.sitDay.d === d ? s.sitDay : { d, who: {} };
         memo.add(`和${v.name}一起${gold ? '看了夕陽' : night ? '看了星星' : '坐著吹風'}`, seasons.winter() ? '冬天的島，好安靜' : '', { key: 'sit:' + v.sid, icon: gold ? '🌅' : night ? '🌌' : '🪑' });
-        if (!s.sitDay.who[v.sid] && !v.guest) { s.sitDay.who[v.sid] = 1; s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + 1); s.stats = s.stats || {}; s.stats.sits = (s.stats.sits || 0) + 1; save(); setTimeout(() => ui.toast(`和${v.name}一起${gold ? '看了夕陽' : night ? '看了星星' : '坐著吹風'}，好感度 +1`), 1800); }
+        if (!s.sitDay.who[v.sid] && !v.guest) { s.sitDay.who[v.sid] = 1; bond.addFr(v, 1); s.stats = s.stats || {}; s.stats.sits = (s.stats.sits || 0) + 1; save(); setTimeout(() => ui.toast(`和${v.name}一起${gold ? '看了夕陽' : night ? '看了星星' : '坐著吹風'}，好感度 +1`), 1800); }
       }
     }
   } else if (v && !v.sitGoal && !v.sitting) sitting.mate = null;
@@ -1385,6 +1394,7 @@ function visit(v) {
   const home0 = v.guest ? v.roomLayout : (I.HOMES || {})[v.sid]; if (!home0) { ui.toast('門鎖著'); return; }
   const { home, shown } = v.guest ? { home: home0, shown: [] } : homeWithGifts(v, home0);
   life.cancel(); moveTo = null; if (!away) town.interrupt(v);
+  if (!away) bond.note(v, 'visit');   // v8.5 第一次到他家（主人在家時）
   const note = () => { if (away) setTimeout(() => ui.toast(w === 'sleep' ? `${v.name}睡著了……輕手輕腳地看看就好` : `${v.name}不在家。桌上留了紙條：「出去走走，自己坐喔！」`), 700); };
   if (house.has(v.sid) && !v.guest) {   // v7.6：整棟室內（外觀怎樣、裡面就怎樣）
     if (!away) { if (v.sitting) standVillager(v); v.sitGoal = null; }
@@ -1428,6 +1438,7 @@ async function spotAct(s, host, subject) {
   const pool = own ? s.lines : s.alone || s.lines, lines = pool && pool.length ? pool : ['……'];
   subject = s.subject || (subject && TA.subject(subject) ? subject : null);   // 圖書館、博物館不是科目：書桌的 subject 指定（博物館是歷史）
   if (houseSid === 'library' && s.id === 'reading_corner') { await seatMenu(who, lines); return; }   // v8.3 夾層的讀書椅：坐下來專注
+  if (houseSid === 'library' && s.id === 'rare_atlas') { await logbook(who, lines); return; }   // v8.5 圓塔的珍本：你的學期航海誌
   if (s.kind === 'study') { await ui.say(who, pick(lines)); ui.closeDialog(); await drill(who, picker(subject ? { mode: 'subject', subject } : { mode: 'mixed' }), 3, {}); return; }
   await ui.say(who, pick(lines));
 }
@@ -1471,6 +1482,61 @@ async function seatMenu(who, lines) {
   if (i === 0 || i === 1) { ui.closeDialog(); focus.begin(i ? 25 : 15, b ? b.sid : null, paintHud, '圖書館・夾層的讀書椅'); return; }
   if (i === 2) await ui.say(who, pick(lines));
 }
+/* ---------- v8.5 「這次先做」：在今日學習挑一件事，固定在任務欄最上面；量得到的會自動打勾，隔天換新的 ---------- */
+const dayN = () => L.dayRec();
+const musN = () => Object.values(S().museum || {}).reduce((a, o) => a + Object.keys(o || {}).length, 0);
+function pinOptions() {
+  const s = S(), b = s.borrow, th = museum.themeNow(), out = [];
+  if (b) out.push({ k: 'borrow', t: `讀借閱中的「${b.name}」，再用 5 題新題試試`, base: () => ((s.stats || {}).borrowTry || 0), done: v => ((s.stats || {}).borrowTry || 0) > v, go: () => borrowAct('read') });
+  if (L.reviewToday().left) out.push({ k: 'review', t: '做完今天的複習', base: () => 0, done: () => !L.reviewToday().left, go: () => hall.reviewGo(8) });
+  out.push({ k: 'donate', t: '捐一件新的展品給博物館', base: musN, done: v => musN() > v, go: () => ui.toast('釣魚、捉蟲、挖化石、潮池……帶去博物館找史遙，或放進捐贈箱') });
+  if (th) out.push({ k: 'theme', t: `湊齊本週小特展「${th.title}」`, base: () => 0, done: () => !!(s.themes || {})[th.id], go: () => ui.toast('到博物館圓廳的特展台看看還缺哪一件') });
+  out.push({ k: 'written', t: '寫一題非選題', base: () => dayN().wq || 0, done: v => (dayN().wq || 0) > v, go: () => written.open() });
+  out.push({ k: 'vocab', t: '翻 20 張單字卡', base: () => dayN().voc || 0, done: v => (dayN().voc || 0) >= v + 20, go: () => lexicon.open() });
+  out.push({ k: 'mock', t: '做一次模擬考（短版也可以）', base: () => (TA.S.exams || []).length, done: v => (TA.S.exams || []).length > v, go: () => hall.openMock() });
+  return out;
+}
+function pinNow() {
+  const p = S().pin; if (!p || p.d !== dayKey()) return null;
+  const o = pinOptions().find(x => x.k === p.k); if (!o) return null;
+  const done = o.done(p.v); if (done && !p.cel) { p.cel = 1; save(); setTimeout(() => ui.toast(`📌 完成了：${o.t}`), 300); Audio.sfx('ok'); }
+  return { t: o.t, done };
+}
+function pinSet(k) { const s = S(); if (!k) { s.pin = null; save(); return; } const o = pinOptions().find(x => x.k === k); if (!o) return; s.pin = { k, d: dayKey(), v: o.base(), cel: 0 }; save(); Audio.sfx('tick'); paintHud(); }
+function pinGo() { const p = S().pin, o = p && pinOptions().find(x => x.k === p.k); if (o) o.go(); else phoneToday(); }
+function pinHtml() {
+  const p = S().pin && S().pin.d === dayKey() ? S().pin : null, opts = pinOptions();
+  if (p) { const o = opts.find(x => x.k === p.k), done = o && o.done(p.v); return `<div class="td-borrow"><span>📌 這次先做：<b>${ui.esc(o ? o.t : '')}</b>${done ? '　✔ 完成了' : '（固定在左上角的任務欄）'}</span><button type="button" class="btn ghost sm" data-pin="">${done ? '換一件' : '取消'}</button></div>`; }
+  return `<div class="td-borrow"><span>📌 這次先做哪一件？挑一件固定在任務欄最上面（可選）</span>${opts.map(o => `<button type="button" class="btn ghost sm" data-pin="${o.k}">${ui.esc(o.t)}</button>`).join('')}</div>`;
+}
+/* ---------- v8.5 學期航海誌：每個月從回憶錄挑一件真的發生過的事，收在圖書館圓塔；我的學期：只算你要考的考科 ---------- */
+async function logbook(who, lines) {
+  const LB = S().logbook || {}, ks = Object.keys(LB).sort();
+  if (!ks.length) { await ui.say(who, pick(lines) + '……旁邊有一本空白的航海誌。在回憶錄挑一件這個月的事收進來，它就會寫在這裡。'); return; }
+  await ui.say(who, `${pick(lines)}……旁邊那本是你的航海誌，已經有 ${ks.length} 頁了。`);
+  const body = ui.el('div', 'wb', `<ul class="wb-list">${ks.map(k => { const e = LB[k]; return `<li><b>${k.slice(0, 4)} 年 ${+k.slice(5)} 月</b>　${e.icon} ${ui.esc(e.title)}${e.sub ? `<br><small>${ui.esc(e.sub)}</small>` : ''}</li>`; }).join('')}</ul><p class="muted">每個月一頁，在手機的「回憶錄」挑。答錯又修好、第一次說清楚一個觀念，都很值得收進來。</p>`);
+  ui.closeDialog(); ui.panel('學期航海誌', body, { cls: 'letter-p' });
+}
+const tutorOf = sid => villagers.find(v => v.sid === sid && !v.guest);
+function semester() {
+  const Q = TA.S.q, s0 = S(), subs = TA.SUBJECTS.filter(s => L.inTrack(s.id) && tutorOf(s.id));
+  const rows = subs.map(s => {
+    const ids = L.BY_SUBJECT[s.id] || [], fixed = ids.filter(id => { const r = Q[id]; return r && r.wr > 0 && r.s >= 3; }).length, mast = ids.filter(id => (Q[id] || {}).s >= L.MASTER_BOX).length, lab = ((s0.lab || {})[s.id] || {}).stage || 0;
+    return { s, items: [['錯題', Math.min(fixed, 5), 5], ['熟練', Math.min(mast, 40), 40], ['研究', Math.min(lab, 1), 1]] };
+  });
+  const full = (TA.S.exams || []).some(e => !e.drill && L.trackGroups().includes(e.group) && L.MOCK[e.group] && e.n >= L.MOCK[e.group].realN * 0.9);
+  const all = rows.flatMap(r => r.items).concat([['做一次整卷模擬考', full ? 1 : 0, 1]]), done = all.filter(([, v, n]) => v >= n).length;
+  return { rows, full, done, total: all.length };
+}
+function semesterHtml() {
+  const m = semester(); if (!m.rows.length) return '';
+  const s0 = S(); if (m.done >= m.total && !s0.semDone) { s0.semDone = Date.now(); s0.bells += 5000; save(); memo.add('我的學期', `要考的 ${m.rows.length} 科都完成了學期目標：修好錯題、熟練、研究，還有一次整卷模考。`, { icon: '🎓' }); setTimeout(() => ui.toast('🎓 我的學期完成了！+5,000 鈴錢'), 300); }
+  const it = ([t, v, n]) => `<i class="${v >= n ? 'ok' : ''}">${v >= n ? `✔ ${t}` : `${t} ${v}/${n}`}</i>`;   // 科目多時預設收起來，不把考科清單擠到下面
+  return `<details class="hub-sem"${m.rows.length <= 4 && m.done < m.total ? ' open' : ''}><summary><b>🎓 我的學期 ${m.done} / ${m.total}</b><small>${m.done >= m.total ? '完成了！' : '點開看每科還差什麼'}</small></summary>`
+    + `<small>每一科：修好 5 道錯題、熟練 40 題、和那一科的導師完成一個研究階段；再加一次整卷模擬考。只算你要考的考科（「調整航線」可改）。</small>`
+    + m.rows.map(r => `<div><span><em style="background:${r.s.color}"></em>${r.s.name}</span>${r.items.map(it).join('')}</div>`).join('')
+    + `<div><span>模考</span>${it(['整卷一次', m.full ? 1 : 0, 1]).replace('<i ', '<i style="grid-column: span 3" ')}</div></details>`;
+}
 /** 今日學習的「借閱中」 */
 function borrowHtml() {
   const b = S().borrow; if (!b) return '';
@@ -1479,7 +1545,7 @@ function borrowHtml() {
 function borrowAct(k) {
   const b = S().borrow; if (!b) return;
   if (k === 'read') { ui.setBack(phoneToday, '今日學習'); library.openNotes(b.sid, b.unit); return; }
-  if (k === 'try') { const ids = L.pickUnit(b.unit, 5); if (!ids.length) { ui.toast('這個單元暫時沒有題目'); return; } hall.runSet(`${b.name} · 讀完試試`, ids, { again: phoneToday }); return; }
+  if (k === 'try') { const ids = L.pickUnit(b.unit, 5); if (!ids.length) { ui.toast('這個單元暫時沒有題目'); return; } const st = S().stats = S().stats || {}; st.borrowTry = (st.borrowTry || 0) + 1; save(); hall.runSet(`${b.name} · 讀完試試`, ids, { again: phoneToday }); return; }
   S().borrow = null; save(); ui.toast(`「${b.name}」還回書架了`); phoneToday();
 }
 /** 捐完：館裡馬上擺上新展品；問要不要去看看它的位置（小光點指路） */
@@ -1548,7 +1614,7 @@ function enterMuseum() {
   life.cancel(); moveTo = null;
   if (house.has('museum')) {
     const f = SITES.museum, v = villagers.find(x => x.sid === 'history'), at = !!v && !v.away && v.mesh.visible && Math.hypot(v.mesh.position.x - f.front[0], v.mesh.position.z - f.front[1]) < 8;   // 史遙守在博物館門口：她在附近的話，進館後她站在服務台
-    if (at) { town.interrupt(v); if (v.sitting) standVillager(v); v.sitGoal = null; }
+    if (at) { town.interrupt(v); if (v.sitting) standVillager(v); v.sitGoal = null; bond.note(v, 'visit'); }
     const gv = hallVisitor('museum'), guests = gv ? [{ v: gv, at: (at ? [[4.75, 0, 3.9, -0.7], [5.0, 0, 5.6, -2.3], [2.9, 0, 4.0, 0.9]] : []).concat([[-1.6, 0, -1.6, -0.8], [1.6, 0, -1.6, 0.8], [-6.6, 0, 1.6, 2.4]]) }] : [];   // v8.3 偶爾有島民來找史遙（或來看展）
     const back = () => { museum.undress(); if (at) { v.mesh.position.set(f.front[0], ground(f.front[0], f.front[1]), f.front[1]); v.target = v.home.slice(); } if (gv) { gv.target = gv.home.slice(); } };
     if (enterPublic('museum', at ? v : null, [f.x, f.z + 2.6], { dress: museum.dress, spots: ud => museum.spots(ud), guests, after: back })) { museum.welcome(); return; }
@@ -1604,7 +1670,7 @@ async function typhoonTalk(v, byPhone) {
   if (i !== 0) return;
   T.quiz[v.sid] = true; save();
   const res = await drill(sp(v), picker({ mode: 'ids', ids }), 3, {});
-  const b = 300 + res.ok * 300, before = s.fr[v.sid] || 0; s.bells += b; s.fr[v.sid] = Math.min(20, before + 1); save();
+  const b = 300 + res.ok * 300, before = s.fr[v.sid] || 0; s.bells += b; bond.addFr(v, 1); save();
   await ui.say(null, `${label}讀書會：答對 ${res.ok} / ${res.n} 題，得到 ${b} 鈴錢${s.fr[v.sid] > before ? `，${v.name}的好感度 +1` : `（${v.name}的好感度已滿）`}`);
 }
 /** 手機「颱風電話」：颱風天待在室內，也能和島民聊防災 */
@@ -1771,6 +1837,7 @@ function startGame() {
     openCram: () => { if (!talking && !ui.dialogOpen()) cram.open(paintHud); },
     openPassport: () => { if (!talking && !ui.dialogOpen()) passport.open(openGame); },
     labReady: () => { const v = lab.firstReady(villagers.filter(x => !x.shop && !x.guest)); return v ? v.name : ''; },
+    pin: () => pinNow(), openPin: () => { if (!talking && !ui.dialogOpen()) pinGo(); },
     env: () => ({ hour: hourOverride ?? nowHour(), date: simDate(), raining: weather.raining(), tourney: !!life.tourney }),
   });
   paintTools(); paintHud();

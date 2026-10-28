@@ -50,7 +50,8 @@ export async function open() {
   const body = ui.el('div', 'memo');
   const paint = async () => {
     const L = list().slice().reverse();
-    body.innerHTML = `<div class="mm-top"><span>共 ${L.length} 個回憶</span></div>`;
+    const LB = S().logbook || {};
+    body.innerHTML = `<div class="mm-top"><span>共 ${L.length} 個回憶${Object.keys(LB).length ? ` · 航海誌 ${Object.keys(LB).length} 頁（在圖書館的圓塔翻閱）` : ''}</span></div>`;
     const write = ui.el('button', 'btn gold', '✏️ 寫下今天'); write.type = 'button'; write.onclick = () => diary(paint); body.querySelector('.mm-top').appendChild(write);
     if (!L.length) { body.appendChild(ui.el('p', 'muted', '還沒有回憶。釣到第一條魚、和島民一起看夕陽、遇到第一場雪……這些時刻都會自動記在這裡。')); return; }
     let month = '';
@@ -59,6 +60,9 @@ export async function open() {
       const m = e.d.slice(0, 7); if (m !== month) { month = m; wrap.appendChild(ui.el('h4', 'mm-month', `${m.slice(0, 4)} 年 ${+m.slice(5)} 月`)); }
       const card = ui.el('div', 'mm-card', `<div class="mm-pic">${e.img ? '' : `<span>${e.icon}</span>`}</div><div class="mm-txt"><small>${fmt(e.d)}</small><b>${e.icon} ${ui.esc(e.title)}</b>${e.sub ? `<p>${ui.esc(e.sub)}</p>` : ''}</div>`);
       if (e.img) getImg(e.t).then(u => { if (u) { const im = new Image(); im.src = u; im.alt = ''; card.querySelector('.mm-pic').appendChild(im); card.querySelector('.mm-pic').onclick = () => zoom(u, e); } }).catch(() => {});
+      { const pg = LB[m], on = pg && pg.t === e.t, lb = ui.el('button', 'btn ghost sm mm-lb' + (on ? ' on' : ''), on ? '📖 這個月的航海誌' : pg ? '📖 改成這一頁' : '📖 收進這個月的航海誌'); lb.type = 'button';   // v8.5 每個月挑一件
+        lb.onclick = () => { if (on) return; const s = S(); s.logbook = s.logbook || {}; s.logbook[m] = { t: e.t, d: e.d, title: e.title, sub: e.sub || '', icon: e.icon }; save(); Audio.sfx('pop'); ui.toast(`收進 ${+m.slice(5)} 月的航海誌：可以到圖書館圓塔翻閱`); paint(); };
+        card.querySelector('.mm-txt').appendChild(lb); }
       wrap.appendChild(card);
     }
     body.appendChild(wrap);
