@@ -1495,9 +1495,9 @@ async function seatMenu(who, lines) {
 const dayN = () => L.dayRec();
 const musN = () => Object.values(S().museum || {}).reduce((a, o) => a + Object.keys(o || {}).length, 0);
 function pinOptions() {
-  const s = S(), b = s.borrow, th = museum.themeNow(), out = [];
+  const s = S(), b = s.borrow, th = museum.themeNow(), out = [], pk = s.pin && s.pin.d === dayKey() ? s.pin.k : null;   // pk：今天釘選的那件，條件消失了也要留著（才看得到「完成了」）
   if (b) out.push({ k: 'borrow', t: `讀借閱中的「${b.name}」，再用 5 題新題試試`, base: () => ((s.stats || {}).borrowTry || 0), done: v => ((s.stats || {}).borrowTry || 0) > v, go: () => borrowAct('read') });
-  if (L.reviewToday().left) out.push({ k: 'review', t: '做完今天的複習', base: () => 0, done: () => !L.reviewToday().left, go: () => hall.reviewGo(8) });
+  if (L.reviewToday().left || pk === 'review') out.push({ k: 'review', t: '做完今天的複習', base: () => 0, done: () => !L.reviewToday().left, go: () => hall.reviewGo(8) });
   out.push({ k: 'donate', t: '捐一件新的展品給博物館', base: musN, done: v => musN() > v, go: () => ui.toast('釣魚、捉蟲、挖化石、潮池……帶去博物館找史遙，或放進捐贈箱') });
   if (th) out.push({ k: 'theme', t: `湊齊本週小特展「${th.title}」`, base: () => 0, done: () => !!(s.themes || {})[th.id], go: () => ui.toast('到博物館圓廳的特展台看看還缺哪一件') });
   out.push({ k: 'written', t: '寫一題非選題', base: () => dayN().wq || 0, done: v => (dayN().wq || 0) > v, go: () => written.open() });
@@ -1507,15 +1507,15 @@ function pinOptions() {
 }
 function pinNow() {
   const p = S().pin; if (!p || p.d !== dayKey()) return null;
-  const o = pinOptions().find(x => x.k === p.k); if (!o) return null;
+  const o = pinOptions().find(x => x.k === p.k); if (!o) return p.t ? { t: p.t, done: false } : null;   // 借閱還書、特展換週：留著原本的字，可以取消
   const done = o.done(p.v); if (done && !p.cel) { p.cel = 1; save(); setTimeout(() => ui.toast(`📌 完成了：${o.t}`), 300); Audio.sfx('ok'); }
   return { t: o.t, done };
 }
-function pinSet(k) { const s = S(); if (!k) { s.pin = null; save(); return; } const o = pinOptions().find(x => x.k === k); if (!o) return; s.pin = { k, d: dayKey(), v: o.base(), cel: 0 }; save(); Audio.sfx('tick'); paintHud(); }
+function pinSet(k) { const s = S(); if (!k) { s.pin = null; save(); return; } const o = pinOptions().find(x => x.k === k); if (!o) return; s.pin = { k, d: dayKey(), v: o.base(), cel: 0, t: o.t }; save(); Audio.sfx('tick'); paintHud(); }
 function pinGo() { const p = S().pin, o = p && pinOptions().find(x => x.k === p.k); if (o) o.go(); else phoneToday(); }
 function pinHtml() {
   const p = S().pin && S().pin.d === dayKey() ? S().pin : null, opts = pinOptions();
-  if (p) { const o = opts.find(x => x.k === p.k), done = o && o.done(p.v); return `<div class="td-borrow"><span>📌 這次先做：<b>${ui.esc(o ? o.t : '')}</b>${done ? '　✔ 完成了' : '（固定在左上角的任務欄）'}</span><button type="button" class="btn ghost sm" data-pin="">${done ? '換一件' : '取消'}</button></div>`; }
+  if (p) { const o = opts.find(x => x.k === p.k), done = o && o.done(p.v); return `<div class="td-borrow"><span>📌 這次先做：<b>${ui.esc(o ? o.t : p.t || '')}</b>${done ? '　✔ 完成了' : '（固定在左上角的任務欄）'}</span><button type="button" class="btn ghost sm" data-pin="">${done ? '換一件' : '取消'}</button></div>`; }
   return `<div class="td-borrow"><span>📌 這次先做哪一件？挑一件固定在任務欄最上面（可選）</span>${opts.map(o => `<button type="button" class="btn ghost sm" data-pin="${o.k}">${ui.esc(o.t)}</button>`).join('')}</div>`;
 }
 /* ---------- v8.5 學期航海誌：每個月從回憶錄挑一件真的發生過的事，收在圖書館圓塔；我的學期：只算你要考的考科 ---------- */
@@ -1533,7 +1533,8 @@ function semester() {
     const ids = L.BY_SUBJECT[s.id] || [], fixed = ids.filter(id => { const r = Q[id]; return r && r.wr > 0 && r.s >= 3; }).length, mast = ids.filter(id => (Q[id] || {}).s >= L.MASTER_BOX).length, lab = ((s0.lab || {})[s.id] || {}).stage || 0;
     return { s, items: [['錯題', Math.min(fixed, 5), 5], ['熟練', Math.min(mast, 40), 40], ['研究', Math.min(lab, 1), 1]] };
   });
-  const full = (TA.S.exams || []).some(e => !e.drill && L.trackGroups().includes(e.group) && L.MOCK[e.group] && e.n >= L.MOCK[e.group].realN * 0.9);
+  const grp = g => /^數學/.test(g || '') ? '數學' : g, mk = g => L.MOCK[g === '數學' ? '數學A' : g];   // 航線是「數學」，模考卷是「數學A／數學B」（舊紀錄是「數學」）
+  const full = (TA.S.exams || []).some(e => !e.drill && L.trackGroups().includes(grp(e.group)) && mk(e.group) && e.n >= mk(e.group).realN * 0.9);
   const all = rows.flatMap(r => r.items).concat([['做一次整卷模擬考', full ? 1 : 0, 1]]), done = all.filter(([, v, n]) => v >= n).length;
   return { rows, full, done, total: all.length };
 }
@@ -1554,7 +1555,7 @@ function borrowHtml() {
 function borrowAct(k) {
   const b = S().borrow; if (!b) return;
   if (k === 'read') { ui.setBack(phoneToday, '今日學習'); library.openNotes(b.sid, b.unit); return; }
-  if (k === 'try') { const ids = L.pickUnit(b.unit, 5); if (!ids.length) { ui.toast('這個單元暫時沒有題目'); return; } const st = S().stats = S().stats || {}; st.borrowTry = (st.borrowTry || 0) + 1; save(); hall.runSet(`${b.name} · 讀完試試`, ids, { again: phoneToday }); return; }
+  if (k === 'try') { const ids = L.pickUnit(b.unit, 5); if (!ids.length) { ui.toast('這個單元暫時沒有題目'); return; } hall.runSet(`${b.name} · 讀完試試`, ids, { again: phoneToday, finish: () => { const st = S().stats = S().stats || {}; st.borrowTry = (st.borrowTry || 0) + 1; save(); } }); return; }   // v8.6 交卷才算試過（「這次先做」以前一開始作答就打勾）
   S().borrow = null; save(); ui.toast(`「${b.name}」還回書架了`); phoneToday();
 }
 /** 捐完：館裡馬上擺上新展品；問要不要去看看它的位置（小光點指路） */

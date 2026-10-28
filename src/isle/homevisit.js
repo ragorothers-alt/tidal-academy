@@ -6,6 +6,7 @@ import { I, S, save } from './state.js';
 import { pick, dayKey } from './quiz.js';
 import { drill, picker } from './drill.js';
 import * as gifts from './gifts.js';
+import * as bond from './bond.js';
 import * as memo from './memo.js';
 import * as room from './room.js';
 
@@ -62,7 +63,7 @@ export async function talk(v, sp) {
     const b = 200 + res.ok * 200; s.bells += b; gain += res.ok >= 2 ? 2 : 1;
     await ui.say(null, `作客讀書會：答對 ${res.ok} / ${res.n} 題，得到 ${b} 鈴錢`);
   }
-  s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + gain); s.stats = s.stats || {}; s.stats.homeVisits = (s.stats.homeVisits || 0) + 1; save();
+  bond.addFr(v, gain); s.stats = s.stats || {}; s.stats.homeVisits = (s.stats.homeVisits || 0) + 1; save();   // v8.6 好感到上限後多出來的也變成共同回憶
   await ui.say(null, `${v.name}的好感度 +${gain}`);
   return bye(v, sp, t);
 }

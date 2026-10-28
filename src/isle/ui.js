@@ -281,7 +281,7 @@ $('dlg').addEventListener('click', e => { if (cardRes || !D.open || D.choices ||
 const held = [];
 /** v8.2 手機上作答時，通知先排隊，答完才出來（不會蓋住題目的選項） */
 function holdToast() {   // v8.6 還沒登記完、手機上季節大字還在：通知先排隊，不和標題擠在一起
-  return (D.choices && D.quiz && innerWidth < 760) || !((TA.S || {}).profile || {}).onboarded || (innerWidth < 760 && !!document.querySelector('.season-banner'));
+  return ((D.choices || D.input) && D.quiz && innerWidth < 760) || !((TA.S || {}).profile || {}).onboarded || (innerWidth < 760 && !!document.querySelector('.season-banner'));
 }
 export function toast(text, tone) {
   if (holdToast()) { if (!held.length) { const iv = setInterval(() => { if (holdToast()) return; clearInterval(iv); held.splice(0).forEach(([a, b]) => toast(a, b)); }, 300); } if (held.length < 4) held.push([text, tone]); return; }
