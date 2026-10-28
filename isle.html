@@ -14,7 +14,7 @@
 <body>
 <canvas id="cv"></canvas>
 <div id="labels"></div>
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite"></div>
 
 <header class="hud-top">
   <div class="hud-left"><div class="clock"><b id="hm">12:00</b><small id="date"></small><i id="wx">☀</i></div><div class="quest" id="quest" hidden></div></div>
@@ -23,10 +23,10 @@
 <div class="hud-bl" id="tools"></div>
 <div class="tourney" id="tourney" hidden></div>
 <div class="hud-br">
-  <button class="round-btn design-btn" id="designBtn" type="button" title="島嶼設計 (G)">🌷</button>
+  <button class="round-btn design-btn" id="designBtn" type="button" title="島嶼設計 (G)" aria-label="島嶼設計">🌷</button>
   <button class="round-btn decor-btn" id="decorBtn" type="button" title="裝潢 (F)">🛋</button>
-  <button class="round-btn" id="pocketBtn" type="button" title="口袋 (I)">🎒</button>
-  <button class="round-btn" id="phoneBtn" type="button" title="潮汐手機 (Tab)"><svg viewBox="0 0 48 48" width="30" height="30" aria-hidden="true"><rect x="12.5" y="5" width="23" height="38" rx="7" fill="#fffbe9" stroke="#25a58a" stroke-width="3.4"/><rect x="16.5" y="11" width="15" height="21" rx="3.2" fill="#8fe6cf"/><path d="M24 14.5c4.6 1.4 5.6 5.6 3.2 9.3-3.6-1-5.6-4.6-3.2-9.3z" fill="#fff"/><path d="M24.6 23.6l-2.4-5.2" stroke="#8fe6cf" stroke-width="1.2" stroke-linecap="round"/><circle cx="24" cy="37.4" r="2.4" fill="#25a58a"/></svg></button>
+  <button class="round-btn" id="pocketBtn" type="button" title="口袋 (I)" aria-label="口袋">🎒</button>
+  <button class="round-btn" id="phoneBtn" type="button" title="潮汐手機 (Tab)" aria-label="潮汐手機"><svg viewBox="0 0 48 48" width="30" height="30" aria-hidden="true"><rect x="12.5" y="5" width="23" height="38" rx="7" fill="#fffbe9" stroke="#25a58a" stroke-width="3.4"/><rect x="16.5" y="11" width="15" height="21" rx="3.2" fill="#8fe6cf"/><path d="M24 14.5c4.6 1.4 5.6 5.6 3.2 9.3-3.6-1-5.6-4.6-3.2-9.3z" fill="#fff"/><path d="M24.6 23.6l-2.4-5.2" stroke="#8fe6cf" stroke-width="1.2" stroke-linecap="round"/><circle cx="24" cy="37.4" r="2.4" fill="#25a58a"/></svg></button>
   <div class="bells"><i class="bell"></i><b id="bells">0</b><i class="gem" title="潮晶：答題、單字、專注與成就的獎勵"></i><b id="gems">0</b></div>
 </div>
 <button class="act-btn" id="actBtn" type="button">動作</button>
@@ -34,7 +34,7 @@
 <div class="joy" id="joy"><i id="joyKnob"></i></div>
 <div class="place-bar" id="placeBar"><button type="button" id="pbRotate">↻ 旋轉</button><button type="button" id="pbCancel">✕ 結束</button></div>
 
-<div class="dlg" id="dlg" hidden>
+<div class="dlg" id="dlg" hidden role="dialog" aria-live="polite">
   <div class="dlg-bubble">
     <span class="dlg-name" id="dlgName"></span>
     <div class="dlg-timer" id="dlgTimer" hidden><i></i></div>
@@ -44,8 +44,8 @@
   <div class="choices" id="choices"></div>
 </div>
 <div class="passage" id="passage" hidden></div>
-<div class="card" id="card" hidden></div>
-<div class="panel" id="panel" hidden><div class="pn-box" id="panelBox"></div></div>
+<div class="card" id="card" hidden role="dialog" aria-modal="true"></div>
+<div class="panel" id="panel" hidden><div class="pn-box" id="panelBox" role="dialog" aria-modal="true" aria-labelledby="pnTitle"></div></div>
 
 <div class="splash" id="splash">
   <div class="logo"><span>潮汐</span><b>小島</b></div>

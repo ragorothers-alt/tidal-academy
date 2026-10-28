@@ -170,7 +170,7 @@ function areaName(x, z) {
 export function init(o) {
   opts = o;
   el = document.createElement('div'); el.className = 'minimap'; el.id = 'minimap';
-  el.innerHTML = `<div class="mini-ring"><canvas></canvas><i class="mini-n">N</i></div><div class="mini-zoom"><button type="button" data-z="-1" title="放大">＋</button><button type="button" data-z="1" title="縮小">－</button></div><div class="mini-name"></div>`;
+  el.innerHTML = `<div class="mini-ring"><canvas></canvas><i class="mini-n">N</i></div><div class="mini-zoom"><button type="button" data-z="-1" title="放大" aria-label="放大小地圖">＋</button><button type="button" data-z="1" title="縮小" aria-label="縮小小地圖">－</button></div><div class="mini-name"></div>`;
   document.body.appendChild(el); document.body.classList.add('has-minimap');
   cv = el.querySelector('canvas'); ctx = cv.getContext('2d'); nameEl = el.querySelector('.mini-name');
   zoomI = Math.max(0, Math.min(2, (o.S().mmZoom ?? 1)));

@@ -18,7 +18,7 @@
 import * as THREE from 'three';
 import { camera, U, CURVE, M, skyU, renderer, scene as isle, HZ, sky, WL } from './engine.js';
 import { animate } from './chars.js';
-import { buildFurniture, furn, rbox, foot } from './room.js';
+import { buildFurniture, disposeFurniture, furn, rbox, foot } from './room.js';
 import { mergeStatic, homes, BLDG } from './props.js';
 import * as props3d from './props3d.js';
 import * as grass from './grass.js';
@@ -68,6 +68,9 @@ const viewMat = new THREE.ShaderMaterial({
       #include <colorspace_fragment>
     }`
 });
+/* v8.6 各棟室內會 clone 窗景材質再換回共用的 uniforms：預設的 clone 會複製 uniforms，碰到即時島景的 render target 就警告（以前每次進門都一則）。
+   這裡改成 clone 時直接共用 uniforms（呼叫端本來就會換成共用的或自己的） */
+viewMat.clone = function () { const u = this.uniforms; this.uniforms = {}; const c = THREE.ShaderMaterial.prototype.clone.call(this); this.uniforms = u; c.uniforms = u; return c; };
 /* 拍全景：借主鏡頭（90 度、正方形）站在房子中央離地 2.2 公尺，依序對著立方體的六個面；每一面用這一面的鏡頭重算草、模型與陰影的剔除（島上的剔除都是照主鏡頭算的）。
    島上不彎曲（室內本來就關掉了；六個面彎的方向不同，接縫會對不上）、地平線遮擋不算、這棟房子的外觀先藏起來（鏡頭在它裡面）。
    畫成 HDR 的線性顏色，和室內一起進後製（調色、泛光）。拍完把鏡頭與狀態還原 */
@@ -190,7 +193,7 @@ function beamGeo(wins, sd) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('aAxis', new THREE.Float32BufferAttribute(AX, 3));
   g.setAttribute('aSA', new THREE.Float32BufferAttribute(SA, 2)); g.setAttribute('aW', new THREE.Float32BufferAttribute(W, 1)); g.setAttribute('aF', new THREE.Float32BufferAttribute(F, 1)); g.setIndex(IX); return g;
 }
-const FX = { beam: null, dust: null, halos: [], sky: [], glow: [], sd: new THREE.Vector3(), beamT: 0 };
+const FX = { beam: null, dust: null, halos: [], sky: [], glow: [], boxes: [], sd: new THREE.Vector3(), beamT: 0 };
 const _sd = new THREE.Vector3();
 /** 屋裡的主光方向：島上真正的太陽（晚上是月亮）換到室內的座標，仰角限制在 17–40 度之間（光才照得進窗、落在地板上） */
 function interiorSun(out) {
@@ -229,6 +232,13 @@ function fxEnter() {
   });
   scene.fog = new THREE.Fog('#bfa9b2', 8, 60);
 }
+// v8.6 只釋放本次進門的幾何與燈暈材質，光束／微塵材質及貼圖共用。
+function fxLeave() {
+  if (FX.beam) FX.beam.geometry.dispose(); if (FX.dust) FX.dust.geometry.dispose();
+  FX.halos.forEach(s => { if (s.material) s.material.dispose(); });
+  FX.boxes.forEach(o => o.geometry.dispose());
+  FX.beam = FX.dust = null; FX.halos = []; FX.sky = []; FX.glow = []; FX.boxes = [];
+}
 function fxTick(dt, t, n, gold) {
   const day = 1 - n; beamU.uTime.value = dustU.uTime.value = t; beamU.uPY.value = P.position.y;
   FX.beamT += dt;
@@ -266,7 +276,7 @@ function orient(o, t, d) {
   _gx.copy(t).normalize(); _gz.copy(d).negate().addScaledVector(_gx, _gx.dot(d)).normalize(); _gy.crossVectors(_gz, _gx);
   o.quaternion.setFromRotationMatrix(_gm.makeBasis(_gx, _gy, _gz));
 }
-function glowBox(w, h, d, m, p, t, face) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.copy(p); orient(o, t, face); o.castShadow = false; o.receiveShadow = true; scene.add(o); extra.push(o); return o; }
+function glowBox(w, h, d, m, p, t, face) { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.copy(p); orient(o, t, face); o.castShadow = false; o.receiveShadow = true; scene.add(o); extra.push(o); FX.boxes.push(o); return o; }
 function glowEnter() {
   FX.glow = [];
   let nr = 0, ns = 0;
@@ -372,7 +382,7 @@ function unmark() { if (!beacon) return; scene.remove(beacon); beacon.geometry.d
 /* 玩家家「我的房間」：照存檔的格子把家具擺進整棟室內（每件可以按 E 查看；入口有「佈置房間」） */
 let decorObjs = [], decorCols = [], decorSpots = [];
 function placeDecor(dec) {
-  decorObjs.forEach(o => scene.remove(o)); decorObjs = []; decorCols = []; decorSpots = [];
+  decorObjs.forEach(o => { scene.remove(o); disposeFurniture(o); }); decorObjs = []; decorCols = []; decorSpots = [];
   const D = cur.ud.decor; if (!D || !dec) return;
   cur.papers.forEach(o => { o.material = o.userData.paper === 'floor' ? dec.floor : dec.wall; });
   let nl = 0;
@@ -440,7 +450,7 @@ export function leave(o) {
   if (!inside) return null; inside = false;
   restore(P, savedP); if (host) restore(host.mesh, hostSaved); host = null;
   guests.forEach(o => restore(o.v.mesh, o.snap)); guests = []; visitSpots = []; dressObjs.forEach(o => scene.remove(o)); dressObjs = []; dressFn = null; unmark();
-  scene.remove(cur.g); extra.forEach(x => scene.remove(x)); extra.length = 0; extraCols.length = 0; placeDecor(null);
+  fxLeave(); scene.remove(cur.g); extra.forEach(x => { scene.remove(x); disposeFurniture(x); }); extra.length = 0; extraCols.length = 0; placeDecor(null);
   U.uCurve.value = savedCurve || CURVE; document.body.classList.remove('in-house'); ui.iris(); Audio.sfx('open');
   const cb = onExit; onExit = null; if (o && o.keep) return cb;
   if (cb) cb(); return null;

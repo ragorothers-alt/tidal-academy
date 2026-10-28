@@ -54,7 +54,8 @@ export function grab(canvas) {
   lastUrl = url;
 }
 let lastUrl = null;
-function flash() { const f = ui.el('div', 'photo-flash'); document.body.appendChild(f); setTimeout(() => f.remove(), 450); }
+function flash() { if (ui.REDUCE.matches) return; const f = ui.el('div', 'photo-flash');   // v8.6 減少動態效果：不白閃
+  document.body.appendChild(f); setTimeout(() => f.remove(), 450); }
 
 /* ---------- 相簿（IndexedDB） ---------- */
 const DB = 'tidal-isle-photos', ST = 'photos', MAX = 30;

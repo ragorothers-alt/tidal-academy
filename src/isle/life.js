@@ -53,22 +53,25 @@ function removeShadow(f) { f.st = 'gone'; }
 
 /* ---------- 釣竿 ---------- */
 let rod = null; // {bob, line, fish, t, state}
-const bobGeo = new THREE.SphereGeometry(0.09, 10, 8);
+const rodTip = new THREE.Vector3(), rodDir = new THREE.Vector3(), rodEnd = new THREE.Vector3(), rodPts = Array.from({ length: 11 }, () => new THREE.Vector3());
+const flyPts = [rodTip, rodEnd];
+const bobGeo = new THREE.SphereGeometry(0.09, 10, 8), bobCapGeo = new THREE.SphereGeometry(0.09, 10, 8, 0, 6.3, Math.PI / 2, Math.PI / 2);
 function cast() {
   const d = fwd(), p = P.position;
   let tx = p.x + d.x * 3.2, tz = p.z + d.z * 3.2, w = waterAt(tx, tz);
   if (!w) { tx = p.x + d.x * 2.2; tz = p.z + d.z * 2.2; w = waterAt(tx, tz); }
   if (!w) { ui.toast('要面向水面才能拋竿喔'); return; }
   const y = w === 'river' ? (waterY(tx, tz) ?? 0.7) + 0.02 : 0.05;
-  const g = new THREE.Group(); g.add(mesh(bobGeo, M('#ef6f5e'), 0, 0.04, 0, { noCast: true }), mesh(new THREE.SphereGeometry(0.09, 10, 8, 0, 6.3, Math.PI / 2, Math.PI / 2), M('#ffffff'), 0, 0.04, 0, { noCast: true }));
+  const g = new THREE.Group(); g.add(mesh(bobGeo, M('#ef6f5e'), 0, 0.04, 0, { noCast: true }), mesh(bobCapGeo, M('#ffffff'), 0, 0.04, 0, { noCast: true }));
   g.position.set(tx, y, tz); scene.add(g);
-  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), bend(new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })));
-  scene.add(line);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rodPts), bend(new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })));
+  line.geometry.setDrawRange(0, 2); scene.add(line);
   rod = { bob: g, line, y, t: 0, fish: null, idle: 12 + Math.random() * 6, where: w, fly: { t: -0.24, to: g.position.clone(), from: null } };   // 浮標等竿子甩到前面（約 0.24 秒）才飛出去
   P.userData.swing = 1; Audio.sfx('cast');
 }
 function reel(silent) {
   if (!rod) return; scene.remove(rod.bob); scene.remove(rod.line);
+  rod.line.geometry.dispose(); if (rod.line.material) rod.line.material.dispose();
   if (rod.fish && rod.fish.st !== 'caught') { rod.fish.st = 'flee'; rod.fish.t = 0; }
   rod = null; if (!silent) Audio.sfx('swish');
 }
@@ -99,11 +102,17 @@ async function hook() {
   }
   busy = false;
 }
+// v8.6 釣魚線沿用同一份頂點緩衝，飛行兩點、落水後十一點。
+function updateLine(pts) {
+  const g = rod.line.geometry, a = g.attributes.position;
+  for (let i = 0; i < pts.length; i++) a.setXYZ(i, pts[i].x, pts[i].y, pts[i].z);
+  a.needsUpdate = true; g.setDrawRange(0, pts.length); g.computeBoundingSphere();
+}
 function updateRod(dt, t) {
   if (!rod) return;
-  const tip = new THREE.Vector3();
+  const tip = rodTip;
   if (P.userData.fpTip) P.userData.fpTip.getWorldPosition(tip);   // 第一人稱：從鏡頭前那支竿子的竿尖拉線
-  else { P.userData.hand.getWorldPosition(tip); const d = fwd(); tip.addScaledVector(d, 0.9); tip.y += 0.75; }
+  else { P.userData.hand.getWorldPosition(tip); rodDir.set(Math.sin(P.rotation.y), 0, Math.cos(P.rotation.y)); tip.addScaledVector(rodDir, 0.9); tip.y += 0.75; }
   if (rod.fly) {   // 浮標飛出去：從竿尖沿拋物線落到水面
     const F = rod.fly; F.t += dt;
     if (F.t < 0) { rod.bob.position.copy(tip); }
@@ -112,7 +121,7 @@ function updateRod(dt, t) {
       const s = Math.min(1, F.t / 0.3); rod.bob.position.lerpVectors(F.from, F.to, s); rod.bob.position.y += Math.sin(s * Math.PI) * 1.1;
       if (s >= 1) { rod.fly = null; rod.bob.position.copy(F.to); Audio.sfx('plop'); waves.ripple(F.to.x, F.to.z, 0.4); }
     }
-    rod.line.geometry.setFromPoints([tip, rod.bob.position.clone().setY(rod.bob.position.y + 0.05)]);
+    rodEnd.copy(rod.bob.position); rodEnd.y += 0.05; updateLine(flyPts);
     return;
   }
   if (rod.yank != null) { rod.yank += dt; rod.bob.position.y = rod.y + Math.min(0.9, rod.yank * 4); }   // 拉竿：浮標被扯出水面
@@ -141,8 +150,8 @@ function updateRod(dt, t) {
   }
   if (rod.dipT > 0) { rod.dipT -= dt; dip = f && f.st === 'bite' ? 0.22 : Math.max(0, rod.dipT) * 0.6; }
   if (rod.yank == null) rod.bob.position.y = rod.y + Math.sin(t * 2.4) * 0.025 - dip;
-  const pts = []; for (let k = 0; k <= 10; k++) { const s = k / 10; pts.push(new THREE.Vector3(tip.x + (rod.bob.position.x - tip.x) * s, tip.y + (rod.bob.position.y + 0.05 - tip.y) * s - Math.sin(s * Math.PI) * 0.35, tip.z + (rod.bob.position.z - tip.z) * s)); }
-  rod.line.geometry.setFromPoints(pts);
+  const pts = rodPts; for (let k = 0; k <= 10; k++) { const s = k / 10; pts[k].set(tip.x + (rod.bob.position.x - tip.x) * s, tip.y + (rod.bob.position.y + 0.05 - tip.y) * s - Math.sin(s * Math.PI) * 0.35, tip.z + (rod.bob.position.z - tip.z) * s); }
+  updateLine(pts);
 }
 function rodAction() {
   if (!rod) { cast(); return; }

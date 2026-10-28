@@ -41,8 +41,9 @@ export async function probe() {
   fails = online ? 0 : fails + 1;
   return online;
 }
-/** 連不上時多久再試：沒有轉送（網頁版，404）就不再自動試；伺服器暫時連不上就 1、2、5、10 分鐘慢慢拉長（打開設定會立刻重試） */
-const retryIn = () => (noProxy ? Infinity : [60, 120, 300, 600][Math.min(fails, 4) - 1] || 60);
+/** 連不上時多久再試：沒有轉送（網頁版，404）就不再自動試；伺服器暫時連不上就 1、2、5、10 分鐘慢慢拉長，
+    連續 5 次都不行就停下來，不再在主控台一直留下 503（打開設定會立刻重試，島民照本機的作息走） */
+const retryIn = () => (noProxy || fails > 4 ? Infinity : [60, 120, 300, 600][fails - 1] || 60);
 
 const PAST = { stroll: '在島上散步', plaza: '在廣場大樹下', bench: '坐在長椅上休息', flowers: '在花叢邊看花', water: '在水邊吹海風', friend: '和其他島民聊天', player: '和玩家打招呼', hobby: '在做自己喜歡的事' };
 const PART = h => (h < 5 ? '深夜' : h < 11 ? '早上' : h < 13 ? '中午' : h < 17 ? '下午' : h < 19 ? '傍晚' : '晚上');

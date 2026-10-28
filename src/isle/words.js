@@ -28,12 +28,12 @@ export function open(paint) {
     const rows = [];
     for (let r = 0; r < TRIES; r++) {
       const g = W.guesses[r], sc = g ? score(g, A.w) : null, txt = g || (r === W.guesses.length && !W.done ? cur : '');
-      rows.push(`<div class="wd-row">${Array.from({ length: LEN }, (_, i) => `<i class="${sc ? sc[i] : txt[i] ? 'f' : ''}">${(txt[i] || '').toUpperCase()}</i>`).join('')}</div>`);
+      rows.push(`<div class="wd-row">${Array.from({ length: LEN }, (_, i) => `<i class="${sc ? sc[i] : txt[i] ? 'f' : ''}"${sc ? ` aria-label="${(txt[i] || '').toUpperCase()}：${{ g: '位置正確', y: '有這個字母、位置不對', x: '沒有這個字母' }[sc[i]]}"` : ''}>${(txt[i] || '').toUpperCase()}</i>`).join('')}</div>`);
     }
     const R = { x: 1, y: 2, g: 3 }, used = {}; W.guesses.forEach(g => score(g, A.w).forEach((c, i) => { const ch = g[i]; if (!used[ch] || R[c] > R[used[ch]]) used[ch] = c; }));
     const kb = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'].map((r, k) => `<div class="wd-kb">${k === 2 ? '<button type="button" data-k="enter" class="wide">送出</button>' : ''}${[...r].map(c => `<button type="button" data-k="${c}" class="${used[c] || ''}">${c.toUpperCase()}</button>`).join('')}${k === 2 ? '<button type="button" data-k="back" class="wide">⌫</button>' : ''}</div>`).join('');
     const end = W.done ? `<p class="wd-end">${W.win ? `🎉 答對了！` : '這次沒猜到。'}答案是 <b>${A.w}</b>（${A.pos || ''}）${ui.esc(A.zh)}${A.ex ? `<br><small>${ui.esc(A.ex)}${A.exZh ? '（' + ui.esc(A.exZh) + '）' : ''}</small>` : ''}</p>` : '';
-    box.innerHTML = `<p class="wd-hint">提示：${A.pos || ''} ${ui.esc(A.zh)} · ${LEN} 個字母</p>${rows.join('')}${end}${W.done ? '' : kb}<p class="muted">猜的字也要是單字表裡的 ${LEN} 字母單字（共 ${words.size} 個）。綠色位置正確、黃色有這個字母但位置不對。每天一題。</p>`;
+    box.innerHTML = `<p class="wd-hint">提示：${A.pos || ''} ${ui.esc(A.zh)} · ${LEN} 個字母</p>${rows.join('')}${end}${W.done ? '' : kb}<p class="muted">猜的字也要是單字表裡的 ${LEN} 字母單字（共 ${words.size} 個）。綠色 ● 位置正確、黃色 ○ 有這個字母但位置不對、灰色沒有這個字母。每天一題。</p>`;
     box.querySelectorAll('[data-k]').forEach(b => { b.onclick = () => press(b.dataset.k); });
   };
   const press = k => {

@@ -14,14 +14,13 @@ import { dayKey } from './state.js';
 const tutor = sid => ((I.VILLAGERS || []).find(v => v.sid === sid) || {}).name || '島民';
 const furnList = () => (I.FURNITURE || []).filter(inCatalog);
 export function catalog() { const s = S(); s.catalog = s.catalog || {}; return s.catalog; }
-/** 舊存檔：倉庫、房間、飯店客房、夢境島裡的家具都算拿到過 */
+/** 舊存檔：倉庫、房間裡的家具都算拿到過。
+    v8.6 飯店客房與夢境島的佈置是免費的擺設目錄（不用倉庫裡的東西），擺過不算拿到；真的買下、用夢境碎片解鎖的會經過 addStorage 登錄 */
 export function backfill() {
   const s = S(), c = catalog(); let n = 0;
   const add = id => { if (id && !c[id] && room.furn(id)) { c[id] = Date.now(); n++; } };
   Object.keys(s.storage || {}).forEach(add);
   ((s.room || {}).items || []).forEach(it => add(it.id));
-  ((s.hotel || {}).rooms || []).forEach(r => ((r && r.items) || []).forEach(it => add(it.id)));
-  (s.dreams || []).forEach(d => ((d && d.items) || []).forEach(it => add(it.id)));
   if (n) save();
 }
 const ids = k => list(k).map(x => x.id);

@@ -836,7 +836,7 @@ export function bend(mat, kind) {
   };
   mat.customProgramCacheKey = () => 'bend3-' + kind; mat.userData.kind = kind;
   if (kind === 'flow') mat.defines = Object.assign({}, mat.defines, { USE_UV: '' });   // 水片沿 uv 流動（沒有貼圖也要有 vUv）
-  if ((kind === 'water' || kind === 'glass') && mat.isMeshStandardMaterial) { ENV_MATS.push(mat); applyEnv(mat); }   // 水面、玻璃映出天空
+  if ((kind === 'water' || kind === 'glass') && mat.isMeshStandardMaterial) { ENV_MATS.push(mat); applyEnv(mat); mat.addEventListener('dispose', () => { const i = ENV_MATS.indexOf(mat); if (i >= 0) ENV_MATS.splice(i, 1); }); }   // 水面、玻璃映出天空
   return mat;
 }
 /* 四季著色：秋天綠葉轉成黃橙紅、草地轉成金綠；冬天朝上的面積雪（地形只有草地積雪，沙灘與步道保留），雪面有細碎閃光 */

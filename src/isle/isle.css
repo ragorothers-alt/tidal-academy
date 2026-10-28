@@ -292,7 +292,7 @@ body.designing .design-btn { background: #c8f0c0; box-shadow: 0 0 0 3px var(--mi
   .joy.run { box-shadow: inset 0 0 0 4px #ffcf5a, 0 6px 0 rgba(107,79,58,.15); } .joy.run i { background: #ffcf5a; }   /* 奔跑中：圓盤與搖桿頭變金色 */
   .joy i { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%; background: var(--cream); box-shadow: 0 4px 0 rgba(107,79,58,.25); transition: transform .06s; }
   .joy.on i { background: #fff1b8; }
-  .hud-bl { left: 18px; bottom: 168px; flex-direction: column; }
+  .hud-bl { left: 18px; bottom: clamp(168px, 38vh, 330px); flex-direction: column; }   /* v8.6 往上移：左下角留給拇指與搖桿（以前第一次推搖桿常按到工具） */
   .tool { width: 50px; height: 50px; }
   .hud-br { right: 14px; bottom: auto; top: 112px; flex-direction: column; align-items: flex-end; gap: 10px; }
   .act-btn { right: 22px; bottom: max(28px, env(safe-area-inset-bottom)); width: 96px; height: 96px; font-size: 17px; }
@@ -303,6 +303,7 @@ body.designing .design-btn { background: #c8f0c0; box-shadow: 0 0 0 3px var(--mi
   .dlg { bottom: 140px; }
   body.in-room .dlg, .dlg:has(.choice) { bottom: 140px; }
   .hint { display: none; }
+  .quest .q-toggle { position: relative; } .quest .q-toggle::after { content: ''; position: absolute; inset: -9px; }   /* v8.6 可點範圍放大到約 40px */
   .pn-box { max-height: calc(100% - 24px); }
 }
 @media (pointer: coarse) and (max-width: 640px) {
@@ -319,6 +320,7 @@ body.designing .design-btn { background: #c8f0c0; box-shadow: 0 0 0 3px var(--mi
   .passage { top: 70px; max-height: 32vh; font-size: 14px; }
 }
 @media (pointer: coarse) { body.talking .joy, body.talking .hud-bl, body.talking .hud-br { opacity: 0; pointer-events: none; } .joy, .hud-bl, .hud-br { transition: opacity .2s; } }
+@media (pointer: coarse) and (max-height: 520px) and (orientation: landscape) { .hud-bl { left: 50%; bottom: max(10px, env(safe-area-inset-bottom)); flex-direction: row; translate: -50% 0; } .tool { width: 46px; height: 46px; } }   /* v8.6 橫向手機：直排放不下，改成下方中間一排（搖桿和動作鍵之間） */
 .card-icon:empty { display: none; }
 /* 稀有生物（四、五星）：圖示外一圈金邊，背後慢慢旋轉的金色光芒；「新登錄圖鑑！」像蓋章一樣蓋上去 */
 .card-in.rare .card-icon { position: relative; background: radial-gradient(circle, #fff, #ffe08a); box-shadow: 0 0 0 4px #ffd34d, 0 0 44px rgba(255, 196, 60, .75); }
@@ -434,9 +436,11 @@ body.focusing .hud-top, body.focusing .hud-bl, body.focusing .hud-br, body.focus
 .wordle .wd-row { display: flex; gap: 6px; justify-content: center; margin: 5px 0; }
 .wordle .wd-row i { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; border: 2px solid #e5d8bd; background: #fffaf0; font-style: normal; font-weight: 900; font-size: 22px; color: var(--ink); }
 .wordle .wd-row i.f { border-color: #b8a88a; }
-.wordle .g, .wordle button.g { background: #5fbf6a !important; border-color: #5fbf6a !important; color: #fff !important; }
-.wordle .y, .wordle button.y { background: #f2c14a !important; border-color: #f2c14a !important; color: #fff !important; }
-.wordle .x, .wordle button.x { background: #a8a29a !important; border-color: #a8a29a !important; color: #fff !important; }
+.wordle .g, .wordle button.g { background: #2f8f4e !important; border-color: #2f8f4e !important; color: #fff !important; }   /* v8.6 顏色加深：白字對比 4.5:1 上下 */
+.wordle .y, .wordle button.y { background: #f2c14a !important; border-color: #c99418 !important; color: #4a3520 !important; }   /* v8.6 黃底改深色字（以前白字只有 1.68:1） */
+.wordle .x, .wordle button.x { background: #78716a !important; border-color: #78716a !important; color: #fff !important; }
+.wordle .wd-row i { position: relative; } .wordle .wd-row i.g::after, .wordle .wd-row i.y::after { position: absolute; right: 3px; top: 1px; font-size: 10px; line-height: 1; }
+.wordle .wd-row i.g::after { content: '●'; } .wordle .wd-row i.y::after { content: '○'; }   /* v8.6 不只靠顏色：● 位置正確、○ 位置不對 */
 .wordle .wd-kb { display: flex; gap: 4px; justify-content: center; margin: 4px 0; }
 .wordle .wd-kb button { min-width: 30px; height: 40px; border: 0; border-radius: 8px; background: #efe4cf; font-weight: 800; cursor: pointer; padding: 0 6px; }
 .wordle .wd-kb button.wide { min-width: 52px; }
@@ -833,7 +837,8 @@ body.panel-open .pn-box { max-height: calc(100% - 110px); }
 /* ---------- 季節標題（v6.14） ---------- */
 .season-banner { position: fixed; left: 50%; top: 40%; z-index: 25; display: grid; justify-items: center; gap: 4px; pointer-events: none; transform: translate(-50%, -50%); animation: sb-in 4.2s ease-in-out both; color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, .12), 0 10px 30px rgba(0, 0, 0, .25); }
 .season-banner b { font-size: clamp(90px, 16vw, 180px); line-height: 1; font-weight: 900; color: #fff; -webkit-text-stroke: 6px var(--sc); paint-order: stroke fill; letter-spacing: 0; }
-.season-banner span { padding: 4px 18px; border-radius: 999px; background: var(--sc); font-weight: 900; font-size: 18px; letter-spacing: 2px; text-shadow: none; }
+.season-banner span { padding: 4px 18px; border-radius: 999px; background: var(--sc); font-weight: 900; font-size: 18px; letter-spacing: 2px; text-shadow: none; white-space: nowrap; }
+.season-banner.small { top: 30%; } .season-banner.small b { font-size: clamp(48px, 9vw, 84px); -webkit-text-stroke: 4px var(--sc); } .season-banner.small small { font-size: 14px; }   /* v8.6 新手引導中 */
 .season-banner small { font-weight: 800; font-size: 16px; color: #fffbe9; }
 @keyframes sb-in { 0% { opacity: 0; transform: translate(-50%, -44%) scale(.9); filter: blur(6px); } 14% { opacity: 1; transform: translate(-50%, -50%) scale(1); filter: blur(0); } 78% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -54%); filter: blur(4px); } }
 body.talking .season-banner { display: none; }
@@ -1571,3 +1576,6 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .hub-sem i { font-style: normal; color: var(--ink-2); font-weight: 600; } .hub-sem i.ok { color: #2f8f6a; font-weight: 800; }
 .mm-lb { justify-self: start; margin-top: 4px; } .mm-lb.on { background: #e8f3ea; color: #2f7a52; cursor: default; }
 .rt-small { display: block; margin: 0 0 6px; padding: 0 4px; color: var(--ink-2); font-weight: 700; font-size: 12px; }
+@media (pointer: coarse) { .mini-zoom button { width: 36px; height: 34px; font-size: 18px; } }   /* v8.6 小地圖的 ± 在觸控裝置放大（以前約 24px） */
+#choices .choice-stop { justify-self: end; align-self: flex-end; margin-top: 2px; padding: 6px 14px; background: rgba(255, 255, 255, .55); color: var(--ink-2); box-shadow: inset 0 0 0 1.5px rgba(107, 79, 58, .25); font-size: 12px; font-weight: 700; } .choice-stop kbd { margin-right: 5px; }   /* v8.6 連續作答的「先到這裡」 */
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-iteration-count: 1 !important; } }   /* v8.6 減少動態效果：一直循環的動畫只播一次 */

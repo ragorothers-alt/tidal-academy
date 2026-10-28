@@ -119,7 +119,7 @@ let lastBanner = '';
 export function banner(force) {
   const c = current(); if (!force && c === lastBanner) return; lastBanner = c;
   const [ch, line, col] = BANNER[c], m = date.getMonth() + 1;
-  const el = document.createElement('div'); el.className = 'season-banner'; el.style.setProperty('--sc', col);
+  const el = document.createElement('div'); el.className = 'season-banner' + ((S().guide || {}).fin ? '' : ' small'); el.style.setProperty('--sc', col);   // v8.6 新手引導中：小一點，不蓋住第一次操作
   el.innerHTML = `<b>${ch}</b><span>${pref() === 'auto' ? m + ' 月 · ' : ''}潮汐小島</span><small>${line}</small>`;
   document.body.appendChild(el); setTimeout(() => el.remove(), 4200);
 }

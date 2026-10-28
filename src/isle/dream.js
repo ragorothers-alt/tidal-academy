@@ -26,7 +26,8 @@ export async function sleep(paint) {
     if (cool) { await ui.say(sp, `${night ? '你沉沉睡去' : '你打了個小盹'}……剛答錯的題目還在腦中打轉，夢裡一片模糊。過一陣子再睡，那些題目才會清楚地浮現（隔一段時間再複習，記得更牢）。`); return; }
     if (!ids.length) { await ui.say(sp, `${night ? '你沉沉睡去' : '你打了個小盹'}……一夜無夢。今天沒有要複習的題目，睡得很安穩。`); return; }
     await ui.say(sp, `${night ? '你躺下來，很快就睡著了' : '你打了個小盹'}……夢裡，今天該複習的題目一題一題漂了過來。`);
-    const res = await drill(sp, picker({ mode: 'ids', ids }), ids.length, {});
+    const res = await drill(sp, picker({ mode: 'ids', ids }), ids.length, { stop: true });
+    if (res.stopped && !res.n) { await ui.say(sp, '你翻了個身，夢就散了。'); return; }
     const s = S(), d = dayKey(), first = s.dreamDay !== d && res.ok > 0, b = first ? res.ok * 150 : 0;
     if (first) { s.dreamDay = d; s.bells += b; } s.stats = s.stats || {}; s.stats.dream = (s.stats.dream || 0) + res.ok; save();
     await ui.say(sp, `醒來了。夢裡答對 ${res.ok} / ${res.n} 題${first ? `，神清氣爽（+${b} 鈴錢）` : ''}。錯題要在不同天答對 3 次才會離開錯題本（同一天重複答對只算一次）。${reviewLine()}。`);

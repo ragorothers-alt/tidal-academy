@@ -104,6 +104,7 @@ export function rbox(w, h, d, r) {
 const mat = (c, e) => M(c, e ? (typeof e === 'string' ? { emissive: new THREE.Color(e), emissiveIntensity: 0.8 } : { emissive: new THREE.Color(c), emissiveIntensity: e }) : {});
 /** 程式化家具模型（data/furnmodels.js，img2threejs 重建）用的工具：材質一律走 M()，光影與地平線彎曲和其他物件一致 */
 const KIT = { mat: (c, o, k) => M(c, o, k), rbox: (w, h, d, r) => rbox(w, h, d, r || 0) };
+const FURN_GEO = new WeakMap();   // v8.6 零件家具自己建立的幾何（方盒與原型仍共用）
 const PROTO = {};   // 程式化模型每種只建一次，之後 clone（共用幾何與材質；房間、夢境島、縮圖會重複用到同一件）
 /** 依零件組出家具模型（原點在佔地中心地板）；有程式化模型（TA.ISLE.FURNMODELS[id]）就用它，建立失敗才退回零件 */
 export function buildFurniture(f) {
@@ -119,7 +120,8 @@ export function buildFurniture(f) {
       const m = PROTO[f.id].clone(true); m.userData.fid = f.id; return m;
     } catch (e) { PROTO[f.id] = null; console.warn('程式化家具模型建立失敗，改用零件：' + f.id, e); }
   }
-  const g = new THREE.Group();
+  const g = new THREE.Group(), own = new Set();
+  FURN_GEO.set(g, own);
   (f.parts || []).forEach(pt => {
     let geo;
     if (pt.t === 'box') geo = rbox(pt.s[0], pt.s[1], pt.s[2], pt.r || 0);
@@ -128,6 +130,7 @@ export function buildFurniture(f) {
     else if (pt.t === 'cone') geo = new THREE.ConeGeometry(pt.r || 0.2, pt.h || 0.3, 16);
     else if (pt.t === 'tor') geo = new THREE.TorusGeometry(pt.r || 0.2, pt.tube || 0.04, 8, 20);
     else return;
+    if (pt.t !== 'box') own.add(geo);
     const m = new THREE.Mesh(geo, mat(pt.c || '#cccccc', pt.e));
     m.position.fromArray(pt.p || [0, 0, 0]);
     if (pt.t === 'sph' && pt.sy) m.scale.y = pt.sy;
@@ -136,6 +139,12 @@ export function buildFurniture(f) {
   });
   g.userData.fid = f.id;
   return g;
+}
+
+/** v8.6 只釋放零件家具的專屬幾何，不碰原型、方盒與 M() 材質 */
+export function disposeFurniture(g) {
+  const own = g && FURN_GEO.get(g); if (!own) return;
+  own.forEach(geo => geo.dispose()); FURN_GEO.delete(g);
 }
 
 /* ---------- 縮圖（離屏渲染，快取） ---------- */
@@ -149,7 +158,27 @@ export function thumb(id) {
   const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3()), r = Math.max(size.x, size.y, size.z) * 0.95 + 0.1;
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50); cam.position.set(ctr.x + r * 1.3, ctr.y + r * 1.2, ctr.z + r * 1.9); cam.lookAt(ctr);
   const saved = U.uCurve.value; U.uCurve.value = 0; thumbR.render(sc, cam); U.uCurve.value = saved;
-  return (thumbs[id] = thumbR.domElement.toDataURL());
+  const url = thumbR.domElement.toDataURL(); disposeFurniture(m);
+  return (thumbs[id] = url);
+}
+
+/** v8.6 先保留圖片的位置，每批最多兩張；面板關閉就停止 */
+export function loadThumbs(root) {
+  const pending = [];
+  root.querySelectorAll('img[data-thumb]').forEach(img => {
+    const id = img.dataset.thumb; if (thumbs[id]) img.src = thumbs[id]; else pending.push(img);
+  });
+  let at = 0;
+  const next = () => {
+    if (!root.isConnected || !ui.panelOpen()) return;
+    const start = performance.now();
+    for (let n = 0; at < pending.length && n < 2; n++) {
+      const img = pending[at++]; if (img.isConnected) img.src = thumb(img.dataset.thumb);
+      if (performance.now() - start > 8) break;
+    }
+    if (at < pending.length) setTimeout(next, 0);
+  };
+  if (pending.length) setTimeout(next, 0);
 }
 
 /* ---------- 房間外殼 ---------- */
@@ -241,6 +270,7 @@ const floorMat = bend(new THREE.MeshStandardMaterial({ roughness: 0.85 })), wall
 function applyPaper() {
   const s = S(), r = data();
   const w = paper('wall', r.wall) || { c1: '#f6ead0', c2: '#efdcb8', pattern: 'stripe' }, f = paper('floor', r.floor) || { c1: '#c99a62', c2: '#a87a48', pattern: 'wood' };
+  if (wallMat.map) wallMat.map.dispose(); if (floorMat.map) floorMat.map.dispose();
   wallMat.map = patternTex(w); wallMat.map.repeat.set(4, 1.5); wallMat.needsUpdate = true;
   floorMat.map = patternTex(f); floorMat.map.repeat.set(4, 4); floorMat.needsUpdate = true;
   void s;
@@ -290,7 +320,7 @@ function fits(f, x, z, r, ignore) {
 const placed = new THREE.Group(); scene.add(placed);
 const lights = [];
 function rebuild() {
-  while (placed.children.length) placed.remove(placed.children[0]);
+  while (placed.children.length) { const m = placed.children[0]; placed.remove(m); disposeFurniture(m); }
   lights.forEach(l => scene.remove(l)); lights.length = 0;
   data().items.forEach(it => {
     const f = furn(it.id); if (!f) return;
@@ -307,7 +337,7 @@ let P = null, onExit = null, savedCurve = 0;
 export function enter(player, exitCb, opt) {
   ui.iris();
   cur = opt && opt.home ? { own: false, home: opt.home, sid: opt.sid, edit: !!opt.edit, catalog: opt.catalog || null, papers: opt.papers || null, onChange: opt.onChange || null } : { own: true };
-  P = player; onExit = exitCb; inside = true; room(); applyPaper(); rebuild();
+  cancelPlace(); P = player; onExit = exitCb; inside = true; room(); applyPaper(); rebuild();
   savedCurve = U.uCurve.value; U.uCurve.value = 0;
   scene.add(P); P.position.set(0, 0, H - 0.8); P.rotation.y = Math.PI;
   camPos.set(0, 9, 10.5);
@@ -315,7 +345,7 @@ export function enter(player, exitCb, opt) {
 }
 export function exit() {
   ui.iris();
-  inside = false; mode = null; if (ghost) { scene.remove(ghost); ghost = null; }
+  inside = false; cancelPlace();
   U.uCurve.value = savedCurve || CURVE; document.body.classList.remove('in-room', 'visiting');
   Audio.sfx('open'); onExit && onExit();
 }
@@ -359,7 +389,7 @@ export function openDecor() {
   const ids = ed ? (cur.catalog || []).filter(id => furn(id)) : Object.keys(s.storage || {}).filter(id => s.storage[id] > 0 && furn(id));
   const grid = ui.el('div', 'dex-grid');
   if (!ids.length) grid.appendChild(ui.el('p', 'muted', '倉庫是空的。到潮汐商店找阿潮買家具，或和島民變熟後會收到禮物。'));
-  ids.forEach(id => { const f = furn(id), b = ui.el('button', 'dex-cell', `<img src="${thumb(id)}" alt="">${s.storage[id] > 1 ? `<i>×${s.storage[id]}</i>` : ''}`); b.type = 'button'; b.title = f.name; if (ed && f.hotel && f.hotel === cur.sid) b.classList.add('theme'); b.onclick = () => { ui.closePanel(); startPlace(id); }; grid.appendChild(b); });
+  ids.forEach(id => { const f = furn(id), b = ui.el('button', 'dex-cell', `<img data-thumb="${id}" alt="">${s.storage[id] > 1 ? `<i>×${s.storage[id]}</i>` : ''}`); b.type = 'button'; b.title = f.name; if (ed && f.hotel && f.hotel === cur.sid) b.classList.add('theme'); b.onclick = () => { ui.closePanel(); startPlace(id); }; grid.appendChild(b); });
   const papers = ui.el('div', 'papers');
   const edPapers = cur.papers;   // 下面 row() 的參數 cur 會蓋掉模組的 cur
   const row = (kind, list, cur, owned) => {
@@ -371,7 +401,7 @@ export function openDecor() {
   papers.append(row('wall', I.WALLPAPER || [], r.wall, s.papers), row('floor', I.FLOORING || [], r.floor, s.papers));
   const how = matchMedia('(pointer: coarse)').matches ? '點地板直接放下，「↻ 旋轉」轉向、「✕ 結束」取消' : '方向鍵或滑鼠移動、R 旋轉、E／點擊放下、Esc 取消';   // 觸控裝置沒有鍵盤：改說畫面上的按鈕
   body.append(ui.el('p', 'muted', ed ? `飯店的家具目錄可以隨意使用，不會用掉你倉庫裡的東西。有黃框的是這間客房主題的家具。${how}。` : `點家具開始擺放：${how}。${ui.keys('對著已擺好的家具按 E 可以轉向或收起。')}`), grid, papers);
-  ui.panel(ed ? '佈置客房' : '裝潢', body, { cls: 'decor-p' });
+  ui.panel(ed ? '佈置客房' : '裝潢', body, { cls: 'decor-p' }); loadThumbs(body);
 }
 function startPlace(id) {
   cancelPlace();
@@ -393,7 +423,7 @@ function place() {
   data().items.push({ id: mode.id, x: mode.x, z: mode.z, r: mode.r }); save(); rebuild(); Audio.sfx('ok');
   cancelPlace(); cur.onChange && cur.onChange();
 }
-function cancelPlace() { mode = null; if (ghost) { scene.remove(ghost); ghost = null; } }
+function cancelPlace() { mode = null; if (ghost) { scene.remove(ghost); ghost.traverse(o => { if (o.isMesh && o.material) o.material.dispose(); }); disposeFurniture(ghost); ghost = null; } }
 export function key(e) {
   if (!mode) return false;
   const k = e.code;

@@ -40,7 +40,8 @@ export async function drill(sp, next, n, opt) {
     const q = L.view(q0);   // 選項順序打亂（解析代號跟著換）
     const sub = q.subject ? TA.subject(q.subject).name : q.vocab ? '單字' : '';
     const head = `第 ${k + 1} / ${n} 題${sub ? '（' + sub + '）' : ''}：`;   // 多選題的提示由 askQ 加上
-    const { ok: good, conf } = await askQ(sp, q, head, { timer: opt.timer, conf: cf.has(k) });
+    const { ok: good, conf, stop } = await askQ(sp, q, head, { timer: opt.timer, conf: cf.has(k), stop: !!opt.stop && n >= 4 && q.type !== 'fill' });
+    if (stop) { ui.passage(null); ui.toast(done ? `先到這裡：做了 ${done} 題，有記錄下來` : '先到這裡'); return { ok, n: done, stopped: true }; }   // v8.6 中途離開：做過的照常記錄
     record(q, good, { conf }); done++; Audio.sfx(good ? 'ok' : 'bad');
     const lead = confNote(good, conf);
     if (good) { ok++; if (opt.praise) await ui.praise(sp, pick(opt.praise), q); }

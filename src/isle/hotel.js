@@ -10,6 +10,7 @@ import { tileAt, groundAt } from './terrain.js';
 import { blocked, colliders, label, PIER, gable, timber, mergeStatic, altBuilding, SITES } from './props.js';
 import { chibi, animate, lookAt } from './chars.js';
 import * as actors from './actors.js';
+import { loadThumbs } from './room.js';
 import { register } from './props3d.js';
 import * as ui from './ui.js';
 import * as challenge from './challenge.js';   // 答對後可以接著連續挑戰（challenge.js 也會用到這裡，循環相依要用 import * as）
@@ -147,6 +148,7 @@ export const siteInfo = () => site;
 
 /* ---------- 大廳與客房 ---------- */
 let mgr = null, lobbyHost = null;
+const roomGuests = new Map();   // v8.6 每位客人的室內模型重用，與戶外散步的模型分開
 function manager() {
   if (mgr) return mgr;
   mgr = chibi({ kind: 'otter', fur: '#a8784a', inner: '#f3e2c8', shirt: '#3fb7e0', pants: '#2a4a70', acc: null }); actors.dress(mgr, 'hotel'); mgr.traverse(o => { o.frustumCulled = false; });
@@ -163,7 +165,7 @@ function enterRoom(i, edit) {
   const h = H(), r = h.rooms[i], th = THEMES.find(t => t.id === r.theme), papers = (I.WALLPAPER || []).concat(I.FLOORING || []).map(p => p.id);
   const catalog = themeFurn(r.theme).map(f => f.id).concat((I.FURNITURE || []).filter(f => (f.src === 'hotel' && f.hotel !== r.theme) || f.src === 'shop' || f.src === 'diy').map(f => f.id));
   let host = null;
-  if (r.done && r.guest != null) { const t = tourist(r.guest); host = { isHotel: true, kind: 'guest', gi: r.guest, mesh: t.m, room: i }; }
+  if (r.done && r.guest != null) { if (!roomGuests.has(r.guest)) roomGuests.set(r.guest, tourist(r.guest)); const t = roomGuests.get(r.guest); host = { isHotel: true, kind: 'guest', gi: r.guest, mesh: t.m, room: i }; }
   ctx.enter(r, { sid: r.theme, edit, catalog, papers }, host, () => leaveRoom(i, edit));
   if (host) { host.mesh.position.set(1.4, 0, -0.6); host.mesh.rotation.y = 0; }
   if (edit) setTimeout(() => ui.toast(`${th.icon} ${i + 1} 號房・${th.name}：按 F 打開飯店的家具目錄（擺 ${NEED} 件以上，其中 ${NEED_T} 件主題家具）`), 900);
@@ -272,7 +274,7 @@ function shop() {
     if (!all.length) { body.appendChild(ui.el('p', 'nk-hint', '紀念品還在準備中唄……')); return; }
     const row = (list, sale) => { const shelf = ui.el('div', 'nk-shelf'); list.forEach(f => {
       const isP = !f.cat, cost = Math.round((f.coupon || 100) * (sale ? 0.7 : 1) / 10) * 10, own = isP && (S().papers || []).includes(f.id), th = THEMES.find(t => t.id === f.hotel);
-      const pic = isP ? `<i class="sw" style="background:linear-gradient(135deg, ${f.c1} 50%, ${f.c2} 50%)"></i>` : `<img src="${ctx.thumb(f.id)}" alt="">`;
+      const pic = isP ? `<i class="sw" style="background:linear-gradient(135deg, ${f.c1} 50%, ${f.c2} 50%)"></i>` : `<img data-thumb="${f.id}" alt="">`;
       const b = ui.el('button', 'nk-item' + (own ? ' own' : ''), `<span class="nk-pic">${pic}</span><span class="nk-tag"><b>${ui.esc(f.name)}</b><small>${own ? '已擁有' : `${COUPON} ${cost}`}${sale ? ' · 現貨' : ''}${th ? ' · ' + th.name : ''}</small></span>`); b.type = 'button'; if (f.desc) b.dataset.tip = f.desc;
       b.onclick = () => {
         if (own) return; const s2 = today(h, 'shop');
@@ -287,6 +289,7 @@ function shop() {
     body.appendChild(ui.el('p', 'nk-hint', '目錄'));
     for (let i = 0; i < all.length; i += 3) body.appendChild(row(all.slice(i, i + 3), false));
     for (let i = 0; i < papers.length; i += 3) body.appendChild(row(papers.slice(i, i + 3), false));
+    loadThumbs(body);
   };
   paint(); ui.panel('潮汐飯店紀念品櫃', body, { cls: 'nook-p' });
 }

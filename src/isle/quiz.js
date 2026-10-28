@@ -36,6 +36,7 @@ export async function askQ(sp, q, head, opt) {
   }
   const multi = q.type === 'multi', conf = !!(opt && opt.conf) && !(opt && opt.timer) && !multi && !q.vocab;
   const ans = await ui.ask(sp, (head || '') + (multi && !/多選/.test(q.q) ? '（多選題：選出所有正確的選項再送出）' : '') + q.q, q.o, Object.assign({ html: true, keys: true, abc: true, multi, answer: q.a }, opt, { conf }));
+  if (ans === -2) return { ok: false, ans, stop: true };   // v8.6 先到這裡（ui.STOP）：這題不算
   return { ok: multi ? Array.isArray(ans) && L.check(q, ans) : ans === q.a, ans, conf: conf ? ui.lastConf() : null };
 }
 /** v8.4 一組題目裡問「有把握嗎」的題號（不限時、3 題以上的組才問；一組問 2 題，不會每題都多一步） */

@@ -38,11 +38,17 @@ function mouth(head, o) {
 }
 /* ---------- 手繪臉部貼圖（I.FACES，Codex 繪製）：貼在頭部前方的球面貼片上，依表情切換格子 ---------- */
 const FACES = () => (window.TA && window.TA.ISLE && window.TA.ISLE.FACES) || null;
-const texCache = {};
+const texCache = {}, texPend = {};   // texPend：圖片還沒解碼完時先拿到的 clone（不放 userData：clone 時會被 JSON 複製）
 function faceTex(key) {
   const F = FACES(); if (!F || !F[key]) return null;
-  if (!texCache[key]) { const t = new THREE.TextureLoader().load(F[key]); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache[key] = t; }
-  const t = texCache[key].clone(); t.repeat.set(1, 1 / 6); t.offset.set(0, 5 / 6); t.needsUpdate = true; return t;
+  if (!texCache[key]) {   // v8.6 圖片解碼完才標記更新：以前還沒載入就 needsUpdate，主控台一直警告「no image data」
+    const pend = texPend[key] = [], t = new THREE.TextureLoader().load(F[key], () => { pend.splice(0).forEach(c => { c.needsUpdate = true; }); });
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache[key] = t;
+  }
+  const base = texCache[key]; let t;
+  if (base.image && base.image.width) t = base.clone();   // clone（copy）裡會 needsUpdate：圖已解碼才用
+  else { t = new THREE.Texture(); t.source = base.source; t.colorSpace = base.colorSpace; t.anisotropy = base.anisotropy; texPend[key].push(t); }   // 還沒解碼：共用同一份 source，載好再標記更新
+  t.repeat.set(1, 1 / 6); t.offset.set(0, 5 / 6); return t;
 }
 const usesDecalEyes = k => !['owl', 'penguin', 'frog'].includes(k);
 /** 球面貼片：中心在頭部前方（theta = 從頭頂量的角度），寬 pw、高 th（弧度），和頭部同樣的縮放 */

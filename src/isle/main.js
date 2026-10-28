@@ -870,7 +870,7 @@ function phoneTime() {
 const TOOLS = [['rod', '釣竿'], ['net', '捕蟲網'], ['shovel', '鏟子'], ['can', '澆水壺']];
 function paintTools() {
   const box = $('tools'); box.innerHTML = '';
-  TOOLS.forEach(([id, n], i) => { const b = ui.el('button', 'tool' + (player.userData.tool === id ? ' on' : ''), `<img src="${icon(id, id)}" alt=""><kbd>${i + 1}</kbd>`); b.type = 'button'; b.title = n; b.onclick = () => equip(id); box.appendChild(b); });
+  TOOLS.forEach(([id, n], i) => { const b = ui.el('button', 'tool' + (player.userData.tool === id ? ' on' : ''), `<img src="${icon(id, id)}" alt=""><kbd>${i + 1}</kbd>`); b.type = 'button'; b.title = n; b.setAttribute('aria-label', `${n}（${i + 1}）`); b.onclick = () => equip(id); box.appendChild(b); });
 }
 function equip(id) { const t = player.userData.tool === id ? null : id; life.cancel(); setTool(player, t); S().tool = t; save(); paintTools(); Audio.sfx('pop'); if (t) ui.toast(`拿出${TOOLS.find(x => x[0] === t)[1]}：按 E 使用`); }
 /** HUD 數字：往目標值跳上去（0.4 秒）並彈一下；變少直接換 */
@@ -923,6 +923,7 @@ addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (ui.keyHook && ui.panelOpen() && !ui.cardOpen() && !ui.dialogOpen() && ui.keyHook(e)) return;
   { const tg = e.target, typing = !!tg && (/^(TEXTAREA|SELECT)$/.test(tg.tagName) || tg.isContentEditable || tg.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|file|color)$/.test(tg.type));
+    if (typing && e.code === 'Tab' && !e.isComposing && ui.panelOpen()) { panelTab(e); return; }   // v8.6 文字區也在面板的焦點循環裡
     if (typing && (e.isComposing || e.keyCode === 229 || e.code !== 'Escape')) return; }   // v8.2 在輸入框打字（含注音組字：ㄛ在 I、ㄑ在 F）：按鍵交給輸入框，不會關掉面板；Esc 照常關閉
   if (focus.active() && !ui.cardOpen() && !ui.dialogOpen()) return;
   if (ui.panelOpen() && ui.dialogOpen() && !ui.cardOpen()) { if (e.code === 'Escape' || e.code === 'Tab') { e.preventDefault(); ui.requestClose(); } return; }   // 對話上面開著面板（例如解析時打開的示意圖）：按鍵給面板，不推進底下的對話
@@ -932,13 +933,9 @@ addEventListener('keydown', e => {
   if (dreamisle.inside && !ui.panelOpen() && dreamisle.key(e)) return;
   if (elsewhere() && ['KeyG', 'KeyP', 'KeyF'].includes(e.code) && !(house.inside && e.code === 'KeyF')) return;
   if (ui.panelOpen()) {
-    const isPhone = $('panelBox').classList.contains('phone');
-    if (e.code === 'Tab' && !isPhone) {   // 練習遊戲等面板：Tab 用來在按鈕與滑桿之間移動，焦點不離開面板
-      const box = $('panelBox'), f = [...box.querySelectorAll('button:not([disabled]), input, select, textarea, [href], [contenteditable="true"]')].filter(x => x.offsetParent !== null);
-      if (!f.length) { e.preventDefault(); return; }
-      const i = f.indexOf(document.activeElement), n = e.shiftKey ? (i <= 0 ? f.length - 1 : i - 1) : (i < 0 || i >= f.length - 1 ? 0 : i + 1);
-      e.preventDefault(); f[n].focus(); return;
-    }
+    const box = $('panelBox'), home = box.classList.contains('phone-home'), fresh = document.activeElement === box || !box.contains(document.activeElement);
+    if (e.code === 'Tab' && !(home && fresh)) { panelTab(e); return; }   // v8.6 每個面板都一樣：Tab 在按鈕之間移動（以前手機裡的 App 按 Tab 會整個關掉）；只有剛打開的手機主畫面按 Tab 是收起手機
+    if (home && /^Arrow(Up|Down|Left|Right)$/.test(e.code)) { panelTab(e, e.code === 'ArrowUp' || e.code === 'ArrowLeft'); return; }   // 手機主畫面：方向鍵在 App 之間移動
     if (e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyI' || e.code === 'KeyF') { e.preventDefault(); ui.requestClose(); } return;
   }
   if (room.inside && room.key(e)) return;
@@ -1284,10 +1281,21 @@ function greetPlayer(v) {
   if (!lines.length) return;
   ui.bubble(v.mesh, lines[Math.floor(Math.random() * lines.length)], 3600); Audio.blip(v.voice || 400); setExpr(v.mesh, 'happy', 2);
 }
-/** 島民要選下一步：拿 laya 的決定，在目前做得到的事情裡挑一件，變成目的地與停留時間；沒有決定就回傳 false */
+/** v8.6 laya 連不上（或關掉）時的本機小動作：一半的時候照天氣與時段自己決定——晴天白天多停在花旁、傍晚到水邊看夕陽、
+    下雨時回家門口躲雨、晚上少去廣場；另一半照原本的作息走 */
+function localPlan(v, hour) {
+  if (mind.enabled() && mind.status() === true) return null;
+  if (simT - (v.localAt ?? -1e9) < 20 || Math.random() > 0.5) return null;   // 同一位 20 秒內最多一次：頭上的想法泡泡不會一直冒
+  v.localAt = simT;
+  const rain = weather.raining(), night = hour >= 20 || hour < 5, gold = hour >= 16.5 && hour < 18.5;
+  const probs = rain ? { stroll: 0.05, hobby: 0.55, plaza: 0.02, bench: 0.02, flowers: 0.02, water: 0.01, friend: 0.1 }
+    : { stroll: 0.25, hobby: 0.2, plaza: night ? 0.05 : 0.15, bench: 0.15, flowers: !night && hour >= 8 && !gold ? 0.35 : 0.03, water: gold ? 0.4 : 0.08, friend: 0.2 };
+  return { probs, mood: null, greet: 0.12, local: true, shelter: rain };
+}
+/** 島民要選下一步：拿 laya 的決定（連不上時偶爾用 localPlan），在目前做得到的事情裡挑一件，變成目的地與停留時間；沒有決定就回傳 false */
 function decide(v, dp, hour) {
   if (!thinks(v)) return false;
-  const p = mind.take(v, simT); if (!p) return false;
+  const p = mind.take(v, simT) || localPlan(v, hour); if (!p) return false;
   const m = v.mesh, x = m.position.x, z = m.position.z, r = Math.max(2, v.range || 3), dist = (a, b) => Math.hypot(a - x, b - z);
   const benches = []; seats.forEach(st => { if (dist(st.x, st.z) < 14 && Math.abs(ground(st.x, st.z) - m.position.y) < 0.8) [0, 1].forEach(k => { if (seatFree(st, k, v)) benches.push({ st, k }); }); });
   const flowers = flowerSpots.filter(f => dist(f[0], f[1]) < 12), water = waterSpot(x, z);
@@ -1311,10 +1319,11 @@ function decide(v, dp, hour) {
     if (!town.invite(v, f, hour, !!talking)) { const a = Math.atan2(x - f.mesh.position.x, z - f.mesh.position.z); go(f.mesh.position.x + Math.sin(a) * 1.3, f.mesh.position.z + Math.cos(a) * 1.3, 4 + Math.random() * 3); }   // 沒有可以聊的話題：走到朋友旁邊待一下
   }
   else if (act === 'player') { v.goPlayer = simT + 15; v.greetT = greetAnyT = simT; v.wait = 99; }
+  else if (p.shelter) go(v.home[0] + (Math.random() - 0.5) * 1.2, v.home[1] + (Math.random() - 0.5) * 1.2, 14 + Math.random() * 10);   // v8.6 下雨：回家門口躲雨
   else { v.target = [x, z]; v.wait = 8 + Math.random() * 6; }   // hobby：待在原地做自己的事
   const prevMood = v.mind && v.mind.mood; v.mind = { act, mood: p.mood };
   if (dp < 16) {   // 頭上冒出要做的事；做自己的事時是各自的興趣，心情變了再冒一個心情
-    ui.think(m, act === 'hobby' ? HOBBY[v.sid] || '🎵' : mind.ACTIONS[act][1]);
+    ui.think(m, act === 'hobby' ? (p.shelter ? '☔' : HOBBY[v.sid] || '🎵') : mind.ACTIONS[act][1]);
     if (p.mood && p.mood !== prevMood && mind.MOODS[p.mood]) setTimeout(() => { if (!v.away) ui.think(m, mind.MOODS[p.mood][1]); }, 2300);
   }
   return true;
@@ -1395,7 +1404,7 @@ function visit(v) {
   const { home, shown } = v.guest ? { home: home0, shown: [] } : homeWithGifts(v, home0);
   life.cancel(); moveTo = null; if (!away) town.interrupt(v);
   if (!away) bond.note(v, 'visit');   // v8.5 第一次到他家（主人在家時）
-  const note = () => { if (away) setTimeout(() => ui.toast(w === 'sleep' ? `${v.name}睡著了……輕手輕腳地看看就好` : `${v.name}不在家。桌上留了紙條：「出去走走，自己坐喔！」`), 700); };
+  const note = () => { if (away) setTimeout(() => ui.toast(w === 'sleep' ? `${v.name}睡著了……輕手輕腳地看看就好` : `${v.name}不在家。桌上留了紙條：「${bag('n:' + v.sid, ((I.LINES7 || {})[v.sid] || {}).note || ['出去走走，自己坐喔！'])}」`), 700); };   // v8.6 每人自己的紙條
   if (house.has(v.sid) && !v.guest) {   // v7.6：整棟室內（外觀怎樣、裡面就怎樣）
     if (!away) { if (v.sitting) standVillager(v); v.sitGoal = null; }
     roomHost = away ? null : v; nearDoor = null; nearV = null;
@@ -1806,6 +1815,14 @@ function visitorLeave(v, silent) {
   if (roomHost === v) roomHost = null;
   scene.add(v.mesh); v.mesh.position.set(v.home[0], ground(v.home[0], v.home[1]), v.home[1]); v.target = v.home.slice();
   if (!silent) ui.toast(`${v.name}回家了`);
+}
+
+/** v8.6 面板裡的焦點循環（Tab／Shift+Tab；back 指定往前），焦點不會跑到面板外面 */
+function panelTab(e, back) {
+  const box = $('panelBox'), f = [...box.querySelectorAll('button:not([disabled]), input, select, textarea, [href], [contenteditable="true"], summary')].filter(x => x.offsetParent !== null);
+  e.preventDefault(); if (!f.length) return;
+  const up = back != null ? back : e.shiftKey, i = f.indexOf(document.activeElement), n = up ? (i <= 0 ? f.length - 1 : i - 1) : (i < 0 || i >= f.length - 1 ? 0 : i + 1);
+  f[n].focus();
 }
 
 /* ---------- 開始 ---------- */

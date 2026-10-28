@@ -107,9 +107,11 @@ if (window.ResizeObserver && $('dlg')) new ResizeObserver(fitChoices).observe($(
 /** 說話並給選項；opt.timer 秒數到了回傳 -1。
     opt：html 允許 b/u/i/sup/sub/br、keys 標上按鍵（abc 時標 A–E，學測的選項代號；數字鍵 1–5 一樣能選）、multi 多選、big 強制大面板、
     answer 正確選項（數字或陣列；有的話作答後先揭曉對錯再回傳） */
+/** v8.6 連續作答中途按「先到這裡」（或 Esc）的回傳值 */
+export const STOP = -2;
 export async function ask(sp, text, options, opt) {
   opt = opt || {};
-  speaker(sp); $('choices').innerHTML = ''; clearTimer();
+  speaker(sp); $('choices').innerHTML = ''; clearTimer(); D.stop = null;
   if (opt.abc || opt.quiz) D.quiz = true;   // 題目（選項標 A–E 的都是題庫題；其他題目傳 quiz）
   const lens = options.map(o => plain(o).length), maxO = Math.max(0, ...lens);
   fit(opt.big != null ? opt.big : plain(text).length > BIG_TEXT || maxO > BIG_OPT || !!opt.multi || passageOn(), maxO > 16 || (options.length <= 5 && lens.reduce((a, b) => a + b, 0) > 56));   // 文意選填的十個短單字排兩欄
@@ -126,6 +128,11 @@ export async function ask(sp, text, options, opt) {
     if (opt.keys) [...box.children].forEach((b, i) => { if (opt.abc && multi && i === options.length) return; b.insertAdjacentHTML('afterbegin', opt.abc ? `<kbd data-n="${(i + 1) % 10}">${LETTERS[i] || i + 1}</kbd>` : `<kbd>${(i + 1) % 10}</kbd>`); });
     hl(); fitChoices();
     if (multi) box.lastChild.classList.add('submit');
+    if (opt.stop) {   // v8.6 放在選項後面、樣式淡一點：不會被當成答案誤按；不算這題、也不記錄
+      const sb = el('button', 'btn ghost sm choice-stop', `${COARSE.matches ? '' : '<kbd>Esc</kbd>'}先到這裡`); sb.type = 'button';
+      D.stop = () => { if (!D.choices) return; D.choices = null; D.multi = false; D.confPick = null; D.stop = null; clearTimer(); box.innerHTML = ''; res(STOP); };
+      sb.onclick = e => { e.stopPropagation(); if (D.stop) D.stop(); }; box.appendChild(sb);
+    }
     const pick = i => {
       if (!D.choices) return;
       if (confWant && i >= 0 && conf == null) {   // v8.4 揭曉前先問把握：E／Enter 有把握、G 有點猜；按別的選項就是改答案
@@ -138,7 +145,7 @@ export async function ask(sp, text, options, opt) {
       }
       if (multi && i >= 0 && i < options.length) { picked.has(i) ? picked.delete(i) : picked.add(i); box.children[i].classList.toggle('on', picked.has(i)); Audio.sfx('tick'); return; }
       if (multi && i === options.length && !picked.size) { Audio.sfx('bad'); return; }
-      D.choices = null; D.multi = false; D.confPick = null; clearTimer(); lastMs = performance.now() - tAsk; lastConfV = conf;
+      D.choices = null; D.multi = false; D.confPick = null; D.stop = null; clearTimer(); lastMs = performance.now() - tAsk; lastConfV = conf;
       const out = multi && i >= 0 ? [...picked].sort((a, b) => a - b) : i;
       if (opt.answer != null) {   // 對錯揭曉（v7.0）：正解變綠打勾、選錯的變紅並抖一下，沒選到的正解框出來；停一下再繼續，答錯停久一點好對照
         const A = [].concat(opt.answer), right = multi ? i >= 0 && out.length === A.length && out.every(x => A.includes(x)) : A.includes(i);
@@ -244,6 +251,7 @@ export function dialogKey(e) {
     return false;
   }
   if (!D.choices) return false;
+  if (D.stop && e.code === 'Escape') { D.stop(); return true; }   // v8.6 先到這裡
   if (D.confPick) { if (e.code === 'KeyE' || e.code === 'Enter' || e.code === 'Space') { D.confPick('sure'); return true; } if (e.code === 'KeyG') { D.confPick('guess'); return true; } }   // v8.4 把握
   if (/^(Digit|Numpad)[0-9]$/.test(e.code)) { const n = +e.code.slice(-1), i = n === 0 ? 9 : n - 1; if (i < D.choices.length) D.pick(i); return true; }   // 1–9、0（第十個選項）
   if (D.multi && e.code === 'Enter') { D.submit(); return true; }
@@ -272,7 +280,9 @@ $('dlg').addEventListener('click', e => { if (cardRes || !D.open || D.choices ||
 /* ---------- 提示 ---------- */
 const held = [];
 /** v8.2 手機上作答時，通知先排隊，答完才出來（不會蓋住題目的選項） */
-function holdToast() { return D.choices && D.quiz && innerWidth < 760; }
+function holdToast() {   // v8.6 還沒登記完、手機上季節大字還在：通知先排隊，不和標題擠在一起
+  return (D.choices && D.quiz && innerWidth < 760) || !((TA.S || {}).profile || {}).onboarded || (innerWidth < 760 && !!document.querySelector('.season-banner'));
+}
 export function toast(text, tone) {
   if (holdToast()) { if (!held.length) { const iv = setInterval(() => { if (holdToast()) return; clearInterval(iv); held.splice(0).forEach(([a, b]) => toast(a, b)); }, 300); } if (held.length < 4) held.push([text, tone]); return; }
   text = keys(text); const box = $('toasts'); if ([...box.children].some(c => c.textContent === text)) return;
@@ -297,6 +307,7 @@ export function bubble(obj, text, ms) {
 /** 收進口袋：圖示從 from（螢幕座標 [x, y]，或 3D 物件）沿弧線飛進背包按鈕，按鈕彈一下；口袋只剩 2 格以下按鈕變色（main.js 的 paintPocket） */
 export function flyToPocket(src, from, size) {
   const b = $('pocketBtn'); if (!b || !b.getClientRects().length) return;
+  if (REDUCE.matches) { Audio.sfx('tick', { pitch: 1.5, vol: 0.5 }); return; }   // v8.6 減少動態效果：不飛
   const [x0, y0] = Array.isArray(from) ? from : screenOf(from, 1.1), r = b.getBoundingClientRect(), x1 = r.left + r.width / 2, y1 = r.top + r.height / 2;
   const e = el('div', 'fly-item', /^(data:|blob:|https?:|\/|\.)/.test(src || '') || /\.(png|webp|jpe?g|svg)$/i.test(src || '') ? `<img src="${src}" alt="">` : esc(src || '🎒'));
   const s0 = Math.min(1.6, (size || 44) / 44), mx = (x0 + x1) / 2 + (x1 - x0) * 0.1, my = Math.min(y0, y1) - 70;
@@ -314,14 +325,15 @@ export function floatText(obj, text, color) {
 let panelBack = null, panelBackAt = 0, panelBackLabel = '手機';   // 從手機打開的下一個面板：左上角放「‹ 手機」（setBack 之後 1 秒內打開的面板才算）
 /** 下一個打開的面板加上返回鈕（手機的 App 用；label：返回到哪裡，例如「自由練習」） */
 export const setBack = (fn, label) => { panelBack = fn; panelBackAt = performance.now(); panelBackLabel = label || '手機'; };
-let panelClose = null, panelGuard = null;   // panelGuard：關閉前要確認（例如模擬考作答中），回傳 Promise<boolean>
+let panelClose = null, panelGuard = null, panelFrom = null;   // panelFrom：v8.6 用鍵盤打開面板時原本的焦點，關閉後還回去   // panelGuard：關閉前要確認（例如模擬考作答中），回傳 Promise<boolean>
 export const panelOpen = () => !$('panel').hidden;
 export function panel(title, body, opt) {
   const p = $('panel'); document.body.classList.add('panel-open');
+  if (p.hidden) { const a = document.activeElement; panelFrom = a && a !== document.body && a.matches(':focus-visible') ? a : null; }
   if (!p.hidden && panelClose) { const f = panelClose; panelClose = null; f(); }   // 直接換成另一個面板：舊面板的清理（語音、動畫、監聽器）也要做
   p.hidden = false; Audio.sfx('open');
   const box = $('panelBox'); box.className = 'pn-box' + (opt && opt.cls ? ' ' + opt.cls : '');
-  box.innerHTML = ''; const head = el('div', 'pn-head', `<b>${esc(title)}</b>`); const x = el('button', 'pn-x', '✕'); x.type = 'button'; x.onclick = () => requestClose(); head.appendChild(x);
+  box.innerHTML = ''; const head = el('div', 'pn-head', `<b id="pnTitle">${esc(title)}</b>`); const x = el('button', 'pn-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', '關閉'); x.onclick = () => requestClose(); head.appendChild(x);
   box.appendChild(head); box.appendChild(body); panelClose = opt && opt.onClose; panelGuard = (opt && opt.guard) || null;
   { const back = panelBack && performance.now() - panelBackAt < 1000 && !(opt && opt.cls && /\bphone-home\b/.test(opt.cls)) ? panelBack : null; panelBack = null;
     if (back) { const b = el('button', 'pn-back', '‹ ' + esc(panelBackLabel)); b.type = 'button'; b.onclick = () => { const g = panelGuard; if (g) g().then(ok => { if (ok) back(); }); else back(); }; head.insertBefore(b, head.firstChild); } }
@@ -329,7 +341,10 @@ export function panel(title, body, opt) {
 }
 /** 要求關閉面板：有離開確認的面板先問過（✕、點面板外面、Esc 都走這裡） */
 export function requestClose() { const g = panelGuard; if (!g) { closePanel(); return; } g().then(ok => { if (ok && panelGuard === g) closePanel(); }); }
-export function closePanel() { panelGuard = null; $('panel').hidden = true; document.body.classList.remove('panel-open'); const f = panelClose; panelClose = null; if (f) f(); }
+export function closePanel() {
+  panelGuard = null; $('panel').hidden = true; document.body.classList.remove('panel-open'); const f = panelClose; panelClose = null; if (f) f();
+  const to = panelFrom; panelFrom = null; if ($('panel').hidden && to && to.isConnected && to.getClientRects().length) to.focus({ preventScroll: true });
+}
 
 /** 分頁籤列（.dex-tabs）在窄螢幕上是橫向捲動的一排：重畫後把選中的那一顆捲到看得到的地方 */
 export function showTab(tabs) {
