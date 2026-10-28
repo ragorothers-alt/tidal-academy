@@ -996,7 +996,8 @@ function treeRing(x, z) {
   const m = modelClone('PROPMODELS', 'tree_ring'); if (!m) return;
   const g = placed(x, z); g.add(m); mergeStatic(g); scene.add(g); register(g);
   colliders.push({ x, z, r: 1.6 });
-  const y = groundAt(x, z); [0, 1, 2, 3].forEach(i => { const a = i * Math.PI / 2 + Math.PI / 4; seats.push({ x: x + Math.sin(a) * 1.25, z: z + Math.cos(a) * 1.25, ry: a, h: y + 0.47, n: 1 }); });
+  // v8.7 座位往外移、降到石面高度：以前坐在 1.25m，小腿後側卡進石緣前緣（外緣約 1.57m），人也浮在石面上約 0.1m
+  const y = groundAt(x, z); [0, 1, 2, 3].forEach(i => { const a = i * Math.PI / 2 + Math.PI / 4; seats.push({ x: x + Math.sin(a) * 1.38, z: z + Math.cos(a) * 1.38, ry: a, h: y + 0.4, n: 1 }); });
 }
 /** 廣場的石板地：以廣場中心為圓心，一圈圈同心圓的石板（中央一枚星徽），外緣參差地融進草地 */
 function plazaPaving() {

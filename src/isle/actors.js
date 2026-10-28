@@ -47,6 +47,20 @@ export function loadModel(id, kind) {
 const findBone = (root, names) => { let b = null; root.traverse(o => { if (!b && o.isBone && names.includes(o.name.replace(/^mixamorig:?/, ''))) b = o; }); return b; };
 
 /** 把 key（島民 sid、'player'、'shop'…）對應的模型套到角色上；沒有模型就維持原樣 */
+/** v8.7 帽子掛點的高度（頭骨座標）：帽子是照 Q 版頭頂在帽子座標 0.4 的地方設計的，讓那一點落在這個角色的頭髮頂端下 1cm。
+    頭髮綁在頭骨上，量一次就好（任何動作下相對位置都一樣）；只看頭頂正上方 16cm 內的頂點，避開肩上的長髮與手 */
+const hv = new THREE.Vector3(), hw = new THREE.Vector3();
+function hatY(model, head) {
+  model.updateMatrixWorld(true); head.getWorldPosition(hw);
+  let top = -Infinity;
+  model.traverse(o => {
+    if (!o.isSkinnedMesh) return; const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i += 2) { o.getVertexPosition(i, hv); hv.applyMatrix4(o.matrixWorld); if (hv.y > hw.y && Math.hypot(hv.x - hw.x, hv.z - hw.z) < 0.16 && hv.y > top) top = hv.y; }
+  });
+  if (!isFinite(top)) return 0.075;
+  hv.set(hw.x, top - 0.01, hw.z); head.worldToLocal(hv);
+  return THREE.MathUtils.clamp(hv.y - 0.4 * 0.42 / HEIGHT, 0.02, 0.2);
+}
 export async function dress(ch, key) {
   const id = CAST[key]; if (!id || !READY.has(id) || !ch || ch.userData.gltf) return false;
   let g; try { g = await loadModel(id); } catch (e) { console.warn('角色模型載入失敗：', id, e); return false; }
@@ -58,8 +72,9 @@ export async function dress(ch, key) {
   if (acts.greet_01) { acts.greet_01.setLoop(THREE.LoopRepeat); }
   const head = findBone(model, ['Head']), hand = findBone(model, ['R_Hand', 'R_Wrist', 'RightHand']);
   // 帽子掛到頭骨、手持工具掛到右手骨（骨頭的世界縮放是 HEIGHT，配件要縮回原本的大小）
-  if (head && u.hatSlot) { head.add(u.hatSlot); u.hatSlot.position.set(0, 0.075, 0.01); u.hatSlot.scale.setScalar(0.42 / HEIGHT); }
-  if (head && u.partyHat) { head.add(u.partyHat); u.partyHat.position.set(0.02, 0.12, 0); u.partyHat.scale.setScalar(0.42 / HEIGHT); }
+  const hy = head ? hatY(model, head) : 0.075;   // v8.7 依這個角色的頭髮頂端放帽子（以前全員同一個高度：森、阿潮的魔女帽浮在頭上 8–9cm）
+  if (head && u.hatSlot) { head.add(u.hatSlot); u.hatSlot.position.set(0, hy, 0.01); u.hatSlot.scale.setScalar(0.42 / HEIGHT); }
+  if (head && u.partyHat) { head.add(u.partyHat); u.partyHat.position.set(0.02, hy + 0.045, 0); u.partyHat.scale.setScalar(0.42 / HEIGHT); }
   if (hand && u.hand) { hand.add(u.hand); u.hand.position.set(0, 0.03, 0); u.hand.scale.setScalar(0.8 / HEIGHT); }
   // 疊加在骨架動作上的程式姿勢（使用工具、空中縮腿）要用到的骨頭；找不到的就略過
   const B = n => findBone(model, n);

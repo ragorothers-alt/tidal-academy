@@ -126,8 +126,8 @@ body.talking .quest, body.placing .quest { opacity: .35; }
 .card-in small { color: var(--ink-2); font-weight: 700; }
 @keyframes spin-in { from { transform: scale(0) rotate(-180deg); } }
 /* 提示 */
-#toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); display: grid; gap: 8px; justify-items: center; pointer-events: none; z-index: 6; }   /* 在獲得卡片（5）之上：卡片出現時的提示不會被蓋住 */
-.toast { padding: 8px 18px; border-radius: 99px; background: rgba(107,79,58,.85); color: #fff; font-weight: 800; font-size: 14px; animation: dlg-in .3s cubic-bezier(.3,1.6,.5,1); transition: opacity .4s; white-space: nowrap; }
+#toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); display: grid; gap: 8px; justify-items: center; pointer-events: none; z-index: 6; }   /* 在獲得卡片（5）之上：卡片出現時的提示不會被蓋住 */
+.toast { padding: 8px 18px; border-radius: 99px; background: rgba(107,79,58,.85); color: #fff; font-weight: 800; font-size: 14px; animation: dlg-in .3s cubic-bezier(.3,1.6,.5,1); transition: opacity .4s; max-width: min(560px, calc(100vw - 24px)); line-height: 1.5; text-align: center; }   /* v8.7 可以換行、不超出畫面（以前 nowrap） */
 .toast.out { opacity: 0; }
 .pill.done { background: #fff1b8; color: #b07a10; }
 .pill.feel { background: #e4f7ef; color: #1f8f78; letter-spacing: 1px; }   /* 手感：採集時連續答對 */
@@ -271,8 +271,6 @@ body.in-room.visiting .decor-btn { display: none; }
 .rt-tip { width: 100%; padding: 12px 14px; border-radius: 16px; background: #fff6d0; text-align: left; }
 .rt-tip p { margin: 4px 0 0; font-weight: 700; line-height: 1.7; }
 
-.rainbow { position: fixed; left: 50%; top: calc(7vh - 1.5vw); width: 300vw; height: 300vw; transform: translateX(-50%); border-radius: 50%; pointer-events: none; opacity: 0; filter: blur(5px);
-  background: radial-gradient(closest-side, transparent 93.2%, rgba(150,110,255,.5) 93.8%, rgba(90,170,255,.55) 94.8%, rgba(110,215,120,.55) 95.8%, rgba(255,226,90,.6) 96.8%, rgba(255,166,74,.55) 97.8%, rgba(255,95,95,.5) 98.6%, transparent 99.3%); }
 
 /* 成就、信件換行 */
 .ach { display: grid; gap: 8px; }
@@ -1580,3 +1578,25 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 #choices .choice-stop { justify-self: end; align-self: flex-end; margin-top: 2px; padding: 6px 14px; background: rgba(255, 255, 255, .55); color: var(--ink-2); box-shadow: inset 0 0 0 1.5px rgba(107, 79, 58, .25); font-size: 12px; font-weight: 700; } .choice-stop kbd { margin-right: 5px; }   /* v8.6 連續作答的「先到這裡」 */
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-iteration-count: 1 !important; } }   /* v8.6 減少動態效果：一直循環的動畫只播一次 */
 @media (pointer: coarse) { #choices .choice-stop { min-height: 40px; padding: 10px 18px; font-size: 13px; } }   /* v8.6 觸控：先到這裡也要好按（約 40px 高） */
+
+/* ---------- v8.7 美術打磨（一）：畫面裡的東西都在畫面內 ---------- */
+/* 有把握／先到這裡：泡泡下緣是很圓的弧，置中並多留一點下方空間，按鈕不會被圓角切掉 */
+.choices:has(.conf-row), .choices:has(.choice-stop) { padding-bottom: 36px; border-bottom-left-radius: 34% 90px; border-bottom-right-radius: 36% 90px; }   /* 泡泡很高時下緣圓弧也很大：改成固定高度的圓角 */
+.conf-row { justify-content: center; }
+#choices .choice-stop { justify-self: center; align-self: center; }
+@media (max-width: 640px) { .conf-row > span { flex: 1 1 100%; text-align: center; } .conf-row .btn { flex: 1 1 0; min-width: 0; } }
+/* 收穫卡：矮的畫面（手機橫向）不超出上下緣 */
+@media (max-height: 520px) { .card-in { max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; gap: 4px; padding: 14px 20px 12px; } .card-icon { width: 88px; height: 88px; } .card-icon img { width: 64px; height: 64px; } .card-in > b { font-size: 19px; } .card-in p { line-height: 1.55; } }
+/* 季節大字、升級橫幅：面板打開時先收起來，不蓋在 App 上 */
+body.panel-open .season-banner { display: none; }
+/* 橫向大題目：名牌掛在泡泡上緣外，要留出位置 */
+@media (orientation: landscape) and (max-height: 540px) { #dlg.big { max-height: calc(100vh - 44px); } }
+/* 觸控橫向：小地圖縮小，右側入口改成小地圖左邊的一排（以前直排到畫面外，設計、口袋又被動作鈕蓋住） */
+@media (pointer: coarse) and (max-height: 520px) and (orientation: landscape) {
+  .minimap { width: 104px; right: 10px; } .mini-ring { width: 104px; height: 104px; padding: 5px; }
+  .mini-zoom { top: 0; right: -12px; } .mini-name { margin-top: 4px; font-size: 11px; padding: 3px 10px 4px; }
+  body.has-minimap .tops { margin-top: 136px; } .tops { gap: 4px; }
+  .hud-br, body.has-minimap .hud-br { top: max(10px, env(safe-area-inset-top)); bottom: auto; right: 132px; flex-direction: row; align-items: center; gap: 8px; }
+  body.in-room .hud-br, body.in-trip .hud-br { right: 14px; }
+  .round-btn { width: 46px; height: 46px; font-size: 22px; }
+}

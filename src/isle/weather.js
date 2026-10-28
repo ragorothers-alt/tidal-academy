@@ -1,6 +1,6 @@
 /* 潮汐小島 · 天氣：依日期與時段決定晴／陰／雨（梅雨與颱風季較常下雨）。雨絲、天色、雨聲、雨傘、雨後彩虹。 */
 import * as THREE from 'three';
-import { scene, bend, sun, hemi, skyU, water, renderer, U } from './engine.js';
+import { scene, bend, sun, hemi, skyU, water, renderer, U, camera } from './engine.js';
 import { dayKey } from './quiz.js';
 import { winter } from './seasons.js';
 
@@ -34,8 +34,29 @@ const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.B
 const mat = bend(new THREE.LineBasicMaterial({ color: '#cfe4ff', transparent: true, opacity: 0, depthWrite: false }));
 const lines = new THREE.LineSegments(geo, mat); lines.frustumCulled = false; lines.renderOrder = 4; scene.add(lines);
 
-/* ---------- 彩虹（俯視鏡頭幾乎看不到天空，改用畫面上方的光環） ---------- */
-const bowEl = document.createElement('div'); bowEl.className = 'rainbow'; document.body.appendChild(bowEl);
+/* ---------- 彩虹：天空裡背對太陽、仰角 42° 的弧（v8.7）----------
+   以前是蓋在整個畫面上的 HTML 光環：進室內、低頭看地面、轉身都在畫面同一個位置。現在放在島上的場景裡，
+   跟著觀看者移動、方位固定在太陽的反方向；被建築擋住、室內看不到都是自然的結果。 */
+const BOW_D = 230, BOW_R = BOW_D * Math.tan(42 * Math.PI / 180);
+const bowMat = new THREE.ShaderMaterial({
+  uniforms: { uK: { value: 0 } }, transparent: true, depthWrite: false, fog: false,
+  vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform float uK; varying vec2 vP;
+    void main(){
+      float t = (length(vP) / ${BOW_R.toFixed(1)} - 0.93) / 0.07;   // 0：內側（紫）→ 1：外側（紅）
+      vec3 c = t < 0.2 ? mix(vec3(0.64, 0.52, 0.95), vec3(0.45, 0.66, 1.0), t / 0.2)
+        : t < 0.45 ? mix(vec3(0.45, 0.66, 1.0), vec3(0.52, 0.88, 0.58), (t - 0.2) / 0.25)
+        : t < 0.65 ? mix(vec3(0.52, 0.88, 0.58), vec3(1.0, 0.89, 0.5), (t - 0.45) / 0.2)
+        : t < 0.82 ? mix(vec3(1.0, 0.89, 0.5), vec3(1.0, 0.7, 0.45), (t - 0.65) / 0.17)
+        : mix(vec3(1.0, 0.7, 0.45), vec3(1.0, 0.5, 0.55), (t - 0.82) / 0.18);   // 夢幻風的粉彩光譜
+      float a = sin(clamp(t, 0.0, 1.0) * 3.14159) * smoothstep(0.0, 0.3, vP.y / ${BOW_R.toFixed(1)});   // 邊緣柔、兩端沒入地平線的霧裡
+      gl_FragColor = vec4(c, a * uK);
+      #include <colorspace_fragment>
+    }`
+});
+const bow = new THREE.Mesh(new THREE.RingGeometry(BOW_R * 0.93, BOW_R, 128, 1, 0, Math.PI), bowMat);
+bow.frustumCulled = false; bow.renderOrder = -1; bow.visible = false; scene.add(bow);
+const bowDir = new THREE.Vector3();
 
 const grey = new THREE.Color('#8f98a6'), greyTop = new THREE.Color('#7a8292');
 /** 每幀：在 applyTime 之後呼叫，套用天氣對光線與畫面的影響 */
@@ -66,7 +87,14 @@ export function update(dt, hour, night, focus, onChange) {
     geo.attributes.position.needsUpdate = true;
   }
   // 彩虹
-  bowEl.style.opacity = (bowK * 0.55 * (1 - night)).toFixed(3);
+  bowMat.uniforms.uK.value = bowK * 0.5 * (1 - night) * (1 - rainK);
+  bow.visible = bowMat.uniforms.uK.value > 0.004;
+  if (bow.visible) {   // 背對太陽：圓心在地平線下（太陽仰角那麼多），跟著觀看者
+    bowDir.copy(skyU.sunDir.value).normalize();   // 天空用的太陽方向（燈光的位置會跟著鏡頭焦點移動）
+    const el = Math.max(0, Math.asin(THREE.MathUtils.clamp(bowDir.y, -1, 1))), hx = -bowDir.x, hz = -bowDir.z, hl = Math.hypot(hx, hz) || 1;
+    bow.position.set(camera.position.x + hx / hl * BOW_D, camera.position.y - Math.tan(el) * BOW_D, camera.position.z + hz / hl * BOW_D);
+    bow.rotation.set(0, Math.atan2(-hx, -hz), 0);   // 正面朝向觀看者
+  }
   return rainK;
 }
 export const icon = () => (now === 'storm' ? '🌀' : now === 'rain' ? (winter() ? '🌨' : '🌧') : now === 'cloudy' ? '☁' : bowK > 0.05 ? '🌈' : null);

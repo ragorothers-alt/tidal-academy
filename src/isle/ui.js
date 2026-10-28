@@ -288,7 +288,8 @@ export function toast(text, tone) {
   text = keys(text); const box = $('toasts'); if ([...box.children].some(c => c.textContent === text)) return;
   while (box.children.length >= 3) box.firstChild.remove();
   const t = el('div', 'toast' + (tone ? ' ' + tone : ''), esc(text)); box.appendChild(t);
-  setTimeout(() => t.classList.add('out'), 2600); setTimeout(() => t.remove(), 3100);
+  const ms = text.length > 26 ? 4500 : 2600;   // v8.7 長句停久一點（會換行，手機上不再超出畫面）
+  setTimeout(() => t.classList.add('out'), ms); setTimeout(() => t.remove(), ms + 500);
 }
 export function emote(obj, text, color) {
   const e = el('div', 'emote'); e.textContent = text; e.style.color = color || '#ff7b9c'; $('labels').appendChild(e);
@@ -325,19 +326,21 @@ export function floatText(obj, text, color) {
 let panelBack = null, panelBackAt = 0, panelBackLabel = '手機';   // 從手機打開的下一個面板：左上角放「‹ 手機」（setBack 之後 1 秒內打開的面板才算）
 /** 下一個打開的面板加上返回鈕（手機的 App 用；label：返回到哪裡，例如「自由練習」） */
 export const setBack = (fn, label) => { panelBack = fn; panelBackAt = performance.now(); panelBackLabel = label || '手機'; };
-let panelClose = null, panelGuard = null, panelFrom = null;   // panelFrom：v8.6 用鍵盤打開面板時原本的焦點，關閉後還回去   // panelGuard：關閉前要確認（例如模擬考作答中），回傳 Promise<boolean>
+let panelClose = null, panelGuard = null, panelFrom = null, panelTitle = '';   // panelFrom：v8.6 用鍵盤打開面板時原本的焦點，關閉後還回去   // panelGuard：關閉前要確認（例如模擬考作答中），回傳 Promise<boolean>
 export const panelOpen = () => !$('panel').hidden;
 export function panel(title, body, opt) {
   const p = $('panel'); document.body.classList.add('panel-open');
   if (p.hidden) { const a = document.activeElement; panelFrom = a && a !== document.body && a.matches(':focus-visible') ? a : null; }
   if (!p.hidden && panelClose) { const f = panelClose; panelClose = null; f(); }   // 直接換成另一個面板：舊面板的清理（語音、動畫、監聽器）也要做
   p.hidden = false; Audio.sfx('open');
-  const box = $('panelBox'); box.className = 'pn-box' + (opt && opt.cls ? ' ' + opt.cls : '');
+  const box = $('panelBox'), keepY = !p.hidden && panelTitle === title ? box.scrollTop : 0; panelTitle = title;   // v8.7 換成別的面板從頂端開始（以前沿用上一頁捲到的位置）；同一個面板重畫才留在原處
+  box.className = 'pn-box' + (opt && opt.cls ? ' ' + opt.cls : '');
   box.innerHTML = ''; const head = el('div', 'pn-head', `<b id="pnTitle">${esc(title)}</b>`); const x = el('button', 'pn-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', '關閉'); x.onclick = () => requestClose(); head.appendChild(x);
   box.appendChild(head); box.appendChild(body); panelClose = opt && opt.onClose; panelGuard = (opt && opt.guard) || null;
   { const back = panelBack && performance.now() - panelBackAt < 1000 && !(opt && opt.cls && /\bphone-home\b/.test(opt.cls)) ? panelBack : null; panelBack = null;
     if (back) { const b = el('button', 'pn-back', '‹ ' + esc(panelBackLabel)); b.type = 'button'; b.onclick = () => { const g = panelGuard; if (g) g().then(ok => { if (ok) back(); }); else back(); }; head.insertBefore(b, head.firstChild); } }
   box.tabIndex = -1; if (document.activeElement && document.activeElement !== document.body && !box.contains(document.activeElement)) document.activeElement.blur(); box.focus({ preventScroll: true });
+  box.scrollTop = keepY;
 }
 /** 要求關閉面板：有離開確認的面板先問過（✕、點面板外面、Esc 都走這裡） */
 export function requestClose() { const g = panelGuard; if (!g) { closePanel(); return; } g().then(ok => { if (ok && panelGuard === g) closePanel(); }); }
