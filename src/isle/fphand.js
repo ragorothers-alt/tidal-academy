@@ -8,15 +8,26 @@ const ARM = /(Right|R_)(Arm|ForeArm|Forearm|Hand|Wrist|Thumb|Index|Middle|Ring|P
 const HAND = ['RightHand', 'R_Hand', 'R_Wrist'];
 // 各工具在畫面裡的擺法（鏡頭空間的位移與旋轉微調）。rotation.x 為正：工具尖端往上抬
 export const POSE = {
-  none: { p: [0.03, -0.03, 0.03], r: [0.15, 0, 0.12] },
+  none: { p: [0.03, -0.07, 0.03], r: [0.05, 0, 0.12] },   // v8.7 空手放低一點、不往上舉（以前一直舉著抓握的手，前臂佔了右下角一大塊）
   net: { p: [0, 0, 0], r: [0, 0, 0] },
   rod: { p: [0, 0, 0], r: [0.08, 0, 0] },
   shovel: { p: [0, -0.01, 0], r: [-0.05, 0, 0] },
-  can: { p: [0.08, -0.07, -0.18], r: [0, 0.55, -0.25] },   // 壺身直立、壺嘴朝左前方
+  can: { p: [0.04, 0.06, -0.1], r: [-0.15, 0.55, 0.6] },   // v8.7 前臂從右邊斜斜伸過來、手提著提把；壺身的方向由 canUpright() 擺正
   umbrella: { p: [0.01, -0.03, 0.05], r: [1.22, 0, -0.26] },   // 傘柄幾乎直立，傘面在頭頂、只看到前緣
 };
 const USE = { net: 0.45, shovel: 0.5, can: 0.9, rod: 0.55 };   // 使用工具的動作長度（秒）
 const ss = (a, b, x) => THREE.MathUtils.smoothstep(x, a, b);
+/* v8.7 第一人稱的澆水壺：不管手掌怎麼擺，壺身都直立、壺嘴朝左前方，提把握在掌心（以前跟著手掌一起躺倒，壺嘴朝斜上方）；
+   倒水時才往壺嘴那一側傾。壺的模型座標：上方是 -y（提把在原點、壺身吊在下面），壺嘴朝 +z（data/toolmodels.js） */
+const _qi = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _qt = new THREE.Quaternion(), _mb = new THREE.Matrix4(), _u = new THREE.Vector3(), _s = new THREE.Vector3(), _k = new THREE.Vector3(), _x = new THREE.Vector3();
+function canUpright(g, piv, cam, pour) {
+  _u.set(0, 1, 0).applyQuaternion(_qi.copy(cam.quaternion).invert());   // 世界的「上」換到鏡頭座標
+  _s.set(-0.72, 0, -0.7); _s.addScaledVector(_u, -_s.dot(_u)).normalize();   // 壺嘴：左前方、水平
+  if (pour) { _k.crossVectors(_u, _s).normalize(); _qp.setFromAxisAngle(_k, pour); _s.applyQuaternion(_qp); _u.applyQuaternion(_qp); }
+  _u.negate(); _x.crossVectors(_u, _s);   // 模型的 +y 是壺的下方
+  _qt.setFromRotationMatrix(_mb.makeBasis(_x, _u, _s));
+  g.quaternion.copy(piv.quaternion).invert().multiply(_qt);
+}
 
 /** 從模型目前的姿勢切出右臂：骨頭權重主要在右臂、右手的三角形，換算成手骨頭的座標（之後擺在鏡頭前） */
 function cutArm(gl) {
@@ -215,6 +226,7 @@ export function createHand(player, scene) {
     py -= low * 0.32; rx -= low * 0.5;
     root.position.copy(cam.position); root.quaternion.copy(cam.quaternion);
     piv.position.set(px, py, pz); piv.quaternion.setFromEuler(E.set(rx, ry, rz, 'XYZ'));
+    if (kind === 'can' && holder.children[0]) canUpright(holder.children[0], piv, cam, useKind === 'can' && useT < 1 ? 0.95 * ss(0, 0.22, useT) * (1 - ss(0.75, 1, useT)) : 0);
   }
   return { update };
 }

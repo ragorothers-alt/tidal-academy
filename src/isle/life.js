@@ -64,7 +64,7 @@ function cast() {
   const y = w === 'river' ? (waterY(tx, tz) ?? 0.7) + 0.02 : 0.05;
   const g = new THREE.Group(); g.add(mesh(bobGeo, M('#ef6f5e'), 0, 0.04, 0, { noCast: true }), mesh(bobCapGeo, M('#ffffff'), 0, 0.04, 0, { noCast: true }));
   g.position.set(tx, y, tz); scene.add(g);
-  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rodPts), bend(new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })));
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(rodPts), bend(new THREE.LineBasicMaterial({ color: '#d6e5eb', transparent: true, opacity: 0.55 })));   // v8.7 淡一點的銀灰（以前純白 0.8，細線在畫面上很刺眼）
   line.geometry.setDrawRange(0, 2); scene.add(line);
   rod = { bob: g, line, y, t: 0, fish: null, idle: 12 + Math.random() * 6, where: w, fly: { t: -0.24, to: g.position.clone(), from: null } };   // 浮標等竿子甩到前面（約 0.24 秒）才飛出去
   P.userData.swing = 1; Audio.sfx('cast');
@@ -163,7 +163,7 @@ function rodAction() {
 /* ================= 蟲 ================= */
 const bugs = [];
 const texCache = {};
-function bugTex(id) { if (texCache[id]) return texCache[id]; const t = new THREE.TextureLoader().load(icon(id, 'bug')); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; return (texCache[id] = t); }
+function bugTex(id) { if (texCache[id]) return texCache[id]; const t = new THREE.TextureLoader().load(icon(id, 'bug')); t.colorSpace = THREE.SRGBColorSpace; return (texCache[id] = t); }   // v8.7 島上飛的蟲用平滑取樣（以前 Nearest，近看是一格格的像素卡；圖鑑與收穫卡的像素圖不變）
 /* v7.5（Codex 第二輪 A5）：蝴蝶、蜜蜂在附近幾叢花之間飛來飛去（0.25–0.55 m/s），停在花上 2–5 秒；
    蜻蜓、豆娘沿著水邊短飛（0.6–1.2 m/s），停在水草尖上 1–3 秒。停的點在出生時挑好；
    飛／停記在 b.mode，b.st 維持 'idle'，網子照樣抓得到 */
@@ -214,8 +214,8 @@ function spawnBug() {
     else { x = (Math.random() - 0.5) * N * 0.92; z = (Math.random() - 0.5) * N * 0.92; const t = tileAt(x, z); ok = w === 'water' ? waterAt(x, z) === 'river' : w === 'beach' ? t === 0 : (t === 1 || t === 2); y = w === 'water' ? (waterY(x, z) ?? 0.7) + 0.08 : groundAt(x, z) + (w === 'air' ? 1.1 : 0.2); if (ok && w !== 'water' && blocked(x, z, 0.3)) ok = false; }
   }
   if (!ok || Math.hypot(x - P.position.x, z - P.position.z) < 6) return;
-  const s = new THREE.Sprite(bend(new THREE.SpriteMaterial({ map: bugTex(sp.id), transparent: true, alphaTest: 0.5 }), 'sprite'));
-  s.scale.set(0.55, 0.55, 1); s.position.set(x, y, z); scene.add(s);
+  const s = new THREE.Sprite(bend(new THREE.SpriteMaterial({ map: bugTex(sp.id), transparent: true, alphaTest: 0.25 }), 'sprite'));
+  s.scale.set(0.3, 0.3, 1); s.position.set(x, y, z); scene.add(s);   // v8.7 0.55m → 0.3m：以前一隻蝴蝶快有角色的半個頭身大
   const b = { sp, s, x, y, z, ph: Math.random() * 6, st: 'idle', t: 0 };
   if (flits(sp) || darts(sp)) {
     const spots = perchSpots(x, z, sp.where === 'flower');

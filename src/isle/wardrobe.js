@@ -1,7 +1,7 @@
 /* 潮汐小島 · 服裝：商店的服裝櫃台賣帽子與染布（上衣、褲子、鞋子共用顏色）、染髮；手機「衣櫃」隨時換裝。
    存檔 S().look = { shirt, pants, shoe, hair, hat }，S().closet = { colors: [], hairs: [], hats: [] }。 */
 import * as THREE from 'three';
-import { M as M0, mesh } from './engine.js';
+import { M as M0, mesh, U } from './engine.js';
 const M = (c, o) => M0(c, o, 'char');   // 角色身上的衣服、帽子、頭髮：不積雪
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
@@ -28,6 +28,23 @@ export const HATS = [
   { id: 'star_pin', name: '星星髮夾', price: 0, src: 'miles', build: g => { [[0.22, 0.3, 0.2, 0.09], [0.3, 0.18, 0.14, 0.06]].forEach(([x, y, z, r]) => { const st = mesh(new THREE.OctahedronGeometry(r, 0), M('#ffe14a', { emissive: new THREE.Color('#ffd84a'), emissiveIntensity: 0.3 }), x, y, z); st.scale.set(1, 1, 0.4); g.add(st); }); } }
 ];
 const hat = id => HATS.find(h => h.id === id);
+/** v8.7 帽子的小圖：用帽子模型本身離屏算一張、快取（以前九種帽子都顯示同一個 🎩，只能靠名字挑） */
+let hatR = null; const hatPics = {};
+function hatPic(id) {
+  if (hatPics[id] !== undefined) return hatPics[id];
+  const h = hat(id); if (!h) return (hatPics[id] = '');
+  try {
+    if (!hatR) { hatR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); hatR.setSize(96, 96); hatR.outputColorSpace = THREE.SRGBColorSpace; hatR.toneMapping = THREE.ACESFilmicToneMapping; }
+    const sc = new THREE.Scene(), g = new THREE.Group(), d = new THREE.DirectionalLight('#ffffff', 1.5); d.position.set(-2, 4, 3); sc.add(new THREE.HemisphereLight('#ffffff', '#8a7a6a', 1.7), d);
+    h.build(g); sc.add(g);
+    const box = new THREE.Box3().setFromObject(g), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3()), r = Math.max(size.x, size.y, size.z) * 0.9 + 0.05;
+    const cam = new THREE.PerspectiveCamera(30, 1, 0.05, 20); cam.position.set(ctr.x + r * 0.8, ctr.y + r * 1.15, ctr.z + r * 2.2); cam.lookAt(ctr);
+    const saved = U.uCurve.value; U.uCurve.value = 0; hatR.render(sc, cam); U.uCurve.value = saved;
+    hatPics[id] = hatR.domElement.toDataURL(); g.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+  } catch (e) { hatPics[id] = ''; }
+  return hatPics[id];
+}
+const hatImg = id => { const s = hatPic(id); return s ? `<img src="${s}" alt="">` : '🎩'; };
 const color = id => COLORS.find(c => c.id === id);
 export const DEFAULT = { shirt: 'sky', pants: 'navy', shoe: 'coral', hair: 'brown', hat: null };
 function closet() { const s = S(); s.closet = s.closet || { colors: ['sky', 'navy', 'coral'], hairs: ['brown'], hats: [] }; return s.closet; }
@@ -55,7 +72,7 @@ export function openShop(v, ch, paint) {
   const draw = () => {
     body.innerHTML = `<p class="muted">今日帽子每天換貨 · 染布買一次，上衣、褲子、鞋子都能用 · 你有 ${s.bells.toLocaleString()} 鈴錢</p>`;
     const grid = ui.el('div', 'fs-grid');
-    stock().forEach(h => { const own2 = owns('hats', h.id), b = ui.el('button', 'fs-item' + (own2 ? ' own' : ''), `<i class="sw hat-sw">🎩</i><b>${h.name}</b><small>${own2 ? '已擁有' : h.price + ' 鈴錢'}</small>`); b.type = 'button'; b.onclick = () => { if (own2) return; buy(h.price, () => own('hats', h.id), h.name); }; grid.appendChild(b); });
+    stock().forEach(h => { const own2 = owns('hats', h.id), b = ui.el('button', 'fs-item' + (own2 ? ' own' : ''), `<i class="sw hat-sw">${hatImg(h.id)}</i><b>${h.name}</b><small>${own2 ? '已擁有' : h.price + ' 鈴錢'}</small>`); b.type = 'button'; b.onclick = () => { if (own2) return; buy(h.price, () => own('hats', h.id), h.name); }; grid.appendChild(b); });
     COLORS.forEach(c => { const own2 = owns('colors', c.id), b = ui.el('button', 'fs-item' + (own2 ? ' own' : ''), `<i class="sw" style="background:${c.c}"></i><b>${c.name}染布</b><small>${own2 ? '已擁有' : '400 鈴錢'}</small>`); b.type = 'button'; b.onclick = () => { if (!own2) buy(400, () => own('colors', c.id), c.name + '染布'); }; grid.appendChild(b); });
     HAIRS.forEach(c => { const own2 = owns('hairs', c.id), b = ui.el('button', 'fs-item' + (own2 ? ' own' : ''), `<i class="sw" style="background:${c.c};border-radius:50% 50% 30% 30%"></i><b>${c.name}髮色</b><small>${own2 ? '已擁有' : '800 鈴錢'}</small>`); b.type = 'button'; b.onclick = () => { if (!own2) buy(800, () => own('hairs', c.id), c.name + '髮色'); }; grid.appendChild(b); });
     body.appendChild(grid);
@@ -74,7 +91,7 @@ export function openCloset(ch) {
     const tabs = ui.el('div', 'dex-tabs'); SLOTS.forEach(([k, n]) => { const b = ui.el('button', 'dex-tab' + (k === slot ? ' on' : ''), n); b.type = 'button'; b.onclick = () => { slot = k; draw(); }; tabs.appendChild(b); }); body.appendChild(tabs); ui.showTab(tabs);
     const grid = ui.el('div', 'fs-grid');
     const opts = slot === 'hat' ? [{ id: null, name: '不戴' }].concat(HATS.filter(h => c.hats.includes(h.id))) : slot === 'hair' ? HAIRS.filter(h => c.hairs.includes(h.id)) : COLORS.filter(x => c.colors.includes(x.id));
-    opts.forEach(o => { const b = ui.el('button', 'fs-item' + (lk[slot] === o.id ? ' on' : ''), `<i class="sw" style="background:${o.c || '#fff8ea'}">${slot === 'hat' ? (o.id ? '🎩' : '✕') : ''}</i><b>${o.name}</b>`); b.type = 'button'; b.onclick = () => { lk[slot] = o.id; save(); apply(ch, lk); Audio.sfx('pop'); draw(); }; grid.appendChild(b); });
+    opts.forEach(o => { const b = ui.el('button', 'fs-item' + (lk[slot] === o.id ? ' on' : ''), `<i class="sw" style="background:${o.c || '#fff8ea'}">${slot === 'hat' ? (o.id ? hatImg(o.id) : '✕') : ''}</i><b>${o.name}</b>`); b.type = 'button'; b.onclick = () => { lk[slot] = o.id; save(); apply(ch, lk); Audio.sfx('pop'); draw(); }; grid.appendChild(b); });
     body.appendChild(grid);
     body.appendChild(ui.el('p', 'muted', '更多帽子、染布與髮色在阿潮商店的服裝櫃台；有些帽子是活動與潮汐里程的限定獎勵。'));
   };

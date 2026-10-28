@@ -111,11 +111,12 @@ function bloomInit() {
   const h = (x, z, k) => Math.abs(Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453) % 1;
   spots.forEach(p => {
     const f = Math.sin(p.x * 0.37 + 1.3) * Math.sin(p.z * 0.29 - 0.7) * 0.6 + Math.sin((p.x - p.z) * 0.17 + 2.1) * 0.4;   // 一片片的花：雜訊高的地方七成五的草叢開花，其他地方兩成
-    const on = THREE.MathUtils.smoothstep(f, 0, 0.7); if (h(p.x, p.z, 1) > 0.2 + 0.55 * on) return;
+    const on = THREE.MathUtils.smoothstep(f, 0, 0.7); if (h(p.x, p.z, 1) > 0.06 + 0.72 * on) return;   // v8.7 花集中成一片一片：花海外面只剩零星幾朵（以前兩成的草叢都開花，整片草地撒得很平均）
+    const pc = Math.floor((Math.sin(p.x * 0.21 + 0.4) * Math.sin(p.z * 0.19 - 1.1) * 0.5 + 0.5) * 5.99);   // 同一片花海以一兩種顏色為主
     for (let j = 0, n = 1 + (h(p.x, p.z, 2) < 0.3 + on * 0.4) + (h(p.x, p.z, 13) < on * 0.4); j < n; j++) {   // 花海中間一叢兩三朵
       const a = h(p.x, p.z, 3 + j) * 6.28 + j * 2.1, d = (0.03 + h(p.x, p.z, 5 + j) * 0.12) * p.s, x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
       const k = Math.floor(x / BCH) + ',' + Math.floor(z / BCH); if (!byKey.has(k)) byKey.set(k, []);
-      byKey.get(k).push({ x, z, tile: p.tile, s: p.s * (0.85 + h(p.x, p.z, 7 + j) * 0.3), r: a * 3.1, t: h(p.x, p.z, 9 + j) - 0.5, c: Math.floor(h(p.x, p.z, 11 + j) * 6) });
+      byKey.get(k).push({ x, z, tile: p.tile, s: p.s * (0.85 + h(p.x, p.z, 7 + j) * 0.3), r: a * 3.1, t: h(p.x, p.z, 9 + j) - 0.5, c: h(p.x, p.z, 15 + j) < 0.72 ? pc : Math.floor(h(p.x, p.z, 11 + j) * 6) });
     }
   });
   byKey.forEach(list => {

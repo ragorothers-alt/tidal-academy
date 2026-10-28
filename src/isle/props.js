@@ -1282,10 +1282,11 @@ function flowerOne() {
   // 廣場外三小片苔花，打斷整圈邊線；不進入原有廣場半徑。
   [0.45, 2.5, 4.55].forEach((a, i) => cluster(PLAZA[0] + Math.cos(a) * 7.15, PLAZA[1] + Math.sin(a) * 7.15, ['pal', i % 6], 0.32));
   // 剩餘花量集中邊緣：保留草地留白，優先沿路邊，少量落在林下。
-  for (let k = 0; k < 14000 && total < 5350; k++) {
+  for (let k = 0; k < 14000 && total < 4700; k++) {
     const px = (R() - 0.5) * 86, pz = (R() - 0.5) * 86, gap = roadGap(px, pz);
     if (gap < 0.6 || gap > 3.5 || plazaArea(px, pz)) continue;
-    const [x, z] = warp(px, pz); cluster(x, z, ['pal', Math.floor(R() * 6)], 0.34 + R() * 0.1);
+    const [x, z] = warp(px, pz), drift = Math.sin(x * 0.23 + 1.7) * Math.sin(z * 0.19 - 0.4) + Math.sin((x + z) * 0.11) * 0.5; if (drift < 0.1) continue;   // v8.7 補種的花只落在一片片的花帶裡、同一帶顏色相近（以前 5350 株隨機撒、隨機配色，整片草地看起來很平均）
+    cluster(x, z, ['pal', Math.floor((Math.sin(x * 0.13 - z * 0.17 + 0.9) * 0.5 + 0.5) * 5.99)], 0.34 + R() * 0.1);
   }
   chunks.forEach(c => { build(c, c.mats.length + SPARE); c.mats.forEach((m, i) => write(c, m, c.cols[i])); c.mats = c.cols = null; });
   // 設定頁即時換季時也更新instanceColor；保留FP四季色盤與aTint，不必重建幾何。

@@ -62,9 +62,9 @@ function evidence(r) {
 export function open() {
   const r = compute(), body = ui.el('div', 'report');
   const W = 320, H = 120, max = Math.max(r.goal, ...r.days.map(x => x.r.q), 1), bw = W / 7;
-  const bars = r.days.map((x, i) => { const h = x.r.q / max * (H - 22), hc = (x.r.c || 0) / max * (H - 22), X = i * bw + 8, wd = bw - 16;
+  const bars = r.days.map((x, i) => { const h = x.r.q / max * (H - 36), hc = (x.r.c || 0) / max * (H - 36), X = i * bw + 8, wd = bw - 16;   // v8.7 以前柱頂只留小字空間，現在預留較大文字的高度
     return `<rect x="${X}" y="${H - 16 - h}" width="${wd}" height="${h}" rx="4" fill="#ffd0b8"/><rect x="${X}" y="${H - 16 - hc}" width="${wd}" height="${hc}" rx="4" fill="#ff8a6a"/><text x="${X + wd / 2}" y="${H - 3}" text-anchor="middle">${'日一二三四五六'[x.d.getDay()]}</text>${x.r.q ? `<text x="${X + wd / 2}" y="${H - 20 - h}" text-anchor="middle">${x.r.q}</text>` : ''}`; }).join('');
-  const gy = H - 16 - r.goal / max * (H - 22);
+  const gy = H - 16 - r.goal / max * (H - 36);   // v8.7 以前柱頂只留小字空間，現在加大圖表字仍保留頂端讀數
   const subj = r.subj.map(x => `<div class="rp-sub"><span style="--c:${x.s.color}">${x.s.short || x.s.name.slice(0, 1)}</span><b>${x.s.name}</b><i><em style="width:${Math.round(x.st.mastery * 100)}%;background:${x.s.color}"></em></i><small>近 7 天練習 ${x.week} 道不同題目 · 累計正確率 ${x.st.seen ? Math.round(x.st.acc * 100) + '%' : '—'}</small></div>`).join('');
   body.innerHTML = `<div class="rp-top"><div><b>${r.cur.q}</b><small>近 7 天答題 ${diff(r.cur.q, r.prev.q)}</small></div><div><b>${pctS(r.cur.c, r.cur.q)}</b><small>正確率（前 7 天 ${pctS(r.prev.c, r.prev.q)}）</small></div><div><b>${r.cur.voc}</b><small>單字複習次數</small></div><div><b>${r.active}/7</b><small>科目作答天數 · 連續 ${r.streak} 天</small></div></div>
     <svg viewBox="0 0 ${W} ${H}" class="rp-chart"><line x1="0" x2="${W}" y1="${gy}" y2="${gy}" stroke="#5aa845" stroke-dasharray="4 3"/>${bars}</svg>
@@ -72,5 +72,6 @@ export function open() {
     ${evidence(r)}
     <h4>各科熟練度與近 7 天練習</h4>${subj}
     ${r.weak.length ? `<h4>最需要加強的單元</h4><ul>${r.weak.map(w => `<li>${w.subject.name}「${ui.esc(w.unit.name)}」${w.st.attempts ? `（正確率 ${Math.round(w.st.acc * 100)}%）` : '（還沒練過）'}</li>`).join('')}</ul><p class="muted">可以到潮汐圖書館做錯題特訓，或接受導師的弱點委託。</p>` : ''}`;
-  ui.panel('學習週報', body, { cls: 'phone' });
+  const chart = body.querySelector('.rp-chart'), fit = new ResizeObserver(() => { if (chart.clientWidth) chart.style.fontSize = `${12 * W / chart.clientWidth}px`; });   // v8.7 以前 SVG 縮窄連字一起縮，現在依實際寬度維持視覺 12px
+  ui.panel('學習週報', body, { cls: 'phone', onClose: () => fit.disconnect() }); fit.observe(chart);   // v8.7 以前圖表字級固定，現在跟隨面板寬度並在關閉時清理監聽
 }

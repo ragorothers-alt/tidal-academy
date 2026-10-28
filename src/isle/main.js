@@ -701,7 +701,7 @@ function reviewCard() {
 /** 考科航線：要考的考科、各考科的級分估算與最弱單元；航海圖、讀書計畫、成績統計、學習週報從這裡進 */
 function phoneTrack() {
   const groups = L.trackGroups(), main = L.mainGroups(), body = ui.el('div', 'phone-sec hub');
-  const top = ui.el('div', 'hub-top', `<span><b>要考：${groups.join('、')}</b><small>${main.length ? `主力考科：${main.join('、')}（每日潮汐的新題多一倍）` : '還沒選主力考科'}${L.phase() ? ` · ${L.phase() === 'final' ? '考前一週' : '考前 30 天'}` : ''}</small></span>`);
+  const top = ui.el('div', 'hub-top', `<span class="hub-route"><b>要考：${groups.map((g, i) => `<span class="hub-subject">${ui.esc(g)}${i < groups.length - 1 ? '、' : ''}</span>`).join('')}</b><small>${main.length ? `主力考科：${main.map((g, i) => `<span class="hub-subject">${ui.esc(g)}${i < main.length - 1 ? '、' : ''}</span>`).join('')}（每日潮汐的新題多一倍）` : '還沒選主力考科'}${L.phase() ? ` · ${L.phase() === 'final' ? '考前一週' : '考前 30 天'}` : ''}</small></span>`);   // v8.7 以前考科可拆字，現在每個考科名稱連同頓號完整換行
   const ed = ui.el('button', 'btn ghost sm', '調整航線'); ed.type = 'button'; ed.onclick = () => { ui.setBack(phoneTrack, '考科航線'); openProfile(); }; top.appendChild(ed); body.appendChild(top);
   { const sm = semesterHtml(); if (sm) body.appendChild(ui.el('div', '', sm)); }   // v8.5 我的學期
   const weak = L.weakUnits(40).filter(w => w.weak), list = ui.el('div', 'hub-groups');

@@ -57,7 +57,7 @@ export function open(hooks) {
       <div class="pf-trk">${trackHtml(false)}</div>
       <p class="muted pf-note">每日潮汐、讀書計畫、考前衝刺與弱點委託只排要考的考科；主力考科的新題多一倍。沒選的科目島上照樣可以玩、可以練。改了之後從明天的每日潮汐開始照新的航線排；讀書計畫可以按「依弱點重新排」。</p>
       <div class="hs-label">潮汐護符</div>
-      <div class="pf-shield"><i>🛡</i><div><b>漏掉一天也不會中斷連續學習</b><small>某天沒學到，護符會自動替你保住連續紀錄（用掉一個）。最多同時持有 ${SHIELD_MAX} 個；目前 ${S.streak.shields} 個。</small></div><button type="button" class="btn buy"${S.streak.shields >= SHIELD_MAX || S.gems < SHIELD_COST ? ' disabled' : ''}>${S.streak.shields >= SHIELD_MAX ? '已經滿了' : `${SHIELD_COST} 潮晶`}</button></div>
+      <div class="pf-shield"><i>${(((window.TA || {}).ISLE || {}).APPICONS || {})['🛡'] ? `<img src="${TA.ISLE.APPICONS['🛡']}" alt="">` : '🛡'}</i><div><b>漏掉一天也不會中斷連續學習</b><small>某天沒學到，護符會自動替你保住連續紀錄（用掉一個）。最多同時持有 ${SHIELD_MAX} 個；目前 ${S.streak.shields} 個。</small></div><button type="button" class="btn buy"${S.streak.shields >= SHIELD_MAX || S.gems < SHIELD_COST ? ' disabled' : ''}>${S.streak.shields >= SHIELD_MAX ? '已經滿了' : `${SHIELD_COST} 潮晶`}</button></div>
       <div class="hs-label">稱號之路</div>
       <div class="pf-titles">${L.TITLES.map(([l, t]) => `<span class="${lv.lv >= l ? 'on' : ''}${lv.title === t ? ' cur' : ''}"><small>Lv.${l}</small>${ui.esc(t)}</span>`).join('')}</div>
       <p class="muted pf-note">經驗來自答題、單字、專注與各種練習；每升一級送 20 潮晶。潮晶可以在商店換鈴錢、買潮汐護符。</p>

@@ -54,7 +54,8 @@ const waveMat = new THREE.ShaderMaterial({
         c = mix(vec4(0.32, 0.25, 0.14, wet * 0.16), vec4(0.6, 0.92, 0.96, 0.16), film);
         float sheen = (1.0 - film) * smoothstep(f + 0.3, f + 0.02, v) * (0.55 + 0.45 * vn(vec2(a * 2.0, t * 0.2)));   // 浪剛退去的濕沙：映著天空的一層淡淡反光，越往上越乾
         c = mix(c, vec4(0.82, 0.9, 1.0, 0.2), sheen * 0.7);
-        c = mix(c, vec4(1.0, 1.0, 1.0, 0.85), max(foam, bubbles));
+        foam *= 0.3 + 0.7 * smoothstep(0.25, 0.6, vn(vec2(a * 0.9 + 3.1, t * 0.05)));   // v8.7 一段有泡、一段只剩濕沙，浪線不再是整條等亮的白線
+        c = mix(c, vec4(1.0, 1.0, 1.0, 0.6), max(foam, bubbles));   // v8.7 泡沫淡一點（以前 0.85）
       }
       c.rgb *= mix(1.0, 0.45, uNight);
       gl_FragColor = c;
@@ -156,7 +157,7 @@ function buildShore() {
 const decalTex = (draw) => { const cv = document.createElement('canvas'); cv.width = cv.height = 64; draw(cv.getContext('2d')); const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t; };
 const footTex = decalTex(c => { c.fillStyle = 'rgba(90,64,30,0.9)'; c.beginPath(); c.ellipse(32, 38, 13, 20, 0, 0, Math.PI * 2); c.fill(); for (let i = 0; i < 4; i++) { c.beginPath(); c.arc(20 + i * 8, 12 + Math.abs(i - 1.5) * 2, 4, 0, 7); c.fill(); } });
 const snowFootTex = decalTex(c => { c.fillStyle = 'rgba(150,168,200,0.85)'; c.beginPath(); c.ellipse(32, 36, 14, 22, 0, 0, Math.PI * 2); c.fill(); c.fillStyle = 'rgba(120,140,178,0.6)'; c.beginPath(); c.ellipse(32, 40, 9, 15, 0, 0, Math.PI * 2); c.fill(); });   // 雪地腳印：淡藍灰色的凹痕
-const ringTex = decalTex(c => { c.strokeStyle = 'rgba(255,255,255,1)'; c.lineWidth = 5; c.beginPath(); c.arc(32, 32, 26, 0, 7); c.stroke(); });
+const ringTex = decalTex(c => { c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineWidth = 6; c.beginPath(); c.arc(32, 32, 26, 0, 7); c.stroke(); c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 2.2; c.stroke(); });   // v8.7 細一點、邊緣柔（以前 5px 實線，比釣魚線粗很多）
 const decalVert = `${BENDV}
   attribute float aAlpha; varying float vAlpha; varying vec2 vUv;
   void main(){ vUv = uv; vAlpha = aAlpha; vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`;

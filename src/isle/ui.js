@@ -140,7 +140,7 @@ export async function ask(sp, text, options, opt) {
         [...box.children].forEach((b, j) => b.classList.toggle('on', j === i));
         confRow = el('div', 'conf-row', `<span>選 ${opt.abc ? LETTERS[i] || i + 1 : i + 1}——有把握嗎？</span>`);
         const setConf = v => { conf = v; D.confPick = null; if (confRow) { confRow.remove(); confRow = null; } [...box.children].forEach(b => b.classList.remove('on')); pick(i); };
-        [['🙂 有把握', 'sure', 'E'], ['🤔 有點猜', 'guess', 'G']].forEach(([t, v, k], n) => { const b = el('button', 'btn sm' + (n ? ' ghost' : ''), `${COARSE.matches ? '' : `<kbd>${k}</kbd>`}${t}`); b.type = 'button'; b.onclick = e => { e.stopPropagation(); setConf(v); }; confRow.appendChild(b); });
+        [['有把握', 'sure', 'E', '🙂'], ['有點猜', 'guess', 'G', '🤔']].forEach(([t, v, k, e], n) => { const src = ((window.TA.ISLE || {}).APPICONS || {})[e], b = el('button', 'btn sm' + (n ? ' ghost' : ''), `${COARSE.matches ? '' : `<kbd>${k}</kbd>`}${src ? `<img class="conf-ic" src="${src}" alt="">` : e + ' '}${t}`); b.type = 'button'; b.onclick = e => { e.stopPropagation(); setConf(v); }; confRow.appendChild(b); });   // v8.7 有把握／有點猜用手繪圖示（以前是 emoji）
         D.confPick = setConf; box.appendChild(confRow); Audio.sfx('tick'); return;
       }
       if (multi && i >= 0 && i < options.length) { picked.has(i) ? picked.delete(i) : picked.add(i); box.children[i].classList.toggle('on', picked.has(i)); Audio.sfx('tick'); return; }
@@ -328,10 +328,11 @@ export function floatText(obj, text, color) {
 let panelBack = null, panelBackAt = 0, panelBackLabel = '手機';   // 從手機打開的下一個面板：左上角放「‹ 手機」（setBack 之後 1 秒內打開的面板才算）
 /** 下一個打開的面板加上返回鈕（手機的 App 用；label：返回到哪裡，例如「自由練習」） */
 export const setBack = (fn, label) => { panelBack = fn; panelBackAt = performance.now(); panelBackLabel = label || '手機'; };
+let panelExit = null;   // v8.7 以前立即隱藏，現在記住可取消的退場動畫
 let panelClose = null, panelGuard = null, panelFrom = null, panelTitle = '';   // panelFrom：v8.6 用鍵盤打開面板時原本的焦點，關閉後還回去   // panelGuard：關閉前要確認（例如模擬考作答中），回傳 Promise<boolean>
 export const panelOpen = () => !$('panel').hidden;
 export function panel(title, body, opt) {
-  const p = $('panel'); document.body.classList.add('panel-open');
+  const p = $('panel'); if (panelExit) { panelExit.onfinish = null; panelExit.cancel(); panelExit = null; p.classList.remove('is-closing'); } document.body.classList.add('panel-open');   // v8.7 以前沒有退場競態，現在開新面板先取消舊退場，保留原焦點與清理
   if (p.hidden) { const a = document.activeElement; panelFrom = a && a !== document.body && a.matches(':focus-visible') ? a : null; }
   if (!p.hidden && panelClose) { const f = panelClose; panelClose = null; f(); }   // 直接換成另一個面板：舊面板的清理（語音、動畫、監聽器）也要做
   p.hidden = false; Audio.sfx('open');
@@ -347,8 +348,17 @@ export function panel(title, body, opt) {
 /** 要求關閉面板：有離開確認的面板先問過（✕、點面板外面、Esc 都走這裡） */
 export function requestClose() { const g = panelGuard; if (!g) { closePanel(); return; } g().then(ok => { if (ok && panelGuard === g) closePanel(); }); }
 export function closePanel() {
-  panelGuard = null; $('panel').hidden = true; document.body.classList.remove('panel-open'); const f = panelClose; panelClose = null; if (f) f();
-  const to = panelFrom; panelFrom = null; if ($('panel').hidden && to && to.isConnected && to.getClientRects().length) to.focus({ preventScroll: true });
+  const p = $('panel'), box = $('panelBox'); if (p.hidden || panelExit) return; panelGuard = null;   // v8.7 以前重複關閉會再清理，現在退場中只處理一次
+  const finish = () => {
+    p.hidden = true; p.classList.remove('is-closing'); document.body.classList.remove('panel-open');
+    if (panelExit) { panelExit.cancel(); panelExit = null; }
+    const f = panelClose, to = panelFrom; panelClose = null; panelFrom = null; if (f) f();
+    if (p.hidden && to && to.isConnected && to.getClientRects().length) to.focus({ preventScroll: true });   // v8.7 以前立即還焦點，現在真正關閉後才還；清理若開新面板就不搶焦點
+  };
+  if (REDUCE.matches) { finish(); return; }   // v8.7 以前所有情況直接關，現在減少動態效果仍直接關
+  const style = getComputedStyle(box); p.classList.add('is-closing');
+  const exit = panelExit = box.animate([{ opacity: style.opacity, transform: style.transform }, { opacity: 0, transform: 'scale(.97)' }], { duration: 120, easing: 'ease-out', fill: 'forwards' });   // v8.7 以前突然消失，現在由目前進場位置淡出並縮小，避免快速關閉時跳動
+  exit.onfinish = () => { if (panelExit === exit) finish(); };   // v8.7 以前沒有延遲回呼，現在僅目前退場可隱藏面板，避免藏掉新 App
 }
 
 /** 分頁籤列（.dex-tabs）在窄螢幕上是橫向捲動的一排：重畫後把選中的那一顆捲到看得到的地方 */

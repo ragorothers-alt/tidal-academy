@@ -207,9 +207,10 @@ function readLetter(m) {
     ${m.text ? `<p>${ui.esc(m.text)}</p>` : ''}
     ${m.giftLine ? `<p class="gift">🎁 ${ui.esc(m.giftLine)}</p>` : ''}
     <p class="sign">${ui.esc(m.close || '')}</p>`);
-  const back = ui.el('button', 'btn', '← 回信箱'); back.type = 'button'; back.onclick = openMail; body.appendChild(back);
+  const acts = ui.el('div', 'letter-actions'); body.appendChild(acts);   // v8.7 以前信件按鈕緊貼，現在用獨立操作列保留間距
+  const back = ui.el('button', 'btn', '← 回信箱'); back.type = 'button'; back.onclick = openMail; acts.appendChild(back);
   const kept = (s.mail || []).filter(x => x.keep).length, kp = ui.el('button', 'btn ghost', m.keep ? '⭐ 已收藏（點一下取消）' : `☆ 收藏這封（${kept} / 5）`); kp.type = 'button';   // v8.5 重要的信可以收藏，信箱滿了也不會被丟掉
   kp.onclick = () => { if (!m.keep && kept >= 5) { ui.toast('最多收藏 5 封：先取消一封'); return; } m.keep = !m.keep; save(); Audio.sfx('tick'); readLetter(m); };
-  body.appendChild(kp);
+  acts.appendChild(kp);   // v8.7 以前收藏鈕緊接正文，現在和返回鈕共用可換行操作列
   ui.panel(m.title, body, { cls: 'letter-p' });
 }

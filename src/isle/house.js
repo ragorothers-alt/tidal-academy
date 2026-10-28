@@ -409,7 +409,7 @@ export function enter(key, opt = {}) {
   try { cur = build(key); } catch (e) { console.warn('室內建立失敗：' + key, e); return false; }
   const { g, ud } = cur; scene.add(g);
   extraCols.length = 0;
-  (ud.lights || []).slice(0, 6).forEach(([x, y, z, c, k]) => { const l = new THREE.PointLight(new THREE.Color(c || '#ffd6a0').multiply(WARM), 1, 0, 2); l.position.set(x, y, z); l.userData.k = k || 1; scene.add(l); extra.push(l); });
+  (ud.lights || []).slice(0, 7).forEach(([x, y, z, c, k]) => { const l = new THREE.PointLight(new THREE.Color(c || '#ffd6a0').multiply(WARM), 1, 0, 2); l.position.set(x, y, z); l.userData.k = k || 1; scene.add(l); extra.push(l); });   // v8.7 第七盞留給圖書館接待區的淡薰衣草補光（書棲的臉白天不再收在暗面）
   (opt.gifts || []).slice(0, (ud.gifts || []).length).forEach((f, i) => {
     const s = ud.gifts[i], m = buildFurniture(f); m.position.set(s[0], s[1], s[2]); m.rotation.y = s[3] || 0; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
     scene.add(m); extra.push(m); m.updateMatrixWorld(true); if (f.cat !== 'rug') extraCols.push(new THREE.Box3().setFromObject(m));

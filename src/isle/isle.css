@@ -83,13 +83,13 @@ body.talking .quest, body.placing .quest { opacity: .35; }
 .logo { display: flex; align-items: baseline; gap: 6px; padding: 18px 34px; border-radius: 40px; background: var(--cream); box-shadow: 0 10px 0 rgba(107,79,58,.2); transform: rotate(-3deg); }
 .logo span { font-size: 30px; font-weight: 800; color: var(--mint); }
 .logo b { font-size: 56px; font-weight: 800; color: #ff9a6a; }
-.splash p { margin: 6px 0 0; font-size: 18px; font-weight: 800; color: #fff; text-shadow: 0 2px 0 rgba(107,79,58,.35); }
+.splash p { margin: 6px 0 0; font-size: 18px; font-weight: 800; }   /* v8.7 以前說明白字靠陰影，現在改由奶油底板與深棕字分離背景 */
 .splash button { padding: 14px 34px; border: 0; border-radius: 99px; background: var(--gold); color: var(--ink); font-size: 20px; font-weight: 800; box-shadow: 0 6px 0 #d89a20; animation: bob2 1.2s ease-in-out infinite; }
-.splash small { color: #fff; font-weight: 700; text-shadow: 0 1px 0 rgba(107,79,58,.4); }
+.splash small { font-weight: 700; }   /* v8.7 以前小字也疊白色，現在沿用說明底板的可讀色彩 */
 .splash p, .splash small { max-width: min(680px, calc(100vw - 40px)); line-height: 1.6; }   /* 窄螢幕：文字不貼邊、不被切掉 */
 .splash button.loading { animation: none; background: #f6ead0; color: #a08a6a; box-shadow: 0 6px 0 #dcc9a2; cursor: progress; }   /* 還在載入：不跳動、顏色淡，看得出還不能按 */
 .splash p span { display: inline-block; }   /* 窄螢幕在「——」後面整段換行，不會只剩一個字掉下去 */
-.splash p, .splash small { text-shadow: 0 1px 0 rgba(107,79,58,.45), 0 2px 10px rgba(60,40,20,.35); }
+.splash .sp-copy { padding: 12px 16px; border-radius: 20px; background: rgba(255,248,231,.92); color: #6b4f3a; text-shadow: none; }   /* v8.7 以前亮背景吃掉白字，現在玩法、題庫數與操作提示各有深棕字小底板 */
 .splash .sp-touch { display: none; }
 @media (pointer: coarse) { .splash .sp-touch { display: block; } .splash .sp-keys { display: none; } }   /* 觸控裝置：換成搖桿與按鈕的說明 */
 
@@ -210,12 +210,13 @@ body.in-room .hud-bl { display: none; }
 #phoneBtn[data-n]:not([data-n=""])::after { content: attr(data-n); position: absolute; right: -4px; top: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 99px; background: #ff5a6a; color: #fff; font: 800 12px/20px var(--font); }
 .ph-row.mail { border: 0; text-align: left; color: var(--ink); width: 100%; }
 .ph-row.mail.new { background: #fff6d0; box-shadow: inset 0 0 0 2px var(--gold); }
-.pn-box.letter-p { width: min(560px, calc(100% - 28px)); background: repeating-linear-gradient(180deg, #fffaf0 0 33px, #f1e4c8 33px 34px); }
+.pn-box.letter-p { width: min(560px, calc(100% - 28px)); background: repeating-linear-gradient(180deg, transparent 0 33px, rgba(107,79,58,.06) 33px 34px), #fffaf0; }   /* v8.7 以前橫線明顯切過字身，現在紙紋淡到 .06 */
 .letter p { margin: 0 0 12px; font-weight: 700; line-height: 1.9; }
 .letter-note { margin: 4px 0 14px; padding: 12px 16px; border-radius: 16px; background: rgba(255,255,255,.85); border-left: 4px solid var(--mint); line-height: 1.85; }
 .letter-note b { display: block; margin-bottom: 4px; color: #2a8a76; }
 .letter .sign { text-align: right; color: var(--ink-2); }
-.letter .gift { color: #c07a10; }
+.letter .gift { padding: 10px 12px; border-radius: 12px; background: #fff1c7; color: var(--ink); font-size: 13px; }   /* v8.7 以前禮物說明和紙紋混在一起，現在放在不帶線的淡金區塊 */
+.letter-actions { display: flex; flex-wrap: wrap; gap: 8px; }   /* v8.7 以前操作鈕互相貼近，現在至少間隔 8px 並可換行 */
 .ev-now { margin: 0; padding: 6px 14px; border-radius: 99px; background: #fff1b8; font-weight: 800; }
 
 /* 島民閒聊、競技場 */
@@ -383,14 +384,15 @@ body.photo .hud-top, body.photo .hud-bl, body.photo .hud-br, body.photo .act-btn
 
 /* 學習週報 */
 .report .rp-top { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.report .rp-top div { background: #fff8ea; border-radius: 14px; padding: 8px; text-align: center; }
-.report .rp-top b { display: block; font-size: 22px; } .report .rp-top small { color: var(--ink-2); font-size: 11px; }
-.report .rp-chart { width: 100%; height: auto; margin-top: 10px; font-size: 10px; fill: #8a7560; }
+.report .rp-top div { min-width: 0; background: #fff8ea; border-radius: 14px; padding: 10px; text-align: center; }   /* v8.7 以前卡片內距小且可被長字撐開，現在保留閱讀空間 */
+.pn-box.phone .report .rp-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }   /* v8.7 以前看視窗寬度塞四欄，現在窄手機面板固定兩欄 */
+.report .rp-top b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; } .report .rp-top small { display: block; color: var(--ink-2); font-size: 12px; line-height: 1.5; }   /* v8.7 以前標籤 11px 且密集，現在 12px、1.5 行高並穩定數字寬度 */
+.report .rp-chart { width: 100%; height: auto; margin-top: 10px; font-size: 12px; fill: var(--ink-2); font-variant-numeric: tabular-nums; }   /* v8.7 以前圖表 10px 淺字，現在配合容器縮放維持 12px 可讀字 */
 .report h4 { margin: 14px 0 6px; }
 .report .rp-sub { display: grid; grid-template-columns: 26px 44px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 4px 0; }
 .report .rp-sub span { grid-row: span 2; width: 26px; height: 26px; border-radius: 50%; background: var(--c); color: #fff; font-weight: 800; display: grid; place-items: center; font-size: 13px; }
 .report .rp-sub b { font-size: 13px; } .report .rp-sub i { height: 8px; border-radius: 99px; background: #efe4cf; overflow: hidden; } .report .rp-sub i em { display: block; height: 100%; border-radius: 99px; }
-.report .rp-sub small { grid-column: 2 / 4; color: var(--ink-2); font-size: 11px; }
+.report .rp-sub small { grid-column: 2 / 4; color: var(--ink-2); font-size: 12px; line-height: 1.5; }   /* v8.7 以前科目讀數僅 11px，現在至少 12px 並放鬆行距 */
 .report ul { margin: 4px 0; padding-left: 20px; }
 @media (max-width: 480px) { .report .rp-top { grid-template-columns: repeat(2, 1fr); } }
 
@@ -1453,10 +1455,15 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .ct-cats { margin-bottom: 4px; }
 .ct-grid { max-height: 40vh; }
 .ct-grid .dex-cell img { width: 88%; }
+.thumb-wait { position: relative; } .thumb-wait::before { content: ''; position: absolute; inset: 14%; border-radius: 18px; background: rgba(107,79,58,.12); box-shadow: inset 0 0 0 1px rgba(107,79,58,.06); pointer-events: none; }   /* v8.7 以前待載入格空白，現在共用靜態淡棕骨架 */
+.thumb-wait > img { opacity: 0; } .thumb-ready > img { animation: thumb-in 140ms ease-out both; }   /* v8.7 以前縮圖突然出現，現在就緒後才用 140ms 淡入 */
+@keyframes thumb-in { from { opacity: 0; } to { opacity: 1; } }   /* v8.7 以前沒有縮圖過場，現在只播一次淡入 */
+.panel.is-closing .pn-box { pointer-events: none; }   /* v8.7 以前立即消失，現在退場期間停止內容點擊，外層仍攔住背景 */
+@media (prefers-reduced-motion: reduce) { .thumb-ready > img { animation: none; } }   /* v8.7 以前縮圖沒有就緒狀態，現在減少動態效果保留靜態骨架並直接顯示圖片 */
 .ct-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 10px; }
-.ct-sw { display: grid; justify-items: center; gap: 2px; width: 66px; font-size: 12px; font-weight: 700; text-align: center; }
+.ct-sw { display: grid; justify-items: center; gap: 2px; width: 66px; color: var(--ac-ink2); font-size: 12px; font-weight: 700; text-align: center; }   /* v8.7 以前未取得名稱跟著淡化，現在名稱固定可讀次要色與 12px */
 .ct-sw i { width: 40px; height: 40px; border-radius: 12px; box-shadow: inset 0 0 0 2px rgba(107, 79, 58, .15); }
-.ct-sw.no { opacity: .35; filter: grayscale(.8); }
+.ct-sw.no i { opacity: .45; outline: 2px dashed var(--ac-ink2); outline-offset: 2px; }   /* v8.7 以前整格灰淡，現在只淡化色塊並以虛線表示未取得，保留色相與名稱 */
 .ct-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; margin: 6px 0 10px; }
 .ct-list span { padding: 6px 10px; border-radius: 12px; background: rgba(255, 255, 255, .6); color: var(--ac-ink2); font-weight: 700; }
 .ct-list span.ok { background: #e9f8ef; color: var(--ink); }
@@ -1545,14 +1552,16 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
 .rv-card.done { background: #f3f6ee; box-shadow: inset 0 0 0 2px rgba(90,170,110,.25); } .rv-card.done b { color: #3f8f5a; }
 .hm-today { margin: 0 0 10px; padding: 8px 12px; border-radius: 12px; background: #e6f4ff; font-weight: 700; color: #2a6a9a; } .hm-today small { display: block; font-weight: 600; color: var(--ink-2); font-size: 12px; }
 /* 考科航線、自由練習（v7.1）：手機學習區的兩個入口 */
-.hub .hub-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 16px; background: #fff6e2; }
+.hub .hub-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 16px; background: #fff6e2; }   /* v8.7 以前航線按鈕被壓成兩行，現在空間不足可獨立一列 */
+.hub-route { flex: 1 1 180px; min-width: 0; } .hub-subject { display: inline-block; white-space: nowrap; }   /* v8.7 以前考科可在字間斷行，現在每個名稱整段換行 */
+.hub .hub-top > .btn { flex: none; min-width: 92px; min-height: 38px; white-space: nowrap; }   /* v8.7 以前調整鈕縮窄，現在保留 92px 寬與單行字 */
 .hub .hub-top b { display: block; font-size: 15px; } .hub .hub-top small { display: block; font-size: 12px; color: var(--ink-2); font-weight: 600; }
 .hub .hub-groups { display: grid; gap: 6px; margin-top: 8px; }
 .hub .hub-g { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 14px; background: rgba(255,255,255,.7); box-shadow: inset 0 0 0 1px rgba(107,79,58,.12); font-size: 14px; }
 .hub .hub-g.main { box-shadow: inset 0 0 0 2px rgba(240,170,60,.55); background: #fffaf0; }
 .hub .hub-g > b em { display: block; font-style: normal; font-size: 11px; color: #c07a10; }
 .hub .hub-g > span { font-weight: 700; } .hub .hub-g > span small { display: block; font-weight: 600; font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub .btn.sm { padding: 5px 10px; font-size: 13px; }
+.hub .btn.sm { min-height: 38px; padding: 5px 10px; font-size: 13px; white-space: nowrap; }   /* v8.7 以前航線小鈕高度偏矮，現在統一至少 38px 並保留 8px 欄距 */
 @media (max-width: 520px) { .hub .hub-g { grid-template-columns: minmax(0, 1fr) auto auto; } .hub .hub-g > b { grid-column: 1 / -1; display: flex; gap: 6px; align-items: baseline; } }
 .lab-row.week { box-shadow: 0 0 0 2px #ffb84a inset; }
 .lab-wk { margin-left: 6px; font-style: normal; font-size: 11px; color: #c07a1a; }
@@ -1609,3 +1618,9 @@ body.panel-open .season-banner { display: none; }
 /* 等你選答案時，按了沒作用的「繼續」先收起來 */
 .act-btn { transition: opacity .15s, transform .15s; }
 body.picking .act-btn { opacity: 0; transform: scale(.85); pointer-events: none; }
+
+/* ---------- v8.7 美術打磨（四）：新圖示的尺寸 ---------- */
+.conf-row .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; } .conf-ic { width: 22px; height: 22px; flex: none; }
+.pf-shield i img { display: block; width: 48px; height: 48px; margin: 0 auto; }
+.dt-grid button .dt-ic { display: block; width: 34px; height: 34px; margin: 0 auto 2px; }
+.fs-item .hat-sw img, .fs-item .sw img { width: 100%; height: 100%; object-fit: contain; }

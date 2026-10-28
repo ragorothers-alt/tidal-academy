@@ -144,7 +144,9 @@ function buildTerrain() {
   const col = new THREE.Color(), push = (x, y, z, c) => { P2.push(x, y, z); C2.push(c.r, c.g, c.b); };
   const quad = (a, b, c, d, ca, cb, cc, cd) => { push(...a, ca); push(...b, cb); push(...c, cc); push(...a, ca); push(...c, cc); push(...d, cd); };
   const grassC = (x, z, lv) => col.set(['#86b03a', '#8cb540', '#92ba46', '#98bf4c'][lv]).lerp(pc.set('#64962c'), 0.35 + 0.35 * Math.sin(x * 0.43 + z * 0.31) * Math.sin(x * 0.27 - z * 0.39)).offsetHSL(0, 0, ((Math.sin(x * 1.7 + z * 2.3) + Math.sin(x * 0.6 - z * 0.9)) * 0.5) * 0.025).clone();   // 和主島一樣陽光下的黃綠，大片深淺交錯
-  const SAND = new THREE.Color('#f6e7c0'), BED = new THREE.Color('#9fd8c8'), RAMP = new THREE.Color('#c9a87a'), CLT = new THREE.Color('#b48a5c'), CLB = new THREE.Color('#946c45'), LIP = new THREE.Color('#5f8f30'), SANDW = new THREE.Color('#d9c08a');
+  const SAND = new THREE.Color('#f6e7c0'), BED = new THREE.Color('#9fd8c8'), RAMP = new THREE.Color('#c9a87a'), CLT = new THREE.Color('#b48a5c'), CLB = new THREE.Color('#946c45'), LIP = new THREE.Color('#5f8f30'), SANDW = new THREE.Color('#d9c08a'), SKIRT = new THREE.Color('#56702c');
+  // v8.7 草皮外緣往外、往下多一圈裙邊（約 0.07–0.13m，沿邊緣有點起伏）：崖頂不再是一刀切的直角薄片，像圓圓的土堆。只是顯示用的網格，格子與碰撞不變
+  const jit = (px, pz) => 0.07 + hs(Math.round(px * 6), Math.round(pz * 6)) * 0.06, SK = 0.15;
   /* 小路：一格切成 6×6 小塊畫花紋；和不同小路相鄰的外圈混一點草色，邊緣比較柔和 */
   const pc = new THREE.Color(), FLW = ['#ff9ab8', '#ffffff', '#ffe066', '#c9a6ff'];
   const paintTop = (x, z, c, pid, grass) => {
@@ -170,7 +172,7 @@ function buildTerrain() {
   for (let z = -E; z <= E; z++) for (let x = -E; x <= E; x++) {
     const c = cellAt(x, z); if (c.t === 'sea') continue;
     if (c.t === 'w') waterCells.push([x, z, c.lv]);
-    const X = x - 0.5, Z = z - 0.5, h = (cx, cz) => cornerH(c, cx, cz);
+    const X = x - 0.5, Z = z - 0.5, h = (cx, cz) => cornerH(c, cx, cz), sk = {};
     const top = c.t === 'sand' ? SAND : c.t === 'w' ? BED : c.t === 'r' ? RAMP : grassC(x, z, c.lv), pid = c.t === 'g' && D.paint && D.paint[x + ',' + z];
     if (pid && PAINTS[pid]) paintTop(x, z, c, pid, top.clone());
     else quad([X, h(0, 0), Z], [X, h(0, 1), Z + 1], [X + 1, h(1, 1), Z + 1], [X + 1, h(1, 0), Z], top, top, top, top);
@@ -180,9 +182,25 @@ function buildTerrain() {
       const n = cellAt(x + dx, z + dz), ha = h(...A), hb = h(...B), na = cornerH(n, ...NA), nb = cornerH(n, ...NB);
       if (ha <= na + 0.01 && hb <= nb + 0.01) return;
       const a = [X + A[0], Z + A[1]], b = [X + B[0], Z + B[1]];
-      if (c.t === 'sand') { quad([a[0], na, a[1]], [a[0], ha, a[1]], [b[0], hb, b[1]], [b[0], nb, b[1]], SANDW, SAND, SAND, SANDW); return; }
+      if (c.t === 'sand') {
+        quad([a[0], na, a[1]], [a[0], ha, a[1]], [b[0], hb, b[1]], [b[0], nb, b[1]], SANDW, SAND, SAND, SANDW);
+        if (n.t === 'sea') sk[dx + ',' + dz] = 's';
+        if (n.t === 'sea') for (let s = 0; s < 3; s++) {   // v8.7 沙灘往海裡斜斜地沒入水面（以前是一塊方方正正的沙盒邊）
+          const t0 = s / 3, t1 = (s + 1) / 3, x0 = a[0] + (b[0] - a[0]) * t0, z0 = a[1] + (b[1] - a[1]) * t0, x1 = a[0] + (b[0] - a[0]) * t1, z1 = a[1] + (b[1] - a[1]) * t1, y0 = ha + (hb - ha) * t0, y1 = ha + (hb - ha) * t1, j0 = jit(x0, z0) * 3, j1 = jit(x1, z1) * 3;
+          quad([x0, y0, z0], [x0 + dx * j0, y0 - 0.3, z0 + dz * j0], [x1 + dx * j1, y1 - 0.3, z1 + dz * j1], [x1, y1, z1], SAND, SANDW, SANDW, SAND);
+        }
+        return;
+      }
       const l = c.t === 'g' ? 0.12 : 0;
       if (l) quad([a[0], ha - l, a[1]], [a[0], ha, a[1]], [b[0], hb, b[1]], [b[0], hb - l, b[1]], LIP, LIP, LIP, LIP);
+      if (l && ha - na > 0.08 && hb - nb > 0.08) {   // 崖頂與草地接沙灘的那一階都有
+        sk[dx + ',' + dz] = 'g';
+        for (let s = 0; s < 3; s++) {
+          const t0 = s / 3, t1 = (s + 1) / 3, x0 = a[0] + (b[0] - a[0]) * t0, z0 = a[1] + (b[1] - a[1]) * t0, x1 = a[0] + (b[0] - a[0]) * t1, z1 = a[1] + (b[1] - a[1]) * t1, y0 = ha + (hb - ha) * t0, y1 = ha + (hb - ha) * t1, j0 = jit(x0, z0), j1 = jit(x1, z1);
+          const d0 = Math.min(SK, (y0 - na - (nb - na) * t0) * 0.75), d1 = Math.min(SK, (y1 - na - (nb - na) * t1) * 0.75);   // 低的那一階：裙邊垂到快碰到沙面為止
+          quad([x0, y0, z0], [x0 + dx * j0, y0 - d0, z0 + dz * j0], [x1 + dx * j1, y1 - d1, z1 + dz * j1], [x1, y1, z1], LIP, SKIRT, SKIRT, LIP);
+        }
+      }
       quad([a[0], Math.min(na, ha - l), a[1]], [a[0], ha - l, a[1]], [b[0], hb - l, b[1]], [b[0], Math.min(nb, hb - l), b[1]], CLB, CLT, CLT, CLB);
       // 瀑布：這格是水、鄰格是較低的水
       if (c.t === 'w' && n.t === 'w' && n.lv < c.lv) {
@@ -190,6 +208,13 @@ function buildTerrain() {
         FP.push(a[0] + ox, y0, a[1] + oz, a[0] + ox, y1, a[1] + oz, b[0] + ox, y1, b[1] + oz, a[0] + ox, y0, a[1] + oz, b[0] + ox, y1, b[1] + oz, b[0] + ox, y0, b[1] + oz);
         FU.push(0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0);
       }
+    });
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => {   // 外角：兩邊的裙邊之間補一個三角形，轉角是圓的
+      const kd = sk[sx + ',0']; if (!kd || kd !== sk['0,' + sz]) return;
+      const cx = sx > 0 ? 1 : 0, cz = sz > 0 ? 1 : 0, px = X + cx, pz = Z + cz, y = h(cx, cz);
+      if (kd === 's') { const j = jit(px, pz) * 3; push(px, y, pz, SAND); push(px + sx * j, y - 0.3, pz, SANDW); push(px, y - 0.3, pz + sz * j, SANDW); return; }
+      const j = jit(px, pz), dd = Math.min(SK, (y - cornerH(cellAt(x + sx, z + sz), 1 - cx, 1 - cz)) * 0.75);
+      if (dd > 0.02) { push(px, y, pz, LIP); push(px + sx * j, y - dd, pz, SKIRT); push(px, y - dd, pz + sz * j, SKIRT); }
     });
   }
   const g = ownGeo(new THREE.BufferGeometry()); g.setAttribute('position', new THREE.Float32BufferAttribute(P2, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C2, 3)); g.computeVertexNormals();
@@ -233,6 +258,8 @@ function glowTex() {
   return (glowT = new THREE.CanvasTexture(c));
 }
 const ADDB = THREE.AdditiveBlending;
+/** v8.7 造島工具的正式圖示（data/appicons.js；沒有的就沿用 emoji） */
+const AIC = (k, alt) => { const s = (((window.TA || {}).ISLE || {}).APPICONS || {})[k]; return s ? `<img class="dt-ic" src="${s}" alt="">` : (alt ?? k); };
 let skyG = null, starMat = null, clouds = null, flies = [], butterflies = [], fish = [], meteor = null, meteorT = 6, nightK = 0;
 function buildAmbient(R) {
   // 星空與月亮：跟著玩家移動的天球，只在夜晚淡入
@@ -348,7 +375,7 @@ function build() {
   // 夢境的氣氛：慢慢飄動的柔和光點
   const N = 160, pos = new Float32Array(N * 3); for (let i = 0; i < N; i++) { const a = Math.random() * 6.28, d = Math.random() * (R + 6); pos.set([Math.cos(a) * d, 0.5 + Math.random() * 5, Math.sin(a) * d], i * 3); }
   const pg = ownGeo(new THREE.BufferGeometry()); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  sparkle = new THREE.Points(pg, ownMat(new THREE.PointsMaterial({ color: '#fff6c8', size: 0.12, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }))); sc.add(sparkle);
+  sparkle = new THREE.Points(pg, ownMat(new THREE.PointsMaterial({ map: glowTex(), color: '#fff6c8', size: 0.2, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }))); sc.add(sparkle);   // v8.7 圓形柔光（以前沒有貼圖，是一顆顆小方塊）
   // 雨與雪
   const RN = 600, rp = new Float32Array(RN * 3); for (let i = 0; i < RN; i++) rp.set([(Math.random() - 0.5) * 40, Math.random() * 14, (Math.random() - 0.5) * 40], i * 3);
   const rg = ownGeo(new THREE.BufferGeometry()); rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
@@ -548,17 +575,17 @@ export function openTools() {
   const btn = (g, html, on, active) => { const b = ui.el('button', 'dt-btn' + (active ? ' on' : ''), html); b.type = 'button'; b.onclick = on; g.appendChild(b); return b; };
   const pickTool = s => { ui.closePanel(); select(s); ui.toast(s.k === 'remove' ? '拆除模式：對著東西按 E（或 X）拆掉' : s.k === 'ter' ? `${s.name}：對著面前的格子按 E${s.op === 'ramp' ? '（面向高一層或高兩層的懸崖）' : ''}、Esc 收起工具` : s.k === 'paint' ? `${s.name}：走過的格子會${s.id === 'erase' ? '擦掉小路' : '鋪上小路'}，E 處理面前一格，Z 復原、Esc 收起` : `${s.name}：E 擺在面前、R 旋轉、Esc 收起工具`); };
   const terG = sec('地形（夢裡的工程不用錢）');
-  [['river', '🌊', '挖河'], ['cliff', '⛰', '蓋懸崖'], ['ramp', '↗', '斜坡'], ['lower', '⬇', '降低／填平']].forEach(([op, ic, n]) => btn(terG, `${ic}<small>${n}</small>`, () => pickTool({ k: 'ter', op, name: n }), sel && sel.k === 'ter' && sel.op === op));
+  [['river', '🌊', '挖河'], ['cliff', '⛰', '蓋懸崖'], ['ramp', '↗', '斜坡'], ['lower', '⬇', '降低／填平']].forEach(([op, ic, n]) => btn(terG, `${AIC(ic)}<small>${n}</small>`, () => pickTool({ k: 'ter', op, name: n }), sel && sel.k === 'ter' && sel.op === op));
   const pg = sec('小路（選好後邊走邊鋪）');
   Object.entries(PAINTS).forEach(([id, [n, c]]) => btn(pg, `<i class="dt-dot dt-sq" style="background:${c}"></i><small>${n}</small>`, () => pickTool({ k: 'paint', id, name: n }), sel && sel.k === 'paint' && sel.id === id));
-  btn(pg, '🧽<small>擦掉小路</small>', () => pickTool({ k: 'paint', id: 'erase', name: '擦掉小路' }), sel && sel.k === 'paint' && sel.id === 'erase');
+  btn(pg, `${AIC('🧽')}<small>擦掉小路</small>`, () => pickTool({ k: 'paint', id: 'erase', name: '擦掉小路' }), sel && sel.k === 'paint' && sel.id === 'erase');
   const tg = sec('樹木（同一種樹可以選小樹、中樹、大樹）');
-  Object.entries(TREES).forEach(([id, n]) => [0, 1, 2].forEach(gr => btn(tg, `🌳<small>${n}${['・小', '・中', ''][gr]}</small>`, () => pickTool({ k: 'tree', id, g: gr, name: n }))));
+  Object.entries(TREES).forEach(([id, n]) => [0, 1, 2].forEach(gr => btn(tg, `${AIC(['🌱', 'tree_m', 'tree_l'][gr], '🌳')}<small>${n}${['・小', '・中', ''][gr]}</small>`, () => pickTool({ k: 'tree', id, g: gr, name: n }))));
   const fg = sec('花');
   FLOWERS.forEach(c => btn(fg, `<i class="dt-dot" style="background:${c}"></i><small>花叢</small>`, () => pickTool({ k: 'flower', c, name: '花叢' })));
   const og = sec('戶外');
   Object.entries(OUTDOOR).forEach(([id, n]) => btn(og, `<small>${n}</small>`, () => pickTool({ k: 'out', id, name: n })));
-  btn(og, '<small>🧹 拆除工具</small>', () => pickTool({ k: 'remove' }));
+  btn(og, `${AIC('🧹')}<small>拆除工具</small>`, () => pickTool({ k: 'remove' }));
   const furnG = sec('家具（夢裡的家具不用錢）');
   const dfs = (I.FURNITURE || []).filter(f => f.src === 'dream');
   if (dfs.length) {
@@ -813,7 +840,7 @@ export function tick(dt, t, ix, iz, len, moving, run, locked) {
   const W = D.weather, fallW = W === 'rain' || W === 'snow' || W === 'petal';
   rain.visible = fallW; rain.material.size = W === 'snow' ? 0.16 : W === 'petal' ? 0.15 : 0.07; rain.material.color.set(W === 'snow' ? '#ffffff' : W === 'petal' ? '#ffb4cf' : '#bfd8ff');
   if (rain.visible) { const p = rain.geometry.attributes.position.array, v = W === 'rain' ? 9 : W === 'petal' ? 0.9 : 1.2; for (let i = 0; i < p.length; i += 3) { p[i + 1] -= v * dt; if (W !== 'rain') { p[i] += Math.sin(t + i) * (W === 'petal' ? 0.7 : 0.3) * dt; if (W === 'petal') p[i + 2] += Math.cos(t * 0.7 + i) * 0.4 * dt; } if (p[i + 1] < 0) p[i + 1] += 14; } rain.geometry.attributes.position.needsUpdate = true; rain.position.set(P.position.x, 0, P.position.z); }
-  sparkle.material.opacity = (night ? 0.9 : 0.45); sparkle.rotation.y = t * 0.02;
+  sparkle.material.opacity = (night ? 0.7 : 0.38); sparkle.rotation.y = t * 0.02;
   const tx = P.position.x * 0.6, tz = P.position.z * 0.6, za = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 0.8 : 1;
   const ty = P.position.y * 0.6;   // 站上懸崖時鏡頭跟著抬高
   if (look) { camGoal.set(P.position.x, P.position.y + 1.95, P.position.z + 1.3); lookGoal.set(P.position.x, P.position.y + 5.2, P.position.z - 12); }   // 從頭頂後上方往天空看，畫面下緣留一點地平線

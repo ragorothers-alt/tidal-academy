@@ -162,18 +162,24 @@ export function thumb(id) {
   return (thumbs[id] = url);
 }
 
+export function setThumb(img, src) {
+  const cell = img.parentElement; cell.classList.remove('thumb-ready'); cell.classList.add('thumb-wait'); cell.setAttribute('aria-busy', 'true');   // v8.7 以前載入前留白，現在保留淡棕骨架
+  const ready = () => { if (!img.naturalWidth) return; cell.classList.remove('thumb-wait'); cell.classList.add('thumb-ready'); cell.removeAttribute('aria-busy'); };   // v8.7 以前直接出圖，現在解碼就緒後才淡入
+  img.onload = ready; img.src = src; if (img.complete) ready();
+}
 /** v8.6 先保留圖片的位置，每批最多兩張；面板關閉就停止 */
 export function loadThumbs(root) {
   const pending = [];
   root.querySelectorAll('img[data-thumb]').forEach(img => {
-    const id = img.dataset.thumb; if (thumbs[id]) img.src = thumbs[id]; else pending.push(img);
+    img.parentElement.classList.add('thumb-wait'); img.parentElement.setAttribute('aria-busy', 'true');   // v8.7 以前排隊圖片空白，現在所有待載入格先顯示骨架
+    const id = img.dataset.thumb; if (thumbs[id]) setThumb(img, thumbs[id]); else pending.push(img);   // v8.7 以前快取直接顯示，現在共用就緒與淡入處理
   });
   let at = 0;
   const next = () => {
     if (!root.isConnected || !ui.panelOpen()) return;
     const start = performance.now();
     for (let n = 0; at < pending.length && n < 2; n++) {
-      const img = pending[at++]; if (img.isConnected) img.src = thumb(img.dataset.thumb);
+      const img = pending[at++]; if (img.isConnected) setThumb(img, thumb(img.dataset.thumb));   // v8.7 以前批次直接填圖，現在保留批次並等待圖片就緒
       if (performance.now() - start > 8) break;
     }
     if (at < pending.length) setTimeout(next, 0);

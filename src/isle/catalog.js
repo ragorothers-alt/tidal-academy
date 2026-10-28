@@ -103,7 +103,7 @@ export function open(hooks) {
       main.querySelectorAll('[data-cat]').forEach(b => b.onclick = () => { cat = b.dataset.cat; Audio.sfx('tick'); paint(); });
       const grid = main.querySelector('.ct-grid'), info = main.querySelector('.dex-info'), queue = [];
       shown.forEach(f => {
-        const own = !!c[f.id], b = ui.el('button', 'dex-cell' + (own ? '' : ' unknown'), '<img alt="">'); b.type = 'button'; b.title = own ? f.name : '？？？';
+        const own = !!c[f.id], b = ui.el('button', 'dex-cell thumb-wait' + (own ? '' : ' unknown'), '<img alt="">'); b.type = 'button'; b.title = own ? f.name : '？？？'; b.setAttribute('aria-busy', 'true');   // v8.7 以前排隊格留白，現在先顯示骨架
         b.onclick = () => { const catN = (CATS.find(x => x[0] === f.cat) || [, ''])[1], [w, d] = f.size || [1, 1], n = (S().storage || {})[f.id] || 0;
           info.innerHTML = `<div class="pk-sel"><img src="${room.thumb(f.id)}" alt="" class="${own ? '' : 'sil'}"><div><b>${ui.esc(f.name)} <small>${catN} · ${w}×${d} 格${own ? (n ? ` · 倉庫裡有 ${n} 件` : ' · 已登錄') : ' · 還沒拿到'}</small></b><p>${ui.esc(f.desc || '')}</p><small>怎麼拿到：${ui.esc(how(f, tutor) || '特別的機會')}</small></div></div>`; Audio.sfx('pop');
           const acts = ui.el('div', 'ct-acts'), wb = ui.el('button', 'btn ghost', wishes().includes(f.id) ? '★ 移出願望' : `☆ 加入願望（${wishes().length}/${WISH_MAX}）`); wb.type = 'button';
@@ -113,10 +113,10 @@ export function open(hooks) {
           info.appendChild(acts); };
         grid.appendChild(b); queue.push([b.querySelector('img'), f.id]);
       });
-      const pump = () => { if (my !== gen || !body.isConnected) return; const t = performance.now(); while (queue.length && performance.now() - t < 14) { const [img, id] = queue.shift(); img.src = room.thumb(id); } if (queue.length) setTimeout(pump, 16); };
-      setTimeout(pump, 30);
+      const pump = () => { if (my !== gen || !body.isConnected) return; const t = performance.now(); while (queue.length && performance.now() - t < 14) { const [img, id] = queue.shift(); room.setThumb(img, room.thumb(id)); } if (queue.length) setTimeout(pump, 16); };
+      setTimeout(pump, 30);   // v8.7 以前生成後直接出圖，現在共用 setThumb 等待就緒與淡入，保留分批排程
     } else if (tab === 'paper') {
-      main.innerHTML = ['壁紙', '地板'].map(kind => `<b class="ach-h">${kind}</b><div class="ct-swatches">${pp.filter(x => x[1] === kind).map(([p]) => `<span class="ct-sw${ownPaper(p) ? '' : ' no'}" title="${ui.esc(p.name || p.id)}"><i style="background:${p.c1}${p.c2 ? `;box-shadow:inset 0 -10px 0 ${p.c2}` : ''}"></i>${ui.esc(p.name || '')}</span>`).join('')}</div>`).join('') + '<p class="muted">壁紙與地板在阿潮的商店（每天換貨），飯店的款式用優惠券兌換。灰色的是還沒有的。</p>';
+      main.innerHTML = ['壁紙', '地板'].map(kind => `<b class="ach-h">${kind}</b><div class="ct-swatches">${pp.filter(x => x[1] === kind).map(([p]) => `<span class="ct-sw${ownPaper(p) ? '' : ' no'}" title="${ui.esc(p.name || p.id)}"><i style="background:${p.c1}${p.c2 ? `;box-shadow:inset 0 -10px 0 ${p.c2}` : ''}"></i>${ui.esc(p.name || '')}</span>`).join('')}</div>`).join('') + '<p class="muted">壁紙與地板在阿潮的商店（每天換貨），飯店的款式用優惠券兌換。虛線色塊表示未取得，名稱仍可閱讀。</p>';   // v8.7 以前靠整格灰淡表示狀態，現在改以虛線標示未取得
     } else if (tab === 'wear') {
       main.innerHTML = `<b class="ach-h">帽子</b><div class="ct-list">${HATS.map(h => `<span class="${owns('hats', h.id) ? 'ok' : ''}">${owns('hats', h.id) ? '✔' : '○'} ${ui.esc(h.name)}<small>${HAT_HOW[h.src] || '特別活動'}</small></span>`).join('')}</div>
         <b class="ach-h">衣服顏色（染布）</b><div class="ct-swatches">${COLORS.map(x => `<span class="ct-sw${owns('colors', x.id) ? '' : ' no'}"><i style="background:${x.c}"></i>${ui.esc(x.name)}</span>`).join('')}</div>

@@ -10,6 +10,7 @@ import { tileAt, groundAt } from './terrain.js';
 import { blocked, colliders, label, PIER, gable, timber, mergeStatic, altBuilding, SITES } from './props.js';
 import { chibi, animate, lookAt } from './chars.js';
 import * as actors from './actors.js';
+import { scene as roomScene } from './room.js';
 import { loadThumbs } from './room.js';
 import { register } from './props3d.js';
 import * as ui from './ui.js';
@@ -147,7 +148,20 @@ export function init(c) {
 export const siteInfo = () => site;
 
 /* ---------- 大廳與客房 ---------- */
-let mgr = null, lobbyHost = null;
+let mgr = null, lobbyHost = null, crest = null;
+/** v8.7 大廳櫃台後牆的學院識別：石板藍圓牌、霧金星環與新月，兩側各一面小旗（呼應建築外觀的月徽與旗幟）。以前後牆只有奶油色壁紙，阿浪在畫面裡不醒目 */
+function lobbyCrest() {
+  if (crest) return crest;
+  const g = new THREE.Group(), slate = M('#8e9cba'), gold = M('#d4b27a', { metalness: 0.3, roughness: 0.45 }), cream = M('#f6ead0', { emissive: new THREE.Color('#f6ead0'), emissiveIntensity: 0.12 });
+  const disc = mesh(new THREE.CircleGeometry(0.42, 48), slate, 0, 0, 0.012); g.add(disc);
+  const ring = mesh(new THREE.TorusGeometry(0.44, 0.024, 8, 56), gold, 0, 0, 0.02); g.add(ring);
+  const moon = new THREE.Shape(); moon.absarc(0, 0, 0.26, 0, Math.PI * 2, false); const bite = new THREE.Path(); bite.absarc(0.11, 0.06, 0.22, 0, Math.PI * 2, true); moon.holes.push(bite);
+  g.add(mesh(new THREE.ExtrudeGeometry(moon, { depth: 0.02, bevelEnabled: false, curveSegments: 24 }), cream, -0.04, -0.02, 0.016));
+  for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + Math.PI / 8, s = mesh(new THREE.OctahedronGeometry(i % 2 ? 0.028 : 0.04, 0), gold, Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0.02); s.scale.z = 0.4; g.add(s); }
+  [-1, 1].forEach(sd => { const f = mesh(new THREE.BoxGeometry(0.3, 0.86, 0.018), slate, sd * 0.95, -0.1, 0.01); g.add(f); g.add(mesh(new THREE.BoxGeometry(0.34, 0.04, 0.03), gold, sd * 0.95, 0.34, 0.02)); g.add(mesh(new THREE.OctahedronGeometry(0.05, 0), gold, sd * 0.95, -0.2, 0.03)); });
+  g.traverse(o => { if (o.isMesh) { o.castShadow = false; o.frustumCulled = false; } });
+  return (crest = g);
+}
 const roomGuests = new Map();   // v8.6 每位客人的室內模型重用，與戶外散步的模型分開
 function manager() {
   if (mgr) return mgr;
@@ -157,7 +171,8 @@ function manager() {
 export function enterLobby() {
   if (!site) return;
   const m = manager(); lobbyHost = { isHotel: true, kind: 'mgr', mesh: m };
-  ctx.enter(LOBBY(), { sid: 'hotel-lobby' }, lobbyHost, () => ctx.outside(site.door[0], site.door[1] + 0.3, 0));
+  ctx.enter(LOBBY(), { sid: 'hotel-lobby' }, lobbyHost, () => { roomScene.remove(lobbyCrest()); ctx.outside(site.door[0], site.door[1] + 0.3, 0); });
+  const c = lobbyCrest(); c.position.set(-1.0, 2.0, -3.985); roomScene.add(c);   // 後牆在 z = -4（8×8 格的房間）；掛在櫃台後、壁柱與窗戶的左邊
   m.position.set(0.5, 0.18, -3.05); m.rotation.y = 0;   // 站在櫃台後的小台子上，露出上半身
   const h = H(); if (!h.intro) setTimeout(() => ui.toast('潮汐渡假飯店：和櫃台的阿浪說話，接下佈置客房的委託吧'), 1200);
 }
@@ -166,6 +181,7 @@ function enterRoom(i, edit) {
   const catalog = themeFurn(r.theme).map(f => f.id).concat((I.FURNITURE || []).filter(f => (f.src === 'hotel' && f.hotel !== r.theme) || f.src === 'shop' || f.src === 'diy').map(f => f.id));
   let host = null;
   if (r.done && r.guest != null) { if (!roomGuests.has(r.guest)) roomGuests.set(r.guest, tourist(r.guest)); const t = roomGuests.get(r.guest); host = { isHotel: true, kind: 'guest', gi: r.guest, mesh: t.m, room: i }; }
+  roomScene.remove(lobbyCrest());   // 從大廳直接進客房：圓牌只掛在大廳
   ctx.enter(r, { sid: r.theme, edit, catalog, papers }, host, () => leaveRoom(i, edit));
   if (host) { host.mesh.position.set(1.4, 0, -0.6); host.mesh.rotation.y = 0; }
   if (edit) setTimeout(() => ui.toast(`${th.icon} ${i + 1} 號房・${th.name}：按 F 打開飯店的家具目錄（擺 ${NEED} 件以上，其中 ${NEED_T} 件主題家具）`), 900);
