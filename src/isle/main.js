@@ -2098,7 +2098,7 @@ function houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow) {
   let pr = $('labels').querySelector('.prompt'); const h = !locked && house.hint();
   if (h) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${h}`; const [x, y] = screenOf(player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
   else if (pr) pr.remove();
-  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen());
+  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
   $('actBtn').textContent = h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
   hudT += dt; if (hudT > 2) { hudT = 0; paintHud(); }
 }
@@ -2140,7 +2140,7 @@ function tick(fixed) {
       pr.style.left = (half ? THREE.MathUtils.clamp(x, half, innerWidth - half) : x) + 'px'; pr.style.top = y + 'px';
     } else if (pr) pr.remove();
     villagers.forEach(v => { v.tag.style.opacity = 0; });
-    document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen());
+    document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
     $('actBtn').textContent = h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
     hudT += dt; if (hudT > (life.tourney ? 0.25 : 2)) { hudT = 0; paintHud(); }
     return;
@@ -2229,7 +2229,7 @@ function tick(fixed) {
   if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
   else if (pr) pr.remove();
   document.body.classList.toggle('placing', design.active());
-  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen());
+  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
   $('actBtn').textContent = hint || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
   life.update(dt, t, run && moving);
   tide.update(dt, t, simDate()); spirit.update(dt, t); balloon.update(dt, t, !weather.raining() && !weather.now.startsWith('cloud') && (hourOverride ?? nowHour()) >= 8 && (hourOverride ?? nowHour()) < 18); env.luck = cooking.lucky();
@@ -2388,7 +2388,7 @@ function roomTick(dt, t, ix, iz, len, moving, locked) {
   else if (it) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = '<kbd>E</kbd>查看家具'; const [x, y] = screenOf(player, 2.0); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
   else if (pr) pr.remove();
   document.body.classList.toggle('placing', placing); document.body.classList.toggle('room-placing', placing);
-  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen());
+  document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
   $('actBtn').textContent = placing ? '放下' : it ? '查看' : nearHost ? '聊天' : '動作';
   const { night, golden } = applyTime(hourOverride ?? nowHour());
   room.render(dt, night, { golden, t, winter: seasons.winter() }); photo.grab(renderer.domElement); memo.grab(renderer.domElement);

@@ -243,7 +243,9 @@ export function advance() {
   return true;
 }
 /** 點畫面（觸控、滑鼠點島上、「繼續」鈕）：只把字打完或往下一句。出了選項或選填鍵盤時，要點選項本身才算作答——點背景不會替你選 */
-export function tapAdvance() { if (!cardRes && D.open && !D.typing && (D.choices || D.input)) return true; return advance(); }
+export function tapAdvance() { if (picking()) return true; return advance(); }
+/** 出了選項或選填鍵盤、字也打完了：等玩家自己選（main 用來收起「繼續」鈕） */
+export function picking() { return !cardRes && D.open && !D.typing && !!(D.choices || D.input); }
 export function dialogKey(e) {
   if (D.input && !D.typing) {
     const k = /^[0-9.\/]$/.test(e.key) ? e.key : e.key === '-' ? '−' : e.key === 'Backspace' ? '⌫' : e.key === 'Enter' ? '送出' : e.key === 'Delete' ? '清除' : null;
