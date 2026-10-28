@@ -155,6 +155,7 @@ export function sfx(name, opt) {
     case 'deny': note(57, t, 0.11, 0.06, 'triangle'); note(53, t + 0.1, 0.16, 0.06, 'triangle'); break;   // 不行喔（不是答錯）
     case 'splash': noise(t, 0.45, 2200, 400, 0.2, 0.7); noise(t + 0.05, 0.32, 900, 200, 0.14, 1); note(64, t, 0.08, 0.03, 'sine'); break;
     case 'whistle': sweep(1800, 2100, t, 0.5, 0.05, 'sine'); break;
+    case 'thunder': noise(t, 2.6, 180, 50, 0.3, 0.5); noise(t, 0.5, 900, 200, 0.1, 0.8); noise(t + 0.35, 1.6, 140, 45, 0.18, 0.6); break;   // 遠方的雷聲：先一聲裂響，再低低地滾過去
     // 腳步聲：依地面換音色（沙、木板、石板、草、雪）
     case 'st_sand': noise(t, 0.08, 700, 300, 0.035 * V, 0.8); break;
     case 'st_wood': noise(t, 0.05, 1300, 800, 0.05 * V, 3); note(50, t, 0.05, 0.03 * V, 'sine'); break;

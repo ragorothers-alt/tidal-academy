@@ -7,7 +7,7 @@
    v8.0 室外燈光設計：分層（月光的冷藍環境、步道低燈的動線光、廣場與地標的重點光、門窗的建築光）、明暗有節奏（光圈—暗—光圈），
    有燈罩的燈只照光錐裡面（cone：光錐邊緣的 cos；axis：照射方向）——路燈與柱燈往下、樹的投光往上、窗光往外往下灑在窗台與地上，不再把整面牆洗白。 */
 import * as THREE from 'three';
-import { scene, camera, skyU, U, LGRID } from './engine.js';
+import { scene, camera, skyU, U, LGRID, lampK } from './engine.js';
 import { groundAt } from './terrain.js';
 
 /** 每種光源：顏色、強度（燭光）、照射距離、衰減、空氣光暈的大小（公尺）、光錐（cos，沒有就是四面發光） */
@@ -161,7 +161,7 @@ let lastLit = -1;
 /** dt：秒；show：在島上戶外（室內與旅行時關掉：燈光格子是島上的座標） */
 export function update(dt, target, show) {
   if (dirty) rebuild();
-  const night = skyU.night.value, lit = THREE.MathUtils.smoothstep(night, 0.12, 0.6);
+  const night = skyU.night.value, lit = Math.max(THREE.MathUtils.smoothstep(night, 0.12, 0.6), lampK.value * 0.85);   // v8.7 跟著燈泡一起在黃昏亮起
   U.uLOn.value = show ? lit : 0;   // 白天 0：著色器整段跳過
   if (!halos) return;
   halos.visible = show; if (!show) return;

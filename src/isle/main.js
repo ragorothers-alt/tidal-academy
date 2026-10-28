@@ -1916,7 +1916,7 @@ $('lv').onclick = () => { if (!ui.dialogOpen()) openProfile(); };
 const clock = new THREE.Clock();
 const headPos = new THREE.Vector3(), headPos2 = new THREE.Vector3();
 const sunTmp = { f: new THREE.Vector3(), v: new THREE.Vector3(), g: new THREE.Vector3(), p: new THREE.Vector3() };
-const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0; const talkMid = new THREE.Vector3();
+const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0, talkFor = null, talkYaw = 0; const talkMid = new THREE.Vector3();
 let zoom = 1, puffT = 0, saveT = 0, hudT = 0;
 /** 走路與奔跑的速度（公尺／秒，v6.84.1 起慢一成多）；pace 是現在的速度：起步時幾分之一秒加速到位，搖桿輕推時走得慢 */
 const WALK = 3.0, RUN = 5.2;
@@ -2244,9 +2244,13 @@ function tick(fixed) {
     else if (!jump.air) camY += (py - camY) * Math.min(1, dt * 7);
     else camY = THREE.MathUtils.clamp(camY, py - 2.2, py + 0.2);
     look.set(player.position.x, camY + 1.3, player.position.z); }
-  { // 聊天時（第三人稱）：鏡頭拉近一點、看向兩個人的中間，表情與反應看得清楚（v7.0）
-    const tm = talking && talking.mesh && !fpNow && !sitting ? talking.mesh : null; talkK += ((tm ? 1 : 0) - talkK) * Math.min(1, dt * 3);
-    if (tm) talkMid.set((player.position.x + tm.position.x) / 2, (camY + tm.position.y) / 2 + 1.25, (player.position.z + tm.position.z) / 2);
+  { // 聊天時（第三人稱）：鏡頭拉近一點、看向兩個人之間偏島民那一側，表情與反應看得清楚（v7.0）
+    // v8.7 鏡頭同時轉到玩家的斜後方（過肩，離兩人連線約 50°，選離原本視角近的那一側）：以前方位不動，島民常被玩家的背擋住；聊完轉回原本的方位
+    const tm = talking && talking.mesh && !fpNow && !sitting && !photo.active() ? talking.mesh : null; talkK += ((tm ? 1 : 0) - talkK) * Math.min(1, dt * 2.4);
+    if (tm) {
+      if (talkFor !== tm) { talkFor = tm; const phi = Math.atan2(tm.position.x - player.position.x, tm.position.z - player.position.z) + Math.PI, a = phi + 0.9, b = phi - 0.9, da = Math.atan2(Math.sin(a - camYaw), Math.cos(a - camYaw)), db = Math.atan2(Math.sin(b - camYaw), Math.cos(b - camYaw)); talkYaw = camYaw + (Math.abs(da) < Math.abs(db) ? da : db); }
+      talkMid.set(player.position.x + (tm.position.x - player.position.x) * 0.6, (camY + tm.position.y) / 2 + 1.25, player.position.z + (tm.position.z - player.position.z) * 0.6);
+    } else if (talkK < 0.01) talkFor = null;
     if (talkK > 0.001) look.lerp(talkMid, talkK * 0.6); }
   const rk = weather.update(dt, hourOverride ?? nowHour(), night, look, (w, prev) => {
     env.rain = w === 'rain' || w === 'storm'; paintHud(); if (w === 'rain') garden.rain();
@@ -2268,7 +2272,7 @@ function tick(fixed) {
   } else {
     // 風景鏡頭（V）：鏡頭放低、視線往前上方抬，看得到更遠的海、天空與遠山
     scenic += ((scenicOn && !photo.active() ? 1 : 0) - scenic) * Math.min(1, dt * 2.2);
-    const yawNow = photo.active() ? 0 : camYaw;
+    const yawNow = photo.active() ? 0 : talkFor ? camYaw + (talkYaw - camYaw) * talkK : camYaw;
     const off = scTmp.o.copy(photo.active() ? photo.offset(camOff) : viewOffset(camOff)).lerp(SCENIC, scenic).multiplyScalar(za * (1 - 0.3 * talkK)).applyAxisAngle(UPV, yawNow), lt = scTmp.l.copy(look).add(scTmp.d.copy(SCENIC_L).multiplyScalar(scenic).applyAxisAngle(UPV, yawNow));
     camPos.lerp(look.clone().add(off), Math.min(1, dt * (photo.active() ? 8 : 4)));
     sitLook.lerp(lt, Math.min(1, dt * 6)); if (sitLook.distanceToSquared(lt) < 0.0004 || photo.active()) sitLook.copy(lt);
@@ -2355,7 +2359,7 @@ function tick(fixed) {
   spinProps(dt);   // 溪邊的水車
   U.uPlayer.value.copy(player.position);
   skyU.cover.value = weather.now.startsWith('cloud') || rk > 0.2 ? 0.9 : 0.22;   // 晴天：高空的薄雲少一點（大朵積雲由 cumulus.js 負責）
-  seasons.update(dt, t, { date: simDate(), inside: false, focus: look, wet: rk > 0.2, cloudy: weather.now.startsWith('cloud'), night });
+  seasons.update(dt, t, { date: simDate(), inside: false, focus: look, wet: rk > 0.2, wetK: weather.wetness(), cloudy: weather.now.startsWith('cloud'), night });
   winter.update(dt, t, night); highland.update(dt, t, night); details.update(t, dt, look, rk > 0.2); hotel.update(dt, t, hourOverride ?? nowHour(), true);
   // 遮擋鏤空：玩家在螢幕上的位置與深度（擋在前面的東西在這個圓裡挖空）
   { const pv = sunTmp.v.copy(player.position).setY(player.position.y + 0.8).applyMatrix4(camera.matrixWorldInverse), pr = renderer.getPixelRatio();

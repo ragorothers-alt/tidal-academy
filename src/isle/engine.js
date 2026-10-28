@@ -90,7 +90,7 @@ export function dropTinyShadows(root) {
 }
 export const U = { uCurve: { value: CURVE }, uBendF: { value: 15 }, uTime: { value: 0 }, uWind: { value: 1 }, uSunV: { value: new THREE.Vector3(0, 1, 0) }, uRimCol: { value: new THREE.Color('#ffc870') }, uRim: { value: 0 },
   uOccP: { value: new THREE.Vector2(-9999, -9999) }, uOccR: { value: 0 }, uOccD: { value: 0 }, uOccY: { value: 0 }, uPlayer: { value: new THREE.Vector3(0, -99, 0) },
-  uSnow: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 },
+  uSnow: { value: 0 }, uWet: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 },
   uWindDir: { value: new THREE.Vector2(0.97, 0.24).normalize() }, uTrans: { value: 0 }, uInside: { value: 0 } };   // uInside：v7.8 正在畫住宅的室內（house.js 畫的時候設 1）   // v7.0：風向（世界座標 xz，陣風順著它推過去）、逆光時葉片透光的強度（main.js 每幀設定）   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
 const BEND = `#include <project_vertex>
   { float bz = max(-mvPosition.z - uBendF, 0.0); mvPosition.y -= bz * bz * uCurve; }
@@ -141,7 +141,7 @@ const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;
     float g = wn_(vec2(a * 0.04 - t * 0.2, c * 0.03)) * 0.65 + wn_(vec2(a * 0.11 - t * 0.62, c * 0.09 + 3.7)) * 0.35;
     return smoothstep(0.34, 0.86, g); }
 `;
-const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
+const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uWet;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
 /* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
@@ -478,7 +478,7 @@ export function bend(mat, kind) {
     else v = v.replace('#include <project_vertex>', BEND);
     sh.vertexShader = v;
     if (!std) return;
-    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uTrans: U.uTrans, uInside: U.uInside, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
+    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uWet: U.uWet, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uTrans: U.uTrans, uInside: U.uInside, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
     const dk = DETK[kind];
     if (dk) dk.forEach((n, i) => { sh.uniforms['uD' + i] = DET[n].d; sh.uniforms['uN' + i] = DET[n].n; });
     if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
@@ -923,6 +923,11 @@ function seasonGLSL(kind) {
         float gl = step(0.9965, n_h(floor(vWP.xz * 46.0 + vWP.y * 13.0)));
         sGl = gl * cov * (0.5 + 0.5 * sin(uTime * 2.4 + n_h(floor(vWP.xz * 46.0)) * 40.0)) * 0.9;
       }
+      if (uWet > 0.0) {   // v8.7 雨天：朝上的地面、石板、屋頂顏色變深、表面比較亮滑；低窪的地方多一點水光（雨停後慢慢乾）
+        float wu = smoothstep(0.5, 0.85, normalize(vWN).y), pd = smoothstep(0.55, 0.75, n_f(vWP.xz * 0.35 + 7.0)) * wu;
+        diffuseColor.rgb *= 1.0 - uWet * wu * (0.22 + pd * 0.16);
+        roughnessFactor = mix(roughnessFactor, min(roughnessFactor, 0.32 - pd * 0.18), uWet * wu * (0.55 + pd * 0.45));
+      }
     }`;
 }
 /* 寫實色彩：卡通的純色降低飽和、亮色稍微壓暗（真實世界的反照率很少超過 0.8） */
@@ -1061,12 +1066,12 @@ export function screenOf(obj, dy) {
 
 /* ---------- 天空 ---------- */
 export const skyU = { glow: { value: 0 }, top: { value: new THREE.Color('#5ec2ff') }, mid: { value: new THREE.Color('#9ad4ff') }, bot: { value: new THREE.Color('#d8f3ff') }, moonDir: { value: new THREE.Vector3(0.4, 0.75, -0.55).normalize() }, dawn: { value: 0 }, span: { value: 0.4 }, sunSky: { value: new THREE.Vector3(0, 1, 0) }, sea: { value: new THREE.Color('#7ad3f6') }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color('#fff4d6') }, night: { value: 0 },
-  lift: { value: 0.36 }, time: U.uTime, cover: { value: 0.3 }, aurora: { value: 0 }, hz: { value: 0 } };   // hz：畫面上地平線在天幕的高度
+  lift: { value: 0.36 }, time: U.uTime, cover: { value: 0.3 }, aurora: { value: 0 }, hz: { value: 0 }, gloom: { value: 0 } };   // hz：畫面上地平線在天幕的高度
 /* 天空：滾筒地平線讓鏡頭下傾時也看得到天空，所以天空用「抬高」後的方向計算漸層、太陽與雲（lift） */
 export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform float glow; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; varying vec3 vD;
+  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; varying vec3 vD;
     float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,45.164))) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1082,7 +1087,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       float e = d.y - hz;   // 相對於畫面上地平線的高度
       float y = clamp(e / max(span, 0.07), 0.0, 1.0);   // 以畫面上的地平線為準、鋪到畫面上緣（span）：一般鏡頭與第一人稱，畫面上緣都是頭頂的深藍
       vec3 c = y < 0.32 ? mix(bot, mid, smoothstep(0.0, 0.32, y)) : mix(mid, top, smoothstep(0.32, 0.88, y));   // v7.6 夢幻風：粉紫的低空佔到三成、往上才轉成粉藍（以前 0.16／0.75）。三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
-      c += vec3(0.1, 0.1, 0.08) * exp(-abs(e) * 18.0) * (1.0 - night);   // 地平線的亮帶
+      c += vec3(0.1, 0.1, 0.08) * exp(-abs(e) * 18.0) * (1.0 - night) * (1.0 - min(gloom, 1.0) * 0.7);   // 地平線的亮帶
       float s = max(dot(d, sunSky), 0.0) * step(night, 0.6);   // 夜裡的「太陽方向」是月光，不畫（太陽本體在卷雲之後才畫，見下方）
       vec2 ha = normalize(d.xz + 1e-4), sa = normalize(sunDir.xz + 1e-4); c += sunCol * vec3(1.0, 0.82, 0.55) * pow(max(dot(ha, sa), 0.0), 4.0) * smoothstep(0.42, -0.02, e) * glow * 1.5;
       float band = 0.0;
@@ -1179,12 +1184,12 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float fib = fbm(vec2(wq.x * 0.9 + wp * 1.5, wq.y * 9.0 + wp * 3.0));   // 順著雲片方向的細絲（橫向變化快、縱向變化慢）
         float field = smoothstep(0.42, 0.62, fbm(wq * 0.22 + 11.0));   // 只有幾片天空有卷雲，其他地方是乾淨的藍
         float ca = smoothstep(0.5, 0.78, ci) * smoothstep(0.3, 0.72, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
-        ca *= mix(0.42, 0.62, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5);
+        ca *= mix(0.42, 0.62, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5) * (1.0 - min(gloom, 1.0));
         vec3 cc = mix(vec3(1.0, 1.0, 1.03), sunCol * vec3(1.12, 0.84, 0.82), clamp(glow * 1.7, 0.0, 0.92)) + sunCol * pow(s, 10.0) * 0.7;
         c = mix(c, cc, ca);
       }
       // 太陽：熱的亮核（給泛光）＋柔和的日暈（米氏散射）；夜裡不畫
-      { float sv = step(night, 0.6) * (1.0 - night);
+      { float sv = step(night, 0.6) * (1.0 - night) * (1.0 - min(gloom, 1.0) * 0.94);   // v8.7 陰雨天看不到太陽（以前雨裡仍有亮亮的日輪）
         c += sunCol * (smoothstep(0.99982, 0.99994, s) * 9.0 + pow(s, 260.0) * 0.5 + pow(s, 32.0) * 0.12 + pow(s, 6.0) * 0.05) * sv; }
       // 積雲：在天幕上投影的分形雜訊，上緣受光、下緣帶天空色的陰影，慢慢飄動
       if (d.y > -0.08) {
@@ -1195,8 +1200,10 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float lit = clamp((n - n2) * 9.0 + 0.55, 0.0, 1.0) * (0.7 + 0.3 * smoothstep(thr, thr + 0.3, n));
         vec3 shade = mix(vec3(0.66, 0.66, 0.86), mix(bot, top, 0.3), 0.3) * mix(0.9, 0.35, night);   // 雲的背光面是薰衣草紫的灰白
         vec3 bright = mix(vec3(1.06, 1.05, 1.02), sunCol * 1.15, 0.25 + glow * 0.5) * mix(1.0, 0.3, night);
+        { float gl = min(gloom, 1.0), st = 1.0 - max(gloom - 1.0, 0.0) * 0.8;   // gloom 超過 1 是暴風雨：雲再暗一截
+          shade = mix(shade, vec3(0.22, 0.24, 0.29) * st * mix(0.9, 0.35, night), gl * 0.9); bright = mix(bright, vec3(0.44, 0.47, 0.54) * st * mix(1.0, 0.3, night), gl * 0.9); }   // v8.7 雨雲：灰藍的雲底、沒有被太陽照白的雲頂
         c = mix(c, mix(shade, bright, lit), m * 0.95);
-        c += sunCol * pow(s, 6.0) * m * 0.35;   // 太陽附近的雲邊發亮
+        c += sunCol * pow(s, 6.0) * m * 0.35 * (1.0 - min(gloom, 1.0));   // 太陽附近的雲邊發亮
       }
       // 極光：北方地平線上方一層層飄動的光幕（下緣綠、上緣轉紫），有細細的直條紋
       if (aurora > 0.001 && d.y > -0.02) {
@@ -1235,6 +1242,7 @@ export const shadowView = {
 /** 彎曲的海面在畫面上的地平線（main.js 每一格算）：y 是 NDC 高度、d 是那一點離鏡頭的深度。比 d 遠、又在這條線以下的東西被地平線擋住 */
 export const HZ = { y: -9, d: 1e9 };
 
+export const lampK = { value: 0 };   // v8.7 燈亮的程度（applyTime 算）：比夜晚程度早一點，日落前後就亮起來
 export const nightMats = [];   // 夜晚發光的窗戶與燈
 export const lamps = [];
 export const FOG = { near: 60, far: 150 };   // 晴天的霧（線性，公尺）
@@ -1320,9 +1328,11 @@ export function applyTime(h) {
   const dawn = THREE.MathUtils.smoothstep(h, 4.8, 5.9) * (1 - THREE.MathUtils.smoothstep(h, 7.0, 8.4));   // 清晨：粉金的晨光
   skyU.glow.value = Math.max(golden * 0.5, dawn * 0.32); skyU.dawn.value = dawn;
   skyU.sunDir.value.copy(dir); skyU.sunCol.value.copy(sun.color).multiplyScalar(day ? 1 : 0.4);
-  nightMats.forEach(m => { const gl = m.userData.kind === 'glass'; m.emissiveIntensity = (gl ? night + (1 - night) * 0.09 : night) * (m.userData.glowK ?? (gl ? 0.95 : 1.25)); });   // v7.6 夢幻風：白天的窗也透出一點暖光（屋裡亮著燈的感覺）   // 窗戶是溫暖的琥珀色燈光（參考圖的夜景：家家戶戶的窗都亮著），不會亮成一片白（v6.93 再收：看得到燈框與窗格）
+  const lit = Math.max(night, h > 12 ? THREE.MathUtils.smoothstep(h, 17.3, 18.6) : 1 - THREE.MathUtils.smoothstep(h, 5.4, 6.5));   // v8.7 燈比天黑早一點亮：日落前後二十分鐘逐漸亮起、清晨天亮後才熄（以前直接乘夜晚程度，17:36 全暗、18:30 還很暗）
+  lampK.value = lit;
+  nightMats.forEach(m => { const gl = m.userData.kind === 'glass'; m.emissiveIntensity = (gl ? lit + (1 - lit) * 0.09 : lit) * (m.userData.glowK ?? (gl ? 0.95 : 1.25)); });   // v7.6 夢幻風：白天的窗也透出一點暖光（屋裡亮著燈的感覺）   // 窗戶是溫暖的琥珀色燈光（參考圖的夜景：家家戶戶的窗都亮著），不會亮成一片白（v6.93 再收：看得到燈框與窗格）
   envState.k = 1 - night * 0.88; ENV_MATS.forEach(m => { if (m.userData.envBase) m.envMapIntensity = m.userData.envBase * envState.k; });
-  lamps.forEach(l => { l.intensity = night * (l.userData.k || 6); });
+  lamps.forEach(l => { l.intensity = lit * (l.userData.k || 6); });
   refreshEnv(Math.round(h * 10), dir, night);   // k：個別燈的亮度（新島的燈籠路燈比較亮）
   if (water.sea) {
     water.sea.color.copy(lerpC(SEA.day, '#7aa8d8', dawn * 0.6)).lerp(cb.set('#b6a9ca'), golden * sink * 0.6).lerp(cb.set('#1d4680'), THREE.MathUtils.smoothstep(night, 0.3, 0.8));

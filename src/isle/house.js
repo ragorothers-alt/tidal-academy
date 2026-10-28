@@ -35,7 +35,8 @@ scene.background = new THREE.Color('#2b2640');
 const hemi = new THREE.HemisphereLight('#fff0e4', '#b39fc2', 1.15), sun = new THREE.DirectionalLight('#fff0d8', 1.8), fill = new THREE.DirectionalLight('#ffe9dc', 0.8);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;   // 主光從屋外照進窗戶（牆和屋頂會擋，地上留下窗形的光）
 fill.position.set(0.3, 1, 0.8);   // 屋裡的漫射光：不投影，讓牆面與家具的明暗有層次（只靠半球光整間會灰灰平平的）
-scene.add(hemi, sun, sun.target, fill);
+const camFill = new THREE.PointLight('#ffe4c8', 0, 5, 2);   // v8.7 鏡頭這一側的柔光：晚上背對燈的時候，玩家不再只剩一個黑影
+scene.add(hemi, sun, sun.target, fill, camFill);
 
 /* 窗外：跟著島上時段變色的天空（skyU 的上中下三色），疊上粉白的雲、遠方的淡紫山丘與海平線 */
 const VIEWTEX = (() => {
@@ -331,7 +332,7 @@ export const kit = {
 };
 
 export let inside = false;
-let P = null, cur = null, host = null, hostSaved = null, savedP = null, savedCurve = CURVE, onExit = null, armed = false, vy = 0, pull = 1;
+let P = null, cur = null, host = null, hostSaved = null, savedP = null, savedCurve = CURVE, onExit = null, armed = false, vy = 0, pull = 1, pUp = 0;
 const built = new Map(), extra = [], extraCols = [];
 const ray = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0), _o = new THREE.Vector3();
 export function init(player) { P = player; }
@@ -420,7 +421,7 @@ export function enter(key, opt = {}) {
   Object.assign(sun.shadow.camera, { left: -cur.ext, right: cur.ext, top: cur.ext, bottom: -cur.ext, near: 0.5, far: cur.ext * 2 + 14 }); sun.shadow.camera.updateProjectionMatrix();
   placeDecor(opt.decor);
   savedP = snapshot(P); scene.add(P); const sp = opt.spawn || ud.spawn || [0, 0, 0, Math.PI];
-  P.position.set(sp[0], sp[1], sp[2]); P.rotation.set(0, sp[3] ?? Math.PI, 0); P.visible = true; vy = 0; armed = false; pull = 1;
+  P.position.set(sp[0], sp[1], sp[2]); P.rotation.set(0, sp[3] ?? Math.PI, 0); P.visible = true; vy = 0; armed = false; pull = 1; pUp = 0;
   host = opt.host || null; hostSaved = host ? snapshot(host.mesh) : null;
   if (host) {
     const h = ud.host || [0, 0, -1, 0]; scene.add(host.mesh); host.mesh.position.set(h[0], h[1], h[2]); host.mesh.rotation.set(0, h[3] || 0, 0); host.mesh.visible = true;
@@ -470,13 +471,22 @@ const angLerp = (a, b, k) => a + (((b - a + Math.PI * 3) % (Math.PI * 2)) - Math
 const tgt = new THREE.Vector3(), want = new THREE.Vector3(), dir = new THREE.Vector3(), eye = new THREE.Vector3(), fw = new THREE.Vector3(), look = new THREE.Vector3(), headP = new THREE.Vector3();
 function updateCam(dt, k, yaw, pitch, tilt, zoom) {
   tgt.copy(P.position); tgt.y += 1.25;
-  const d = THREE.MathUtils.clamp(2.0 + zoom * 2.2, 2.6, 6), p = THREE.MathUtils.clamp(0.32 + tilt, 0.06, 1.1);
-  want.set(Math.sin(yaw) * Math.cos(p) * d, Math.sin(p) * d, Math.cos(yaw) * Math.cos(p) * d).add(tgt);
-  dir.copy(want).sub(tgt); const L = dir.length(); dir.divideScalar(L);
-  ray.set(tgt, dir); ray.far = L; const hit = ray.intersectObjects(cur.blockers, false)[0];
-  const w = hit ? Math.max(0.3, hit.distance - 0.28) / L : 1;
+  const d = THREE.MathUtils.clamp(2.6 + zoom * 2.6, 3.2, 7), p0 = THREE.MathUtils.clamp(0.42 + tilt, 0.06, 1.1);   // v8.7 拉遠、抬高（以前 4.2m、仰角 18°：一進門玩家的背影佔畫面三分之一，看不到屋裡）
+  // v8.7 背後是牆（剛進門、站在牆邊）：先試著把鏡頭抬高越過去，比較留得住距離就慢慢抬上去，不要直接貼到後腦勺
+  const free = pp => { dir.set(Math.sin(yaw) * Math.cos(pp), Math.sin(pp), Math.cos(yaw) * Math.cos(pp)); ray.set(tgt, dir); ray.far = d; const h = ray.intersectObjects(cur.blockers, false)[0]; return h ? Math.max(0.3, h.distance - 0.28) : d; };
+  const f0 = free(p0), pUpT = f0 < d * 0.8 && free(Math.min(p0 + 0.3, 1.15)) > f0 * 1.25 ? 0.3 : 0;
+  pUp += (pUpT - pUp) * Math.min(1, dt * 2.5);
+  const p = Math.min(p0 + pUp, 1.15), L = d;
+  dir.set(Math.sin(yaw) * Math.cos(p), Math.sin(p), Math.cos(yaw) * Math.cos(p));
+  const w = Math.min(free(p), L) / L;
   pull = w < pull ? w : pull + (w - pull) * Math.min(1, dt * 3);   // 被擋住：馬上拉近（不會看穿牆）；不擋了：慢慢退回
   camera.position.copy(tgt).addScaledVector(dir, L * pull); look.copy(tgt);
+  if (pUp > 0.01) {   // 抬高的時候視線往前看一點，看得到屋裡而不是只有地板；往前多少以角色的腳還在畫面裡為限
+    const hb = Math.max(0.3, Math.hypot(camera.position.x - tgt.x, camera.position.z - tgt.z)), hv = camera.position.y - tgt.y, la = Math.atan2(hv + 1.25, hb) - 0.26;
+    const s = la > 0.05 ? THREE.MathUtils.clamp(hv / Math.tan(la) - hb, 0, pUp * 6) : 0; look.x -= Math.sin(yaw) * s; look.z -= Math.cos(yaw) * s;
+  }
+  camFill.position.copy(tgt).addScaledVector(dir, Math.min(1.4, L * pull * 0.6)); camFill.position.y += 0.5;
+  if (k < 0.5) P.visible = L * pull > 0.95;   // 被牆擠到貼著頭：先把自己藏起來，不會滿畫面都是後腦勺
   if (k > 0) {
     const u = P.userData, hb = (u.gltf && u.gltf.head) || u.head;
     if (hb) hb.getWorldPosition(headP); else headP.copy(P.position).setY(P.position.y + 1.15);
@@ -554,7 +564,7 @@ export function tick(dt, t, o) {
   const day = 1 - n, bk = cur.ud.bounce || 1;
   hemi.color.set(n > 0.5 ? '#d2b296' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#4a3a3c' : '#a893b8');   // v8.0：晚上四處反彈的是燈的暖光（月光只從窗戶進來）
   if (bk > 1) hemi.groundColor.lerp(_c.set('#d6b89c'), Math.min(1, (bk - 1) * 0.7) * day);   // v8.1 大廳：白天從蜂蜜木地板、奶油牆反彈上來的光偏暖
-  hemi.intensity = 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0');
+  hemi.intensity = 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0'); camFill.intensity = (0.25 * day + 1.2 * n) * (1 - fpNow);
   sun.intensity = day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b9c0ff' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
   scene.background.set(n > 0.5 ? '#1d1a34' : '#cbb8de');
   extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光

@@ -484,7 +484,7 @@ function seaNdc(x, z) {
 }
 function updateBg(night, gold) {
   if (!bgs.length) return;
-  bgCol.setRGB(1, 1, 1).lerp(BG_DAWN, skyU.dawn.value * 0.6).lerp(BG_GOLD, gold * 0.8).lerp(BG_NIGHT, THREE.MathUtils.smoothstep(night, 0, 0.6)).lerp(RAINY, gloomK * 0.55);
+  bgCol.setRGB(1, 1, 1).lerp(BG_DAWN, skyU.dawn.value * 0.6).lerp(BG_GOLD, gold * 0.8).lerp(BG_NIGHT, THREE.MathUtils.smoothstep(night, 0, 0.6)).lerp(RAINY, gloomK * 0.8).multiplyScalar(1 - gloomK * 0.3 - Math.max(0, skyU.gloom.value - 1) * 0.4);   // v8.7 雨天遠方的雲塔也灰下來（以前還是晴天的粉藍），暴風雨再暗
   camera.getWorldDirection(camF);
   bgs.forEach(o => {
     const c = o.c, sx = Math.sin(c.az), sz = -Math.cos(c.az);
@@ -700,7 +700,7 @@ export function update(dt, t, night, show) {
   hazeU.uFront.value.copy(frontCol).multiplyScalar(0.5 * (1 + night * 0.25) * (1 - gold * 0.12));   // v7.6 夢幻風：逆光時朝鏡頭的面是珍珠粉紫（以前灰藍），城堡是粉白的剪影、不是一團灰影   // 黃金時段正面補光也少 18%，塔面才分得出明暗   // 背光面也看得出岩層與草頂；夜裡是月光照著的藍灰
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
-  puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar(1 - night * 0.55);
+  puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar((1 - night * 0.55) * (1 - gloomK * 0.3));   // v8.7 雨天的低雲也暗一點
   puffs.forEach(m => { m.color.copy(puffCol); });
   far.forEach(o => {
     const x = Math.sin(o.az) * o.d, z = -Math.cos(o.az) * o.d, on = inCone(x, z, (o.size || 60) * 0.8);

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { scene, bend, sun, hemi, skyU, water, renderer, U, camera } from './engine.js';
 import { dayKey } from './quiz.js';
 import { winter } from './seasons.js';
+import { sfx } from './audio.js';
 
 const RAIN_P = [0.2, 0.25, 0.25, 0.3, 0.45, 0.5, 0.35, 0.45, 0.4, 0.25, 0.2, 0.2];
 const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
@@ -19,12 +20,14 @@ export function at(d, hour) {
   return r < RAIN_P[m] ? 'rain' : r < RAIN_P[m] + 0.18 ? 'cloudy' : 'clear';
 }
 export let now = 'clear';
-let rainK = 0, cloudK = 0, bowK = 0, override = null;
+let rainK = 0, cloudK = 0, bowK = 0, override = null, stormK = 0, wetK = 0, flash = 0, boltIn = 6, thunderIn = -1;
 export const raining = () => now === 'rain' || now === 'storm';
 export const stormy = () => now === 'storm';
 export const setOverride = w => { override = w; };
 /** 陰雨的程度 0–1（積雲、浮空島、城堡、遠景跟著變灰：遠方不會還是晴天的亮白） */
 export const gloom = () => Math.max(cloudK * 0.55, rainK);
+/** 地面有多濕 0–1：下雨時慢慢變濕，雨停後大約兩分鐘才乾（seasons.js 交給地面材質） */
+export const wetness = () => wetK;
 
 /* ---------- 雨絲 ---------- */
 const N = 700, BOX = 26;
@@ -58,7 +61,7 @@ const bow = new THREE.Mesh(new THREE.RingGeometry(BOW_R * 0.93, BOW_R, 128, 1, 0
 bow.frustumCulled = false; bow.renderOrder = -1; bow.visible = false; scene.add(bow);
 const bowDir = new THREE.Vector3();
 
-const grey = new THREE.Color('#8f98a6'), greyTop = new THREE.Color('#7a8292');
+const grey = new THREE.Color('#8f98a6'), greyTop = new THREE.Color('#7a8292'), stormTop = new THREE.Color('#4a4f63'), stormLow = new THREE.Color('#646a7c'), boltC = new THREE.Color('#e6e2ff');
 /** 每幀：在 applyTime 之後呼叫，套用天氣對光線與畫面的影響 */
 export function update(dt, hour, night, focus, onChange) {
   const d = new Date(), w = override || at(d, hour);
@@ -68,10 +71,19 @@ export function update(dt, hour, night, focus, onChange) {
   U.uWind.value += ((now === 'storm' ? 3.2 : 1) - U.uWind.value) * Math.min(1, dt * 0.5);
   cloudK += ((now === 'clear' ? 0 : 1) - cloudK) * Math.min(1, dt * 0.4);
   bowK = Math.max(0, bowK - dt / 240);
+  stormK += ((now === 'storm' ? 1 : 0) - stormK) * Math.min(1, dt * 0.4);
+  wetK += ((wet && !winter() ? 1 : 0) - wetK) * Math.min(1, dt * (wet ? 0.12 : 0.02));
+  // v8.7 暴風雨：偶爾一道閃電（天空一白、隔一兩秒才打雷）
+  flash = Math.max(0, flash - dt * 5);
+  if (stormK > 0.6 && (boltIn -= dt) <= 0) { flash = 1; boltIn = 7 + Math.random() * 10; thunderIn = 0.6 + Math.random() * 1.6; if (Math.random() < 0.4) setTimeout(() => { flash = Math.max(flash, 0.7); }, 140); }
+  if (thunderIn >= 0 && (thunderIn -= dt) < 0) sfx('thunder');
   // 光線
-  const dim = cloudK * 0.35 + rainK * 0.4 + (now === 'storm' ? 0.1 : 0);   // v6.93：雨天的影子再淡一點（陰天沒有強烈的直射光）
-  sun.intensity *= 1 - dim; hemi.intensity *= 1 - rainK * 0.3; renderer.toneMappingExposure *= 1 - rainK * 0.12;
-  { const gk = (cloudK * 0.5 + rainK * 0.45) * (1 - night * 0.6); skyU.top.value.lerp(greyTop, gk); skyU.mid.value.lerp(grey, gk * 0.9); skyU.bot.value.lerp(grey, gk * 0.85); }   // 陰天灰一半；下雨整片天空是柔和的灰藍（v6.93：低空那一段以前沒有變灰，雨天還看得到藍天）
+  const dim = cloudK * 0.35 + rainK * 0.4 + stormK * 0.12;   // v6.93：雨天的影子再淡一點（陰天沒有強烈的直射光）
+  sun.intensity *= 1 - dim; hemi.intensity *= (1 - rainK * 0.3 - stormK * 0.15) + flash * 1.6; renderer.toneMappingExposure *= (1 - rainK * 0.12 - stormK * 0.08) * (1 + flash * 0.2);
+  { const gk = (cloudK * 0.5 + rainK * 0.45) * (1 - night * 0.6); skyU.top.value.lerp(greyTop, gk); skyU.mid.value.lerp(grey, gk * 0.9); skyU.bot.value.lerp(grey, gk * 0.85);
+    const sk = stormK * 0.6 * (1 - night * 0.6); skyU.top.value.lerp(stormTop, sk); skyU.mid.value.lerp(stormLow, sk * 0.8); skyU.bot.value.lerp(stormLow, sk * 0.6);   // 暴風雨比下雨暗一截
+    if (flash > 0) { skyU.top.value.lerp(boltC, flash * 0.55); skyU.mid.value.lerp(boltC, flash * 0.5); skyU.bot.value.lerp(boltC, flash * 0.35); } }
+  skyU.gloom.value = Math.min(1, gloom() * (1 - night * 0.4)) + stormK * 0.5 * (1 - night * 0.5);   // 0–1 陰雨、1–1.5 暴風雨（天空與積雲都看這個）   // 陰天灰一半；下雨整片天空是柔和的灰藍（v6.93：低空那一段以前沒有變灰，雨天還看得到藍天）
   scene.fog.color.lerp(grey, rainK * 0.45 * (1 - night * 0.5));
   scene.fog.near -= rainK * 30; scene.fog.far -= rainK * 60;   // 晴天的霧距由 applyTime 設定（engine.FOG），雨天再拉近
   if (water.sea) water.sea.color.lerp(grey, rainK * 0.35);

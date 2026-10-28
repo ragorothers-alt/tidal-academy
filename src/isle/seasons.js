@@ -68,7 +68,7 @@ export function update(dt, t, ctx) {
     const y = date.getFullYear(), c = current(), M = { winter: [K.snow > 0.6, `${y} 年的第一場雪`, '整座島都變白了', '❄️'], spring: [K.bloom > 0.9, `${y} 年的櫻花開了`, '廣場的櫻花樹開滿了花', '🌸'], autumn: [K.fall > 0.5, `${y} 年的秋天`, '樹葉一棵一棵轉紅了', '🍁'], summer: [K.snow + K.fall + K.bloom < 0.05, `${y} 年的夏天`, '天空好藍、海好亮', '🌻'] }[c];
     if (M && M[0]) memo.add(M[1], M[2], { key: `season:${y}:${c}`, icon: M[3] });
   }
-  U.uSnow.value = out ? K.snow : 0; U.uFall.value = out ? K.fall : 0; U.uBloom.value = out ? K.bloom : 0;
+  U.uSnow.value = out ? K.snow : 0; U.uFall.value = out ? K.fall : 0; U.uBloom.value = out ? K.bloom : 0; U.uWet.value = out ? ctx.wetK || 0 : 0;   // v8.7 雨天的濕地面只在島上
   // 極光：冬天晴朗的夜晚（約一半的日子）會出現
   { const d = date, k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate() - (d.getHours() < 6 ? 1 : 0)}`;
     const on = debug.aurora != null ? debug.aurora && out : out && current() === 'winter' && ctx.night > 0.7 && !ctx.wet && !ctx.cloudy && dayHash(k + ':aurora') < 0.5;

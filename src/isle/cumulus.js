@@ -125,7 +125,7 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
     ['uCShd', 'uCLit', 'uCRim'].forEach((u, i) => { TRI[u].value.copy(triC.day[i]).lerp(triC.dawn[i], dw).lerp(triC.gold[i], golden).lerp(triC.night[i], nk); });
     TRI.uCMix.value = 0.58 * (1 - gl * 0.8); }   // 陰雨天不染粉紫
   col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.4).lerp(nightC, THREE.MathUtils.smoothstep(night, 0, 0.6));   // 清晨粉桃、黃昏橘粉（v7.5：0.92 → 0.72，整朵雲不再全是橘色）；天一暗雲就跟著暗下來，夜裡是月光下的深藍
-  { const gl = gloom() * (1 - night * 0.6); col.lerp(rainC, gl * 0.8).multiplyScalar(1 - gl * 0.36); }   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
+  { const gl = gloom() * (1 - night * 0.6), st = Math.max(0, skyU.gloom.value - 1); col.lerp(rainC, gl * 0.85).multiplyScalar((1 - gl * 0.5) * (1 - st * 0.7)); }   // v8.7 再暗一點，暴風雨更暗   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
   sprites.forEach(o => {
     const { cl } = o, x = camera.position.x + Math.sin(cl.az) * cl.d, z = camera.position.z - Math.cos(cl.az) * cl.d;
     if (inCone && !inCone(x, z, cl.w)) { o.s.visible = false; cl.bump = null; return; }   // 畫面外：不取樣地平線；轉回來時直接對齊（v7.3）

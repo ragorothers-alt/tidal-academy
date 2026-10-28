@@ -5,6 +5,7 @@ import { groundAt } from './terrain.js';
 import { PLAZA, modelClone, mergeStatic } from './props.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
+import * as glow from './glow.js';
 import { I, S, save } from './state.js';
 import { pickQ, record, pick, dayKey } from './quiz.js';
 
@@ -181,7 +182,7 @@ function eventPumpkin() {
     for(let e=0;e<3;e++){const a=ids[e],b=ids[(e+1)%3],key=[a,b].sort((x,y)=>x-y).join(':');if(edges.has(key))edges.delete(key);else edges.set(key,[a,b]);}
   }
   edges.forEach(([a,b])=>{const A=v(a),B=v(b),C=B.clone().add(new THREE.Vector3(0,0,.015)),D=A.clone().add(new THREE.Vector3(0,0,.015));[A,B,C,A,C,D].forEach(q=>walls.push(...q.toArray()));});
-  for(const [data,mat]of [[outer,M('#DDA27E')],[walls,M('#947B7B')],[inner,warm('#FFD39D',.85)]]){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(data,3));geo.computeVertexNormals();g.add(mesh(geo,mat));}shell.dispose();
+  for(const [data,mat]of [[outer,M('#DDA27E')],[walls,M('#947B7B')],[inner,warm('#FFC98A',1.9)]]){const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(data,3));geo.computeVertexNormals();g.add(mesh(geo,mat));}shell.dispose();
   tube(g,[[0,.42,0],[.015,.49,0],[.055,.52,.015]],.035,M('#7F9E92'),3,5);
   const leaf=mesh(new THREE.OctahedronGeometry(.085,0),M('#9FB994'),.075,.455,.025);leaf.scale.set(1,.25,.6);g.add(leaf);return g;
 }
@@ -205,8 +206,9 @@ function christmasTree() {
   relief(g,starPoints(5,.22),warm('#F5DBA6',.6),0,2.95,0,.09);
   bow(g,0,1.98,.46,'#E1B8B1',.62);return g;
 }
+let pumpkinGlow = [];
 export function refresh() {
-  decoGeometries.forEach(geo => geo.dispose()); decoGeometries.clear();
+  decoGeometries.forEach(geo => geo.dispose()); decoGeometries.clear(); pumpkinGlow.forEach(e => glow.unemit(e)); pumpkinGlow = [];
   while (deco.children.length) deco.remove(deco.children[0]);
   const ev = active();
   const main = ev.find(e => e !== 'spring' && e !== 'cram') || ev[0];
@@ -226,10 +228,16 @@ export function refresh() {
     }
   }
   if (ev.includes('halloween')) {
-    for (let i = 0; i < 12; i++) {
-      const a = i / 12 * Math.PI * 2, x = PLAZA[0] + Math.cos(a) * 5, z = PLAZA[1] + Math.sin(a) * 5 - 0.4, y = groundAt(x, z);
-      const pumpkin = eventPumpkin(); pumpkin.position.set(x, y, z); pumpkin.rotation.y = -a + Math.PI / 2; deco.add(pumpkin);
-    }
+    // v8.7 南瓜燈三五成群放在廣場邊緣、路燈旁與出入口之間（以前十二顆平均排一圈，好幾顆擋在步道正中間），一大兩小、臉朝廣場；
+    // 每一群在夜裡有一團真的暖光（glow.js），刻出來的眼睛嘴巴也亮起來
+    [[-0.6, 5.9], [0.6, 5.9], [1.66, 5.7], [4.2, 5.8]].forEach(([a, r]) => {
+      const cx = PLAZA[0] + Math.cos(a) * r, cz = PLAZA[1] + Math.sin(a) * r - 0.4;
+      [[0, 0, 1.15], [0.62, -0.28, 0.78], [-0.5, -0.36, 0.6]].forEach(([t, dr, s], j) => {
+        const x = cx - Math.sin(a) * t + Math.cos(a) * dr, z = cz + Math.cos(a) * t + Math.sin(a) * dr, y = groundAt(x, z);
+        const pumpkin = eventPumpkin(); pumpkin.scale.setScalar(s); pumpkin.position.set(x, y, z); pumpkin.rotation.y = -a + Math.PI / 2 + (j - 1) * 0.35; deco.add(pumpkin);
+      });
+      pumpkinGlow.push(glow.emit({ x: cx, y: groundAt(cx, cz) + 0.35, z: cz, kind: 'garden', color: '#ffb070', power: 0.7 }));
+    });
   }
   const built = new Set(); deco.traverse(o => { if (o.isMesh && !sharedEventGeometries.has(o.geometry)) built.add(o.geometry); });
   mergeStatic(deco);   // 節慶裝飾擺好就不動：同材質的零件合併（南瓜燈一圈原本六十幾次繪製）

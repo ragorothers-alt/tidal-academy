@@ -5,6 +5,28 @@ import { animateModel } from './actors.js';
 const M = (c, o) => M0(c, o, 'char');   // 角色專用材質：不積雪、不變紅葉
 
 const S = (r, w, h) => new THREE.SphereGeometry(r, w || 12, h || 8);
+/** 雨傘（v8.7，以前是一片光滑的圓蓋）：八片傘面在傘骨之間微微下凹、傘緣呈波浪；傘骨、傘頂尖與骨尾的小珠合成一個幾何。全員共用 */
+let UMB = null;
+function umbGeo() {
+  if (UMB) return UMB;
+  const R = 0.62, TH = Math.PI / 2.5, canopy = new THREE.SphereGeometry(R, 48, 8, 0, Math.PI * 2, 0, TH), p = canopy.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i); const t = Math.acos(THREE.MathUtils.clamp(v.y / R, -1, 1)) / TH, sag = (1 - Math.abs(Math.cos(Math.atan2(v.x, v.z) * 4))) * t * t;   // 兩根傘骨中間：往內收、傘緣往上提一點
+    p.setXYZ(i, v.x * (1 - sag * 0.07), v.y + sag * 0.07, v.z * (1 - sag * 0.07));
+  }
+  canopy.computeVertexNormals();
+  const parts = [];
+  for (let j = 0; j < 8; j++) {
+    const ph = j / 8 * Math.PI * 2, pts = []; for (let k = 0; k <= 6; k++) { const a = k / 6 * TH; pts.push(new THREE.Vector3(Math.sin(a) * Math.sin(ph), Math.cos(a), Math.sin(a) * Math.cos(ph)).multiplyScalar(R + 0.006)); }
+    parts.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 8, 0.008, 3, false));
+    const tip = new THREE.SphereGeometry(0.016, 6, 4); tip.translate(pts[6].x, pts[6].y - 0.01, pts[6].z); parts.push(tip);
+  }
+  const top = new THREE.ConeGeometry(0.022, 0.09, 6); top.translate(0, R + 0.04, 0); parts.push(top);
+  const pos = [], nor = [];
+  parts.forEach(g => { const n = g.index ? g.toNonIndexed() : g; pos.push(...n.attributes.position.array); nor.push(...n.attributes.normal.array); if (n !== g) n.dispose(); g.dispose(); });
+  const ribs = new THREE.BufferGeometry(); ribs.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); ribs.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  return (UMB = { canopy, ribs });
+}
 const WHITE = () => bend(new THREE.MeshBasicMaterial({ color: '#ffffff' }));
 /** 眼睛：深色眼珠＋帶顏色的虹膜下緣＋兩個高光；每隻眼睛是一個 group，眨眼時壓扁 */
 function eyes(head, o) {
@@ -176,7 +198,7 @@ export function chibi(o) {
   const hand = new THREE.Group(); hand.position.set(0, -0.24, 0.05); arms[1].add(hand);
   const umbrella = new THREE.Group(); umbrella.visible = false; umbrella.position.set(0.18, 1.55, 0);
   umbrella.add(mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.9, 6), M('#6b4f3a'), 0, -0.4, 0));
-  const canopy = mesh(new THREE.SphereGeometry(0.62, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.6), M(o.umbrella || o.shirt || '#ff8a7a', { side: THREE.DoubleSide }), 0, 0, 0); umbrella.add(canopy);
+  const ug = umbGeo(), canopy = mesh(ug.canopy, M(o.umbrella || o.shirt || '#ff8a7a', { side: THREE.DoubleSide }), 0, 0, 0); umbrella.add(canopy, mesh(ug.ribs, M('#6b4f3a'), 0, 0, 0));
   root.add(umbrella);
   const hatSlot = new THREE.Group(); head.add(hatSlot);
   root.userData = { wear, parts, hatSlot, partyHat, umbrella, body, head, legs, arms, hand, walk: 0, speed: 0, blink: 2 + Math.random() * 3, swing: 0, expr: 'neutral', exprT: 0, talk: false, look: null, phase: Math.random() * 6 };
