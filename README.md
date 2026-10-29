@@ -2,7 +2,9 @@
 
 > 把每一題，都變成照亮海面的光。
 
-離線、免帳號的學測備戰遊戲，目前版本 **8.6.1**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
+離線、免帳號的學測備戰遊戲，目前版本 **8.8.1**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
+
+**線上版**：<https://ragorothers-alt.github.io/tidal-academy/>——推上 `main` 時，GitHub Actions 會跑測試、執行 `python build.py`，把 `dist/` 發布到 GitHub Pages（`.github/workflows/pages.yml`）。進度存在各自瀏覽器的 localStorage；線上版沒有 laya 轉送，島民改用本機的作息決定要做什麼。
 
 ## 潮汐小島：動物森友會式的學測生活
 
