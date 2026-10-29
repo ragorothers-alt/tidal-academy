@@ -46,6 +46,44 @@ export function loadModel(id, kind) {
 // 骨頭名稱：Tripo 骨架（Head、R_Hand）或網頁版匯出的 Mixamo 骨架（mixamorig:Head，GLTFLoader 會去掉冒號）
 const findBone = (root, names) => { let b = null; root.traverse(o => { if (!b && o.isBone && names.includes(o.name.replace(/^mixamorig:?/, ''))) b = o; }); return b; };
 
+/* ---------- v8.8 表情臉皮：Tripo 模型的眼睛和嘴畫在貼圖上、不會動。在臉上疊一層共用模型骨架的薄片，眨眼、說話、有表情時才出現；
+   平常隱藏，看到的仍是模型原本的臉（tools/face_bake.py、face_frames.py 產生 data/modelfaces.js） ---------- */
+const IDENT = new THREE.Matrix4(), faceTex = {};
+const unb64 = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u.buffer; };
+function faceFrames(id, key, f) {   // 同一個模型的表情格貼圖共用
+  const k = id + '/' + key; if (faceTex[k]) return faceTex[k];
+  const out = {};
+  for (const n in f) { const img = new Image(), t = new THREE.Texture(img); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; img.onload = () => { t.needsUpdate = true; }; img.src = f[n]; out[n] = t; }
+  return (faceTex[k] = out);
+}
+function faceSkin(model, id) {
+  const F = (((window.TA || {}).ISLE || {}).MODELFACES || {})[id]; if (!F) return null;
+  let sk = null; model.traverse(o => { if (!sk && o.isSkinnedMesh) sk = o; }); if (!sk) return null;
+  const parts = {};
+  for (const key of ['eyes', 'mouth']) {
+    const d = F[key]; if (!d) continue;
+    const g = new THREE.BufferGeometry(), jw = new Uint8Array(unb64(d.jw)), n = jw.length / 8, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) { let s = 0; for (let k = 0; k < 4; k++) s += jw[i * 8 + 4 + k]; for (let k = 0; k < 4; k++) { si[i * 4 + k] = jw[i * 8 + k]; sw[i * 4 + k] = jw[i * 8 + 4 + k] / (s || 1); } }
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(unb64(d.p)), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(unb64(d.n)), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(unb64(d.uv)), 2));
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    g.setIndex(new THREE.BufferAttribute(new Uint16Array(unb64(d.i)), 1));
+    const tex = faceFrames(id, key, d.f), src = sk.material;
+    const m = new THREE.MeshStandardMaterial({ map: Object.values(tex)[0], color: src.color, roughness: src.roughness, metalness: src.metalness, envMapIntensity: src.envMapIntensity,
+      transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+    m.defines = { TA_MODEL: '' }; bend(m, 'char');   // 和模型同一套光影、地平線彎曲
+    const mesh = new THREE.SkinnedMesh(g, m); mesh.bind(sk.skeleton, IDENT);   // 和 GLTFLoader 一樣用單位矩陣綁定：頂點是原始網格座標
+    mesh.frustumCulled = false; mesh.receiveShadow = true; mesh.castShadow = false; mesh.visible = false; mesh.renderOrder = 2; mesh.userData.faceSkin = true;
+    sk.parent.add(mesh); parts[key] = { mesh, tex, cur: null };
+  }
+  return parts;
+}
+function setFace(p, frame) {
+  if (!p || p.cur === frame) return;
+  p.cur = frame; p.mesh.visible = !!(frame && p.tex[frame]); if (p.mesh.visible) p.mesh.material.map = p.tex[frame];
+}
+
 /** 把 key（島民 sid、'player'、'shop'…）對應的模型套到角色上；沒有模型就維持原樣 */
 /** v8.7 帽子掛點的高度（頭骨座標）：帽子是照 Q 版頭頂在帽子座標 0.4 的地方設計的，讓那一點落在這個角色的頭髮頂端下 1cm。
     頭髮綁在頭骨上，量一次就好（任何動作下相對位置都一樣）；只看頭頂正上方 16cm 內的頂點，避開肩上的長髮與手 */
@@ -80,7 +118,7 @@ export async function dress(ch, key) {
   const B = n => findBone(model, n);
   const rig = { rArm: B(['RightArm', 'R_UpperArm']), rFore: B(['RightForeArm', 'R_Forearm']), rHand: hand, lArm: B(['LeftArm', 'L_UpperArm']), lFore: B(['LeftForeArm', 'L_Forearm']),
     spine: B(['Spine1', 'Spine']), lUp: B(['LeftUpLeg', 'L_Thigh']), lLeg: B(['LeftLeg', 'L_Calf']), rUp: B(['RightUpLeg', 'R_Thigh']), rLeg: B(['RightLeg', 'R_Calf']) };
-  u.gltf = { mixer, acts, cur: null, model, head, rig, useT: 1, useKind: null, base: model.position.clone(), baseS: HEIGHT };
+  u.gltf = { mixer, acts, cur: null, model, head, rig, useT: 1, useKind: null, base: model.position.clone(), baseS: HEIGHT, face: faceSkin(model, id) };
   play(u.gltf, 'idle');
   return true;
 }
@@ -159,6 +197,12 @@ export function animateModel(ch, dt, moving, rate = 1) {
     if (gl.head && !u.sit) { turn(ch, gl.head, AX, gl.rp + nod); turn(ch, gl.head, AZ, tilt); }
     gl.hop = Math.abs(Math.sin(gl.t * 7.5)) * 0.055 * gl.hopK;   // 開心：原地輕輕跳（玩家的模型由 main.js 的 jumpPose 加上去）
     if (!u.isPlayer) gl.model.position.y = gl.base.y + gl.hop; }
+  if (gl.face) {   // v8.8 臉：每 2–6 秒眨一次眼、說話時嘴巴一開一合、開心時笑眼並張嘴笑
+    u.blink -= dt; if (u.blink < 0) u.blink = 2 + Math.random() * 4;
+    const ex = u.expr || 'neutral';
+    setFace(gl.face.eyes, ex === 'happy' ? 'happy' : u.blink < 0.12 ? 'closed' : null);
+    setFace(gl.face.mouth, u.talk ? (Math.sin(gl.t * 17) > -0.2 ? 'talk' : null) : ex === 'happy' ? 'smile' : null);
+  }
   // 使用工具：life.js 等設 swing = 1 表示剛用了一下。第三人稱由這裡播；第一人稱的手（fphand.js）看 swingFP
   if (u.swing > 0) { if (!u.sit) { gl.useT = 0; gl.useKind = u.tool || null; } u.swing = 0; u.swingFP = 1; }
   if (gl.rig && (gl.useT < 1 || u.airK > 0.001)) { toolPose(ch, gl, dt); airPose(ch, gl, u.airK); }
