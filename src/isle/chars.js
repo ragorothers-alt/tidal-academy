@@ -232,6 +232,10 @@ export function setTool(ch, tool) {
 export function setExpr(ch, expr, dur) { const u = ch.userData; u.expr = expr; u.exprT = dur || 0; }
 /** 說話中：嘴巴開合 */
 export function setTalk(ch, on) { ch.userData.talk = !!on; }
+/** v8.8 說話的人 → 角色：對話框只知道名字（圖書館、飯店的說話者沒有帶角色），作答表情、室內說話的嘴型靠名字找到臉 */
+const byName = new Map();
+export function nameMesh(name, ch) { if (name && ch) byName.set(name, ch); }
+export const meshOf = sp => (sp && (sp.mesh || byName.get(sp.name))) || null;
 /** 看向某個世界座標（null 表示看前方） */
 export function lookAt(ch, v) { ch.userData.look = v || null; }
 const tmpV = new THREE.Vector3();

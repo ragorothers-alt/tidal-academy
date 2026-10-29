@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { scene, M, mesh, nightMats, cullable } from './engine.js';
 import { tileAt, groundAt } from './terrain.js';
 import { blocked, colliders, label, PIER, gable, timber, mergeStatic, altBuilding, SITES } from './props.js';
-import { chibi, animate, lookAt } from './chars.js';
+import { chibi, animate, lookAt, nameMesh } from './chars.js';
 import * as actors from './actors.js';
 import { scene as roomScene } from './room.js';
 import { loadThumbs } from './room.js';
@@ -165,7 +165,7 @@ function lobbyCrest() {
 const roomGuests = new Map();   // v8.6 每位客人的室內模型重用，與戶外散步的模型分開
 function manager() {
   if (mgr) return mgr;
-  mgr = chibi({ kind: 'otter', fur: '#a8784a', inner: '#f3e2c8', shirt: '#3fb7e0', pants: '#2a4a70', acc: null }); actors.dress(mgr, 'hotel'); mgr.traverse(o => { o.frustumCulled = false; });
+  mgr = chibi({ kind: 'otter', fur: '#a8784a', inner: '#f3e2c8', shirt: '#3fb7e0', pants: '#2a4a70', acc: null }); actors.dress(mgr, 'hotel'); mgr.traverse(o => { o.frustumCulled = false; }); nameMesh(MGR.name, mgr);
   return mgr;
 }
 export function enterLobby() {

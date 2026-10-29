@@ -4,6 +4,7 @@ import * as ui from './ui.js';
 import * as miles from './miles.js';
 import * as Audio from './audio.js';
 import { S, dayKey as stateDayKey } from './state.js';
+import { setExpr, meshOf } from './chars.js';
 
 const TA = window.TA, L = TA.L;
 /** 科目題目。題目再長都能出（放不下時對話框自動換成大題目面板），不因版面挑題。
@@ -30,14 +31,15 @@ function fromPool(ids, maxD, opt) {
 /** 出一道題：題組先打開閱讀材料、多選題可以勾選多個再送出，選項標 A–E。回傳 { ok, ans }（限時到了 ans = -1） */
 export async function askQ(sp, q, head, opt) {
   ui.passage(q.passage || null);
+  const face = r => { const m = meshOf(sp); if (m && !r.stop) setExpr(m, r.ok ? 'happy' : 'sad', r.ok ? 1.6 : 2); return r; };   // v8.8 出題的人：答對開心、答錯難過一下
   if (q.type === 'fill') {   // 選填題：數字鍵盤作答
     const ans = await ui.input(sp, (head || '') + '（選填題：算出答案後輸入）' + q.q, Object.assign({ html: true }, opt));
-    return { ok: ans !== -1 && L.check(q, ans), ans };
+    return face({ ok: ans !== -1 && L.check(q, ans), ans });
   }
   const multi = q.type === 'multi', conf = !!(opt && opt.conf) && !(opt && opt.timer) && !multi && !q.vocab;
   const ans = await ui.ask(sp, (head || '') + (multi && !/多選/.test(q.q) ? '（多選題：選出所有正確的選項再送出）' : '') + q.q, q.o, Object.assign({ html: true, keys: true, abc: true, multi, answer: q.a }, opt, { conf }));
   if (ans === -2) return { ok: false, ans, stop: true };   // v8.6 先到這裡（ui.STOP）：這題不算
-  return { ok: multi ? Array.isArray(ans) && L.check(q, ans) : ans === q.a, ans, conf: conf ? ui.lastConf() : null };
+  return face({ ok: multi ? Array.isArray(ans) && L.check(q, ans) : ans === q.a, ans, conf: conf ? ui.lastConf() : null });
 }
 /** v8.4 一組題目裡問「有把握嗎」的題號（不限時、3 題以上的組才問；一組問 2 題，不會每題都多一步） */
 export function confPlan(n, opt) {

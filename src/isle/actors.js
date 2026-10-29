@@ -64,9 +64,11 @@ function faceSkin(model, id) {
     const d = F[key]; if (!d) continue;
     const g = new THREE.BufferGeometry(), jw = new Uint8Array(unb64(d.jw)), n = jw.length / 8, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
     for (let i = 0; i < n; i++) { let s = 0; for (let k = 0; k < 4; k++) s += jw[i * 8 + 4 + k]; for (let k = 0; k < 4; k++) { si[i * 4 + k] = jw[i * 8 + k]; sw[i * 4 + k] = jw[i * 8 + 4 + k] / (s || 1); } }
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(unb64(d.p)), 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(unb64(d.n)), 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(unb64(d.uv)), 2));
+    const pq = new Uint16Array(unb64(d.p)), pos = new Float32Array(pq.length), q = d.q;   // 座標存成 0–65535，依 q（最小值、範圍）還原
+    for (let i = 0; i < pq.length; i++) pos[i] = q[i % 3] + pq[i] / 65535 * q[3 + i % 3];
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(new Int8Array(unb64(d.n)), 3, true));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Uint16Array(unb64(d.uv)), 2, true));
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
     g.setIndex(new THREE.BufferAttribute(new Uint16Array(unb64(d.i)), 1));
     const tex = faceFrames(id, key, d.f), src = sk.material;
@@ -197,11 +199,11 @@ export function animateModel(ch, dt, moving, rate = 1) {
     if (gl.head && !u.sit) { turn(ch, gl.head, AX, gl.rp + nod); turn(ch, gl.head, AZ, tilt); }
     gl.hop = Math.abs(Math.sin(gl.t * 7.5)) * 0.055 * gl.hopK;   // 開心：原地輕輕跳（玩家的模型由 main.js 的 jumpPose 加上去）
     if (!u.isPlayer) gl.model.position.y = gl.base.y + gl.hop; }
-  if (gl.face) {   // v8.8 臉：每 2–6 秒眨一次眼、說話時嘴巴一開一合、開心時笑眼並張嘴笑
+  if (gl.face) {   // v8.8 臉：每 2–6 秒眨一次眼、說話時嘴巴一開一合；開心笑眼張嘴、難過垂眼抿嘴、驚訝嘴巴張成 o、睏了（心情或深夜）眼皮半閉
     u.blink -= dt; if (u.blink < 0) u.blink = 2 + Math.random() * 4;
-    const ex = u.expr || 'neutral';
-    setFace(gl.face.eyes, ex === 'happy' ? 'happy' : u.blink < 0.12 ? 'closed' : null);
-    setFace(gl.face.mouth, u.talk ? (Math.sin(gl.t * 17) > -0.2 ? 'talk' : null) : ex === 'happy' ? 'smile' : null);
+    const ex = u.expr || 'neutral', rest = ex === 'sad' ? 'sad' : ex === 'surprised' ? 'oh' : null;
+    setFace(gl.face.eyes, ex === 'happy' ? 'happy' : u.blink < 0.12 ? 'closed' : ex === 'sad' ? 'sad' : u.mood === 'sleepy' && ex === 'neutral' ? 'half' : null);
+    setFace(gl.face.mouth, u.talk ? (Math.sin(gl.t * 17) > -0.2 ? 'talk' : rest) : ex === 'happy' ? 'smile' : rest);
   }
   // 使用工具：life.js 等設 swing = 1 表示剛用了一下。第三人稱由這裡播；第一人稱的手（fphand.js）看 swingFP
   if (u.swing > 0) { if (!u.sit) { gl.useT = 0; gl.useKind = u.tool || null; } u.swing = 0; u.swingFP = 1; }

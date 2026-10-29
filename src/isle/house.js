@@ -17,7 +17,7 @@
      camThrough 不擋鏡頭、prop 不合併（會動的零件）、paper 'wall' | 'floor'（玩家家「我的房間」的牆與地板）。 */
 import * as THREE from 'three';
 import { camera, U, CURVE, M, skyU, renderer, scene as isle, HZ, sky, WL } from './engine.js';
-import { animate } from './chars.js';
+import { animate, meshOf } from './chars.js';
 import { buildFurniture, disposeFurniture, furn, rbox, foot } from './room.js';
 import { mergeStatic, homes, BLDG } from './props.js';
 import * as props3d from './props3d.js';
@@ -554,7 +554,7 @@ export function tick(dt, t, o) {
   if (host) {   // 主人轉頭看你
     const m = host.mesh, want = Math.atan2(P.position.x - m.position.x, P.position.z - m.position.z);
     if (Math.hypot(P.position.x - m.position.x, P.position.z - m.position.z) < 6) m.rotation.y = angLerp(m.rotation.y, want, Math.min(1, dt * 3));
-    m.userData.look.copy(P.position); m.userData.look.y += 1.1; animate(m, dt, 0, t);
+    m.userData.look.copy(P.position); m.userData.look.y += 1.1; m.userData.talk = ui.typing() && meshOf({ name: ui.speakerName() }) === m; animate(m, dt, 0, t);   // v8.8 主人（島民、書棲、阿浪）說話時嘴巴開合
   }
   guests.forEach(o => { const m = o.v.mesh, near = Math.hypot(P.position.x - m.position.x, P.position.z - m.position.z) < 2.2; m.rotation.y = angLerp(m.rotation.y, near ? Math.atan2(P.position.x - m.position.x, P.position.z - m.position.z) : o.face, Math.min(1, dt * 2.5)); m.userData.look.copy(near ? P.position : m.position).y += 1.1; animate(m, dt, 0, t); });
   if (beacon) { beacon.position.y = beacon.userData.y + Math.sin(t * 3) * 0.06; beacon.rotation.y += dt * 1.8; if ((beacon.userData.left -= dt) <= 0 || Math.hypot(P.position.x - beacon.position.x, P.position.z - beacon.position.z) < 1.1) unmark(); }

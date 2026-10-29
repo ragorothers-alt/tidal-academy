@@ -4,7 +4,7 @@ import { scene, camera, renderer, U, sun, sky, applyTime, screenOf, skyU, bend, 
 import { N, C, T, terrain, groundAt, tileAt, isBridge, isFord, foamMat, seaMesh, waterY as fwY, GRID_SHIFT, tileOf, waterAt } from './terrain.js';
 import { colliders, blocked, penetration, PLAZA, SITES, homes, onPier, PIER, seats, nudgeHome, flowerSpots, onRoad, spin as spinProps } from './props.js';
 import * as mind from './mind.js';
-import { chibi, animate, setTool, setExpr, setTalk, lookAt, clap, setSit } from './chars.js';
+import { chibi, animate, setTool, setExpr, setTalk, lookAt, clap, setSit, nameMesh } from './chars.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as life from './life.js';
@@ -194,7 +194,7 @@ const myHome = homes.find(h => h.owner === 'player');
       v.home = h ? h.door.slice() : [PLAZA[0] + (Math.random() - 0.5) * 6, PLAZA[1] + 2]; if (h) h.owner = v.sid;
     }
     v.range = v.sid === 'history' ? 1.5 : 3.2;
-    v.mesh = chibi(v); scene.add(v.mesh); actors.dress(v.mesh, v.sid);   // 有 3D 模型的島民換上模型
+    v.mesh = chibi(v); scene.add(v.mesh); actors.dress(v.mesh, v.sid); nameMesh(v.name, v.mesh);   // 有 3D 模型的島民換上模型
     const x = v.home[0], z = v.home[1]; v.mesh.position.set(x, ground(x, z), z); v.target = [x, z]; v.wait = Math.random() * 3;
     v.tag = ui.el('div', 'tag', `${ui.esc(v.name)}<small>${v.sub.name}</small>`); v.tag.style.setProperty('--c', v.color); $('labels').appendChild(v.tag);
     villagers.push(v);
@@ -208,7 +208,7 @@ const myHome = homes.find(h => h.owner === 'player');
   villagers.push(v);
   villagers.forEach(o => props3d.track(o.mesh, 0.7, 1.0, 0.9));   // 畫面外的島民不畫（影子落進畫面的只畫進陰影貼圖）
 }
-const sp = v => ({ name: v.name, color: v.color, voice: v.voice });
+const sp = v => ({ name: v.name, color: v.color, voice: v.voice, mesh: v.mesh });   // mesh：作答後島民的表情（quiz.js askQ）
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
 social.init(villagers, { paint: () => paintHud(), toast: t => ui.toast(t), giveFurn: id => room.addStorage(id) });
@@ -433,7 +433,7 @@ challenge.init({ sp: v => sp(v), player, tail: v => tail(v), hearts: f => hearts
 const hearts = f => '♥'.repeat(Math.min(5, Math.ceil(f / 4))) + '♡'.repeat(5 - Math.min(5, Math.ceil(f / 4)));
 async function gift(v) {
   const s = S(), b = 500 + Math.floor(Math.random() * 5) * 100; s.bells += b; save();
-  await ui.say(sp(v), pick(v.gift || ['這個送你！']));
+  setExpr(v.mesh, 'happy', 2.5); await ui.say(sp(v), pick(v.gift || ['這個送你！']));
   await ui.card({ icon: icon('bells', 'bells'), title: `收到 ${b} 鈴錢！`, sub: `${v.name}的謝禮` });
 }
 
@@ -1322,6 +1322,7 @@ function decide(v, dp, hour) {
   else if (p.shelter) go(v.home[0] + (Math.random() - 0.5) * 1.2, v.home[1] + (Math.random() - 0.5) * 1.2, 14 + Math.random() * 10);   // v8.6 下雨：回家門口躲雨
   else { v.target = [x, z]; v.wait = 8 + Math.random() * 6; }   // hobby：待在原地做自己的事
   const prevMood = v.mind && v.mind.mood; v.mind = { act, mood: p.mood };
+  m.userData.mood = p.mood || (hour >= 22 || hour < 5 ? 'sleepy' : null);   // v8.8 臉：睏了（laya 的心情或深夜）眼皮半閉
   if (dp < 16) {   // 頭上冒出要做的事；做自己的事時是各自的興趣，心情變了再冒一個心情
     ui.think(m, act === 'hobby' ? (p.shelter ? '☔' : HOBBY[v.sid] || '🎵') : mind.ACTIONS[act][1]);
     if (p.mood && p.mood !== prevMood && mind.MOODS[p.mood]) setTimeout(() => { if (!v.away) ui.think(m, mind.MOODS[p.mood][1]); }, 2300);
@@ -1451,7 +1452,7 @@ async function spotAct(s, host, subject) {
   if (s.kind === 'study') { await ui.say(who, pick(lines)); ui.closeDialog(); await drill(who, picker(subject ? { mode: 'subject', subject } : { mode: 'mixed' }), 3, {}); return; }
   await ui.say(who, pick(lines));
 }
-const libMesh = chibi(library.LIB()); libMesh.traverse(m => { m.frustumCulled = false; }); actors.dress(libMesh, 'library');
+const libMesh = chibi(library.LIB()); libMesh.traverse(m => { m.frustumCulled = false; }); actors.dress(libMesh, 'library'); nameMesh(library.LIB().name, libMesh);
 const LIBHOST = { isLib: true, sid: 'library', mesh: libMesh };
 /* ---------- v8.3 新館：十科書架、讀書椅、借閱、展品與小特展、捐贈箱、留言簿、來館的島民 ---------- */
 const SHELF = ['chinese', 'english', 'math', 'history', 'geography', 'civics', 'physics', 'chemistry', 'biology', 'earth'];   // 圖書館十科書架由左到右（data/interiors_library.js 的名牌順序）
@@ -1916,7 +1917,7 @@ $('lv').onclick = () => { if (!ui.dialogOpen()) openProfile(); };
 const clock = new THREE.Clock();
 const headPos = new THREE.Vector3(), headPos2 = new THREE.Vector3();
 const sunTmp = { f: new THREE.Vector3(), v: new THREE.Vector3(), g: new THREE.Vector3(), p: new THREE.Vector3() };
-const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0, talkFor = null, talkYaw = 0; const talkMid = new THREE.Vector3();
+const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0, talkFor = null, talkYaw = 0, talkNear = 0, talkSpeakT = 0; const talkMid = new THREE.Vector3(), talkHead = new THREE.Vector3(), talkDepth = new THREE.Vector3(), talkDir = new THREE.Vector3();
 let zoom = 1, puffT = 0, saveT = 0, hudT = 0;
 /** 走路與奔跑的速度（公尺／秒，v6.84.1 起慢一成多）；pace 是現在的速度：起步時幾分之一秒加速到位，搖桿輕推時走得慢 */
 const WALK = 3.0, RUN = 5.2;
@@ -2250,8 +2251,13 @@ function tick(fixed) {
     if (tm) {
       if (talkFor !== tm) { talkFor = tm; const phi = Math.atan2(tm.position.x - player.position.x, tm.position.z - player.position.z) + Math.PI, a = phi + 0.9, b = phi - 0.9, da = Math.atan2(Math.sin(a - camYaw), Math.cos(a - camYaw)), db = Math.atan2(Math.sin(b - camYaw), Math.cos(b - camYaw)); talkYaw = camYaw + (Math.abs(da) < Math.abs(db) ? da : db); }
       talkMid.set(player.position.x + (tm.position.x - player.position.x) * 0.6, (camY + tm.position.y) / 2 + 1.25, player.position.z + (tm.position.z - player.position.z) * 0.6);
+      const hb = tm.userData.gltf && tm.userData.gltf.head; if (hb) hb.getWorldPosition(talkHead).y += 0.06; else talkHead.copy(tm.position).setY(tm.position.y + 1.15);
     } else if (talkK < 0.01) talkFor = null;
-    if (talkK > 0.001) look.lerp(talkMid, talkK * 0.6); }
+    // v8.8 對方說話時鏡頭再靠近：拉到離對方的臉約 2 公尺、一樣在玩家的斜後方，看得到表情（換行之間的空檔 1.2 秒內不拉回，鏡頭不會一進一出）
+    talkSpeakT = tm && talking.name && ui.speakerName() === talking.name ? 1.2 : talkSpeakT - dt;
+    talkNear += ((talkSpeakT > 0 && tm ? 1 : 0) - talkNear) * Math.min(1, dt * (talkSpeakT > 0 ? 1.8 : 1.2));
+    if (talkK > 0.001) look.lerp(talkMid, talkK * 0.6);
+    if (talkNear > 0.001 && talkFor) look.lerp(talkDepth.copy(talkHead).setY(talkHead.y - 0.16), talkNear * 0.9); }   // 看向臉的下方一點：臉落在畫面中上，不被下方的對話框擋住
   const rk = weather.update(dt, hourOverride ?? nowHour(), night, look, (w, prev) => {
     env.rain = w === 'rain' || w === 'storm'; paintHud(); if (w === 'rain') garden.rain();
     const sn = seasons.winter();
@@ -2274,7 +2280,12 @@ function tick(fixed) {
     scenic += ((scenicOn && !photo.active() ? 1 : 0) - scenic) * Math.min(1, dt * 2.2);
     const yawNow = photo.active() ? 0 : talkFor ? camYaw + (talkYaw - camYaw) * talkK : camYaw;
     const off = scTmp.o.copy(photo.active() ? photo.offset(camOff) : viewOffset(camOff)).lerp(SCENIC, scenic).multiplyScalar(za * (1 - 0.3 * talkK)).applyAxisAngle(UPV, yawNow), lt = scTmp.l.copy(look).add(scTmp.d.copy(SCENIC_L).multiplyScalar(scenic).applyAxisAngle(UPV, yawNow));
-    camPos.lerp(look.clone().add(off), Math.min(1, dt * (photo.active() ? 8 : 4)));
+    const want = look.clone().add(off);
+    if (talkNear > 0.001 && talkFor && !photo.active()) {   // 近景：從過肩的方位往兩人連線轉回兩成（臉偏正面、玩家留在畫面邊上），和眼睛差不多高（從上往下看會被帽沿擋住臉）
+      talkDir.set(player.position.x - talkFor.position.x, 0, player.position.z - talkFor.position.z).normalize().lerp(scTmp.d.set(off.x, 0, off.z).normalize(), 0.8).normalize();
+      want.lerp(talkDir.multiplyScalar(2.0 * za).add(talkHead).setY(talkHead.y + 0.12), talkNear);
+    }
+    camPos.lerp(want, Math.min(1, dt * (photo.active() ? 8 : 4)));
     sitLook.lerp(lt, Math.min(1, dt * 6)); if (sitLook.distanceToSquared(lt) < 0.0004 || photo.active()) sitLook.copy(lt);
   }
   camera.position.copy(camPos);
@@ -2364,7 +2375,7 @@ function tick(fixed) {
   // 遮擋鏤空：玩家在螢幕上的位置與深度（擋在前面的東西在這個圓裡挖空）
   { const pv = sunTmp.v.copy(player.position).setY(player.position.y + 0.8).applyMatrix4(camera.matrixWorldInverse), pr = renderer.getPixelRatio();
     const [ox, oy] = screenOf(player, 0.8);
-    U.uOccP.value.set(ox * pr, (innerHeight - oy) * pr); U.uOccR.value = fpK > 0.3 ? 0 : 74 * pr; U.uOccD.value = -pv.z; U.uOccY.value = player.position.y; post.fx.focus = fpK ? THREE.MathUtils.lerp(-pv.z, fpFocus, fpK) : -pv.z; U.uBendF.value = Math.max(4, -pv.z - 2); }   // 第一人稱：不挖空、對焦在看著的東西
+    U.uOccP.value.set(ox * pr, (innerHeight - oy) * pr); U.uOccR.value = fpK > 0.3 ? 0 : 74 * pr; U.uOccD.value = -pv.z; U.uOccY.value = player.position.y; post.fx.focus = fpK ? THREE.MathUtils.lerp(-pv.z, fpFocus, fpK) : talkNear > 0.001 && talkFor ? THREE.MathUtils.lerp(-pv.z, -talkDepth.copy(talkHead).applyMatrix4(camera.matrixWorldInverse).z, talkNear) : -pv.z; U.uBendF.value = Math.max(4, -pv.z - 2); }   // 第一人稱：不挖空、對焦在看著的東西
   const dof0 = post.fx.dof; post.fx.dof = dof0 * (1 - fpK * 0.8);   // 第一人稱景深很淡（看海平線時對焦在遠處，近處的海浪、閃光不能糊掉）
   post.render(t); post.fx.dof = dof0; photo.grab(renderer.domElement); memo.grab(renderer.domElement);
   saveT += dt; if (saveT > 10 && !TA.importing) { saveT = 0; S().pos = [Math.round(player.position.x * 10) / 10, Math.round(player.position.z * 10) / 10]; save(); }

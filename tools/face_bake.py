@@ -15,6 +15,8 @@ import cv2
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS = os.path.join(ROOT, 'src', 'isle', 'models')
 PPU = 2400   # 每單位（模型原始高度 1）幾個像素
+FRONT = False   # --front：全部改取最前面的一層（檢查用：看鏡頭實際看到什麼）；個別角色在 face_regions.json 設 "front": true
+OPEN = int(0.012 * PPU)   # 去掉瀏海、鏡框用的寬度（約 1.2 公分：比一綹瀏海寬、比鼻子窄）
 
 CT = {5126: np.float32, 5123: np.uint16, 5125: np.uint32, 5121: np.uint8, 5122: np.int16, 5120: np.int8}
 NC = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}
@@ -45,7 +47,7 @@ def node_name(j, k):
     return re.sub(r'^mixamorig:?', '', j['nodes'][k].get('name', ''))
 
 
-def bake(mid, out):
+def bake(mid, out, top=False):
     j, B = load_glb(mid)
     prim = j['meshes'][0]['primitives'][0]; at = prim['attributes']
     P = accessor(j, B, at['POSITION']); N = accessor(j, B, at['NORMAL']); UV = accessor(j, B, at['TEXCOORD_0'])
@@ -77,32 +79,47 @@ def bake(mid, out):
     img = j['images'][j['textures'][tex_i]['source']]; bv = j['bufferViews'][img['bufferView']]
     atlas = cv2.imdecode(np.frombuffer(B[bv.get('byteOffset', 0):bv.get('byteOffset', 0) + bv['byteLength']], np.uint8), cv2.IMREAD_COLOR).astype(np.float32)
     TH, TW = atlas.shape[:2]
-    zb = np.full((Ht, Wd), np.inf, np.float32); tri = np.full((Ht, Wd), -1, np.int32); bar = np.zeros((Ht, Wd, 3), np.float32)
     tris = I[(headW[I] > 0.3).all(1)]   # 臉的下半部（下巴、嘴）有一部分綁在脖子上，也要算進來
-    for k, t in enumerate(tris):
-        pa = np.stack([(A[t] - a0) * PPU, (b1 - Bv[t]) * PPU], 1)   # 圖的座標（y 往下）
-        e1, e2 = pa[1] - pa[0], pa[2] - pa[0]
-        area = e1[0] * e2[1] - e1[1] * e2[0]
-        if area >= -1e-6: continue   # 只留朝前的面（y 往下翻過來之後，朝前的面變成順時針）
-        x0, x1 = int(np.floor(pa[:, 0].min())), int(np.ceil(pa[:, 0].max())); y0, y1 = int(np.floor(pa[:, 1].min())), int(np.ceil(pa[:, 1].max()))
-        x0, y0 = max(x0, 0), max(y0, 0); x1, y1 = min(x1, Wd - 1), min(y1, Ht - 1)
-        if x1 < x0 or y1 < y0: continue
-        gx, gy = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
-        px, py = gx - pa[0, 0], gy - pa[0, 1]
-        l1 = (px * e2[1] - py * e2[0]) / area; l2 = (e1[0] * py - e1[1] * px) / area; l0 = 1 - l1 - l2
-        ins = (l0 >= -1e-4) & (l1 >= -1e-4) & (l2 >= -1e-4)
-        if not ins.any(): continue
-        d = l0 * D[t[0]] + l1 * D[t[1]] + l2 * D[t[2]]
-        sl = (slice(y0, y1 + 1), slice(x0, x1 + 1))
-        ok = ins & (d > dc) & (d < zb[sl])   # 中心前方、最深的一層＝皮膚
-        if not ok.any(): continue
-        zb[sl][ok] = d[ok]; tri[sl][ok] = k; bar[sl][ok] = np.stack([l0, l1, l2], -1)[ok]
+
+    def raster(score):
+        """把頭部的三角形投影到臉圖上，每個像素留 score 最小的那一層（只看頭部中心前方）。
+        模型是雙面繪製（actors.js），有些三角形的法線朝內也看得到：正反面都算，fs 記下是不是背面（之後法線要翻過來）"""
+        best = np.full((Ht, Wd), np.inf, np.float32); tri = np.full((Ht, Wd), -1, np.int32); bar = np.zeros((Ht, Wd, 3), np.float32); dep = np.zeros((Ht, Wd), np.float32)
+        fs = np.ones((Ht, Wd), np.float32)
+        for k, t in enumerate(tris):
+            pa = np.stack([(A[t] - a0) * PPU, (b1 - Bv[t]) * PPU], 1)   # 圖的座標（y 往下）
+            e1, e2 = pa[1] - pa[0], pa[2] - pa[0]
+            area = e1[0] * e2[1] - e1[1] * e2[0]
+            if abs(area) < 1e-6: continue   # 側面看過去只剩一條線的三角形（y 往下翻過來之後，朝前的面是順時針：area < 0）
+            x0, x1 = int(np.floor(pa[:, 0].min())), int(np.ceil(pa[:, 0].max())); y0, y1 = int(np.floor(pa[:, 1].min())), int(np.ceil(pa[:, 1].max()))
+            x0, y0 = max(x0, 0), max(y0, 0); x1, y1 = min(x1, Wd - 1), min(y1, Ht - 1)
+            if x1 < x0 or y1 < y0: continue
+            gx, gy = np.meshgrid(np.arange(x0, x1 + 1) + 0.5, np.arange(y0, y1 + 1) + 0.5)
+            px, py = gx - pa[0, 0], gy - pa[0, 1]
+            l1 = (px * e2[1] - py * e2[0]) / area; l2 = (e1[0] * py - e1[1] * px) / area; l0 = 1 - l1 - l2
+            ins = (l0 >= -1e-4) & (l1 >= -1e-4) & (l2 >= -1e-4)
+            if not ins.any(): continue
+            d = l0 * D[t[0]] + l1 * D[t[1]] + l2 * D[t[2]]
+            sl = (slice(y0, y1 + 1), slice(x0, x1 + 1)); s = score(d, sl)
+            ok = ins & (d > dc) & (s < best[sl])
+            if not ok.any(): continue
+            best[sl][ok] = s[ok]; tri[sl][ok] = k; bar[sl][ok] = np.stack([l0, l1, l2], -1)[ok]; dep[sl][ok] = d[ok]; fs[sl][ok] = 1.0 if area < 0 else -1.0
+        return tri, bar, dep, fs
+
+    # 第一次：最前面的一層（鏡頭看得到的，含瀏海、眼鏡框）
+    tri, bar, zb, fs = raster(lambda d, sl: -d)
+    if not top:   # top：眼睛畫在比 OPEN 還窄的薄層上（倩曉），直接用最前面那層
+        # 皮膚的深度：最前面那層去掉比 OPEN 窄的凸起（瀏海一綹綹、鏡框），剩下平滑的臉；
+        # 第二次每個像素取最接近這張臉的那一層——瀏海在前面、有些模型臉皮後面還有一層（眼窩、嘴巴裡、重複的臉），都不會被選到
+        F = np.where(tri >= 0, zb, dc).astype(np.float32); kk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (OPEN, OPEN))
+        S = cv2.dilate(cv2.erode(F, kk), kk)
+        tri, bar, zb, fs = raster(lambda d, sl: np.abs(d - S[sl]))
     valid = tri >= 0
     tv = tris[np.clip(tri, 0, None)]   # 每個像素的三個頂點
     w = bar[..., :, None]
     # 臉皮是共用模型骨架的 SkinnedMesh：座標存原始網格座標（GLTFLoader 用單位矩陣綁定，世界座標＝Σ 骨頭 × 反綁定 × 頂點），
     # 骨頭權重照底下那個三角形內插，頭轉、脖子動時跟臉一起變形
-    pos = (P[tv] * w).sum(2); nor = (N[tv] * w).sum(2); nor /= np.linalg.norm(nor, axis=-1, keepdims=True) + 1e-9
+    pos = (P[tv] * w).sum(2); nor = (N[tv] * w).sum(2) * fs[..., None]; nor /= np.linalg.norm(nor, axis=-1, keepdims=True) + 1e-9   # 看到的是背面：法線翻成朝外（和雙面繪製的光影一致）
     uv = (UV[tv] * w).sum(2)
     dense = np.zeros(tv.shape[:2] + (len(joints),), np.float32)
     for c in range(3):
@@ -115,7 +132,8 @@ def bake(mid, out):
     os.makedirs(out, exist_ok=True)
     cv2.imwrite(os.path.join(out, mid + '_face.png'), np.dstack([col, valid * 255.0]).clip(0, 255).astype(np.uint8))
     np.savez_compressed(os.path.join(out, mid + '_maps.npz'), pos=pos.astype(np.float32), nor=nor.astype(np.float32), valid=valid,
-                        jnt=jnt.astype(np.uint8), wgt=wgt.astype(np.float32), depth=np.where(valid, zb, 0).astype(np.float32))
+                        jnt=jnt.astype(np.uint8), wgt=wgt.astype(np.float32), depth=np.where(valid, zb, 0).astype(np.float32),
+                        fwd=(np.linalg.inv(R3) @ f / np.linalg.norm(np.linalg.inv(R3) @ f)).astype(np.float32))   # 臉朝前的方向（原始網格座標）：小曲面沿這個方向浮起
     info = {'id': mid, 'w': Wd, 'h': Ht, 'ppu': PPU, 'mix': mix, 'r': r.tolist(), 'u': u.tolist(), 'f': f.tolist(),
             'a0': float(a0), 'b1': float(b1), 'dc': float(dc), 'headTris': int(len(tris)), 'validPx': int(valid.sum())}
     json.dump(info, open(os.path.join(out, mid + '_info.json'), 'w'), indent=1)
@@ -124,7 +142,10 @@ def bake(mid, out):
 
 if __name__ == '__main__':
     args = sys.argv[1:]; out = os.path.join(ROOT, '.face-work')
+    if '--front' in args:
+        FRONT = True; args.remove('--front')
     if '--out' in args:
         k = args.index('--out'); out = args[k + 1]; del args[k:k + 2]
+    regions = json.load(open(os.path.join(ROOT, 'tools', 'face_regions.json'), encoding='utf-8'))
     for mid in args:
-        bake(mid, out)
+        bake(mid, out, FRONT or (regions.get(mid) or {}).get('front', False))
