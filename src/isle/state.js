@@ -74,8 +74,9 @@ export function practiced(id, right, total, ev) {
 
 /* ---------- 物種 ---------- */
 export const list = k => (k === 'fish' ? I.FISH : k === 'bug' ? I.BUGS : k === 'sea' ? I.SEALIFE : k === 'mineral' ? I.MINERALS : k === 'marine' ? I.MARINE : k === 'food' ? I.FOODS : I.FOSSILS) || [];
-/** 只拍照、不帶走的生物：潮池的保育類（沒有標價），以及潛水遇到的保育類、珊瑚、硨磲貝與鸚鵡螺（v9.0）。照片直接送進博物館 */
-const MARINE_PHOTO = new Set(['giant_clam', 'nautilus', 'staghorn_coral', 'brain_coral', 'soft_coral', 'sea_fan']);
+/** 只拍照、不帶走的生物：潮池的保育類（沒有標價），以及潛水遇到的保育類、珊瑚、硨磲貝與鸚鵡螺（v9.0）。照片直接送進博物館
+   v9.1：有毒的豹紋章魚與海蛇、固著在海底的海鰓、桶狀海綿、海鞘與海草也只拍照（牠們的台詞本來就是「拍完留在原地」） */
+const MARINE_PHOTO = new Set(['giant_clam', 'nautilus', 'staghorn_coral', 'brain_coral', 'soft_coral', 'sea_fan', 'blue_ring_octopus', 'sea_snake', 'sea_pen', 'barrel_sponge', 'sea_squirt', 'seagrass']);
 export const photoOnly = (k, sp) => !!sp && (k === 'sea' ? !sp.price : k === 'marine' ? !!sp.protected || MARINE_PHOTO.has(sp.id) : false);
 export const find = (k, id) => list(k).find(x => x.id === id);
 export function itemName(it) { if (!it) return ''; if (it.k === 'unk') return '未鑑定的化石'; if (it.k === 'ore') return '未鑑定的礦石'; if (it.k === 'pkg') return '要送出的筆記本'; const sp = find(it.k, it.id); return sp ? sp.name : it.id; }

@@ -521,8 +521,8 @@ test('公共建築的整棟室內：出生點、出口、互動點與展示位',
   const std = () => new THREE.MeshStandardMaterial();
   const kit = { mat: std, rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null };
   const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8'), hooks = (main.match(/const HOUSE_HOOKS = \{([\s\S]*?)\};/) || ['', ''])[1];
-  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'] };
-  for (const key of ['library', 'museum', 'aquarium']) {
+  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'], tidecave: ['cave'] };
+  for (const key of ['library', 'museum', 'aquarium', 'tidecave']) {
     if (!fs.existsSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`))) { t.diagnostic(key + ' 還沒有整棟室內'); continue; }
     vm.runInContext(fs.readFileSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`), 'utf8'), cx, { filename: key });
     const fac = cx.TA && cx.TA.ISLE && cx.TA.ISLE.INTERIORS && cx.TA.ISLE.INTERIORS[key];
@@ -530,7 +530,8 @@ test('公共建築的整棟室內：出生點、出口、互動點與展示位',
     const ud = fac(THREE, kit).userData;
     const [sx, , sz] = ud.spawn, [ex, ez, er] = ud.exit;
     assert.ok(Math.hypot(sx - ex, sz - ez) > er + 0.4, key + ' 出生點要在出口圈外');
-    if (key !== 'aquarium') assert.ok(Array.isArray(ud.host) && ud.host.length >= 3, key + ' 館員的位置');
+    if (key !== 'aquarium' && key !== 'tidecave') assert.ok(Array.isArray(ud.host) && ud.host.length >= 3, key + ' 館員的位置');
+    if (key === 'tidecave') assert.equal(ud.spots.filter(s => s.kind === 'hook:cave').map(s => s.topic).sort().join(), 'chest,fossil,pool,vein,wall', '潮洞的五個互動點');
     if (key === 'aquarium') assert.equal((ud.tanks || []).map(k => k.where).sort().join(), 'deep,reef,seagrass,shallow', '海洋館的四座水族缸');
     const kinds = ud.spots.map(s => s.kind);
     ud.spots.forEach(s => {
@@ -672,6 +673,9 @@ test('海洋生物：欄位、棲地、月份時段、台詞與圖示', { skip: 
   });
   for (let m = 1; m <= 12; m++) for (const w of ['shallow', 'reef', 'seagrass', 'deep']) assert.ok(M.filter(x => x.where === w && x.months.includes(m)).length >= 2, `${m} 月的${w}至少兩種`);
   ['green_turtle', 'hawksbill'].forEach(id => assert.ok(M.find(x => x.id === id).protected, id + ' 是保育類'));
+  const photo = new Set([...(fs.readFileSync(path.join(ROOT, 'src/isle/state.js'), 'utf8').match(/MARINE_PHOTO = new Set\(\[([^\]]*)\]\)/) || ['', ''])[1].matchAll(/'([a-z0-9_]+)'/g)].map(m => m[1]));
+  M.forEach(x => { if (/拍照|拍完|留在原地|留原地/.test(I.MARINE_LINES.catch[x.id])) assert.ok(x.protected || photo.has(x.id), x.id + ' 的台詞說拍完留在原地，就要只拍照（state.js 的 MARINE_PHOTO）'); });   // v9.1
+  assert.ok(M.filter(x => (x.where === 'shallow' || x.where === 'reef') && !x.protected && !photo.has(x.id)).length >= 4, '潮洞的發光潮池至少有四種帶得回去的生物');
 });
 
 /* v9.0 海洋生物與海底造景的模型：每一種都有、動作需要的零件都在、面數在預算內，dive.js／aquarium.js 用到的造景都有 */
@@ -695,4 +699,27 @@ test('海洋生物與海底造景模型：零件、原點與面數', () => {
     const g = J.REEFMODELS[k](THREE, kit); g.updateMatrixWorld(true);
     assert.ok(tris(g) <= 3800, `${k} 面數 ${tris(g)}`); assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.03, k + ' 原點在底部');
   });
+});
+
+/* v9.1 北海岸的模型：northcoast.js 用到的每一種都有、命名零件在、原點在地面或海面、面數在預算內；北側樓梯在規劃裡 */
+test('北海岸：模型零件、原點與面數，北側樓梯', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/isle/data/northmodels.js'), 'utf8'), cx, { filename: 'northmodels.js' });
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial() }, J = cx.TA.ISLE;
+  const src = fs.readFileSync(path.join(ROOT, 'src/isle/northcoast.js'), 'utf8'), used = [...new Set([...src.matchAll(/'(sea_stack_a|sea_stack_b|sea_arch|cave_mouth|driftwood|tide_rocks|north_sign)'/g)].map(m => m[1]))];
+  assert.equal(used.length, 7, 'northcoast.js 用到七種模型');
+  const parts = { sea_stack_a: ['birds'], cave_mouth: ['void'], north_sign: ['board'] }, sea = ['sea_stack_a', 'sea_stack_b', 'sea_arch'];
+  used.forEach(k => {
+    assert.ok(J.NORTHMODELS[k], '少了 ' + k);
+    const g = J.NORTHMODELS[k](THREE, kit); g.updateMatrixWorld(true);
+    (parts[k] || []).forEach(n => assert.ok(g.getObjectByName(n), `${k} 少了 ${n}`));
+    let tris = 0; g.traverse(o => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+    assert.ok(tris <= 4200, `${k} 面數 ${tris}`);
+    const y = new THREE.Box3().setFromObject(g).min.y;
+    if (sea.includes(k)) assert.ok(y < -0.8 && y > -1.6, `${k} 要有一截在海面下（${y.toFixed(2)}）`); else assert.ok(Math.abs(y) < 0.05, `${k} 原點在地面（${y.toFixed(2)}）`);
+  });
+  const plan = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/island_plan.json'), 'utf8'));
+  assert.ok(plan.stairs.some(s => s.name === 'Academy North Stair' && s.from === 'grass' && s.to === 'plateau'), '學院台地的北側樓梯');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/data/islandplan.js'), 'utf8'), /Academy North Stair/, 'islandplan.js 要重新打包');
 });

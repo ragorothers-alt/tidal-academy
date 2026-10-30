@@ -70,6 +70,9 @@ import * as harbor from './harbor.js';
 import * as swim from './swim.js';
 import * as dive from './dive.js';
 import * as aquarium from './aquarium.js';
+import * as boat from './boat.js';
+import * as northcoast from './northcoast.js';
+import * as cave from './cave.js';
 import * as pwa from './pwa.js';
 import * as seasons from './seasons.js';
 import * as shake from './shake.js';
@@ -227,11 +230,13 @@ fauna.init({ ground, player, villagers, simT: () => simT, hour: () => hourOverri
 const offMods = {};
 try { pwa.init(); } catch (e) { console.warn('離線功能出錯：', e); }   // v8.9.2 網頁版：安裝、離線、更新提示
 try { harbor.init(); } catch (e) { offMods.harbor = true; console.warn('港口出錯，先停用：', e); }   // v8.9.1 碼頭的燈、船與浮標
+try { northcoast.init({ enterCave: () => enterCave() }); } catch (e) { offMods.northcoast = true; console.warn('北海岸出錯，先停用：', e); }   // v9.1 北海岸與潮洞洞口
+cave.init({ leave: () => house.leave() });
 function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
 social.init(villagers, { paint: () => paintHud(), toast: t => ui.toast(t), giveFurn: id => room.addStorage(id) });
-town.init(villagers, { walkable: (x, z) => walkable(x, z, ground(x, z), null), giveFurn, icon, savePos: () => { if (!room.inside && !elsewhere()) S().pos = [player.position.x, player.position.z]; save(); } });
+town.init(villagers, { walkable: (x, z) => walkable(x, z, ground(x, z), null), giveFurn, icon, savePos: () => { if (!room.inside && !elsewhere() && !boat.isRiding()) S().pos = [player.position.x, player.position.z]; save(); } });
 guest.init({ chibi, villagers, homes, paint: () => paintHud() });
 gifts.init(room);
 garden.init(player, { paint: () => paintHud() });
@@ -288,7 +293,7 @@ const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS
   review: () => libAct('rv'), vocab: () => libAct('voc'), mistakes: () => libAct('book'), words: () => libAct('word'),   // v8.1 圖書館的功能點
   libnotes: sid => { ui.closeDialog(); library.openNotes(sid || shelfSid()); },   // v8.3 十科書架：面向哪一格就翻開哪一科
   wing: k => museum.openWing(k),   // 博物館的展區（topic 是展區）
-  exhibit: t => museum.exhibitCard(t.k, t.id), theme: () => themeAct(), box: () => donationBox(), guestbook: () => guestbook(), aquarium: () => goAquarium(), aqtank: t => aquarium.openTank(t) };   // v9.0 海洋館   // v8.3 展品、小特展、捐贈箱、留言簿
+  exhibit: t => museum.exhibitCard(t.k, t.id), theme: () => themeAct(), box: () => donationBox(), guestbook: () => guestbook(), aquarium: () => goAquarium(), aqtank: t => aquarium.openTank(t), cave: t => cave.act(t) };   // v9.0 海洋館、v9.1 潮洞   // v8.3 展品、小特展、捐贈箱、留言簿
 trip.init(player, () => { const x = PIER.x, z = PIER.z + PIER.len - 1.4; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
 spirit.init(player, () => skyU.night.value > 0.5);
 diy.init(player, myHome, { thumb: id => room.thumb(id), addStorage: (id, n) => room.addStorage(id, n) });
@@ -707,6 +712,8 @@ dive.init({ player, night: () => skyU.night.value, onExit: (sp, why) => {   // v
   swim.use(sp); player.position.set(sp.x, seaMesh.position.y - swim.SINK, sp.z); player.rotation.y = 0; swimming = true; jump.air = false; jump.n = 0; camY = null; moveTo = null; camPos.copy(player.position).add(camOff); paintHud();
   if (why === 'air') setTimeout(() => ui.toast('呼——氧氣用完前浮上來了'), 700);
 } });
+boat.init({ player, canStand: (x, z) => !isWater(x, z) && ground(x, z) < 1.3 && !blocked(x, z, 0.3), onBoard: () => { moveTo = null; endSwim(); },   // v9.1 小划船
+  onLeave: (x, z, pier) => { player.position.set(x, pier ? 0.47 : ground(x, z), z); jump.air = false; jump.n = 0; swimming = false; camY = null; moveTo = null; } });
 dreamisle.init({ player, addStorage: (id, n) => room.addStorage(id, n), beforeEnter: () => { if (room.inside) room.exit(); if (house.inside) house.leave(); }, villagers: () => villagers.filter(v => !v.shop && !v.guest), wake: () => { enterHome(); setTimeout(() => ui.toast('醒來了。夢境島會一直保留著，下次睡覺還能回去'), 800); } });
 const appBase = n => n.replace(/（.*?）$/, '');   // 「信箱（5）」→「信箱」
 /** 一排 App 圖示（手機首頁與兩個學習入口共用）：點了記進「最近使用」，打開的面板左上角有返回鈕（back、label） */
@@ -1026,7 +1033,8 @@ function act() {
   }
   if (dreamisle.inside) { const dh = dreamisle.handler(); if (dh) { talking = { name: 'dreamisle' }; Promise.resolve(dh()).finally(() => { talking = null; }); } return; }
   if (dive.inside) { const dh = dive.handler(); if (dh) { talking = { name: 'dive' }; Promise.resolve(dh()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); } return; }
-  if (swimming) { const sp = swim.near(player.position.x, player.position.z); if (sp) { moveTo = null; dive.enter(sp); } return; }   // v9.0 游泳中：只能在潛點潛下去
+  if (boat.isRiding()) { boat.act(player.position.x, player.position.z); return; }   // v9.1 船上：停回碼頭、上岸
+  if (swimming) { const sp = swim.near(player.position.x, player.position.z); if (sp) { moveTo = null; dive.enter(sp); } else boat.act(player.position.x, player.position.z); return; }   // v9.0 游泳中：只能在潛點潛下去（或爬上小船）
   if (trip.inside) { const th = trip.tripHandler(); if (th) { talking = { name: 'trip' }; Promise.resolve(th()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); } return; }
   if (room.inside) {
     const host = roomHost;
@@ -1044,6 +1052,7 @@ function act() {
   if (nearMail) { social.openMail(); return; }
   if (nearV) { const g = routine.joinable(nearV); if (g) joinGathering(g); else talk(nearV); return; }
   { const st = nearSeat(); if (st) { sitDown(st); return; } }
+  if (boat.act(player.position.x, player.position.z) || northcoast.act(player.position.x, player.position.z)) return;   // v9.1 坐上小船、走進潮洞
   const ch = fauna.handler();   // v8.9 摸摸島上的貓
   if (ch) { talking = { name: 'cat' }; Promise.resolve(ch()).finally(() => { talking = null; }); return; }
   const dk = trip.handler();
@@ -1667,6 +1676,12 @@ async function guestbook() {
   ok.onclick = () => { const t = ta.value.trim(); if (!t) { ui.toast('寫一點什麼吧'); return; } const d = new Date(), s = S(); s.guestbook = (s.guestbook || []).concat([{ d: `${d.getMonth() + 1}/${d.getDate()}`, t }]).slice(-40); save(); ui.closePanel(); memo.add('博物館留言簿', t, { icon: '🖋' }); Audio.sfx('catch'); ui.toast('寫進留言簿了'); };
   body.appendChild(ok); ui.panel('潮汐博物館 · 留言簿', body, { cls: 'memo-p' }); setTimeout(() => ta.focus(), 50);
 }
+/** v9.1 走進北海岸的潮洞（退潮時；出洞回到洞口前的沙灘） */
+function enterCave() {
+  life.cancel(); moveTo = null;
+  if (!house.has('tidecave')) { ui.toast('潮洞裡還很暗，下次再來吧'); return; }
+  if (enterPublic('tidecave', null, northcoast.DOOR, { after: () => cave.left() })) { cave.entered(); setTimeout(() => ui.toast('潮洞：潮水漲回來之前記得出洞'), 700); }
+}
 /** v9.0 博物館 ⇄ 海洋館：兩棟相連的室內。從博物館的拱門走進海洋館，出來回到拱門前（不回島上） */
 function goAquarium() {
   if (!house.has('aquarium')) { ui.toast('海洋館還在整理，下次再來吧'); return; }
@@ -2108,6 +2123,7 @@ function doJump() {
   if (dreamisle.inside) { if (!talking && !ui.dialogOpen() && !ui.panelOpen()) dreamisle.jump(); return; }
   if (dive.inside) { if (!talking && !ui.dialogOpen() && !ui.panelOpen()) dive.jump(); return; }   // v9.0 水下：往上踢一下
   if (!started || room.inside || elsewhere() || design.active() || life.busy || life.fishing() || talking || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen()) return;
+  if (boat.isRiding()) return;   // v9.1 船上不跳
   if (swimming && jump.n >= 1) return;   // v9.0 水裡只能往上跳一下
   if (jump.n >= 3) { inBuf.jump = performance.now(); return; }   // 三段跳還在空中：落地時補跳
   jump.air = true; jump.n++; jump.v = JUMP_V[jump.n - 1]; if (jump.n === 3) { jump.flip = 0.0001; setExpr(player, 'happy', 1); }
@@ -2172,7 +2188,8 @@ function houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow) {
   fpK += ((fpNow ? 1 : 0) - fpK) * Math.min(1, dt * 4.5); if (Math.abs(fpK - (fpNow ? 1 : 0)) < 0.003) fpK = fpNow ? 1 : 0;
   fpLens(fpK, 0.12);
   house.tick(dt, t, { ix, iz, len, moving, run, locked, night: skyU.night.value, golden, fpK, yaw: camYaw, pitch: fpPitch, tilt: camV.tilt, zoom });
-  if (houseSid === 'aquarium') guard('aquarium', () => aquarium.tick(dt, t));   // v9.0 水族缸裡的生物游動
+  if (houseSid === 'aquarium') guard('aquarium', () => aquarium.tick(dt, t));
+  if (houseSid === 'tidecave') guard('cave', () => cave.tick(dt));   // v9.1 潮水漲回來就提醒出洞   // v9.0 水族缸裡的生物游動
   if (!house.inside) return;
   houseHand.update(dt, { active: fpK > 0.92, show: fpNow && !talking && !ui.dialogOpen() && !ui.cardOpen() && !ui.panelOpen(), camera, tool: player.userData.tool, umbrella: false, fishing: false, moving, run, yaw: camYaw, pitch: fpPitch, t });
   photo.grab(renderer.domElement); memo.grab(renderer.domElement);
@@ -2202,7 +2219,8 @@ function tick(fixed) {
   if (sitting) { ix = iz = 0; moveTo = null; }
   const run = keys.ShiftLeft || keys.ShiftRight || joy.run, len = Math.hypot(ix, iz), moving = len > 0.01;
   { const away = room.inside || elsewhere(); if (away !== wasAway) { wasAway = away; moveTo = null; } if (!away && pendingMove) { pendingMove = false; move.apply(villagers); } }   // 跨日的搬家：在島上時才搬（不會在你拜訪時把房子搬走）   // 進出室內、離島：上一個場景點的目的地不能帶過去
-  if ((house.inside || room.inside || elsewhere()) && player.userData.act === 'swim') endSwim();   // v9.0 游泳時被送進室內（回家、進館）：先收起游泳的姿勢
+  if ((house.inside || room.inside || elsewhere()) && player.userData.act === 'swim') endSwim();
+  if ((house.inside || room.inside || elsewhere()) && boat.isRiding()) boat.stop();   // v9.1 划船時被送進室內：船留在原地   // v9.0 游泳時被送進室內（回家、進館）：先收起游泳的姿勢
   if (house.inside) {
     minimap.update(dt, false);   // v8.2 室內收起島上的小地圖（地名不會停在進門前）
     if (myHouseCls !== (houseSid === 'player')) { myHouseCls = houseSid === 'player'; document.body.classList.toggle('my-house', myHouseCls); }   // 自己家顯示 🛋 裝潢鈕
@@ -2227,7 +2245,7 @@ function tick(fixed) {
     hudT += dt; if (hudT > (life.tourney ? 0.25 : 2)) { hudT = 0; paintHud(); }
     return;
   }
-  if (moving) {
+  if (moving && !boat.isRiding()) {
     const want = (run ? RUN : WALK * (0.3 + 0.7 * Math.min(1, len))) * cooking.speedMul() * (swimming ? 0.55 : 1);   // 搖桿推多少走多快（鍵盤、點地面 = 一般走路）
     pace = Math.max(pace, want * 0.4); pace += (want - pace) * Math.min(1, dt * 7);   // 起步從四成速度加速上去，不會一按就全速衝出去
     ix /= len; iz /= len;
@@ -2239,21 +2257,21 @@ function tick(fixed) {
     const snowy = seasons.snowK() > 0.5 && tileAt(player.position.x, player.position.z) !== 0;   // 雪地上走路也會踢起細雪
     if ((run || snowy) && (puffT -= dt) < 0) { puffT = run ? 0.12 : 0.26; puff(player.position.x, player.position.y, player.position.z); }
   }
-  if (fpNow && !sitting) player.rotation.y = camYaw + Math.PI;   // 第一人稱：身體朝著視線（面前的島民、門、釣魚的方向都以看的地方為準）
-  const inAir = sink.t > 0 ? false : jumpTick(dt);   // 落水沉下去的那一下不貼地
-  if (swimming && !inAir) swimTick(dt, moving); else if (moving && !inAir && !sitting) { const fast = run && pace > WALK * 1.15, SL = fast ? 0.9 : 0.62; stepAcc += pace * dt; if (stepAcc > SL) { stepAcc -= SL; footstep(fast); } } else stepAcc = 0.45;   // 腳步聲：每走一步一聲
+  if (fpNow && !sitting && !boat.isRiding()) player.rotation.y = camYaw + Math.PI;   // 第一人稱：身體朝著視線（面前的島民、門、釣魚的方向都以看的地方為準）
+  const inAir = sink.t > 0 || boat.isRiding() ? false : jumpTick(dt);   // 落水沉下去的那一下不貼地
+  if (boat.isRiding()) { guard('boat', () => boat.tick(dt, t, ix, iz, len, moving, run, locked)); stepAcc = 0.45; } else if (swimming && !inAir) swimTick(dt, moving); else if (moving && !inAir && !sitting) { const fast = run && pace > WALK * 1.15, SL = fast ? 0.9 : 0.62; stepAcc += pace * dt; if (stepAcc > SL) { stepAcc -= SL; footstep(fast); } } else stepAcc = 0.45;   // 腳步聲：每走一步一聲
   { const tv = talking && talking.mesh ? talking : nearV; lookAt(player, tv && tv.mesh ? headPos2.copy(tv.mesh.position).setY(tv.mesh.position.y + 1.1) : null); }
   if (ui.cardOpen()) setExpr(player, 'happy', 0.5);   // 抓到、解鎖成就時開心
   if (!moving) {   // 放開方向鍵：約 0.1 秒內滑停（走路動作淡出的時候腳不會在原地滑）
-    if (pace > 0.35 && !locked && !inAir && !sitting) { pace *= Math.exp(-dt * 20); stepChar(player, lastDir.x, lastDir.y, dt, pace); } else pace = 0;
+    if (pace > 0.35 && !locked && !inAir && !sitting && !boat.isRiding()) { pace *= Math.exp(-dt * 20); stepChar(player, lastDir.x, lastDir.y, dt, pace); } else pace = 0;
   }
   { const u = player.userData, sw = swimming && !inAir; u.swimK = (u.swimK || 0) + ((sw && moving ? 1 : 0) - (u.swimK || 0)) * Math.min(1, dt * 4); u.swimLean = (u.swimLean || 0) + ((sw ? (moving ? 0.95 : 0.12) : 0) - (u.swimLean || 0)) * Math.min(1, dt * 5); if (sw) u.act = 'swim'; else if (u.act === 'swim') u.act = null; if (u.hand && u.hand.visible === swimming) u.hand.visible = !swimming; }   // v9.0 游泳：踩水、蛙式、身體前傾；手上的工具先收起來
-  animate(player, dt, moving && !inAir && !swimming ? (run && pace > WALK * 1.15 ? 2 : 1) : 0, t, moving ? THREE.MathUtils.clamp(pace / (run && pace > WALK * 1.15 ? RUN : WALK), 0.45, 1.2) : 1); jumpPose(dt);   // 腳步跟著速度：慢走時步伐也慢，腳不會在地上滑
+  animate(player, dt, moving && !inAir && !swimming && !boat.isRiding() ? (run && pace > WALK * 1.15 ? 2 : 1) : 0, t, moving ? THREE.MathUtils.clamp(pace / (run && pace > WALK * 1.15 ? RUN : WALK), 0.45, 1.2) : 1); jumpPose(dt);   // 腳步跟著速度：慢走時步伐也慢，腳不會在地上滑
   if (sitting) { const [sx, sz] = slotPos(sitting.seat, sitting.slot); player.position.set(sx, seatY(sitting.seat), sz); player.rotation.y = sitting.seat.ry; jump.air = false; sitTick(dt); }
   // 島民
   nearV = null; let best = 2.2;
   const hourNow = hourOverride ?? nowHour();
-  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t)); guard('swim', () => swim.update(dt, t));
+  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t)); guard('swim', () => swim.update(dt, t)); guard('boatIdle', () => boat.update(dt, t)); guard('northcoast', () => northcoast.update());
   mindCtx.hour = hourNow; mind.update(simT, villagers.filter(v => thinks(v) && !v.away && v.mesh.visible), mindCtx);
   const [plx, ply] = screenOf(player, 1.6), plD = camera.position.distanceTo(player.position);   // 角色頭上在畫面的位置：後面島民的名牌疊上來時淡一點
   villagers.forEach(v => {
@@ -2313,12 +2331,12 @@ function tick(fixed) {
   // 提示
   let pr = $('labels').querySelector('.prompt');
   const tool = player.userData.tool;
-  nearDoor = locked || swimming || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
-  nearMail = !!myHome && !locked && !swimming && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
-  if (nearDoor || nearMail || swimming) nearV = null;
-  const gHint = !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : '') : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
+  nearDoor = locked || swimming || boat.isRiding() || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
+  nearMail = !!myHome && !locked && !swimming && !boat.isRiding() && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
+  if (nearDoor || nearMail || swimming || boat.isRiding()) nearV = null;
+  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
   const gj = nearV && routine.joinable(nearV);   // v8.9 走近正在進行的團體活動：按 E 加入
-  const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : swimming ? '' : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
+  const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : swimming || boat.isRiding() ? '' : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
   if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
   else if (pr) pr.remove();
   document.body.classList.toggle('placing', design.active());
@@ -2478,7 +2496,7 @@ function tick(fixed) {
     U.uOccP.value.set(ox * pr, (innerHeight - oy) * pr); U.uOccR.value = fpK > 0.3 ? 0 : 74 * pr; U.uOccD.value = -pv.z; U.uOccY.value = player.position.y; post.fx.focus = fpK ? THREE.MathUtils.lerp(-pv.z, fpFocus, fpK) : talkNear > 0.001 && talkFor ? THREE.MathUtils.lerp(-pv.z, -talkDepth.copy(talkHead).applyMatrix4(camera.matrixWorldInverse).z, talkNear) : -pv.z; U.uBendF.value = Math.max(4, -pv.z - 2); }   // 第一人稱：不挖空、對焦在看著的東西
   const dof0 = post.fx.dof; post.fx.dof = dof0 * (1 - fpK * 0.8);   // 第一人稱景深很淡（看海平線時對焦在遠處，近處的海浪、閃光不能糊掉）
   post.render(t); post.fx.dof = dof0; photo.grab(renderer.domElement); memo.grab(renderer.domElement);
-  saveT += dt; if (saveT > 10 && !TA.importing) { saveT = 0; S().pos = [Math.round(player.position.x * 10) / 10, Math.round(player.position.z * 10) / 10]; save(); }
+  saveT += dt; if (saveT > 10 && !TA.importing) { saveT = 0; if (!boat.isRiding()) S().pos = [Math.round(player.position.x * 10) / 10, Math.round(player.position.z * 10) / 10]; save(); }
   hudT += dt; if (hudT > (life.tourney ? 0.25 : 2)) { hudT = 0; paintHud(); }
 }
 function roomTick(dt, t, ix, iz, len, moving, locked) {
@@ -2517,4 +2535,4 @@ scene.traverse(o => { o.frustumCulled = cullable(o); }); dropTinyShadows(scene);
 paintHud(); paintTools();
 requestAnimationFrame(frame);
 addEventListener('pagehide', () => { if (TA.importing) return; if (!room.inside && !elsewhere()) S().pos = [player.position.x, player.position.z]; TA.Store.flush(); });
-window.__isle = { yuehome, house, shopin, swim, dive, swimming: () => swimming, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, enterLibrary, enterMuseum, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };
+window.__isle = { yuehome, house, shopin, swim, dive, boat, swimming: () => swimming, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, enterLibrary, enterMuseum, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };

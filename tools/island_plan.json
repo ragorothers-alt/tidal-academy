@@ -507,6 +507,34 @@
     ]
    ],
    "length": 5
+  },
+  {
+   "name": "Academy North Stair",
+   "x": 4,
+   "z": -36,
+   "dir": "S",
+   "width": 2,
+   "from": "grass",
+   "to": "plateau",
+   "start": [
+    4,
+    -39.5
+   ],
+   "end": [
+    4,
+    -33.5
+   ],
+   "path": [
+    [
+     4,
+     -39.5
+    ],
+    [
+     4,
+     -33.5
+    ]
+   ],
+   "length": 6
   }
  ],
  "roads": [

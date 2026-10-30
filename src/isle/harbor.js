@@ -67,7 +67,7 @@ export function init() {
   const boat = (key, x, z, ry, cr) => {
     const m = modelClone('HARBORMODELS', key); if (!m) return null;
     const g = new THREE.Group(); g.position.set(x, seaMesh.position.y, z); g.rotation.y = ry; g.add(m); scene.add(g); register(g);
-    colliders.push({ x, z, r: cr }); boats.push({ g, ph: Math.random() * 6.28, y0: 0 });
+    const col = { x, z, r: cr }; colliders.push(col); boats.push({ g, m, key, col, home: [x, z, ry], ph: Math.random() * 6.28, y0: 0 });
     return m;
   };
   const fb = boat('fishing_boat', px + hw + 0.98, pz + len * 0.5, 0, 1.1);
@@ -85,9 +85,11 @@ export function init() {
   lighthouseBeam();
 }
 
+/** v9.1 碼頭西側的小划船（boat.js 坐上去划船時接手：ride 期間這裡不再讓它搖） */
+export const rowboat = () => boats.find(b => b.key === 'rowboat') || null;
 export function update(dt, t) {
   const sea = seaMesh.position.y, k = lampK.value;
-  boats.forEach(b => { b.g.position.y = sea + Math.sin(t * 1.1 + b.ph) * 0.025; b.g.rotation.z = Math.sin(t * 0.9 + b.ph) * 0.03; b.g.rotation.x = Math.sin(t * 0.7 + b.ph * 1.3) * 0.015; });
+  boats.forEach(b => { if (b.ride) return; b.g.position.y = sea + Math.sin(t * 1.1 + b.ph) * 0.025; b.g.rotation.z = Math.sin(t * 0.9 + b.ph) * 0.03; b.g.rotation.x = Math.sin(t * 0.7 + b.ph * 1.3) * 0.015; });
   buoys.forEach(b => {
     b.g.position.y = sea + Math.sin(t * 1.4 + b.sway) * 0.05; b.g.rotation.x = Math.sin(t * 1.1 + b.sway) * 0.08; b.g.rotation.z = Math.cos(t * 0.9 + b.sway) * 0.08;
     const p = ((t + b.ph) % 3) / 3; b.lit.emissiveIntensity = k * (p < 0.12 ? 2.6 : 0.08);   // 每 3 秒亮一下
