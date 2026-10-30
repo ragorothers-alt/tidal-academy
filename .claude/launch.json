@@ -1,6 +1,27 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "tidal", "runtimeExecutable": "python", "runtimeArgs": ["tools/serve.py", "8766", "0.0.0.0"], "port": 8766 }
+    {
+      "name": "tidal",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "tools/serve.py",
+        "8766",
+        "0.0.0.0"
+      ],
+      "port": 8766
+    },
+    {
+      "name": "dist",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8770",
+        "--directory",
+        "dist"
+      ],
+      "port": 8770
+    }
   ]
 }

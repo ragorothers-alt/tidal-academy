@@ -67,6 +67,7 @@ import * as grass from './grass.js';
 import * as waves from './waves.js';
 import * as bluetears from './bluetears.js';
 import * as harbor from './harbor.js';
+import * as pwa from './pwa.js';
 import * as seasons from './seasons.js';
 import * as shake from './shake.js';
 import * as written from './written.js';
@@ -221,6 +222,7 @@ routine.init({ ground, villagers, player, slotPos: (st, k) => slotPos(st, k), se
 fauna.init({ ground, player, villagers, simT: () => simT, hour: () => hourOverride ?? nowHour(), talking: () => talking, isWater: (x, z) => isWater(x, z), waterY: (x, z) => waterY(x, z) });
 /** 新加的島上生活（作息、動物）出錯時只停用那一塊並記一次警告，不讓整個主迴圈停下來 */
 const offMods = {};
+try { pwa.init(); } catch (e) { console.warn('離線功能出錯：', e); }   // v8.9.2 網頁版：安裝、離線、更新提示
 try { harbor.init(); } catch (e) { offMods.harbor = true; console.warn('港口出錯，先停用：', e); }   // v8.9.1 碼頭的燈、船與浮標
 function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }

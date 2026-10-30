@@ -129,6 +129,11 @@ body.talking .quest, body.placing .quest { opacity: .35; }
 #toasts { position: fixed; top: 92px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 24px)); display: grid; gap: 8px; justify-items: center; pointer-events: none; z-index: 6; }   /* 在獲得卡片（5）之上：卡片出現時的提示不會被蓋住 */
 .toast { padding: 8px 18px; border-radius: 99px; background: rgba(107,79,58,.85); color: #fff; font-weight: 800; font-size: 14px; animation: dlg-in .3s cubic-bezier(.3,1.6,.5,1); transition: opacity .4s; max-width: min(560px, calc(100vw - 24px)); line-height: 1.5; text-align: center; }   /* v8.7 可以換行、不超出畫面（以前 nowrap） */
 .toast.out { opacity: 0; }
+/* v8.9.2 網頁版有新版本：畫面下方一條提示（更新／等一下） */
+.pwa-update { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 18px; border-radius: 99px;
+  background: linear-gradient(180deg, #fff8e7, #fbecc8); color: #6b4f3a; font-weight: 800; font-size: 14px; box-shadow: 0 6px 0 rgba(107,79,58,.18), 0 14px 30px rgba(0,0,0,.2); width: max-content; max-width: calc(100vw - 24px); animation: dlg-in .3s cubic-bezier(.3,1.6,.5,1); }   /* width：left 50% 的固定元素預設只能縮到半個畫面寬，字會被擠到換行 */
+.pwa-update span, .pwa-update .btn { white-space: nowrap; }
+.pwa-update .btn { padding: 6px 14px; font-size: 14px; }
 .pill.done { background: #fff1b8; color: #b07a10; }
 .pill.feel { background: #e4f7ef; color: #1f8f78; letter-spacing: 1px; }   /* 手感：採集時連續答對 */
 /* 面板 */

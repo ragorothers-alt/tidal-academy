@@ -137,6 +137,33 @@ def page(src_page, css, scripts, extra=''):
 (DIST / 'isle.html').write_text(page('isle.html', [a_isle_css], [a_base, a_data, a_isle_data, a_three], '\n<script>TA.Store.load(); TA.L.index(); window.__MODEL_BASE = "models/"; window.__FIG_BASE = "figs/";</script>\n<script src="' + a_isle + '"></script>'), encoding='utf-8')
 (ASSETS / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
 
+# ---------- 網頁版安裝與離線（v8.9.2，PWA）：manifest、圖示、service worker ----------
+# sw.js 由 pwa/sw.js 填入這次建置的檔案清單：本體（網頁、帶雜湊的資產、圖示）安裝時就存；模型、配樂、示意圖玩到時才存。
+# 版本是本體內容的雜湊（內容沒變就不會跳更新提示）；模型快取的名字跟著模型內容的雜湊。
+PWA = ROOT / 'pwa'
+if (PWA / 'sw.js').exists():
+    icons = sorted((PWA / 'icons').glob('*.png')) if (PWA / 'icons').exists() else []
+    if icons:
+        (DIST / 'icons').mkdir(exist_ok=True)
+        for f in icons: shutil.copy(f, DIST / 'icons' / f.name)
+    shutil.copy(PWA / 'manifest.webmanifest', DIST / 'manifest.webmanifest')
+    head = ('<link rel="manifest" href="manifest.webmanifest">\n<meta name="theme-color" content="#3f8f8c">\n<meta name="apple-mobile-web-app-capable" content="yes">\n'
+            '<meta name="apple-mobile-web-app-title" content="潮汐小島">\n<meta name="mobile-web-app-capable" content="yes">\n')
+    if any(f.name == 'apple-touch-icon.png' for f in icons): head += '<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">\n'
+    for name in ('isle.html', 'index.html'):
+        html = (DIST / name).read_text(encoding='utf-8')
+        if any(f.name == 'favicon-32.png' for f in icons): html = html.replace('<link rel="icon" href="data:,">', '<link rel="icon" type="image/png" href="icons/favicon-32.png">')
+        (DIST / name).write_text(html.replace('</head>', head + '</head>', 1), encoding='utf-8')
+    core = ['./', 'index.html', 'isle.html', 'manifest.webmanifest'] + ['assets/' + v['file'] for v in manifest.values()] + ['icons/' + f.name for f in icons]
+    extra = sorted([f'models/{f.name}' for f in (DIST / 'models').glob('*.js')] + [f'figs/{f.name}' for f in (DIST / 'figs').glob('*.html')]) if (DIST / 'models').exists() else []
+    hv, he = hashlib.sha256(), hashlib.sha256()
+    for p in core[1:]: hv.update(p.encode()); hv.update((DIST / p).read_bytes())
+    for p in extra: he.update(p.encode()); he.update((DIST / p).read_bytes())
+    sw = (PWA / 'sw.js').read_text(encoding='utf-8').replace('__VERSION__', hv.hexdigest()[:12]).replace('__EXTRA_V__', he.hexdigest()[:12])
+    sw = sw.replace('__CORE__', json.dumps(core, ensure_ascii=False)).replace('__EXTRA__', json.dumps(extra, ensure_ascii=False))
+    (DIST / 'sw.js').write_text(sw, encoding='utf-8')
+    print(f'PWA: sw.js（本體 {len(core)} 個檔、模型與示意圖 {len(extra)} 個）、manifest、{len(icons)} 個圖示')
+
 total = sum(v['bytes'] for v in manifest.values())
 print(f'Built dist/: isle.html (index.html redirects to it), {len(manifest)} assets, {total:,} bytes, {len(data_files)} data files.')
 for k, v in manifest.items(): print(f"  {v['file']:<28} {v['bytes']:>10,}")

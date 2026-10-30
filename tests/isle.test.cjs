@@ -621,6 +621,21 @@ test('作息台詞：每位導師做的每件事、每場團體活動、揮手�
   ok(L.cats.pet, 3, 'cats.pet'); L.cats.pet.forEach(s => assert.ok(s.includes('{cat}'), '摸貓台詞要有 {cat}：' + s));
 });
 
+/* v8.9.2 網頁版安裝與離線：manifest 欄位與圖示、service worker 範本的填空（build.py 填）只出現在程式裡 */
+test('網頁版安裝與離線：manifest、圖示與 service worker 範本', () => {
+  const mf = JSON.parse(fs.readFileSync(path.join(ROOT, 'pwa/manifest.webmanifest'), 'utf8'));
+  assert.ok(mf.name && mf.short_name && mf.short_name.length <= 12, '名稱');
+  assert.equal(mf.display, 'standalone'); assert.equal(mf.start_url, './isle.html'); assert.equal(mf.scope, './');
+  assert.ok(mf.icons.some(i => i.sizes === '512x512' && i.purpose === 'maskable') && mf.icons.some(i => i.sizes === '192x192'), '要有 192、512 與可遮罩的圖示');
+  const png = f => { const b = fs.readFileSync(path.join(ROOT, 'pwa', f)); assert.equal(b.toString('latin1', 1, 4), 'PNG', f + ' 不是 PNG'); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
+  mf.icons.forEach(i => assert.deepEqual(png(i.src), i.sizes.split('x').map(Number), i.src + ' 的尺寸'));
+  ['icons/apple-touch-icon.png', 'icons/favicon-32.png'].forEach(f => assert.ok(fs.existsSync(path.join(ROOT, 'pwa', f)), '少了 ' + f));
+  const sw = fs.readFileSync(path.join(ROOT, 'pwa/sw.js'), 'utf8'), code = sw.replace(/\/\*[\s\S]*?\*\//g, '');
+  ['__VERSION__', '__CORE__', '__EXTRA__', '__EXTRA_V__'].forEach(k => assert.ok(code.includes(k), 'sw.js 少了 ' + k));
+  assert.ok(!/__(VERSION|CORE|EXTRA|EXTRA_V)__/.test(sw.match(/^\/\*[\s\S]*?\*\//)[0]), '開頭的說明不能寫填空的名字（build.py 會一起替換掉）');
+  assert.match(fs.readFileSync(path.join(ROOT, 'build.py'), 'utf8'), /PWA = ROOT \/ 'pwa'/);
+});
+
 /* v8.9.1 港口的船與燈：harbor.js 找得到的零件都在、原點在水線（船與浮標）或地面（燈柱）、面數在預算內 */
 test('港口模型：命名零件、原點與面數', () => {
   const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));

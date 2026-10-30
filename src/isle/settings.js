@@ -8,9 +8,10 @@ import { setPool } from './glow.js';
 import * as seasons from './seasons.js';
 import * as mind from './mind.js';
 import * as shake from './shake.js';
+import * as pwa from './pwa.js';
 
 const TA = window.TA;
-export const VERSION = '8.9.1';
+export const VERSION = '8.9.2';
 export const hooks = {};   // main.js 掛上來的開關（第一人稱視角）
 const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, phoneAll: false, noConf: false, noWhy: false, fs: 1, speed: 1, timer: 1, shake: true, haptic: true };
 /** 設定值：原地補上預設值（不換掉物件——設定面板拿著同一個物件改，換掉的話後面的修改就存不進去） */
@@ -63,6 +64,7 @@ export function open() {
     { const st = mind.status(), on = c.laya !== false;   // 島民自己做決定（laya）：開關與連線狀態
       const desc = !on ? '關閉：島民在家附近隨意走動' : st === true ? '已連上 laya：島民依個性、時間與天氣決定接下來做什麼（散步、坐長椅、看花、找朋友聊天、走過來跟你打招呼）' : st === false ? '連不上 laya 伺服器（例如網頁版、伺服器沒開），島民先照原本的方式走動，連上後自動接手' : '檢查連線中…';
       body.appendChild(row('島民自己做決定', desc, toggle(on, () => { c.laya = !on; save(); draw(); }))); }
+    pwa.rows(row, draw).forEach(r => body.appendChild(r));   // v8.9.2 安裝到這台裝置、離線遊玩
     const ex = ui.el('button', 'btn', '匯出'); ex.type = 'button';
     ex.onclick = () => { TA.Store.flush && TA.Store.flush(); const d = new Date(); download(`tidal-academy-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, TA.Store.exportJSON()); ui.toast('已匯出存檔（學習紀錄與小島的進度；相簿與回憶錄的照片不在裡面）'); };
     body.appendChild(row('匯出存檔', '進度只存在這個瀏覽器，清除瀏覽資料會遺失；請定期匯出備份。備份包含學習紀錄與小島的進度，相簿與回憶錄的照片不包含在內' + (TA.Store.ok === false ? '。⚠ 目前存檔寫不進這台裝置，請立刻匯出' : ''), ex));
