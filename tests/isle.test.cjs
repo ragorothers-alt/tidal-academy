@@ -769,3 +769,64 @@ test('公共建設：模型的零件與標記點，建設的位置與費用', ()
   ids.forEach(m => { assert.ok(+m[2] >= 5000 && +m[2] <= 40000 && +m[3] >= 300 && +m[3] <= 3000, m[1] + ' 的費用'); assert.match(src, new RegExp(`${m[1]}: \\[-?[\\d.]+, -?[\\d.]+, `), m[1] + ' 的位置'); });
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/terrain.js'), 'utf8'), /WORK_BRIDGES = \{ bridge: /, 'terrain.js 登記了石橋');
 });
+
+/* v9.4.0 港邊夜市：每一攤真的開獎時，長期平均要等於題目算的期望值；轉盤照模型的 2／3／3 格 */
+test('港邊夜市：開獎的平均等於期望值', async () => {
+  const V = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/ev.js')).href);
+  let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  Object.keys(V.BOOTHS).forEach(k => {
+    for (let n = 0; n < 12; n++) {
+      const q = k === 'spin' ? V.BOOTHS.spin(rnd, { parts: V.WHEEL }) : V.BOOTHS[k](rnd);
+      assert.ok(Number.isInteger(q.cost) && q.cost > 0 && typeof q.play === 'function' && Number.isFinite(q.exp), k + ' 的玩法');
+      if (k === 'spin') assert.deepEqual(q.parts, V.WHEEL, '轉盤照模型的格數');
+      if (k !== 'balls') assert.equal(q.exp, q.ev, k + ' 的期望值');
+      let sum = 0, sq = 0; const N = 6000;
+      for (let i = 0; i < N; i++) { const r = q.play(rnd); assert.ok(r.won >= 0 && typeof r.show === 'string' && r.show && r.hit === r.won > 0, k + ' 開獎結果'); const v = r.won - q.cost; sum += v; sq += v * v; }
+      const mean = sum / N, sd = Math.sqrt(Math.max(sq / N - mean * mean, 1)), tol = 4.5 * sd / Math.sqrt(N) + 0.5;
+      assert.ok(Math.abs(mean - q.exp) < tol, `${k}：模擬平均 ${mean.toFixed(1)}，期望值 ${q.exp.toFixed(1)}（容許 ${tol.toFixed(1)}）`);
+    }
+  });
+  assert.equal(V.choose(4, 2), 6); assert.equal(V.choose(4, 0), 1);
+});
+
+/* v9.4.0 港邊夜市：八攤的攤主與台詞、六樣小吃、三件集章獎品、八個模型的零件與標記點、攤位不重疊 */
+test('港邊夜市：攤主、小吃、獎品與模型', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  ['src/isle/data/furniture.js', 'src/isle/data/nightmodels.js', 'src/isle/data/nightmarket.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), cx, { filename: f }));
+  const J = cx.TA.ISLE, N = J.NIGHTMARKET, src = fs.readFileSync(path.join(ROOT, 'src/isle/nightmarket.js'), 'utf8');
+  const games = ['dice', 'ticket', 'spin', 'balls', 'ring', 'pachinko'], foods = ['eggcake', 'boba'];
+  assert.deepEqual(Object.keys(N.keepers).sort(), games.concat(foods).sort(), '八攤的攤主');
+  const lines = (a, n, tag) => { assert.ok(Array.isArray(a) && a.length >= n && a.every(t => typeof t === 'string' && t.length > 2 && t.length <= 60 && !/\d/.test(t)), tag); };
+  Object.entries(N.keepers).forEach(([id, k]) => {
+    assert.ok(k.name && k.stall && k.sign && k.sign.length <= 6, id + ' 名字與招牌');
+    ['color', 'awning'].concat(Object.keys(k.look).map(x => 'look.' + x)).forEach(f => assert.match(f.startsWith('look.') ? k.look[f.slice(5)] : k[f], /^#[0-9a-f]{6}$/i, id + ' ' + f));
+    ['greet', 'bye'].concat(games.includes(id) ? ['smart', 'miss', 'win', 'lose'] : ['buy']).forEach(f => lines(k[f], 2, `${id}.${f}`));
+  });
+  assert.equal(new Set(Object.values(N.keepers).map(k => k.awning.toLowerCase())).size, 8, '雨棚顏色不重複');
+  assert.equal(N.snacks.length, 6); assert.equal(new Set(N.snacks.map(s => s.id)).size, 6, '小吃 id 不重複');
+  N.snacks.forEach(s => { assert.ok(foods.includes(s.stall) && Number.isInteger(s.price) && s.price >= 50 && s.price <= 200 && s.price % 10 === 0, s.id + ' 攤位與價格'); assert.ok(s.desc && s.fact && s.fact.length <= 90 && ['chemistry', 'biology', 'physics', 'earth'].includes(s.subject), s.id + ' 小知識'); });
+  foods.forEach(f => assert.equal(N.snacks.filter(s => s.stall === f).length, 3, f + ' 三樣小吃'));
+  assert.equal(N.prizes.length, 3, '三件集章獎品');
+  N.prizes.forEach(f => assert.ok(J.FURNITURE.some(x => x.id === f.id && x.src === 'event:night_market'), f.id + ' 放進家具清單'));
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /night_market: '/, '家具目錄寫得出怎麼拿到');
+  // 模型：具名零件與標記點、面數、原點在地面
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial() };
+  const need = { nm_stall: ['awning_a', 'awning_b', 'sign', 'bulbs', 'prop', 'keeper', 'front', 'hook_l', 'hook_r'], nm_gate: ['sign'], nm_table: ['seat_0', 'seat_1', 'seat_2', 'seat_3'], nm_wheel: ['wheel', 'pointer'],
+    nm_dice: [], nm_tickets: [], nm_balls: [], nm_rings: [], nm_pachinko: [], nm_eggcake: [], nm_boba: [] };
+  Object.entries(need).forEach(([k, parts]) => {
+    assert.ok(J.NIGHTMODELS[k], '少了 ' + k); if (k !== 'nm_stall' && k !== 'nm_gate' && k !== 'nm_table') assert.ok(src.includes(`'${k}'`), `nightmarket.js 要用到 ${k}`);
+    const g = J.NIGHTMODELS[k](THREE, kit); g.updateMatrixWorld(true);
+    parts.forEach(n => assert.ok(g.getObjectByName(n), `${k} 少了 ${n}`));
+    ['sign', 'awning_a'].filter(n => parts.includes(n)).forEach(n => assert.ok(g.getObjectByName(n).isMesh, `${k} 的 ${n} 要是網格`));
+    let tris = 0; g.traverse(o => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+    assert.ok(tris <= 4600, `${k} 面數 ${tris}`);
+    assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.06, `${k} 原點在地面`);
+  });
+  // 攤位：八攤都擺得出來、彼此不重疊、街道留得出走道
+  const S = [...src.match(/export const STALLS = \[([\s\S]*?)\];/)[1].matchAll(/\['(\w+)', (-?[\d.]+), (-?[\d.]+), (Math\.PI|0)\]/g)].map(m => ({ id: m[1], x: +m[2], z: +m[3], ry: m[4] }));
+  assert.deepEqual(S.map(s => s.id).sort(), games.concat(foods).sort(), '八攤都有位置');
+  S.forEach((a, i) => S.slice(i + 1).forEach(b => assert.ok(Math.abs(a.x - b.x) >= 2.25 || Math.abs(a.z - b.z) >= 1.6, `${a.id} 和 ${b.id} 重疊`)));
+  const north = S.filter(s => s.ry === 'Math.PI'), south = S.filter(s => s.ry === '0');
+  assert.ok(Math.min(...south.map(s => s.z)) - Math.max(...north.map(s => s.z)) - 1.5 >= 2.4, '中間的街至少 2.4 公尺寬');
+});

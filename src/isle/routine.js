@@ -12,6 +12,7 @@ import { warp, groundAt } from './terrain.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as weather from './weather.js';
+import * as nm from './nightmarket.js';
 import * as memo from './memo.js';
 import * as bond from './bond.js';
 import { I, S, save } from './state.js';
@@ -63,7 +64,9 @@ function places() {
     river: { water: [W(-18, 12), W(-14, 18), W(8, 27)] },
     loop: { route: [[1.6, 12], [1, 18], [0, 22], [-2.4, 31], [-9, 34], [-15, 38.5], [-17, 34], [-22, 33], [-26, 32], [-31, 30], [-33, 22], [-33, 10], [-24, 10], [-22, 6], [-16, 6], [-12, 6], [-5, 6], [1.6, 8]].map(([x, z]) => W(x, z)) },
     chess: { seats: st => !!st.chess },
-    picnic: { seats: st => !!st.picnic }
+    picnic: { seats: st => !!st.picnic },
+    nightMarket: { stand: nm.spots() },   // v9.4.0 週六晚上的港邊夜市：每一攤前面
+    nightBusk: { stand: nm.buskSpots() }
   };
   return PLACES;
 }

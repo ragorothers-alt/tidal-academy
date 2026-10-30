@@ -1,4 +1,4 @@
-/* 潮汐小島 · 潮汐夜市（數學：期望值與機率）：逛四個攤位，先算再決定。題目由 ev.js 產生。 */
+/* 潮汐小島 · 潮汐夜市（數學：期望值與機率）：逛六個攤位，先算再決定。題目由 ev.js 產生（週六晚上的港邊夜市在 nightmarket.js，用同一套題目）。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { S, save, practiced, dayKey } from './state.js';
@@ -28,7 +28,7 @@ export function open(paint) {
   };
   const finish = () => {
     const s = S(), d = dayKey(), first = s.marketDay !== d && right > 0, b = first ? right * 300 : 0; if (first) s.marketDay = d; s.bells += b; practiced('market', right, order.length); save(); if (right) miles.add('puzzle');
-    body.innerHTML = `<p class="mk-q"><b>逛完四攤，算對 ${right} / ${order.length} 題</b></p><p class="muted">${first ? `今日練習獎勵：${b} 鈴錢。` : (s.marketDay === d ? '今天的獎勵已經領過了，可以繼續練習。' : '答對至少一題就能領今天的獎勵，再試一次吧！')}</p>
+    body.innerHTML = `<p class="mk-q"><b>逛完 ${order.length} 攤，算對 ${right} / ${order.length} 題</b></p><p class="muted">${first ? `今日練習獎勵：${b} 鈴錢。` : (s.marketDay === d ? '今天的獎勵已經領過了，可以繼續練習。' : '答對至少一題就能領今天的獎勵，再試一次吧！')}</p>
       <p>期望值 = Σ（每種結果的值 × 它的機率）。算「淨得」時別忘了扣掉成本；不放回抽取時，第二次的總數要減 1。</p>`;
     const again = ui.el('button', 'btn gold', '再逛一圈'); again.type = 'button'; again.onclick = start; body.appendChild(again);
     paint && paint();

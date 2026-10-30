@@ -1680,3 +1680,13 @@ body.picking .act-btn { opacity: 0; transform: scale(.85); pointer-events: none;
 .works .wk-bar.mi i { background: linear-gradient(90deg, #5fb8e0 calc(var(--k) * 100%), #dbe9f2 0); }
 .works .wk-bar b { font-size: 12px; color: var(--ink-2); }
 .works .wk-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* v9.4.0 港邊夜市的集章卡 */
+.nm .nm-lead { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
+.nm .nm-lead small { display: block; margin-top: 4px; font-weight: 700; color: var(--ink-2); }
+.nm .nm-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0 10px; }
+.nm .nm-st { display: grid; justify-items: center; gap: 3px; padding: 8px 4px 6px; border-radius: 14px; border: 2px dashed #e6cfae; background: var(--cream-2); }
+.nm .nm-st i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-style: normal; font-size: 20px; background: #f3e7d3; }
+.nm .nm-st.on { border-style: solid; border-color: #e7a08f; background: #fff0ea; }
+.nm .nm-st.on i { background: #ffd9cc; }
+.nm .nm-st small { font-size: 11.5px; font-weight: 800; color: var(--ink-2); }
+.nm .nm-sum { margin: 0 0 8px; font-size: 13px; line-height: 1.6; }

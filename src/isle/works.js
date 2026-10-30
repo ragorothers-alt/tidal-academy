@@ -40,7 +40,7 @@ const milesPts = () => (S().miles || {}).pts || 0;
 
 /* ---------- 模型與招牌字 ---------- */
 /** 在模型的某個薄零件正面（模型的 −Z 那一面）貼一塊字；零件本身可能轉了 π，所以位置換算到模型的座標再貼 */
-function label(g, name, draw, w0 = 256) {
+export function label(g, name, draw, w0 = 256) {
   const m = g.getObjectByName(name); if (!m || !m.isMesh || typeof document === 'undefined') return null;
   m.geometry.computeBoundingBox(); const bb = m.geometry.boundingBox, w = bb.max.x - bb.min.x, h = bb.max.y - bb.min.y, d = bb.max.z - bb.min.z;
   g.updateMatrixWorld(true); const c3 = m.localToWorld(bb.getCenter(new THREE.Vector3())); g.worldToLocal(c3);
@@ -51,7 +51,7 @@ function label(g, name, draw, w0 = 256) {
   return { cv, t, draw: fn => { fn(c, cv.width, cv.height); t.needsUpdate = true; } };
 }
 const FONT = '"Microsoft JhengHei", "PingFang TC", system-ui, sans-serif';
-function words(c, w, h, bg, fg, lines) {
+export function words(c, w, h, bg, fg, lines) {
   c.fillStyle = bg; c.fillRect(0, 0, w, h); c.fillStyle = fg; c.textAlign = 'center'; c.textBaseline = 'middle';
   lines.forEach(([t, k, y]) => { c.font = `800 ${Math.round(h * k)}px ${FONT}`; c.fillText(t, w / 2, h * y, w * 0.9); });
 }

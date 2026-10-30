@@ -4,7 +4,7 @@ const D = () => ((globalThis.TA || {}).ISLE || {});
 /** 地點與活動在手機裡的名稱（routine.js 的 PLACES、ACTS 用同一組 key；資料測試也照這兩張表檢查） */
 export const PLACE_NAMES = { plazaTree: '廣場大樹下', fountain: '噴泉邊', plazaBench: '廣場長椅', market: '市集', pierEnd: '碼頭盡頭', pier: '碼頭', beach: '海灘', camp: '海灘營地', hotel: '飯店前',
   cape: '東岬', shrine: '山頂祠堂', spring: '高地泉水邊', mill: '水車磨坊', garden: '廣場花台', veggies: '菜園', flowers: '花田', board: '告示牌前', terrace: '學院台地', telescope: '觀星台',
-  river: '溪邊', loop: '環島步道', chess: '廣場棋桌', picnic: '南邊草地' };
+  river: '溪邊', loop: '環島步道', chess: '廣場棋桌', picnic: '南邊草地', nightMarket: '港邊夜市', nightBusk: '夜市東頭' };
 export const ACT_NAMES = { read: '讀書', cards: '翻單字卡', write: '寫詩', sketch: '畫地圖', violin: '拉小提琴', sing: '唱歌', tambourine: '打鈴鼓', tinker: '修東西', water: '澆花', observe: '觀察花草',
   look: '看雲看海', stars: '看星星', tea: '喝果茶', cook: '煮湯', stretch: '做早操', chess: '下棋', kite: '放風箏', picnic: '野餐', sunset: '看夕陽', shop: '逛攤位', jog: '慢跑' };
 export const gatherings = () => D().GATHERINGS || [];

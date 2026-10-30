@@ -57,7 +57,7 @@
     { id: 'pier_sunset', name: '碼頭看夕陽', icon: '🌅', days: [0, 1, 2, 3, 4, 5, 6], from: 17, to: 18.25, place: 'pierEnd',
       byDay: { 0: ['chinese', 'geography'], 1: ['chinese', 'earth'], 2: ['english', 'biology'], 3: ['geography', 'physics'], 4: ['math', 'chemistry'], 5: ['civics', 'chinese'], 6: ['earth', 'english', 'biology'] },
       act: 'sunset', subj: ['earth', 'physics'] },
-    { id: 'tree_concert', name: '大樹下合奏', icon: '🎻', days: [3, 6], from: 19, to: 20, place: 'plazaTree',
+    { id: 'tree_concert', name: '大樹下合奏', icon: '🎻', days: [3], from: 19, to: 20, place: 'plazaTree',
       who: ['math', 'english', 'chemistry'], act: { math: 'violin', english: 'sing', chemistry: 'tambourine' }, subj: ['math', 'physics'] },
     { id: 'chess', name: '下棋', icon: '♟️', days: [2, 4], from: 15, to: 16.5, place: 'chess',
       who: ['civics', 'physics'], act: 'chess', subj: ['math', 'civics'] },
@@ -66,6 +66,10 @@
     { id: 'stargaze', name: '觀星會', icon: '🔭', days: [5, 6], from: 20.5, to: 22, place: 'telescope',
       who: ['earth', 'physics', 'chinese'], act: 'stars', subj: ['earth'] },
     { id: 'picnic', name: '野餐', icon: '🧺', days: [6], from: 11, to: 12.75, place: 'picnic',
-      who: ['chemistry', 'biology', 'math'], act: 'picnic', subj: ['chemistry', 'biology'] }
+      who: ['chemistry', 'biology', 'math'], act: 'picnic', subj: ['chemistry', 'biology'] },
+    { id: 'night_market', name: '逛港邊夜市', icon: '🏮', days: [6], from: 19, to: 21, place: 'nightMarket',   // v9.4.0 週六晚上的夜市（攤位 18:00–23:00）
+      who: ['geography', 'biology', 'civics'], act: 'shop', subj: ['math'] },
+    { id: 'night_busk', name: '夜市街頭演奏', icon: '🎻', days: [6], from: 19, to: 20, place: 'nightBusk',   // 週六的合奏搬到夜市東頭
+      who: ['math', 'english', 'chemistry'], act: { math: 'violin', english: 'sing', chemistry: 'tambourine' }, subj: ['math', 'physics'] }
   ];
 })(typeof window !== 'undefined' ? window : globalThis);
