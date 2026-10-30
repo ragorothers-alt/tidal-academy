@@ -1,4 +1,5 @@
-/* 潮汐小島 · 水岸效果：沙灘浪花（一層層白浪推上岸再退去，留下濕沙）、沙灘腳印、水面漣漪（落水、魚影、下雨）。 */
+/* 潮汐小島 · 水岸效果：沙灘浪花（一層層白浪推上岸再退去，留下濕沙）、沙灘腳印、水面漣漪（落水、魚影、下雨）。
+   v8.9.1 藍眼淚的夜晚（bluetears.js 設 uBlue）：碎浪與浪花前緣一點一點發出藍光，海邊濕沙上的腳印也亮一下。 */
 import * as THREE from 'three';
 import { scene, U, TERRAIN } from './engine.js';
 import { N, C, T, tileAt, groundAt, seaMesh, waterAt, waterY, warp } from './terrain.js';
@@ -8,14 +9,14 @@ const BENDV = `uniform float uCurve; uniform float uBendF;
   vec4 bendPos(vec4 mv){ float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve; return mv; }`;
 
 /* ---------- 沙灘浪花 ---------- */
-const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: { value: 0.1 }, uNight: { value: 0 } };
+const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: { value: 0.1 }, uNight: { value: 0 }, uBlue: { value: 0 } };
 const waveMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: waveU,
   vertexShader: `${BENDV}
     attribute float side; attribute float along; uniform float uSea; varying float vS; varying float vA;
     void main(){ vS = side; vA = along; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02;   // 水線與海面側貼著海平面（隨潮汐升降）
       vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`,
-  fragmentShader: `uniform float uTime; uniform float uNight; varying float vS; varying float vA;
+  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; varying float vS; varying float vA;
     float h(float x){ return fract(sin(x * 91.7) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -58,6 +59,11 @@ const waveMat = new THREE.ShaderMaterial({
         c = mix(c, vec4(1.0, 1.0, 1.0, 0.6), max(foam, bubbles));   // v8.7 泡沫淡一點（以前 0.85）
       }
       c.rgb *= mix(1.0, 0.45, uNight);
+      if (uBlue > 0.001) {   // 藍眼淚：浪花裡的夜光藻被拍打就發光——一點一點閃，泡沫越濃越亮；亮度超過 1，泛光讓它真的像在發光（濕沙與水膜不亮）
+        float spk = vn(vec2(a * 13.0 + t * 0.7, abs(vS) * 46.0 - t * 1.9)), k = uBlue * smoothstep(0.2, 0.5, c.a);
+        c.rgb = mix(c.rgb, vec3(0.05, 0.45, 1.0) * (1.5 + 2.8 * smoothstep(0.45, 0.95, spk)), k);
+        c.a = mix(c.a, min(1.0, c.a * (0.95 + 0.9 * spk)), k);
+      }
       gl_FragColor = c;
     }`
 });
@@ -163,10 +169,12 @@ const decalVert = `${BENDV}
   void main(){ vUv = uv; vAlpha = aAlpha; vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`;
 const decalFrag = `uniform sampler2D map; uniform float uNight; varying float vAlpha; varying vec2 vUv;
   void main(){ vec4 t = texture2D(map, vUv); gl_FragColor = vec4(t.rgb * mix(1.0, 0.5, uNight), t.a * vAlpha); }`;
-function pool(tex, n) {
+const glowFrag = `uniform sampler2D map; varying float vAlpha; varying vec2 vUv;
+  void main(){ float a = texture2D(map, vUv).a * vAlpha; gl_FragColor = vec4(vec3(0.06, 0.48, 1.0) * 2.4 * a, a); }`;   // v8.9.1 藍眼淚的腳印：加法混色的藍光
+function pool(tex, n, glow) {
   const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), alpha = new Float32Array(n);
   geo.setAttribute('aAlpha', new THREE.InstancedBufferAttribute(alpha, 1));
-  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { map: { value: tex }, uCurve: U.uCurve, uBendF: U.uBendF, uNight: waveU.uNight }, vertexShader: decalVert, fragmentShader: decalFrag });
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: { map: { value: tex }, uCurve: U.uCurve, uBendF: U.uBendF, uNight: waveU.uNight }, vertexShader: decalVert, fragmentShader: glow ? glowFrag : decalFrag });
   const im = new THREE.InstancedMesh(geo, mat, n); im.frustumCulled = false; im.renderOrder = 3; scene.add(im);
   const items = Array.from({ length: n }, () => ({ life: 0, max: 1, x: 0, y: -99, z: 0, r: 0, s: 1, grow: 0 }));
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -185,8 +193,12 @@ function pool(tex, n) {
     }
   };
 }
-let feet = null, snowFeet = null, rings = null, stepAcc = 0, stepSide = 1, lastX = null, lastZ = null, rainAcc = 0, fishAcc = 0;
-export function init() { buildShore(); feet = pool(footTex, 60); snowFeet = pool(snowFootTex, 90); rings = pool(ringTex, 48); }
+let feet = null, snowFeet = null, rings = null, glowFeet = null, stepAcc = 0, stepSide = 1, lastX = null, lastZ = null, rainAcc = 0, fishAcc = 0;
+export function init() { buildShore(); feet = pool(footTex, 60); snowFeet = pool(snowFootTex, 90); rings = pool(ringTex, 48); glowFeet = pool(footTex, 24, true); }
+/** v8.9.1 藍眼淚的亮度（0–1，bluetears.js 每格設定） */
+export function setBlue(k) { waveU.uBlue.value = k; }
+/** 離海很近的濕沙（浪打得到的地方） */
+const wetSand = (x, z) => { for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; if (tileAt(x + Math.sin(a) * 1.3, z + Math.cos(a) * 1.3) === -1) return true; } return false; };
 /** 在水面上產生一圈漣漪 */
 export function ripple(x, z, size, y) {
   if (!rings) return;
@@ -206,6 +218,7 @@ export function update(dt, player, opt) {
       if (stepAcc > 0.42) {
         stepAcc = 0; stepSide = -stepSide; const a = Math.atan2(p.x - lastX, p.z - lastZ);
         (onSnow ? snowFeet : feet).add(p.x + Math.cos(a) * 0.1 * stepSide, groundAt(p.x, p.z) + 0.012, p.z - Math.sin(a) * 0.1 * stepSide, a, onSnow ? 0.26 : 0.24, onSnow ? 16 : 8, 0);
+        if (waveU.uBlue.value > 0.15 && !onSnow && wetSand(p.x, p.z)) glowFeet.add(p.x + Math.cos(a) * 0.1 * stepSide, groundAt(p.x, p.z) + 0.016, p.z - Math.sin(a) * 0.1 * stepSide, a, 0.3, 2.4, 0.4);   // 踩在藍眼淚的濕沙上：腳印亮一下再淡去
       }
     }
   }
@@ -217,5 +230,5 @@ export function update(dt, player, opt) {
   }
   // 魚影：偶爾在魚的位置冒一圈
   if (opt.fish && opt.fish.length) { fishAcc += dt; if (fishAcc > 1.2) { fishAcc = 0; const f = opt.fish[Math.floor(Math.random() * opt.fish.length)]; if (f && f.m && f.m.visible) ripple(f.m.position.x, f.m.position.z, 0.35); } }
-  feet.update(dt); snowFeet.update(dt); rings.update(dt);
+  feet.update(dt); snowFeet.update(dt); rings.update(dt); glowFeet.update(dt);
 }

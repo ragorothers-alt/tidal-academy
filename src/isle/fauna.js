@@ -3,6 +3,7 @@
    模型在 data/faunamodels.js（程式化建模）；海豚與鯨魚出現在離玩家最近的那一側外海，比較容易看到。 */
 import * as THREE from 'three';
 import * as nav from './nav.js';
+import { glow as blueGlow } from './bluetears.js';
 import { scene, bend } from './engine.js';
 import { modelClone } from './props.js';
 import { warp } from './terrain.js';
@@ -20,7 +21,7 @@ const fx = [];   // 水花圈：{ mesh, t, life }
 let ringGeo = null;
 function splash(x, y, z, size) {   // 每個水花圈各自一個材質（各自淡出），和海面一樣套地平線彎曲
   if (!ringGeo) ringGeo = new THREE.RingGeometry(0.82, 1, 24).rotateX(-Math.PI / 2);
-  const m = new THREE.Mesh(ringGeo, bend(new THREE.MeshBasicMaterial({ color: '#f4fbff', transparent: true, opacity: 0.7, depthWrite: false })));
+  const m = new THREE.Mesh(ringGeo, bend(new THREE.MeshBasicMaterial({ color: blueGlow() > 0.2 ? '#62cbff' : '#f4fbff', transparent: true, opacity: blueGlow() > 0.2 ? 0.95 : 0.7, depthWrite: false })));   // v8.9.1 藍眼淚的夜晚：水花是藍色的
   m.position.set(x, y + 0.02, z); m.scale.setScalar(size * 0.3); m.renderOrder = 3; scene.add(m);
   fx.push({ mesh: m, t: 0, life: 1.1, size });
 }

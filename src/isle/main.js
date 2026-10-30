@@ -65,6 +65,8 @@ import * as walldress from './walldress.js';
 import * as motes from './motes.js';
 import * as grass from './grass.js';
 import * as waves from './waves.js';
+import * as bluetears from './bluetears.js';
+import * as harbor from './harbor.js';
 import * as seasons from './seasons.js';
 import * as shake from './shake.js';
 import * as written from './written.js';
@@ -219,6 +221,7 @@ routine.init({ ground, villagers, player, slotPos: (st, k) => slotPos(st, k), se
 fauna.init({ ground, player, villagers, simT: () => simT, hour: () => hourOverride ?? nowHour(), talking: () => talking, isWater: (x, z) => isWater(x, z), waterY: (x, z) => waterY(x, z) });
 /** 新加的島上生活（作息、動物）出錯時只停用那一塊並記一次警告，不讓整個主迴圈停下來 */
 const offMods = {};
+try { harbor.init(); } catch (e) { offMods.harbor = true; console.warn('港口出錯，先停用：', e); }   // v8.9.1 碼頭的燈、船與浮標
 function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
@@ -1943,6 +1946,7 @@ $('lv').onclick = () => { if (!ui.dialogOpen()) openProfile(); };
 const clock = new THREE.Clock();
 const headPos = new THREE.Vector3(), headPos2 = new THREE.Vector3();
 const sunTmp = { f: new THREE.Vector3(), v: new THREE.Vector3(), g: new THREE.Vector3(), p: new THREE.Vector3() };
+const MIST_W = new THREE.Color('#ffffff');   // v8.9.1 晨霧的顏色往白拉
 const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0, talkFor = null, talkYaw = 0, talkNear = 0, talkSpeakT = 0; const talkMid = new THREE.Vector3(), talkHead = new THREE.Vector3(), talkDepth = new THREE.Vector3(), talkDir = new THREE.Vector3();
 let zoom = 1, puffT = 0, saveT = 0, hudT = 0;
 /** 走路與奔跑的速度（公尺／秒，v6.84.1 起慢一成多）；pace 是現在的速度：起步時幾分之一秒加速到位，搖桿輕推時走得慢 */
@@ -2197,7 +2201,7 @@ function tick(fixed) {
   // 島民
   nearV = null; let best = 2.2;
   const hourNow = hourOverride ?? nowHour();
-  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t));
+  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t));
   mindCtx.hour = hourNow; mind.update(simT, villagers.filter(v => thinks(v) && !v.away && v.mesh.visible), mindCtx);
   const [plx, ply] = screenOf(player, 1.6), plD = camera.position.distanceTo(player.position);   // 角色頭上在畫面的位置：後面島民的名牌疊上來時淡一點
   villagers.forEach(v => {
@@ -2400,6 +2404,14 @@ function tick(fixed) {
   U.uSunV.value.copy(dir).transformDirection(camera.matrixWorldInverse); U.uRimCol.value.copy(sun.color);
   U.uRim.value = (0.28 + golden * 0.4) * fxClear * (1 - night);   // 白天也有側逆光的亮邊
   U.uShade.value = fxClear * (1 - night) * (1 - golden * 0.6);
+  {   // v8.9.1 晨霧：秋冬春的清晨比較常有（每天固定，同一天重新整理也一樣），4:30 起漸濃、6 點最濃、8:30 前散去；下雨、颱風天沒有
+    const h = hourOverride ?? nowHour(), d = simDate(), r = (Math.sin((d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate()) * 12.9898) * 43758.5453) % 1, r1 = Math.abs(r);
+    const chance = [0.7, 0.65, 0.55, 0.5, 0.4, 0.35, 0.3, 0.3, 0.45, 0.65, 0.8, 0.75][d.getMonth()], amt = r1 < chance ? 0.6 + 0.4 * ((r1 * 7.13) % 1) : 0;
+    const tk = THREE.MathUtils.smoothstep(h, 4.3, 5.8) * (1 - THREE.MathUtils.smoothstep(h, 7.2, 8.6)), wet = weather.raining() || weather.typhoon() ? 0 : 1;
+    U.uMist.value.x = 0.5 * amt * tk * wet * (room.inside ? 0 : 1);
+    U.uMistCol.value.copy(scene.fog.color).lerp(MIST_W, 0.4).lerp(sun.color, 0.12);   // 霧是帶一點晨光的白
+  }
+  { const c = U.uCloud.value, w = 0.06 * (0.7 + 0.3 * U.uWind.value) * dt; c.x = U.uShade.value * 0.5; c.y += w; c.z += w * 0.37; }   // v8.9.1 雲影：晴天的白天才有，風大時飄得快（約每秒 1.5 公尺）
   U.uTrans.value = fxClear * (1 - night) * (0.55 + golden * 0.75);   // 葉片透光：晴天有，黃金時段的逆光最明顯
   motes.update(dt, t, look, golden, night, fxClear);
   waves.update(dt, player, { night, rain: rainVis, inAir: jump.air, fish: life.fishShadows && life.fishShadows() });

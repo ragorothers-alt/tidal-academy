@@ -620,3 +620,20 @@ test('作息台詞：每位導師做的每件事、每場團體活動、揮手�
   assert.ok(L.cats.names.orange && L.cats.names.tux, '貓的名字');
   ok(L.cats.pet, 3, 'cats.pet'); L.cats.pet.forEach(s => assert.ok(s.includes('{cat}'), '摸貓台詞要有 {cat}：' + s));
 });
+
+/* v8.9.1 港口的船與燈：harbor.js 找得到的零件都在、原點在水線（船與浮標）或地面（燈柱）、面數在預算內 */
+test('港口模型：命名零件、原點與面數', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/isle/data/harbormodels.js'), 'utf8'), cx, { filename: 'harbormodels.js' });
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial({ color: '#ffe9cc' }) };
+  const need = { rowboat: [['oarL', 'oarR', 'seat'], 2500, true], fishing_boat: [['lantern', 'light'], 6000, true], pier_lamp: [['light'], 1200, false], buoy: [['light'], 800, true] };
+  for (const [key, [parts, budget, floats]] of Object.entries(need)) {
+    const g = cx.TA.ISLE.HARBORMODELS[key](THREE, kit); g.updateMatrixWorld(true);
+    parts.forEach(n => assert.ok(g.getObjectByName(n), `${key} 少了 ${n}`));
+    let tris = 0; g.traverse(o => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+    assert.ok(tris <= budget, `${key} 面數 ${tris} 超過 ${budget}`);
+    const b = new THREE.Box3().setFromObject(g);
+    if (floats) assert.ok(b.min.y < 0 && b.max.y > 0, `${key} 的原點要在水線（一部分在水面下）`); else assert.ok(Math.abs(b.min.y) < 0.02, `${key} 的原點要在地面`);
+  }
+});

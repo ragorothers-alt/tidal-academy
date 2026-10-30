@@ -424,11 +424,53 @@ water.sea = bend(new THREE.MeshStandardMaterial({ color: '#8bb9cf', transparent:
 export const deepMesh = (() => { const g = new THREE.PlaneGeometry(280, 280, 70, 70); g.rotateX(-Math.PI / 2); const m = new THREE.Mesh(g, bend(new THREE.MeshStandardMaterial({ color: '#0c4a72', roughness: 1, fog: false }))); m.position.y = -9; m.raycast = () => {}; scene.add(m); return m; })();
 // 海面每個頂點量一次水深（aDepth，海面的透明度用）：地形外沒有海床，當成很深
 export const seaMesh = (() => { const g = new THREE.PlaneGeometry(320, 320, 160, 160); g.rotateX(-Math.PI / 2); { const P = g.attributes.position, dep = new Float32Array(P.count); for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i); dep[i] = Math.abs(x) < C - 1 && Math.abs(z) < C - 1 ? Math.max(0, 0.02 - groundAt(x, z)) : 2; } g.setAttribute('aDepth', new THREE.BufferAttribute(dep, 1)); } const m = new THREE.Mesh(g, water.sea); m.position.y = 0.02; m.receiveShadow = true; m.renderOrder = -10; scene.add(m); return m; })();   // renderOrder：透明物裡最先畫（post.js 的第二階段）
+/* v8.9.1 河水往下游流：從出海口沿著河道往上游量距離（BFS），每格的流向是往距離變小的方向（再和鄰格平均兩次，轉彎順一點）；
+   窄的地方流得快一點，出海口放慢；瀑布落下的地方、踏石、小溪匯進大河的地方有白浪（rapid 0–1）；池塘是靜水。
+   格子角落記下世界座標的流速向量（公尺／秒，已套上地形扭曲）與白浪程度，河面頂點在格子裡雙線性內插（aFlow），著色器讓水紋與白沫往下游漂 */
+const FLOW_AT = (() => {
+  const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]], D8 = D4.concat([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
+  const W = new Uint8Array(N * N), dist = new Int32Array(N * N).fill(-1), q = [];
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) { const t = T(x, z); W[z * N + x] = (t === 3 || t === 6) && !pondOf(x, z) ? 1 : 0; }
+  const isW = (x, z) => x >= 0 && z >= 0 && x < N && z < N && W[z * N + x] === 1;
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (W[z * N + x] && D4.some(([a, b]) => T(x + a, z + b) === -1)) { dist[z * N + x] = 0; q.push(z * N + x); }
+  for (let h = 0; h < q.length; h++) { const k = q[h], x = k % N, z = (k - x) / N; for (const [a, b] of D8) { const nx = x + a, nz = z + b; if (isW(nx, nz) && dist[nz * N + nx] < 0) { dist[nz * N + nx] = dist[k] + 1; q.push(nz * N + nx); } } }   // 八方向：小溪是斜斜地接進大河的
+  let dx = new Float32Array(N * N), dz = new Float32Array(N * N);
+  for (const k of q) {
+    const x = k % N, z = (k - x) / N; let gx = 0, gz = 0;
+    for (const [a, b] of D8) { const n = (z + b) * N + x + a; if (!isW(x + a, z + b) || dist[n] < 0) continue; const w = (dist[k] - dist[n]) / Math.hypot(a, b); gx += a * w; gz += b * w; }
+    const L = Math.hypot(gx, gz); if (L > 1e-6) { dx[k] = gx / L; dz[k] = gz / L; }
+  }
+  for (let pass = 0; pass < 2; pass++) {   // 和鄰格平均：兩格寬的河在轉彎處不會一格一格地折
+    const nx = new Float32Array(N * N), nz = new Float32Array(N * N);
+    for (const k of q) { const x = k % N, z = (k - x) / N; let sx = dx[k] * 2, sz = dz[k] * 2; for (const [a, b] of D8) { const n = (z + b) * N + x + a; if (isW(x + a, z + b) && dist[n] >= 0) { sx += dx[n]; sz += dz[n]; } } const L = Math.hypot(sx, sz); if (L > 1e-6) { nx[k] = sx / L; nz[k] = sz / L; } }
+    dx = nx; dz = nz;
+  }
+  const rapid = new Float32Array(N * N), speed = new Float32Array(N * N);
+  const fall = (PLAN ? PLAN.falls : []).map(f => { const d = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] }[f.facing] || [1, 0]; return [f.x + d[0] * 1.4, f.z + d[1] * 1.4]; });
+  for (const k of q) {
+    const x = k % N, z = (k - x) / N, px = x - C + 0.5, pz = z - C + 0.5; let r = 0;
+    fall.forEach(([fx, fz]) => { r = Math.max(r, 1 - Math.hypot(px - fx, pz - fz) / 3); });   // 瀑布落下的水潭
+    if (isFord(x, z)) r = Math.max(r, 0.75); else if (D4.some(([a, b]) => isFord(x + a, z + b))) r = Math.max(r, 0.35);   // 水從踏石之間擠過去
+    if (D4.some(([a, b]) => isW(x + a, z + b) && isCreek(x, z) !== isCreek(x + a, z + b))) r = Math.max(r, 0.55);   // 小溪從高一點的溪床流進大河
+    let n9 = 0; for (const [a, b] of D8) if (isW(x + a, z + b)) n9++;
+    rapid[k] = r; speed[k] = (isCreek(x, z) ? 0.3 : 0.4) * (n9 <= 3 ? 1.25 : n9 <= 5 ? 1.1 : 1) * (dist[k] < 3 ? 0.5 + dist[k] / 6 : 1) * (1 + r * 0.9);
+  }
+  const M1 = N + 1, out = new Float32Array(M1 * M1 * 3);
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    let fx = 0, fz = 0, r = 0, n = 0;
+    for (const [a, b] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const x = i + a, z = j + b; if (!isW(x, z)) continue; const k = z * N + x; if (dist[k] < 0) continue; fx += dx[k] * speed[k]; fz += dz[k] * speed[k]; r += rapid[k]; n++; }
+    if (!n) continue;
+    fx /= n; fz /= n; r /= n;
+    const X = i - C, Z = j - C, [wx, wz] = warp(X, Z), [ax, az] = warp(X + fx * 0.5, Z + fz * 0.5), o = (j * M1 + i) * 3;   // 流向也跟著地形扭曲
+    out[o] = (ax - wx) / 0.5; out[o + 1] = (az - wz) / 0.5; out[o + 2] = r;
+  }
+  return (x, z, u, v) => { const o = (a, b) => ((z + b) * M1 + x + a) * 3, k00 = o(0, 0), k10 = o(1, 0), k01 = o(0, 1), k11 = o(1, 1), f = c => (out[k00 + c] * (1 - u) + out[k10 + c] * u) * (1 - v) + (out[k01 + c] * (1 - u) + out[k11 + c] * u) * v; return [f(0), f(1), f(2)]; };
+})();
 water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, transparent: true, opacity: 0.5, roughness: 0.26 }), 'water');   // 清透一點，看得到河床上的焦散光紋
 /* 河面：每格細分成 4×4，靠岸的地方顏色淺、比較透明而且有流動的白沫（頂點顏色的 alpha 是「離岸多近」），
    河中央是較深的藍；流進沙灘或大海的那幾格，水面順著往下斜進海裡，不會浮在沙灘上 */
 {
-  const P = [], CL = [], PD = [], S = 4, isW = (x, z) => T(x, z) === 3 || T(x, z) === 6;
+  const P = [], CL = [], PD = [], FL = [], S = 4, isW = (x, z) => T(x, z) === 3 || T(x, z) === 6;
   const deep = new THREE.Color('#6998b1'), shal = new THREE.Color('#9acbc7'), cDeep = new THREE.Color('#8bb9c4'), cShal = new THREE.Color('#b0c8dd'), col = new THREE.Color();   // 青綠透亮的河水；小溪更淺更亮
   const pDeep = new THREE.Color('#2f6f72'), pShal = new THREE.Color('#85b7a2');   // 池塘（v7.4）：池心深青綠、岸邊淺綠
   const cornerY = (cx, cz, y0) => { for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const t = T(cx + dx, cz + dz); if (t === 0 || t === -1) return 0.3; } return y0; };
@@ -444,7 +486,7 @@ water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColo
       if (dLN) d = Math.min(d, Math.hypot(u, v)); if (dRN) d = Math.min(d, Math.hypot(1 - u, v)); if (dLS) d = Math.min(d, Math.hypot(u, 1 - v)); if (dRS) d = Math.min(d, Math.hypot(1 - u, 1 - v));
       const e = 1 - THREE.MathUtils.smoothstep(d, 0, 0.42), y = (h00 * (1 - u) + h10 * u) * (1 - v) + (h01 * (1 - u) + h11 * u) * v;
       const pk = pd ? pondK(pd, X + u, Z + v) : 0;   // aPond：0 = 不是池塘；池塘是 0.12（岸邊）到 1（池心），著色器依它加深、少畫光網與白沫
-      P.push(X + u, y, Z + v); if (isCreek(x, z)) col.copy(cDeep).lerp(cShal, 0.25 + e * 0.6); else if (pd) col.copy(pDeep).lerp(pShal, Math.max(e, 1 - pk)); else col.copy(deep).lerp(shal, e); CL.push(col.r, col.g, col.b, e); PD.push(pd ? 0.12 + 0.88 * pk : 0);
+      P.push(X + u, y, Z + v); if (isCreek(x, z)) col.copy(cDeep).lerp(cShal, 0.25 + e * 0.6); else if (pd) col.copy(pDeep).lerp(pShal, Math.max(e, 1 - pk)); else col.copy(deep).lerp(shal, e); CL.push(col.r, col.g, col.b, e); PD.push(pd ? 0.12 + 0.88 * pk : 0); FL.push(...(pd ? [0, 0, 0] : FLOW_AT(x, z, u, v)));
     };
     for (let j = 0; j < S; j++) for (let i = 0; i < S; i++) {
       const u0 = i / S, u1 = (i + 1) / S, v0 = j / S, v1 = (j + 1) / S;
@@ -460,7 +502,7 @@ water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColo
     for (const k of [0, 1]) P[i + k * 2] += (a[k] * (1 - u) + b[k] * u) * (1 - v) + (c[k] * (1 - u) + e[k] * u) * v;
   }
   for (let i = 0; i < P.length; i += 3) { const [wx, wz] = warp(P[i], P[i + 2]); P[i] = wx; P[i + 2] = wz; }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CL, 4)); g.setAttribute('aPond', new THREE.Float32BufferAttribute(PD, 1)); g.computeVertexNormals();
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CL, 4)); g.setAttribute('aPond', new THREE.Float32BufferAttribute(PD, 1)); g.setAttribute('aFlow', new THREE.Float32BufferAttribute(FL, 3)); g.computeVertexNormals();
   { const rm = new THREE.Mesh(g, water.river); rm.renderOrder = -10; scene.add(rm); }
 }
 export const foamMat = bend(new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthWrite: false }));

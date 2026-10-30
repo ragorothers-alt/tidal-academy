@@ -2,7 +2,7 @@
 
 > 把每一題，都變成照亮海面的光。
 
-離線、免帳號的學測備戰遊戲，目前版本 **8.9.0**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
+離線、免帳號的學測備戰遊戲，目前版本 **8.9.1**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
 
 **線上版**：<https://ragorothers-alt.github.io/tidal-academy/>——推上 `main` 時，GitHub Actions 會跑測試、執行 `python build.py`，把 `dist/` 發布到 GitHub Pages（`.github/workflows/pages.yml`）。進度存在各自瀏覽器的 localStorage；線上版沒有 laya 轉送，島民改用本機的作息決定要做什麼。
 
@@ -98,7 +98,7 @@
 
 **手機與平板：** 左半邊按住拖曳出現搖桿，輕推慢走、推遠奔跑；右半邊拖曳轉視角，兩指縮放，跳躍與互動用畫面按鈕，裝潢時有旋轉、結束等擺放按鈕。直向時工具列在左側較高處，左下角留給搖桿；矮螢幕橫向時改放下方中央。小地圖縮放與任務欄收合有較大的觸控範圍，進入住家、圖書館、博物館時收起小地圖。長選單可在選項區內捲動；小螢幕在對話裡作答（選擇題、選填題）與季節橫幅顯示時通知先排隊，船員登記完成前也暫緩通知。
 
-**畫面：** 動森式低角度鏡頭與滾筒地平線、程式生成的積雲與天空、手繪感草地與岩層材質、隨風擺動的草叢、葉片紋理、水光、環境光遮蔽與景深、遮擋鏤空、低多邊形卡通風、現實時間日夜（夜晚窗戶與路燈亮起、星空）、柔和陰影、黃昏的金色逆光（泛光、光束、太陽光暈、逆光輪廓、浮塵與螢火蟲，可在設定關閉）、帶魔法學院風的人形 3D 角色、仍採 Q 版造型的旅客，以及涵蓋 189 種圖鑑條目的像素圖示。系統開啟「減少動態效果」時，進出建築用短淡入、拍照不白閃、物品不飛入口袋，循環動畫只播一次。
+**畫面：** 動森式低角度鏡頭與滾筒地平線、程式生成的積雲與天空、手繪感草地與岩層材質、隨風擺動的草叢、葉片紋理、水光、環境光遮蔽與景深、遮擋鏤空、低多邊形卡通風、現實時間日夜（夜晚窗戶與路燈亮起、星空）、柔和陰影、黃昏的金色逆光（泛光、光束、太陽光暈、逆光輪廓、浮塵與螢火蟲，可在設定關閉）、往下游流的河水（踏石之間、瀑布下、小溪匯進大河的地方有白浪）、晴天隨風飄過整座島的雲影、清晨貼著低處的晨霧、春夏夜晚發藍光的浪花（藍眼淚）、夜裡亮起燈柱與燈影的碼頭、掃過海面的燈塔光束、帶魔法學院風的人形 3D 角色、仍採 Q 版造型的旅客，以及涵蓋 189 種圖鑑條目的像素圖示。系統開啟「減少動態效果」時，進出建築用短淡入、拍照不白閃、物品不飛入口袋，循環動畫只播一次。
 
 ## 學習模式（都在島上）
 
@@ -155,8 +155,8 @@ src/isle/      engine 渲染與日夜 · terrain 地形 · props 場景物件 ·
                stars 觀星 · astro 天文與潮汐計算（純函式）· homevisit 島民作客 · photo 拍照與相簿
                diy 手作 · tide 潮汐與潮池 · spirit 潮靈 · report 學習週報 · wardrobe 服裝 · miles 潮汐里程 · cooking 料理 · rocks 礦物鑑定 · balloon 熱氣球 · trip 神秘島 · focus 專注時光 · planner 讀書計畫 · words 單字謎 · mathgen 數學題產生器（純函式，目前未接入石碑）· tablets 數學石碑（每日選數學題庫） · quizcup 快問快答與模考走勢 · museum 博物館展廳 · cram 考前衝刺
                hall 潮汐考場（模擬考、練習組、結果頁、錯題本、成績統計）· voyage 航海圖/單元試煉/每日潮汐/激流衝刺/首領戰 · lexicon 單字燈塔 · lexq 單字出題（純函式）· profile 我的檔案與船員登記 · challenge 連續挑戰與主動出題 · feel 手感 · main 主程式
-               nav 島上找路（格子地圖 + A*）· schedule 島民作息表（純函式）· routine 島民照作息做事、團體活動 · fauna 島上的動物（貓、海豚、鯨魚、跳魚）· actors 人形模型的動作與做事姿勢
-src/isle/data/ islandplan 島嶼規劃（tools/planpack.cjs 從 tools/island_plan.json 產生）· bldmodels*/lmmodels*/propmodels*/toolmodels/furnmodels 程式化模型（img2threejs 重建）· creatures 圖鑑 · villagers 島民 · lines 委託/來信/活動台詞 · furniture 家具 · homes 島民的家/閒聊/好感度事件 · guests 旅客/館員/圖書館/評價 · bday 生日與喜好 · lines2 大賽/弱點委託/互贈禮物/搬遷台詞 · lines3 作客台詞 · stars 星表與流星雨 · sealife 潮間帶生物 · lines4 夜祭台詞 · foods 料理 · minerals 礦物 · lines5 颱風與熱氣球台詞 · lines6 冬季節慶與考前台詞 · lines7 雨天/初次共同經歷/外出紙條 · contrast 易混題對照 · museum_themes 小特展主題 · hall_visits 來館台詞 · icons 像素圖示 · routines 作息與團體活動 · lines8 作息/團體活動/揮手/貓的台詞 · faunamodels 動物模型 · handprops 手持道具 · actscene 棋桌、野餐桌、風箏、湯鍋
+               nav 島上找路（格子地圖 + A*）· schedule 島民作息表（純函式）· routine 島民照作息做事、團體活動 · fauna 島上的動物（貓、海豚、鯨魚、跳魚）· actors 人形模型的動作與做事姿勢 · bluetears 藍眼淚 · harbor 碼頭的燈、船、浮標與燈塔光束
+src/isle/data/ islandplan 島嶼規劃（tools/planpack.cjs 從 tools/island_plan.json 產生）· bldmodels*/lmmodels*/propmodels*/toolmodels/furnmodels 程式化模型（img2threejs 重建）· creatures 圖鑑 · villagers 島民 · lines 委託/來信/活動台詞 · furniture 家具 · homes 島民的家/閒聊/好感度事件 · guests 旅客/館員/圖書館/評價 · bday 生日與喜好 · lines2 大賽/弱點委託/互贈禮物/搬遷台詞 · lines3 作客台詞 · stars 星表與流星雨 · sealife 潮間帶生物 · lines4 夜祭台詞 · foods 料理 · minerals 礦物 · lines5 颱風與熱氣球台詞 · lines6 冬季節慶與考前台詞 · lines7 雨天/初次共同經歷/外出紙條 · contrast 易混題對照 · museum_themes 小特展主題 · hall_visits 來館台詞 · icons 像素圖示 · routines 作息與團體活動 · lines8 作息/團體活動/揮手/貓的台詞 · faunamodels 動物模型 · handprops 手持道具 · actscene 棋桌、野餐桌、風箏、湯鍋 · harbormodels 漁船、小划船、碼頭燈柱、浮標
 src/core/      registry 科目與題庫註冊 · util · store 存檔 · learn 學習引擎 · creature 首領海獸繪製
 src/data/      各科題庫與單字（格式見 tools/CONTENT_GUIDE.md）
 vendor/three/  three.js r160（MIT）
