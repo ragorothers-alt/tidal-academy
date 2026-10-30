@@ -21,6 +21,8 @@ export const trees = [], rocks = [], flowerSpots = [], homes = [];
 export const seats = [];
 /** 在野外補種一小株花（西部高地的野花草原用；flowers 區塊建立後才可用） */
 export let wildFlowers = () => {};
+/** 把某塊地上的野花藏起來（縮成 0）：hit(x, z) 為真的那幾株；後來蓋的公共建設用 */
+export let clearFlowers = () => {};
 /** 廣場中心（規劃的廣場，套上地形扭曲）：島民聚會、節慶裝飾、雪人都以這裡為準 */
 export const PLAZA = warp(PLAN.sites.plaza.x, PLAN.sites.plaza.z);
 export const SITES = {};
@@ -1082,6 +1084,7 @@ PLAN.landmarks.forEach(l => {
   else if (l.kind === 'seaplane') SITES.seaplane = { x, z };
 });
 BRIDGES.forEach(bridgeModel);
+export const addBridgeModel = br => bridgeModel(br);   // v9.2.1 公共建設的橋（玩的時候才完工，terrain.js 的 addWorkBridge 先登記）
 STAIRS.forEach(stairModel);
 roads(); fordStones(); plazaPaving(); rimStones(); decorations(); dressing();
 PLAN.props.lamps.forEach(([x, z]) => { const [wx, wz] = warp(x, z); lamp(wx, wz); });
@@ -1299,6 +1302,7 @@ function flowerOne() {
     if (total >= TOTAL || !safe(x, z)) return; const ch = chunkOf(x, z); if (!ch.im) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
     write(ch, matrix(x, z, 0.9 + R() * 0.2, 1), color); total++; flowerSpots.push([x, z]);
   };
+  clearFlowers = hit => chunks.forEach(c => { if (!c.im) return; let n = 0; for (let i = 0; i < c.n; i++) { c.im.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); if (hit(v.x, v.z)) { c.im.setMatrixAt(i, m4.makeScale(0, 0, 0).setPosition(v)); n++; } } if (n) c.im.instanceMatrix.needsUpdate = true; });
 }
 /** v6.78 以前：溪畔那一棟島民的家挪到構圖較好的位置。新島照規劃擺好了，不用挪 */
 export function nudgeHome() { return false; }

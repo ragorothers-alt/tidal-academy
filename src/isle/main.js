@@ -55,6 +55,7 @@ import * as feel from './feel.js';
 import * as hall from './hall.js';   // 潮汐考場：模擬考、錯題本、成績統計
 import * as voyage from './voyage.js';   // 航海圖、單元試煉、每日潮汐、激流衝刺、燈塔首領戰
 import * as story from './story.js';   // v9.2 主線「點亮星環」
+import * as works from './works.js';   // v9.2.1 公共建設
 import * as lexicon from './lexicon.js';   // 單字燈塔：翻卡、單字測驗、字表
 import * as profile from './profile.js';   // 我的檔案、船員登記、潮汐護符
 import * as lab from './lab.js';   // 導師研究計畫
@@ -233,6 +234,7 @@ try { pwa.init(); } catch (e) { console.warn('離線功能出錯：', e); }   //
 try { harbor.init(); } catch (e) { offMods.harbor = true; console.warn('港口出錯，先停用：', e); }   // v8.9.1 碼頭的燈、船與浮標
 try { northcoast.init({ enterCave: () => enterCave() }); } catch (e) { offMods.northcoast = true; console.warn('北海岸出錯，先停用：', e); }   // v9.1 北海岸與潮洞洞口
 cave.init({ leave: () => house.leave() });
+try { works.init({ busy: fn => worksBusy(fn), seat: () => sitting && sitting.seat, lookCastle: show => lookCastle(show), units: () => story.unitTotal(), lit: () => story.litCount(), paint: () => paintHud() }); } catch (e) { offMods.works = true; console.warn('公共建設出錯，先停用：', e); }   // v9.2.1 告示牌與蓋好的建設
 function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
@@ -787,7 +789,7 @@ function phone() {
       ['今日學習', '📚', '#9fe0a0', phoneToday], ['考科航線', '⛵', '#c8e4ff', phoneTrack], ['點亮星環' + (story.badge() ? '（!）' : ''), '💫', '#e6d8ff', () => story.open()], ['自由練習', '🧩', '#e8f0c0', phoneFree], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()]
     ]],
     ['島上生活', [
-      ['信箱' + (social.unread() ? `（${social.unread()}）` : ''), '✉️', '#ffc8d8', () => social.openMail()], ['委託', '📋', '#c8e0ff', () => social.phoneList()],
+      ['信箱' + (social.unread() ? `（${social.unread()}）` : ''), '✉️', '#ffc8d8', () => social.openMail()], ['委託', '📋', '#c8e0ff', () => social.phoneList()], ['公共建設', '🏗', '#ffe2b8', () => works.openBoard()],
       ['潮汐里程' + (miles.badge() ? `（${miles.badge()}）` : ''), '🌊', '#a8e0f8', () => miles.open(id => { wardrobe.own('hats', id); ui.toast('到衣櫃換上新帽子吧'); })],
       ...(weather.typhoon() ? [['颱風電話', '📞', '#c0d0ff', typhoonPhone]] : []),
       ['島民', '🐰', '#ffb3c8', phoneVillagers], ['研究計畫' + (lab.firstReady(villagers.filter(v => !v.shop && !v.guest)) ? '（!）' : ''), '🔬', '#d8e0ff', () => lab.openBook(villagers.filter(v => !v.shop && !v.guest))], ['口袋', '🎒', '#ffd36b', () => openPockets()], ['地圖', '🗺', '#a6e3ff', phoneMap], ['潮汐表', '〽️', '#b0e0f0', () => tide.openTable(simDate())], ['島嶼評價', '⭐', '#ffe08a', () => rating.open()]
@@ -1057,7 +1059,7 @@ function act() {
   if (nearMail) { social.openMail(); return; }
   if (nearV) { const g = routine.joinable(nearV); if (g) joinGathering(g); else talk(nearV); return; }
   { const st = nearSeat(); if (st) { sitDown(st); return; } }
-  if (boat.act(player.position.x, player.position.z) || northcoast.act(player.position.x, player.position.z)) return;   // v9.1 坐上小船、走進潮洞
+  if (boat.act(player.position.x, player.position.z) || northcoast.act(player.position.x, player.position.z) || works.act(player.position.x, player.position.z)) return;   // v9.1 坐上小船、走進潮洞
   const ch = fauna.handler();   // v8.9 摸摸島上的貓
   if (ch) { talking = { name: 'cat' }; Promise.resolve(ch()).finally(() => { talking = null; }); return; }
   const dk = trip.handler();
@@ -1681,6 +1683,14 @@ async function guestbook() {
   ok.onclick = () => { const t = ta.value.trim(); if (!t) { ui.toast('寫一點什麼吧'); return; } const d = new Date(), s = S(); s.guestbook = (s.guestbook || []).concat([{ d: `${d.getMonth() + 1}/${d.getDate()}`, t }]).slice(-40); save(); ui.closePanel(); memo.add('博物館留言簿', t, { icon: '🖋' }); Audio.sfx('catch'); ui.toast('寫進留言簿了'); };
   body.appendChild(ok); ui.panel('潮汐博物館 · 留言簿', body, { cls: 'memo-p' }); setTimeout(() => ta.focus(), 50);
 }
+/** v9.2.1 公共建設的互動（望遠鏡、咖啡館）：做完關掉對話框 */
+function worksBusy(fn) { talking = { name: 'works' }; Promise.resolve(fn()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); }
+/** v9.2.1 觀景台的望遠鏡：暫時用第一人稱望向北方的城堡並拉近，看完回到原本的鏡頭 */
+async function lookCastle(show) {
+  const was = fpOn, yaw = camYaw, pitch = fpPitch, p = player.position, cx = Math.sin(0.18) * 292.5, cz = -Math.cos(0.18) * 292.5;   // 城堡的方位與距離（fantasy.js 的 CASTLE）
+  fpOn = true; camYaw = -Math.atan2(cx - p.x, -(cz - p.z)); fpPitch = -0.03; camera.zoom = 2.4; lensNear = 14; camera.updateProjectionMatrix();   // 對焦在遠方：望遠鏡本身與崖邊的樹不入鏡
+  try { await show(); } finally { camera.zoom = 1; lensNear = 0; camera.updateProjectionMatrix(); fpOn = was; camYaw = yaw; fpPitch = pitch; }
+}
 /** v9.1 走進北海岸的潮洞（退潮時；出洞回到洞口前的沙灘） */
 function enterCave() {
   life.cancel(); moveTo = null;
@@ -2040,9 +2050,10 @@ settings.hooks.fp = { get: () => fpOn, set: setFp };   // 設定頁的開關
 /** 第一人稱轉頭：拖曳的位移換成左右轉向與上下看 */
 function fpLook(dx, dy, touch) { const k = touch ? 0.0075 : 0.0055; camYaw -= dx * k; fpPitch = THREE.MathUtils.clamp(fpPitch - dy * k, -1.2, 1.2); }
 /** 視角與近裁切面：一般鏡頭 36°；第一人稱放寬（直式螢幕再寬一點），近裁切面拉近才不會貼著牆看穿過去。k：第一人稱的程度 */
+let lensNear = 0;   // 觀景台的望遠鏡：近裁切面推到遠處
 function fpLens(k, nearIn) {   // nearIn：整棟室內的第三人稱鏡頭貼著牆，近裁切面也要近
   const a = camera.aspect > 0.2 ? camera.aspect : 1.6, wide = a >= 1.3 ? 60 : Math.min(88, 2 * Math.atan(Math.tan(Math.PI / 6) * 1.3 / a) * 180 / Math.PI);   // 視窗大小還是 0 時（aspect 是 NaN）先當成橫式
-  const fov = 36 + (wide - 36) * k, near = k > 0.5 ? 0.15 : nearIn || 0.5;
+  const fov = 36 + (wide - 36) * k, near = lensNear || (k > 0.5 ? 0.15 : nearIn || 0.5);
   if (!(Math.abs(camera.fov - fov) <= 0.01) || camera.near !== near) { camera.fov = fov; camera.near = near; camera.updateProjectionMatrix(); }
   player.visible = k < 0.6;   // 鏡頭進到頭裡之前把自己藏起來
 }
@@ -2226,6 +2237,7 @@ function tick(fixed) {
   { const away = room.inside || elsewhere(); if (away !== wasAway) { wasAway = away; moveTo = null; } if (!away && pendingMove) { pendingMove = false; move.apply(villagers); } }   // 跨日的搬家：在島上時才搬（不會在你拜訪時把房子搬走）   // 進出室內、離島：上一個場景點的目的地不能帶過去
   if ((house.inside || room.inside || elsewhere()) && player.userData.act === 'swim') endSwim();
   if (started) guard('story', () => story.tick(dt));   // v9.2 星環：寄章節的信、點亮新燈塔時城堡亮一扇窗
+  if (started) guard('works', () => works.tick(dt));   // v9.2.1 捐滿的建設隔天完工、泡溫泉
   if ((house.inside || room.inside || elsewhere()) && boat.isRiding()) boat.stop();   // v9.1 划船時被送進室內：船留在原地   // v9.0 游泳時被送進室內（回家、進館）：先收起游泳的姿勢
   if (house.inside) {
     minimap.update(dt, false);   // v8.2 室內收起島上的小地圖（地名不會停在進門前）
@@ -2277,7 +2289,7 @@ function tick(fixed) {
   // 島民
   nearV = null; let best = 2.2;
   const hourNow = hourOverride ?? nowHour();
-  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t)); guard('swim', () => swim.update(dt, t)); guard('boatIdle', () => boat.update(dt, t)); guard('northcoast', () => northcoast.update());
+  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t)); guard('swim', () => swim.update(dt, t)); guard('boatIdle', () => boat.update(dt, t)); guard('northcoast', () => northcoast.update()); guard('worksFx', () => works.update(dt, t));
   mindCtx.hour = hourNow; mind.update(simT, villagers.filter(v => thinks(v) && !v.away && v.mesh.visible), mindCtx);
   const [plx, ply] = screenOf(player, 1.6), plD = camera.position.distanceTo(player.position);   // 角色頭上在畫面的位置：後面島民的名牌疊上來時淡一點
   villagers.forEach(v => {
@@ -2340,7 +2352,7 @@ function tick(fixed) {
   nearDoor = locked || swimming || boat.isRiding() || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
   nearMail = !!myHome && !locked && !swimming && !boat.isRiding() && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
   if (nearDoor || nearMail || swimming || boat.isRiding()) nearV = null;
-  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
+  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || works.hint(player.position.x, player.position.z) || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
   const gj = nearV && routine.joinable(nearV);   // v8.9 走近正在進行的團體活動：按 E 加入
   const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : swimming || boat.isRiding() ? '' : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
   if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }

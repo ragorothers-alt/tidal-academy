@@ -159,14 +159,14 @@ export function refresh() {
   const d = S().design || {};
   chunks.forEach(ch => {
     ch.list.forEach((p, i) => {
-      const hide = !!d[p.tile];
+      const hide = !!d[p.tile] || zones.some(f => f(p.x, p.z));
       m4.compose(v.set(p.x, groundAt(p.x, p.z) - 0.02, p.z), q.setFromEuler(e.set(0, p.r, 0)), sc.setScalar(hide ? 0 : p.s));
       ch.im.setMatrixAt(i, m4);
     });
     ch.im.instanceMatrix.needsUpdate = true; if (ch.im.instanceColor) ch.im.instanceColor.needsUpdate = true;
   });
   blooms.forEach(ch => {
-    ch.list.forEach((b, i) => { m4.compose(v.set(b.x, groundAt(b.x, b.z) - 0.02, b.z), q.setFromEuler(e.set(b.t * 0.6, b.r, 0)), sc.setScalar(d[b.tile] ? 0 : b.s)); ch.im.setMatrixAt(i, m4); });
+    ch.list.forEach((b, i) => { m4.compose(v.set(b.x, groundAt(b.x, b.z) - 0.02, b.z), q.setFromEuler(e.set(b.t * 0.6, b.r, 0)), sc.setScalar(d[b.tile] || zones.some(f => f(b.x, b.z)) ? 0 : b.s)); ch.im.setMatrixAt(i, m4); });
     ch.im.instanceMatrix.needsUpdate = true;
   });
 }
@@ -190,5 +190,8 @@ export function cull() {
 }
 export const count = () => spots.length;
 let pend = 0;
+const zones = [];
+/** 後來蓋的東西（公共建設）底下不長草、不開花：hit(x, z) 為真的地方藏起來 */
+export function clearArea(hit) { zones.push(hit); refreshSoon(); }
 /** 島嶼設計改變時：下一幀再一次重排（連續放很多格也只重排一次） */
 export const refreshSoon = () => { if (!pend) pend = setTimeout(() => { pend = 0; refresh(); }, 0); };

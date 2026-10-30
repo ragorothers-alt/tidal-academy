@@ -746,3 +746,26 @@ test('主線點亮星環：十二章的文字、目標與獎勵', () => {
   assert.ok(ST.finale.length >= 6 && ST.finale.length <= 10 && ST.finale.every(([w, l]) => WHO.includes(w) && l.length >= 12) && ST.finale[ST.finale.length - 1][0] === 'earth', '點燈儀式');
   len(ST.after.text, 60, 210, '考完試的信');
 });
+
+/* v9.2.1 公共建設：五個模型的零件、標記點、原點與面數；works.js 的每一樣建設都有擺放位置、費用合理 */
+test('公共建設：模型的零件與標記點，建設的位置與費用', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/isle/data/worksmodels.js'), 'utf8'), cx, { filename: 'worksmodels.js' });
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial() }, J = cx.TA.ISLE;
+  const need = { works_board: ['poster_0', 'poster_1', 'poster_2', 'poster_3'], works_site: ['sign'], viewpoint: ['scope', 'look', 'seat_0', 'seat_1'], hot_spring: ['water', 'sign', 'soak_0', 'soak_1', 'soak_2', 'steam'], cafe: ['menu', 'counter', 'seat_0', 'seat_1', 'seat_2', 'seat_3'] };
+  const src = fs.readFileSync(path.join(ROOT, 'src/isle/works.js'), 'utf8');
+  Object.entries(need).forEach(([k, parts]) => {
+    assert.ok(J.WORKSMODELS[k], '少了 ' + k); assert.ok(src.includes(`'${k}'`), `works.js 要用到 ${k}`);
+    const g = J.WORKSMODELS[k](THREE, kit); g.updateMatrixWorld(true);
+    parts.forEach(n => assert.ok(g.getObjectByName(n), `${k} 少了 ${n}`));
+    ['poster_0', 'sign', 'menu'].filter(n => parts.includes(n)).forEach(n => assert.ok(g.getObjectByName(n).isMesh, `${k} 的 ${n} 要是網格（程式在它正面貼字）`));
+    let tris = 0; g.traverse(o => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+    assert.ok(tris <= 4200, `${k} 面數 ${tris}`);
+    assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.05, `${k} 原點在地面`);
+  });
+  const ids = [...src.matchAll(/\{ id: '(\w+)', name: '[^']+', where: '[^']+', bells: (\d+), miles: (\d+)/g)];
+  assert.deepEqual(ids.map(m => m[1]).sort(), ['bridge', 'cafe', 'spa', 'view'], '四樣建設');
+  ids.forEach(m => { assert.ok(+m[2] >= 5000 && +m[2] <= 40000 && +m[3] >= 300 && +m[3] <= 3000, m[1] + ' 的費用'); assert.match(src, new RegExp(`${m[1]}: \\[-?[\\d.]+, -?[\\d.]+, `), m[1] + ' 的位置'); });
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/terrain.js'), 'utf8'), /WORK_BRIDGES = \{ bridge: /, 'terrain.js 登記了石橋');
+});

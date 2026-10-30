@@ -204,6 +204,17 @@ if (PLAN) {
     for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (inBand(x - C + 0.5, z - C + 0.5, [br.a, br.b], r.w)) { BRIDGE.push([x, z]); BRIDGE_AT.set(z * N + x, br); }
   });
 } else { const bz = C + 2; for (let x = C; x < C + 9; x++) if (T(x, bz) === 3 || T(x, bz + 1) === 3) BRIDGE.push([x, bz], [x, bz + 1]); BRIDGE.forEach(b => BRIDGE_AT.set(b[1] * N + b[0], null)); }
+/* v9.2.1 公共建設的橋（works.js）：捐滿、完工之後才算數（規劃座標）。存檔裡已經完工的在這裡就和規劃的橋一起登記
+   （props.js 擺模型、nightlights.js 點燈、島民的路網都看得到）；玩的時候才完工的，works.js 呼叫 addWorkBridge 當場登記 */
+const WORK_BRIDGES = { bridge: { a: [23.9, 28.4], b: [21.4, 33.3], w: 2.4, name: 'Tide Meadow Bridge' } };
+function regBridge(o) {
+  const br = { a: o.a, b: o.b, w: o.w, base: 1.0, name: o.name }; BRIDGES.push(br);
+  for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) if (inBand(x - C + 0.5, z - C + 0.5, [br.a, br.b], o.w)) { BRIDGE.push([x, z]); BRIDGE_AT.set(z * N + x, br); }
+  return br;
+}
+if (PLAN) { const done = ((((typeof window !== 'undefined' && window.TA) || {}).S || {}).isle || {}).works || {}; Object.keys(WORK_BRIDGES).forEach(k => { if ((done[k] || {}).built) regBridge(WORK_BRIDGES[k]); }); }
+/** 玩的時候才完工的橋：登記之後馬上能走（回傳橋，給 props.js 擺模型；已經登記過就回傳 null） */
+export function addWorkBridge(k) { const o = WORK_BRIDGES[k]; return !o || BRIDGES.some(b => b.name === o.name) ? null : regBridge(o); }
 export const isBridge = (x, z) => BRIDGE_AT.has(z * N + x);
 function bridgeY(br, wx, wz) {
   if (!br) return 1.12;
