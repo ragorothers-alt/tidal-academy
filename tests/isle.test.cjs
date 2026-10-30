@@ -830,3 +830,77 @@ test('港邊夜市：攤主、小吃、獎品與模型', () => {
   const north = S.filter(s => s.ry === 'Math.PI'), south = S.filter(s => s.ry === '0');
   assert.ok(Math.min(...south.map(s => s.z)) - Math.max(...north.map(s => s.z)) - 1.5 >= 2.4, '中間的街至少 2.4 公尺寬');
 });
+
+/* v9.4.1 島嶼運動會：每一題的答案都要能從題目裡的數字算回來；跑步的 x(t) 與沙包的拋物線和公式一致 */
+test('島嶼運動會：物理題的答案由計算得出', async () => {
+  const Q = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/sportq.js')).href);
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const r1 = v => Math.round(v * 10) / 10, numOf = s => parseFloat(String(s));
+  const want = {   // 從題目文字裡的數字（依出現順序）算出正確答案
+    avg: ([t, d]) => d / t, acc: ([t, v]) => v / t, dist: ([a, t]) => a * t * t / 2, time: ([a, v]) => v / a,
+    far: ([v]) => v * v / 9.8, pair: ([t]) => 90 - t, best: () => 45, fma: ([m, F]) => F / m, fric: ([m, mu]) => mu * m * 10,
+  };
+  [['RUN', Q.RUN], ['THROW', Q.THROW], ['TUG', Q.TUG]].forEach(([set, T]) => Object.entries(T).forEach(([kind, gen]) => {
+    for (let i = 0; i < 60; i++) {
+      const q = gen(rnd), tag = `${set}.${kind}：${q.text}`;
+      assert.equal(q.kind, kind, tag); assert.equal(q.opts.length, 4, tag + ' 四個選項'); assert.equal(new Set(q.opts).size, 4, tag + ' 選項不重複');
+      assert.ok(Number.isInteger(q.a) && q.a >= 0 && q.a < 4 && q.why && q.why.length <= 120, tag + ' 答案與說明');
+      if (want[kind]) {
+        const n = (q.text.match(/\d+(\.\d+)?/g) || []).map(Number), ans = r1(want[kind](n));
+        assert.equal(numOf(q.opts[q.a]), ans, tag + ` 答案應為 ${ans}`);
+        q.opts.forEach((o, j) => { if (j !== q.a) assert.notEqual(numOf(o), ans, tag + ' 錯的選項不能等於答案'); assert.ok(numOf(o) > 0, tag + ' 選項是正數'); });
+      } else if (kind === 'net') { const [F1, F2] = q.text.match(/\d+/g).map(Number); assert.ok(q.opts[q.a].startsWith(`${F1 - F2} N，往甲隊`), tag); }
+      else assert.ok(['一樣大', '地面給他們的摩擦力比較大'].includes(q.opts[q.a]), tag);
+    }
+  }));
+  // 跑步：先等加速度、到極速後等速；跑到 runTime 的那一刻剛好在終點，位置一路往前
+  [[2.2, 4.6], [3, 5], [3.4, 5.4], [8, 3]].forEach(([acc, top]) => {
+    const T = Q.runTime(acc, top, 10); assert.ok(Math.abs(Q.runAt(acc, top, T) - 10) < 1e-9, `runTime(${acc}, ${top})`);
+    for (let t = 0.05; t < T; t += 0.05) assert.ok(Q.runAt(acc, top, t) > Q.runAt(acc, top, t - 0.05), '跑步的位置一直往前');
+  });
+  assert.ok(Q.runTime(3.4, 5.4, 10) < Q.runTime(3, 5, 10) && Q.runTime(3, 5, 10) < Q.runTime(2.2, 4.6, 10), '加速度與極速越大，跑得越快');
+  const ar = Q.afterRun('阿飛', 10, 2.83, 5, rnd); assert.equal(numOf(ar.opts[ar.a]), r1(10 / 2.83), '跑完的平均速率');
+  // 擲沙包：45° 最遠、互餘角射程一樣、拋物線落地點等於射程
+  [6, 8, 10].forEach(v => {
+    [15, 30, 60, 75].forEach(d => assert.ok(Q.range(v, 45) > Q.range(v, d), '45° 最遠'));
+    assert.ok(Math.abs(Q.range(v, 30) - Q.range(v, 60)) < 1e-9, '30° 和 60° 射程一樣');
+    [30, 45, 60].forEach(d => { const [x, y] = Q.bagAt(v, d, Q.flight(v, d)); assert.ok(Math.abs(x - Q.range(v, d)) < 1e-9 && Math.abs(y) < 1e-9, `${v} m/s、${d}° 的落點`); });
+  });
+});
+
+/* v9.4.1 島嶼運動會：裁判、兩位選手、三個項目的台詞、三件獎牌家具、九個模型的零件與標記點 */
+test('島嶼運動會：裁判、選手、獎品與模型', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  ['src/isle/data/furniture.js', 'src/isle/data/sportmodels.js', 'src/isle/data/sportsday.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), cx, { filename: f }));
+  const J = cx.TA.ISLE, D = J.SPORTSDAY, src = fs.readFileSync(path.join(ROOT, 'src/isle/sportsday.js'), 'utf8');
+  const lines = (a, n, tag) => { assert.ok(Array.isArray(a) && a.length >= n && a.every(t => typeof t === 'string' && t.length > 2 && t.length <= 60 && !/\d/.test(t)), tag); };
+  const hex = (o, tag) => Object.entries(o).forEach(([k, v]) => assert.match(v, /^#[0-9a-f]{6}$/i, `${tag}.${k}`));
+  assert.ok(D.referee.name && D.referee.name.length <= 4, '裁判的稱呼'); hex({ color: D.referee.color }, '裁判'); hex(D.referee.look, '裁判.look');
+  ['greet', 'pick', 'cheer', 'bye', 'rain'].forEach(f => lines(D.referee[f], 2, 'referee.' + f));
+  assert.equal(D.athletes.length, 2, '兩位選手'); assert.equal(new Set(D.athletes.map(a => a.id)).size, 2, '選手 id 不重複');
+  D.athletes.forEach(a => { assert.match(a.id, /^[a-z]+$/, a.id); hex({ color: a.color }, a.id); hex(a.look, a.id + '.look'); ['intro', 'win', 'lose', 'tug'].forEach(f => lines(a[f], 2, `${a.id}.${f}`)); });
+  ['run', 'throw', 'tug'].forEach(k => { assert.ok(D.events[k] && D.events[k].name, k); lines(D.events[k].intro, 2, k + '.intro'); });
+  ['ready', 'first', 'other'].forEach(f => lines(D.events.run[f], 2, 'run.' + f)); ['far', 'short'].forEach(f => lines(D.events.throw[f], 2, 'throw.' + f)); ['win', 'lose'].forEach(f => lines(D.events.tug[f], 2, 'tug.' + f));
+  assert.ok(D.events.tug.why && D.events.tug.why.length <= 90 && /摩擦/.test(D.events.tug.why), '拔河的物理說明');
+  lines(D.tug.pull, 3, 'tug.pull'); lines(D.tug.slip, 3, 'tug.slip'); lines(D.card.medal, 2, 'card.medal');
+  assert.ok(D.letter.from === 'physics' && D.letter.title && D.letter.text.length >= 100 && D.letter.close, '物理導師的介紹信');
+  assert.equal(D.prizes.length, 3, '三件獎牌家具');
+  D.prizes.forEach(f => assert.ok(J.FURNITURE.some(x => x.id === f.id && x.src === 'event:sports_day'), f.id + ' 放進家具清單'));
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /sports_day: '/, '家具目錄寫得出怎麼拿到');
+  // 模型：具名零件與標記點、面數、原點在地面（拔河旗綁在繩子上，懸空）
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial() };
+  const need = { sd_arch: ['sign'], sd_tent: ['sign', 'referee', 'front'], sd_board: ['board'], sd_cone: ['plate'], sd_mat: [], sd_bag: [], sd_podium: ['p1', 'p2', 'p3'], sd_tugflag: [], sd_bench: ['seat_0', 'seat_1'] };
+  Object.entries(need).forEach(([k, parts]) => {
+    assert.ok(J.SPORTMODELS[k], '少了 ' + k); assert.ok(src.includes(`'${k}'`), `sportsday.js 要用到 ${k}`);
+    const g = J.SPORTMODELS[k](THREE, kit); g.updateMatrixWorld(true);
+    parts.forEach(n => assert.ok(g.getObjectByName(n), `${k} 少了 ${n}`));
+    ['sign', 'board', 'plate'].filter(n => parts.includes(n)).forEach(n => assert.ok(g.getObjectByName(n).isMesh, `${k} 的 ${n} 要是網格`));
+    let tris = 0; g.traverse(o => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+    assert.ok(tris <= 3500, `${k} 面數 ${tris}`);
+    if (k !== 'sd_tugflag') assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.06, `${k} 原點在地面`);
+  });
+  // 場地：三條跑道 10 公尺、拔河繩在跑道南邊，和夜市用同一塊草地
+  assert.match(src, /LANES = \[32\.2, 33\.2, 34\.2\], START = 2\.4, FINISH = 12\.4/, '跑道位置');
+  assert.ok(fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8').includes('sportsday.playerPose()'), 'main.js 播玩家跑步的動作');
+});

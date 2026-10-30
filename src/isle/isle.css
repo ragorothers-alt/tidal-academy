@@ -1690,3 +1690,13 @@ body.picking .act-btn { opacity: 0; transform: scale(.85); pointer-events: none;
 .nm .nm-st.on i { background: #ffd9cc; }
 .nm .nm-st small { font-size: 11.5px; font-weight: 800; color: var(--ink-2); }
 .nm .nm-sum { margin: 0 0 8px; font-size: 13px; line-height: 1.6; }
+/* v9.4.1 島嶼運動會的紀錄 */
+.sd .sd-lead { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
+.sd .sd-lead small { display: block; margin-top: 4px; font-weight: 700; color: var(--ink-2); }
+.sd .sd-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 10px; }
+.sd .sd-ev { display: grid; justify-items: center; gap: 3px; padding: 8px 4px 7px; border-radius: 14px; border: 2px dashed #c9d9ea; background: var(--cream-2); text-align: center; }
+.sd .sd-ev i { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; font-style: normal; font-size: 21px; background: #e6eef6; }
+.sd .sd-ev.blue { border-style: solid; border-color: #8fb4dc; background: #eef5fc; }
+.sd .sd-ev.gold { border-style: solid; border-color: #e2bf62; background: #fff7df; }
+.sd .sd-ev.gold i { background: #ffe9a8; }
+.sd .sd-ev small { font-size: 11.5px; font-weight: 800; color: var(--ink-2); }

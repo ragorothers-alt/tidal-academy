@@ -51,6 +51,8 @@
       who: ['chinese', 'english', 'civics'], act: { chinese: 'read', english: 'cards', civics: 'read' }, subj: ['chinese', 'english', 'civics'] },
     { id: 'morning_exercise', name: '早操', icon: '🤸', days: [0, 6], from: 7.5, to: 8.25, place: 'fountain',
       who: ['geography', 'biology', 'physics', 'english'], act: 'stretch', subj: ['biology'] },
+    { id: 'sports_warmup', name: '運動會熱身', icon: '🏃', days: [0], from: 9, to: 10, place: 'sportsWarm',   // v9.4.1 週日的運動會開場：在跑道南邊做熱身操（下雨不辦）
+      who: ['geography', 'biology', 'physics', 'english'], act: 'stretch', subj: ['physics'] },
     { id: 'market_lunch', name: '市集午餐', icon: '🍙', days: [0, 1, 2, 3, 4, 5, 6], from: 12, to: 13, place: 'market',
       byDay: { 0: ['math', 'earth', 'civics'], 1: ['chemistry', 'math'], 2: ['geography', 'civics'], 3: ['chemistry', 'earth'], 4: ['english', 'physics'], 5: ['chemistry', 'biology'], 6: ['chinese', 'geography', 'english'] },
       act: 'shop', subj: ['chemistry', 'biology', 'geography'] },

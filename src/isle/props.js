@@ -23,6 +23,7 @@ export const seats = [];
 export let wildFlowers = () => {};
 /** 把某塊地上的野花藏起來（縮成 0）：hit(x, z) 為真的那幾株；後來蓋的公共建設用 */
 export let clearFlowers = () => {};
+export let hideFlowers = () => () => {};   // v9.4.1 暫時藏起一塊地上的野花（運動會的跑道），回傳讓花長回來的函式
 /** 廣場中心（規劃的廣場，套上地形扭曲）：島民聚會、節慶裝飾、雪人都以這裡為準 */
 export const PLAZA = warp(PLAN.sites.plaza.x, PLAN.sites.plaza.z);
 export const SITES = {};
@@ -1302,6 +1303,8 @@ function flowerOne() {
     if (total >= TOTAL || !safe(x, z)) return; const ch = chunkOf(x, z); if (!ch.im) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
     write(ch, matrix(x, z, 0.9 + R() * 0.2, 1), color); total++; flowerSpots.push([x, z]);
   };
+  hideFlowers = hit => { const kept = []; chunks.forEach(c => { if (!c.im) return; let n = 0; for (let i = 0; i < c.n; i++) { c.im.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); if (hit(v.x, v.z)) { kept.push([c, i, m4.clone()]); c.im.setMatrixAt(i, m4.makeScale(0, 0, 0).setPosition(v)); n++; } } if (n) c.im.instanceMatrix.needsUpdate = true; });
+    return () => kept.forEach(([c, i, m]) => { c.im.setMatrixAt(i, m); c.im.instanceMatrix.needsUpdate = true; }); };
   clearFlowers = hit => chunks.forEach(c => { if (!c.im) return; let n = 0; for (let i = 0; i < c.n; i++) { c.im.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); if (hit(v.x, v.z)) { c.im.setMatrixAt(i, m4.makeScale(0, 0, 0).setPosition(v)); n++; } } if (n) c.im.instanceMatrix.needsUpdate = true; });
 }
 /** v6.78 以前：溪畔那一棟島民的家挪到構圖較好的位置。新島照規劃擺好了，不用挪 */

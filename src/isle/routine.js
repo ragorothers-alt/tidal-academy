@@ -13,6 +13,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as weather from './weather.js';
 import * as nm from './nightmarket.js';
+import * as sd from './sportsday.js';
 import * as memo from './memo.js';
 import * as bond from './bond.js';
 import { I, S, save } from './state.js';
@@ -66,7 +67,8 @@ function places() {
     chess: { seats: st => !!st.chess },
     picnic: { seats: st => !!st.picnic },
     nightMarket: { stand: nm.spots() },   // v9.4.0 週六晚上的港邊夜市：每一攤前面
-    nightBusk: { stand: nm.buskSpots() }
+    nightBusk: { stand: nm.buskSpots() },
+    sportsWarm: { stand: sd.spots() }   // v9.4.1 週日運動會開場前：跑道南邊
   };
   return PLACES;
 }
