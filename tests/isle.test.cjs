@@ -723,3 +723,26 @@ test('北海岸：模型零件、原點與面數，北側樓梯', () => {
   assert.ok(plan.stairs.some(s => s.name === 'Academy North Stair' && s.from === 'grass' && s.to === 'plateau'), '學院台地的北側樓梯');
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/data/islandplan.js'), 'utf8'), /Academy North Stair/, 'islandplan.js 要重新打包');
 });
+
+/* v9.2 主線「點亮星環」：十二章的文字齊全、長度合理，章節與 story.js 的目標、獎勵一一對上，目標的數字寫在章節說明裡 */
+test('主線點亮星環：十二章的文字、目標與獎勵', () => {
+  const cx = { console, Math }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'src/isle/data/story.js'), 'utf8'), cx, { filename: 'story.js' });
+  const ST = cx.TA.ISLE.STORY, src = fs.readFileSync(path.join(ROOT, 'src/isle/story.js'), 'utf8');
+  const goals = {}; for (const m of (src.match(/const GOALS = \{([\s\S]*?)\};/) || ['', ''])[1].matchAll(/(c\d+): \[((?:\['\w+', \d+\],? ?)+)\]/g)) goals[m[1]] = [...m[2].matchAll(/\['(\w+)', (\d+)\]/g)].map(x => [x[1], +x[2]]);
+  const reward = (src.match(/const REWARD = \{([^}]*)\}/) || ['', ''])[1];
+  const WHO = ['chinese', 'english', 'math', 'history', 'geography', 'civics', 'physics', 'chemistry', 'biology', 'earth', 'shop'], len = (s, a, b, what) => assert.ok(typeof s === 'string' && [...s].length >= a && [...s].length <= b, `${what}（${s && [...s].length} 字）`);
+  assert.equal(ST.chapters.length, 12, '十二章'); assert.equal(Object.keys(goals).length, 12, 'story.js 十二章的目標');
+  ST.chapters.forEach((c, i) => {
+    assert.equal(c.id, 'c' + (i + 1)); assert.ok(WHO.includes(c.who), c.id + ' who');
+    assert.ok(goals[c.id] && new RegExp(c.id + ': \\[\\d+, \\d+\\]').test(reward), c.id + ' 的目標與獎勵');
+    goals[c.id].forEach(([, n]) => assert.ok(c.goal.includes(' ' + n + ' '), `${c.id} 的目標說明要寫出 ${n}（${c.goal}）`));
+    len(c.title, 2, 8, c.id + ' 標題'); len(c.letter.title, 4, 16, c.id + ' 信的標題'); len(c.letter.text, 60, 170, c.id + ' 信'); assert.match(c.letter.close, /^—— /, c.id + ' 信的署名');
+    assert.ok(c.intro.length >= 4 && c.intro.length <= 6 && c.wait.length === 2 && c.done.length >= 3 && c.done.length <= 5, c.id + ' 台詞句數');
+    [...c.intro, ...c.done].forEach(l => len(l, 12, 70, c.id + ' 台詞')); c.wait.forEach(l => len(l, 10, 52, c.id + ' 等待的台詞'));
+    len(c.memo.title, 4, 14, c.id + ' 回憶錄標題'); len(c.memo.sub, 14, 52, c.id + ' 回憶錄');
+    assert.doesNotMatch(JSON.stringify(c), /(\b\d{2,3}|[七八九]十[一二三四五六七八九]?) ?(扇|座)/, c.id + ' 不寫死窗與燈塔的總數（單元會增加）');
+  });
+  assert.ok(ST.finale.length >= 6 && ST.finale.length <= 10 && ST.finale.every(([w, l]) => WHO.includes(w) && l.length >= 12) && ST.finale[ST.finale.length - 1][0] === 'earth', '點燈儀式');
+  len(ST.after.text, 60, 210, '考完試的信');
+});

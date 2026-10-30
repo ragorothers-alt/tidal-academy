@@ -2,7 +2,7 @@
 
 > 把每一題，都變成照亮海面的光。
 
-離線、免帳號的學測備戰遊戲，目前版本 **9.1.0**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
+離線、免帳號的學測備戰遊戲，目前版本 **9.2.0**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
 
 **線上版**：<https://ragorothers-alt.github.io/tidal-academy/>——推上 `main` 時，GitHub Actions 會跑測試、執行 `python build.py`，把 `dist/` 發布到 GitHub Pages（`.github/workflows/pages.yml`）。線上版可以安裝到電腦桌面或手機主畫面（手機「設定」→「安裝到這台裝置」；iPhone 用 Safari 的「分享 → 加入主畫面」），第一次打開後沒有網路也能玩；角色模型、配樂與示意圖玩到時才存，也可以在設定按「下載全部」一次存好（約 45 MB）。有新版本時畫面下方會出現提示，按「更新」就換成新版。進度存在各自瀏覽器的 localStorage；線上版沒有 laya 轉送，島民改用本機的作息決定要做什麼。
 
@@ -60,6 +60,7 @@
 | **潮汐與潮池** | 依月相與時間計算潮位（簡化半日潮模型），海面跟著漲退，大潮、小潮會變化；退潮時沙灘邊出現潮池，答對地科「海洋」題就能撿到 22 種潮間帶生物（新圖鑑分類，可捐給博物館）。手機有潮汐表 |
 | **游泳與潛水** | 在阿潮的店買潛水衣（3,000 鈴錢），就能從沙灘走進海裡游泳。海面冒泡泡的地方是潛點（每天換位置，淺灘、海草床、珊瑚礁、外海深處四種），游過去按 `E` 潛下去：方向鍵游、空白鍵往上踢，氧氣約 90 秒。退潮時珊瑚礁太淺潛不下去，漲潮時才有離岸較遠的深水潛點。每次潛水遇到 3–4 種當下出沒的海洋生物（30 種，新圖鑑分類），游到發亮的生物旁按 `E` 答一題生物或地科題就能帶回；綠蠵龜、玳瑁、珊瑚、硨磲貝與鸚鵡螺，還有有毒的豹紋章魚與海蛇、固著在海底的海鰓、海綿、海鞘與海草只拍照、不帶走，照片直接送進博物館。游得太快會嚇跑游得快的生物 |
 | **北海岸、潮洞與小划船** | 學院台地北側的樓梯走下去是北海岸：漂流木、潮池岩，外海有海蝕柱與海蝕拱。台地東北角崖下有潮洞，只有乾潮前後（和潮池同一段時間）走得進去；洞裡的岩層壁、發光潮池、水晶礦脈、沙中化石與舊木箱每天各能探索一次（答地科或生物題，帶回海洋生物、未鑑定的礦石與化石），潮水漲回來時要記得出洞。碼頭西側的小划船按 `E` 坐上去就能環島划船：方向鍵往哪推船就轉過去划，能穿過海蝕拱；划回碼頭停好，或在任何沙灘邊上岸 |
+| **主線「點亮星環」** | 北方天空的城堡後面掛著一圈分成十段的星環，一段是一科。每點亮一座單元燈塔（航海圖的單元試煉正確率 60% 以上），城堡就亮起一扇窗、那一科的那一段也亮一點（晚上最清楚）。故事分成十二章、每週一章，跟著學測倒數走（第一章在考前 84 天，最後一章在考試那週；比較早開始玩就從開始那天起每週一章）：章節開放那天會收到信，去找那一章的老師開始，達成目標（點亮燈塔、答對題目、每日潮汐、燈塔首領）後回去聽故事、領鈴錢與潮晶。手機的「點亮星環」看得到星環、十科的進度與每一章 |
 | **潮靈小汐** | 有錯題的夜晚，廣場邊會出現迷路的潮靈；他的記憶碎片散落島上，每一片都是你答錯過的一題（取自今天的複習清單），重新答對就能撿回來，也算今天的複習；找不到時可問小汐最近一片的方向與約略距離，附近的碎片會提醒就在周圍，小地圖上方是北 |
 | **我的學期** | 手機「考科航線」頂端：只算要考的科目，每科修好 5 道錯題、熟練 40 題、完成該科導師的一個研究階段，再做一次所選考科的整卷模擬考（題型專練不算）。全部達成後回來查看，得 5,000 鈴錢與一則回憶；超過 4 科時預設收合 |
 | **學期航海誌** | 手機「回憶錄」每個月選一張卡片收進航海誌，也可換成同月另一件事；到圖書館圓塔樓上的「潮汐航海圖集」旁翻閱整本 |
@@ -157,8 +158,8 @@ src/isle/      engine 渲染與日夜 · terrain 地形 · props 場景物件 ·
                stars 觀星 · astro 天文與潮汐計算（純函式）· homevisit 島民作客 · photo 拍照與相簿
                diy 手作 · tide 潮汐與潮池 · spirit 潮靈 · report 學習週報 · wardrobe 服裝 · miles 潮汐里程 · cooking 料理 · rocks 礦物鑑定 · balloon 熱氣球 · trip 神秘島 · focus 專注時光 · planner 讀書計畫 · words 單字謎 · mathgen 數學題產生器（純函式，目前未接入石碑）· tablets 數學石碑（每日選數學題庫） · quizcup 快問快答與模考走勢 · museum 博物館展廳 · cram 考前衝刺
                hall 潮汐考場（模擬考、練習組、結果頁、錯題本、成績統計）· voyage 航海圖/單元試煉/每日潮汐/激流衝刺/首領戰 · lexicon 單字燈塔 · lexq 單字出題（純函式）· profile 我的檔案與船員登記 · challenge 連續挑戰與主動出題 · feel 手感 · main 主程式
-               nav 島上找路（格子地圖 + A*）· schedule 島民作息表（純函式）· routine 島民照作息做事、團體活動 · fauna 島上的動物（貓、海豚、鯨魚、跳魚）· actors 人形模型的動作與做事姿勢 · bluetears 藍眼淚 · harbor 碼頭的燈、船、浮標與燈塔光束 · pwa 網頁版的安裝、離線與更新提示 · swim 游泳與潛點 · dive 潛水的海底 · aquarium 博物館的海洋館 · boat 小划船 · northcoast 北海岸的擺設與潮洞洞口 · cave 潮洞裡的探索
-src/isle/data/ islandplan 島嶼規劃（tools/planpack.cjs 從 tools/island_plan.json 產生）· bldmodels*/lmmodels*/propmodels*/toolmodels/furnmodels 程式化模型（img2threejs 重建）· creatures 圖鑑 · villagers 島民 · lines 委託/來信/活動台詞 · furniture 家具 · homes 島民的家/閒聊/好感度事件 · guests 旅客/館員/圖書館/評價 · bday 生日與喜好 · lines2 大賽/弱點委託/互贈禮物/搬遷台詞 · lines3 作客台詞 · stars 星表與流星雨 · sealife 潮間帶生物 · lines4 夜祭台詞 · foods 料理 · minerals 礦物 · lines5 颱風與熱氣球台詞 · lines6 冬季節慶與考前台詞 · lines7 雨天/初次共同經歷/外出紙條 · contrast 易混題對照 · museum_themes 小特展主題 · hall_visits 來館台詞 · icons 像素圖示 · routines 作息與團體活動 · lines8 作息/團體活動/揮手/貓的台詞 · faunamodels 動物模型 · handprops 手持道具 · actscene 棋桌、野餐桌、風箏、湯鍋 · harbormodels 漁船、小划船、碼頭燈柱、浮標 · marine 海洋生物 · marinemodels／reefmodels 海洋生物與海底造景模型 · marineicons 海洋生物圖示 · northmodels 北海岸的海蝕柱、海蝕拱、潮洞洞口 · interiors_aquarium／interiors_tidecave 海洋館與潮洞的室內
+               nav 島上找路（格子地圖 + A*）· schedule 島民作息表（純函式）· routine 島民照作息做事、團體活動 · fauna 島上的動物（貓、海豚、鯨魚、跳魚）· actors 人形模型的動作與做事姿勢 · bluetears 藍眼淚 · harbor 碼頭的燈、船、浮標與燈塔光束 · pwa 網頁版的安裝、離線與更新提示 · swim 游泳與潛點 · dive 潛水的海底 · aquarium 博物館的海洋館 · boat 小划船 · northcoast 北海岸的擺設與潮洞洞口 · cave 潮洞裡的探索 · story 主線「點亮星環」（章節、城堡的窗、十段星環）
+src/isle/data/ islandplan 島嶼規劃（tools/planpack.cjs 從 tools/island_plan.json 產生）· bldmodels*/lmmodels*/propmodels*/toolmodels/furnmodels 程式化模型（img2threejs 重建）· creatures 圖鑑 · villagers 島民 · lines 委託/來信/活動台詞 · furniture 家具 · homes 島民的家/閒聊/好感度事件 · guests 旅客/館員/圖書館/評價 · bday 生日與喜好 · lines2 大賽/弱點委託/互贈禮物/搬遷台詞 · lines3 作客台詞 · stars 星表與流星雨 · sealife 潮間帶生物 · lines4 夜祭台詞 · foods 料理 · minerals 礦物 · lines5 颱風與熱氣球台詞 · lines6 冬季節慶與考前台詞 · lines7 雨天/初次共同經歷/外出紙條 · contrast 易混題對照 · museum_themes 小特展主題 · hall_visits 來館台詞 · icons 像素圖示 · routines 作息與團體活動 · lines8 作息/團體活動/揮手/貓的台詞 · faunamodels 動物模型 · handprops 手持道具 · actscene 棋桌、野餐桌、風箏、湯鍋 · harbormodels 漁船、小划船、碼頭燈柱、浮標 · marine 海洋生物 · marinemodels／reefmodels 海洋生物與海底造景模型 · marineicons 海洋生物圖示 · northmodels 北海岸的海蝕柱、海蝕拱、潮洞洞口 · interiors_aquarium／interiors_tidecave 海洋館與潮洞的室內 · story 主線十二章的台詞與信
 src/core/      registry 科目與題庫註冊 · util · store 存檔 · learn 學習引擎 · creature 首領海獸繪製
 src/data/      各科題庫與單字（格式見 tools/CONTENT_GUIDE.md）
 vendor/three/  three.js r160（MIT）

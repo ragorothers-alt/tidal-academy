@@ -136,8 +136,8 @@ function preparePaint(mesh, castle) {
 function detailBuilder() {
   const p = [], n = [], c = [], e = [], col = new THREE.Color();
   return {
-    add(geo, x, y, z, sx, sy, sz, color, glow = 0, turn = 0) {
-      const g = geo.index ? geo.toNonIndexed() : geo.clone();
+    add(geo, x, y, z, sx, sy, sz, color, glow = 0, turn = 0) {   // 回傳這塊在合併網格裡的頂點範圍 [起點, 個數]（v9.2 城堡的窗一扇一扇點亮）
+      const g = geo.index ? geo.toNonIndexed() : geo.clone(), s0 = e.length;
       const M = new THREE.Matrix4().makeRotationY(turn).scale(new THREE.Vector3(sx, sy, sz)).setPosition(x, y, z);
       g.applyMatrix4(M); col.set(color);
       const P = g.attributes.position, N = g.attributes.normal;
@@ -145,7 +145,7 @@ function detailBuilder() {
         p.push(P.getX(i), P.getY(i), P.getZ(i)); n.push(N.getX(i), N.getY(i), N.getZ(i));
         c.push(col.r, col.g, col.b); e.push(glow);
       }
-      g.dispose(); geo.dispose();
+      g.dispose(); geo.dispose(); return [s0, e.length - s0];
     },
     mesh(name) {
       const g = new THREE.BufferGeometry();
@@ -196,10 +196,13 @@ function modelRay(model) {
     return ray.intersectObjects(meshes, false).find(h => !filter || filter(h));
   };
 }
+/* v9.2 點亮星環：城堡的窗跟著玩家點亮的單元燈塔一扇一扇亮起來（一開始只有少數幾扇亮著）。frac：點亮的單元比例 0–1 */
+const lit = { mesh: null, panes: [], frac: 0 };
+const BASE_LIT = 0.06, DARK_GLOW = 0.03;
 function castleDetails(model) {
   const b = detailBuilder(), ray = modelRay(model);
   // 四面各自按樓層找原牆表面；窗框、窗芯都有厚度，而非隨機灑在岩底的光點。
-  let windows = 0;
+  let windows = 0; const panes = [];
   for (let level = 0; level < 5; level++) for (let i = 0; i < 24; i++) {
     const a = i / 24 * Math.PI * 2, sx = Math.sin(a), sz = Math.cos(a), y = 0.43 + level * 0.046;
     const h = ray(sx * 1.1, y, sz * 1.1, -sx, 0, -sz, hit => Math.abs(hit.face.normal.y) < 0.42);
@@ -207,7 +210,8 @@ function castleDetails(model) {
     const v = h.point.clone().addScaledVector(new THREE.Vector3(sx, 0, sz), 0.0024), w = level > 4 ? 0.006 : 0.008;
     const shape = new THREE.Shape(); shape.moveTo(-w, -w * 1.5); shape.lineTo(w, -w * 1.5); shape.lineTo(w, w * 0.35); shape.absarc(0, w * 0.35, w, 0, Math.PI, false); shape.closePath();
     b.add(new THREE.ExtrudeGeometry(shape, { depth: 0.002, bevelEnabled: false, curveSegments: 5 }), v.x, v.y, v.z, 1, 1, 1, '#8c6b94', 0, a);
-    b.add(new THREE.ExtrudeGeometry(shape, { depth: 0.0025, bevelEnabled: false, curveSegments: 5 }), v.x + sx * 0.002, v.y, v.z + sz * 0.002, 0.68, 0.78, 1, '#f3c491', 0.78 + i % 3 * 0.11, a);
+    const [s0, n] = b.add(new THREE.ExtrudeGeometry(shape, { depth: 0.0025, bevelEnabled: false, curveSegments: 5 }), v.x + sx * 0.002, v.y, v.z + sz * 0.002, 0.68, 0.78, 1, '#f3c491', 0.78 + i % 3 * 0.11, a);
+    panes.push({ s0, n, glow: 0.78 + i % 3 * 0.11, k: (level * 24 + i) * 37 % 120 });   // k：點亮的順序（打散在四面與各層，不會一層一層亮）
     windows++;
   }
   // 原城本來已有細高尖塔，新增低一級的六座庭院小塔與鏤空拱廊，讓層次向島緣展開。
@@ -228,7 +232,16 @@ function castleDetails(model) {
     if (h) vine(b, h.point.x + sx * 0.005, h.point.y, h.point.z + sz * 0.005, 0.085 + i % 4 * 0.024, i);
   }
   const m = b.mesh('far:castle-gardens-windows'); m.userData.windows = windows; model.add(m);
+  lit.mesh = m; lit.panes = panes.sort((p, q) => p.k - q.k); paintWindows();
 }
+function paintWindows() {
+  if (!lit.mesh) return;
+  const P = lit.panes, base = Math.ceil(P.length * BASE_LIT), on = base + Math.round(lit.frac * (P.length - base)), a = lit.mesh.geometry.attributes.aFarGlow;
+  P.forEach((p, j) => { const gl = j < on ? p.glow : DARK_GLOW; for (let i = 0; i < p.n; i++) a.array[p.s0 + i] = gl; });
+  a.needsUpdate = true;
+}
+export function setCastleLit(frac) { const f = Math.max(0, Math.min(1, frac || 0)); if (f === lit.frac && lit.mesh) return; lit.frac = f; paintWindows(); }
+export const castleWindows = () => lit.panes.length;
 function isleDetails(model, variant) {
   const b = detailBuilder(), ray = modelRay(model);
   // 不動原草頂、樹與瀑布：花樹＋小屋／單塔各有深度，三款有不同天空剪影。
@@ -541,8 +554,32 @@ function makeRing() {
     backdropMaterial(m.material);
     m.scale.setScalar(k); m.raycast = NO_HIT; m.renderOrder = -1; g.add(m); ring.layers.push({ m, spin, w });
   });
+  { const cv = document.createElement('canvas'); cv.width = cv.height = 1024; const map = new THREE.CanvasTexture(cv); map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;   // v9.2 十科的十段：哪一科點亮的燈塔越多，那一段越亮（科目的顏色，不跟著天色染色）
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    backdropMaterial(m.material); m.raycast = NO_HIT; m.renderOrder = -1; g.add(m); ring.seg = { cv, map, m, fr: null, cols: null }; paintSegs(); }
   g.scale.setScalar(78 * FAR_K); scene.add(g); ring.g = g;
 }
+/** 十段星環的貼圖：每一段先畫一條淡淡的底線，再依點亮比例從起點畫出科目顏色的光弧；全亮的那段多一條白芯 */
+function paintSegs() {
+  const S = ring.seg; if (!S) return;
+  const c = S.cv.getContext('2d'), fr = S.fr || [], n = 10, R = 455, gap = 0.05;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 1024, 1024); c.translate(512, 512); c.lineCap = 'round';
+  for (let i = 0; i < n; i++) {
+    const a0 = -Math.PI / 2 + i / n * Math.PI * 2 + gap, a1 = a0 + Math.PI * 2 / n - gap * 2, f = Math.max(0, Math.min(1, fr[i] || 0)), col = (S.cols || [])[i] || '#ffffff';
+    c.shadowBlur = 0; c.strokeStyle = 'rgba(255,255,255,0.28)'; c.lineWidth = 5; c.beginPath(); c.arc(0, 0, R, a0, a1); c.stroke();
+    if (f > 0) { c.shadowBlur = 22; c.shadowColor = col; c.strokeStyle = col; c.lineWidth = 24; c.beginPath(); c.arc(0, 0, R, a0, a0 + (a1 - a0) * f); c.stroke(); }
+    if (f >= 1) { c.shadowBlur = 10; c.shadowColor = '#ffffff'; c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 6; c.beginPath(); c.arc(0, 0, R, a0, a1); c.stroke(); }
+  }
+  S.map.needsUpdate = true;
+}
+/** v9.2：十科各自的點亮比例（0–1）與顏色；有變才重畫 */
+export function setRing(fracs, cols) {
+  const S = ring.seg, key = fracs.map(f => f.toFixed(3)).join() + '|' + cols.join();
+  ring.total = fracs.reduce((a, f) => a + f, 0) / (fracs.length || 1);
+  if (!S || S.key === key) return; S.key = key; S.fr = fracs.slice(); S.cols = cols.slice(); paintSegs();
+}
+/** 點亮新的燈塔時，星環亮一下 */
+export function flareRing() { ring.flare = 1; }
 const ringBase = new THREE.Vector3();
 function updateRing(dt, t, night) {
   if (!ring.g) return;
@@ -555,7 +592,9 @@ function updateRing(dt, t, night) {
   hazeU.uFarDay.value = (1 - night) * (1 - gold * 0.85) * (1 - gloomK * 0.5);
   ring.col.copy(RING_DAY).lerp(RING_DUSK, gold).lerp(RING_NIGHT, night);
   const op = ((0.035 + gold * 0.035) * (1 - night) + night * 0.095) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
-  ring.layers.forEach(o => { o.m.rotation.z += o.spin * dt; o.m.material.color.copy(ring.col); o.m.material.opacity = op * o.w * pulse; });
+  const fl = ring.flare || 0, boost = 1 + (ring.total || 0) * 1.6 + fl * 2.5; ring.flare = Math.max(0, fl - dt * 0.4);   // v9.2：點亮得越多，整圈星環越清楚；剛點亮時亮一下
+  ring.layers.forEach(o => { o.m.rotation.z += o.spin * dt; o.m.material.color.copy(ring.col); o.m.material.opacity = Math.min(1, op * o.w * pulse * boost); });
+  if (ring.seg) ring.seg.m.material.opacity = Math.min(1, ((0.2 + gold * 0.2) * (1 - night) + night * 0.7) * (1 - gloomK * 0.6) * (1 + fl * 0.8));
 }
 
 const farMaterialCache = new WeakMap();

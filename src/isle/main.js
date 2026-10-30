@@ -54,6 +54,7 @@ import * as guide from './guide.js';
 import * as feel from './feel.js';
 import * as hall from './hall.js';   // 潮汐考場：模擬考、錯題本、成績統計
 import * as voyage from './voyage.js';   // 航海圖、單元試煉、每日潮汐、激流衝刺、燈塔首領戰
+import * as story from './story.js';   // v9.2 主線「點亮星環」
 import * as lexicon from './lexicon.js';   // 單字燈塔：翻卡、單字測驗、字表
 import * as profile from './profile.js';   // 我的檔案、船員登記、潮汐護符
 import * as lab from './lab.js';   // 導師研究計畫
@@ -256,6 +257,7 @@ room.setVisitItemHook(async (it, f) => {
 });
 museum.init(player, () => { const f = SITES.museum, x = f.x, z = f.z + 2.6; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
 const shopV = villagers.find(v => v.shop);
+story.init({ ready: () => guide.finished() || Object.keys(TA.S.days || {}).length >= 2, who: sid => sid === 'shop' ? shopV : villagers.find(v => v.sid === sid), sp: v => sp(v), paint: () => paintHud(), openChart: () => voyage.openChart() });   // v9.2 新手引導做完（或玩過兩天）才開始
 shopin.init(player, shopV, {
   onExit: () => { const f = SITES.shop, x = f.x + 0.8, z = f.z + 2.75; player.position.set(x, ground(x, z), z); player.rotation.y = 0; if (shopV) { shopV.mesh.visible = true; shopV.mesh.position.set(shopV.home[0], ground(shopV.home[0], shopV.home[1]), shopV.home[1]); shopV.mesh.rotation.y = 0; shopV.target = shopV.home.slice(); shopV.wait = 2; } camPos.copy(player.position).add(camOff); paintHud(); },
   counter: () => talk(shopV),
@@ -407,6 +409,7 @@ async function villagerTalk(v) {
     if (!room.inside && !elsewhere() && homevisit.canInvite(v)) opts.splice(opts.findIndex(o => o[0] === 'chat'), 0, ['fn', '邀請來我家玩', () => homevisit.invite(v, sp(v))]);
     if (lab.available(v)) opts.splice(opts.findIndex(o => o[0] === 'chat'), 0, ['fn', lab.menuLabel(v), () => lab.talk(v, sp(v), { giveFurn, paint: paintHud })]);
     if (town.bondLevel(v.sid) >= 3) opts.splice(1, 0, ['fn', '開讀書會（5 題，鈴錢加倍）', () => town.studyClub(v, sp(v))]);
+    story.menu(v, sp(v)).forEach(([l, f]) => opts.unshift(['fn', l, f]));   // v9.2 輪到這位老師的星環章節排在最前面（其他選項都加完才插）
     opts.push(['bye', '再見']);
     const i = await ui.ask(sp(v), pick(['還有什麼事嗎？', '想做什麼呢？', '嗯？']), opts.map(o => o[1]));
     const k = opts[i] ? opts[i][0] : 'bye';
@@ -506,8 +509,10 @@ async function shopTalk(v) {
   const opts = [['furn', '買家具'], ['wear', '服裝櫃台'], ['seed', '買種子'], ['sell', '賣東西'], ['ticket', `買潮汐券（3,000 鈴錢，有 ${trip.tickets()} 張）`], ['gem', `用潮晶換鈴錢（有 ${TA.S.gems} 潮晶）`]];
   if (!s.wetsuit) opts.splice(5, 0, ['suit', '買潛水衣（3,000 鈴錢）']);   // v9.0 穿上就能游泳、潛水
   if (events.active().includes('halloween') || s.candy) opts.push(['candy', `糖果兌換（${s.candy || 0} 顆）`]);
+  story.menu(v, sp(v)).forEach(([l, f]) => opts.unshift(['story', l, f]));   // v9.2 第 11 章是阿潮
   opts.push(['bye', '只是看看']);
   const i = await ui.ask(sp(v), '要做什麼呢？', opts.map(o => o[1])), k = (opts[i] || ['bye'])[0];
+  if (k === 'story') { await opts[i][2](); paintHud(); return; }
   if (k === 'furn') { ui.closeDialog(); openFurnShop(v); return; }
   if (k === 'wear') { ui.closeDialog(); wardrobe.openShop(v, player, paintHud); return; }
   if (k === 'seed') { ui.closeDialog(); garden.openSeedShop(v, paintHud); return; }
@@ -769,7 +774,7 @@ function phoneFree() {
   body.appendChild(ui.el('h4', 'ph-sec', '練習遊戲')); body.appendChild(appGrid(games, phoneFree, '自由練習'));
   ui.setBack(phone); ui.panel('自由練習', body, { cls: 'phone' });
 }
-const PHONE_CORE = ['考前衝刺', '今日學習', '考科航線', '自由練習', '模擬考', '信箱', '委託', '島民', '口袋', '地圖', '圖鑑', '島上指南', '設定'];
+const PHONE_CORE = ['考前衝刺', '今日學習', '考科航線', '點亮星環', '自由練習', '模擬考', '信箱', '委託', '島民', '口袋', '地圖', '圖鑑', '島上指南', '設定'];
 let phoneMore = false;   // 這次打開遊戲按過「更多 App」
 function phone() {
   const body = ui.el('div', 'phone-sec');
@@ -779,7 +784,7 @@ function phone() {
   const SEC = [
     ['學習', [   // v7.1：學習只留四個入口（今天、考科航線、自由練習、模考）；其他模式收進兩個入口裡，用過的會出現在「最近使用」
       ...(cram.active() ? [['考前衝刺', '🎯', '#ffc0b8', () => cram.open(paintHud)]] : []),
-      ['今日學習', '📚', '#9fe0a0', phoneToday], ['考科航線', '⛵', '#c8e4ff', phoneTrack], ['自由練習', '🧩', '#e8f0c0', phoneFree], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()]
+      ['今日學習', '📚', '#9fe0a0', phoneToday], ['考科航線', '⛵', '#c8e4ff', phoneTrack], ['點亮星環' + (story.badge() ? '（!）' : ''), '💫', '#e6d8ff', () => story.open()], ['自由練習', '🧩', '#e8f0c0', phoneFree], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()]
     ]],
     ['島上生活', [
       ['信箱' + (social.unread() ? `（${social.unread()}）` : ''), '✉️', '#ffc8d8', () => social.openMail()], ['委託', '📋', '#c8e0ff', () => social.phoneList()],
@@ -2220,6 +2225,7 @@ function tick(fixed) {
   const run = keys.ShiftLeft || keys.ShiftRight || joy.run, len = Math.hypot(ix, iz), moving = len > 0.01;
   { const away = room.inside || elsewhere(); if (away !== wasAway) { wasAway = away; moveTo = null; } if (!away && pendingMove) { pendingMove = false; move.apply(villagers); } }   // 跨日的搬家：在島上時才搬（不會在你拜訪時把房子搬走）   // 進出室內、離島：上一個場景點的目的地不能帶過去
   if ((house.inside || room.inside || elsewhere()) && player.userData.act === 'swim') endSwim();
+  if (started) guard('story', () => story.tick(dt));   // v9.2 星環：寄章節的信、點亮新燈塔時城堡亮一扇窗
   if ((house.inside || room.inside || elsewhere()) && boat.isRiding()) boat.stop();   // v9.1 划船時被送進室內：船留在原地   // v9.0 游泳時被送進室內（回家、進館）：先收起游泳的姿勢
   if (house.inside) {
     minimap.update(dt, false);   // v8.2 室內收起島上的小地圖（地名不會停在進門前）
