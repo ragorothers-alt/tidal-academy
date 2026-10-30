@@ -20,7 +20,8 @@ const WINGS = [
   { k: 'bug', name: '昆蟲', wall: 'right', color: '#8fe0b8' },
   { k: 'fossil', name: '化石', wall: 'back', color: '#e8c878' },
   { k: 'sea', name: '潮池生物', wall: 'frontL', color: '#5ab0c8' },
-  { k: 'mineral', name: '礦物', wall: 'frontR', color: '#b9a2ff' }
+  { k: 'mineral', name: '礦物', wall: 'frontR', color: '#b9a2ff' },
+  { k: 'marine', name: '海洋館', wall: null, color: '#3fa7d6' }   // v9.0 潛水遇到的生物：展示在海洋館（aquarium.js）的水族缸裡
 ];
 /* 展廳的材質貼圖（畫一次就快取，離館時不釋放） */
 const TX = {};
@@ -84,7 +85,7 @@ function build() {
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(3, D - 3), own(new THREE.MeshStandardMaterial({ map: rugTex(), roughness: 1 }))); rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.012, 1.2); rug.receiveShadow = true; s.add(rug);
   const s2 = S(); slots = [];
   WINGS.forEach(w => {
-    const L2 = list(w.k); if (!L2.length) return;
+    const L2 = list(w.k); if (!L2.length || !w.wall) return;
     const pos = layout(w.wall, L2.length);
     pos.forEach(([x, y, z, ry], i) => {
       const sp = L2[i], got = s2.museum[w.k] && s2.museum[w.k][sp.id];
@@ -197,6 +198,28 @@ function cardsMesh(list) {
   const m = new THREE.Mesh(g, ATL.mat); m.castShadow = false; m.receiveShadow = true; return m;
 }
 let signs = [];
+/* ---------- v9.0 海洋館的入口：魚類側廳北牆上的拱門（走過去按 E 走進海洋館；從海洋館出來站在拱門前） ---------- */
+export const ARCH = [-9, -8.98], ARCH_SPAWN = [-9, 0, -7.7, 0];
+let archG = null;
+function arch() {
+  if (archG) return archG;   // 建一次重複用（材質與貼圖不釋放）
+  const g = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: '#d9ad70', roughness: 0.68 }), brass = new THREE.MeshStandardMaterial({ color: '#f4bf55', roughness: 0.3, metalness: 0.4 });
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 512; const c = cv.getContext('2d'), gr = c.createLinearGradient(0, 0, 0, 512);
+  gr.addColorStop(0, '#bff4ff'); gr.addColorStop(0.45, '#3fb4e0'); gr.addColorStop(1, '#1a5f9a'); c.fillStyle = gr; c.fillRect(0, 0, 256, 512);
+  c.strokeStyle = 'rgba(255,255,255,0.35)'; c.lineWidth = 3; for (let y = 40; y < 512; y += 46) { c.beginPath(); for (let x = 0; x <= 256; x += 8) c.lineTo(x, y + Math.sin(x / 22 + y) * 6); c.stroke(); }   // 水紋
+  c.fillStyle = 'rgba(255,255,255,0.6)'; for (let i = 0; i < 24; i++) { c.beginPath(); c.arc(30 + (i * 53) % 200, 480 - i * 19, 3 + (i % 3) * 2, 0, 6.283); c.fill(); }   // 泡泡
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const portal = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.45), new THREE.MeshBasicMaterial({ map: tex })); portal.position.set(0, 1.25, 0.01); g.add(portal);
+  const box = (w, h, d, x, y, z, m) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; g.add(o); };
+  box(0.22, 2.62, 0.22, -0.86, 1.31, 0.08, wood); box(0.22, 2.62, 0.22, 0.86, 1.31, 0.08, wood); box(1.96, 0.24, 0.26, 0, 2.72, 0.08, wood);
+  box(2.02, 0.04, 0.28, 0, 2.86, 0.08, brass); box(0.26, 0.04, 0.26, -0.86, 0.02, 0.08, brass); box(0.26, 0.04, 0.26, 0.86, 0.02, 0.08, brass);
+  const sc = document.createElement('canvas'); sc.width = 512; sc.height = 128; const s2 = sc.getContext('2d');
+  s2.fillStyle = '#1f6f98'; s2.fillRect(0, 0, 512, 128); s2.fillStyle = '#f4bf55'; s2.fillRect(0, 0, 512, 10); s2.fillRect(0, 118, 512, 10);
+  s2.fillStyle = '#ffffff'; s2.font = '800 60px system-ui, "Microsoft JhengHei", sans-serif'; s2.textAlign = 'center'; s2.textBaseline = 'middle'; s2.fillText('潮汐海洋館', 256, 66, 480);
+  const st = new THREE.CanvasTexture(sc); st.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshStandardMaterial({ map: st, emissiveMap: st, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.35, roughness: 0.8 })); sign.position.set(0, 3.12, 0.1); g.add(sign);
+  g.position.set(ARCH[0], 0, ARCH[1]); return (archG = g);
+}
 function signMesh(w, n, total, [x, y, z, ry, wd]) {
   const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const c = cv.getContext('2d');
   const full = total > 0 && n >= total;   // v8.3 捐齊的展區：名牌換成金色
@@ -238,10 +261,11 @@ export function dress(ud) {
   if (cards.length) { const m = cardsMesh(cards); signs.push(m); out.push(m); }
   if (plates.length) { NL.tex.needsUpdate = true; const m = quads(plates, NL.mat); signs.push(m); out.push(m); }
   const th = themeStand(ud); if (th) { th.children.forEach(o => signs.push(o)); out.push(th); }
+  if (window.TA.ISLE.INTERIORS && window.TA.ISLE.INTERIORS.aquarium) out.push(arch());   // v9.0 海洋館的拱門
   return out;
 }
 /** v8.3 這次進館的互動點：每件捐贈過的展品＋圓廳的特展台 */
-export const spots = ud => { const t = ud && ud.themeAt || THEME_AT; return spotList.concat(themeNow() ? [{ x: t[0], y: 0, z: t[2], r: 1.2, kind: 'hook:theme', label: '看看本週小特展' }] : []); };
+export const spots = ud => { const t = ud && ud.themeAt || THEME_AT; return spotList.concat(themeNow() ? [{ x: t[0], y: 0, z: t[2], r: 1.2, kind: 'hook:theme', label: '看看本週小特展' }] : [], window.TA.ISLE.INTERIORS && window.TA.ISLE.INTERIORS.aquarium ? [{ x: ARCH[0], y: 0, z: ARCH[1] + 1, r: 1.0, kind: 'hook:aquarium', label: '走進海洋館' }] : []); };
 /** 展品在館裡的位置（捐完指路用） */
 export const where = (k, id) => placed.get(k + ':' + id) || null;
 export const wingName = k => (WINGS.find(w => w.k === k) || {}).name || '';
@@ -296,7 +320,7 @@ export async function openTheme(sp, hooks) {
     if (hooks && hooks.paint) hooks.paint();
   }
 }
-const howTo = k => ({ fish: '去釣魚', bug: '去捉蟲', fossil: '挖化石再請史遙鑑定', sea: '退潮時去潮池', mineral: '敲石頭、請岳鑑定礦石' })[k] || '';
+const howTo = k => ({ fish: '去釣魚', bug: '去捉蟲', fossil: '挖化石再請史遙鑑定', sea: '退潮時去潮池', mineral: '敲石頭、請岳鑑定礦石', marine: '穿上潛水衣去潛水' })[k] || '';
 /** 出館：名牌的字與這次的圖卡網格每次重做，釋放掉（圖集留著下次用） */
 export function undress() { signs.forEach(m => { m.geometry.dispose(); if (m.material !== ATL.mat && m.material !== NL.mat) { if (m.material.map) m.material.map.dispose(); m.material.dispose(); } }); signs = []; }
 /** 離館時釋放這次建立的幾何與專屬材質（共用材質 M() 與圖示貼圖快取不釋放） */

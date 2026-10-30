@@ -16,7 +16,7 @@ if (fs.existsSync(path.join(ROOT, 'src/isle/data/homes.js'))) load('src/isle/dat
 if (fs.existsSync(path.join(ROOT, 'src/isle/data/guests.js'))) load('src/isle/data/guests.js');
 if (fs.existsSync(path.join(ROOT, 'src/isle/data/bday.js'))) load('src/isle/data/bday.js');
 if (fs.existsSync(path.join(ROOT, 'src/isle/data/lines2.js'))) load('src/isle/data/lines2.js');
-['stars', 'lines3', 'sealife', 'lines4', 'foods', 'minerals', 'lines5', 'lines6', 'timeline', 'elements', 'idioms', 'routines', 'lines8'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });
+['stars', 'lines3', 'sealife', 'lines4', 'foods', 'minerals', 'lines5', 'lines6', 'timeline', 'elements', 'idioms', 'routines', 'lines8', 'marine', 'marineicons'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });
 ['researchfurn', 'research', 'collectfurn'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });   // 導師研究計畫（家具要在 furniture.js 之後載入）
 const I = ctx.TA.ISLE;
 
@@ -521,15 +521,17 @@ test('公共建築的整棟室內：出生點、出口、互動點與展示位',
   const std = () => new THREE.MeshStandardMaterial();
   const kit = { mat: std, rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null };
   const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8'), hooks = (main.match(/const HOUSE_HOOKS = \{([\s\S]*?)\};/) || ['', ''])[1];
-  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'] };
-  for (const key of ['library', 'museum']) {
+  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'] };
+  for (const key of ['library', 'museum', 'aquarium']) {
+    if (!fs.existsSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`))) { t.diagnostic(key + ' 還沒有整棟室內'); continue; }
     vm.runInContext(fs.readFileSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`), 'utf8'), cx, { filename: key });
     const fac = cx.TA && cx.TA.ISLE && cx.TA.ISLE.INTERIORS && cx.TA.ISLE.INTERIORS[key];
     if (!fac) { t.diagnostic(key + ' 還沒有整棟室內（用舊的房間）'); continue; }
     const ud = fac(THREE, kit).userData;
     const [sx, , sz] = ud.spawn, [ex, ez, er] = ud.exit;
     assert.ok(Math.hypot(sx - ex, sz - ez) > er + 0.4, key + ' 出生點要在出口圈外');
-    assert.ok(Array.isArray(ud.host) && ud.host.length >= 3, key + ' 館員的位置');
+    if (key !== 'aquarium') assert.ok(Array.isArray(ud.host) && ud.host.length >= 3, key + ' 館員的位置');
+    if (key === 'aquarium') assert.equal((ud.tanks || []).map(k => k.where).sort().join(), 'deep,reef,seagrass,shallow', '海洋館的四座水族缸');
     const kinds = ud.spots.map(s => s.kind);
     ud.spots.forEach(s => {
       assert.ok(s.label && s.label.length <= 6 && s.r > 0, key + ' 互動點 ' + s.label);
@@ -651,4 +653,46 @@ test('港口模型：命名零件、原點與面數', () => {
     const b = new THREE.Box3().setFromObject(g);
     if (floats) assert.ok(b.min.y < 0 && b.max.y > 0, `${key} 的原點要在水線（一部分在水面下）`); else assert.ok(Math.abs(b.min.y) < 0.02, `${key} 的原點要在地面`);
   }
+});
+
+/* v9.0 潛水的海洋生物：欄位、棲地、每個月都潛得到、台詞、圖示 */
+test('海洋生物：欄位、棲地、月份時段、台詞與圖示', { skip: !I.MARINE && '尚未產生' }, () => {
+  const M = I.MARINE, others = new Set([...I.FISH, ...I.BUGS, ...I.FOSSILS, ...(I.SEALIFE || []), ...(I.MINERALS || [])].map(x => x.id));
+  assert.equal(M.length, 30, '30 種'); assert.equal(new Set(M.map(x => x.id)).size, 30, 'id 唯一');
+  const hoursOk = h => Array.isArray(h) && h.every(r => r.length === 2 && r[0] >= 0 && r[1] <= 24 && r[0] < r[1]);
+  M.forEach(x => {
+    assert.match(x.id, /^[a-z0-9_]+$/); assert.ok(!others.has(x.id), x.id + ' 和其他圖鑑重複');
+    assert.ok(['shallow', 'reef', 'seagrass', 'deep'].includes(x.where), x.id + ' 棲地'); assert.ok(['any', 'high', 'low'].includes(x.tide), x.id + ' 潮位');
+    assert.ok(hoursOk(x.hours) && x.months.length && x.months.every(m => m >= 1 && m <= 12), x.id + ' 時段與月份');
+    assert.ok(x.rarity >= 1 && x.rarity <= 5 && x.price > 0 && x.speed >= 0 && x.speed <= 3, x.id + ' 稀有度、價格、速度');
+    assert.ok(['biology', 'earth'].includes(x.sid), x.id + ' 出題科目');
+    assert.ok(x.desc.length >= 40 && x.desc.length <= 95 && x.fact.length >= 15 && x.fact.length <= 60, x.id + ' 說明與小知識的長度');
+    const line = I.MARINE_LINES.catch[x.id]; assert.ok(line && line.length >= 10 && line.length <= 45, x.id + ' 抓到的台詞');
+    if (I.ICONS) assert.match(I.ICONS[x.id] || '', /^data:image\/png;base64,/, x.id + ' 圖示');
+  });
+  for (let m = 1; m <= 12; m++) for (const w of ['shallow', 'reef', 'seagrass', 'deep']) assert.ok(M.filter(x => x.where === w && x.months.includes(m)).length >= 2, `${m} 月的${w}至少兩種`);
+  ['green_turtle', 'hawksbill'].forEach(id => assert.ok(M.find(x => x.id === id).protected, id + ' 是保育類'));
+});
+
+/* v9.0 海洋生物與海底造景的模型：每一種都有、動作需要的零件都在、面數在預算內，dive.js／aquarium.js 用到的造景都有 */
+test('海洋生物與海底造景模型：零件、原點與面數', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  for (const f of ['marinemodels', 'reefmodels']) vm.runInContext(fs.readFileSync(path.join(ROOT, `src/isle/data/${f}.js`), 'utf8'), cx, { filename: f });
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial() }, J = cx.TA.ISLE;
+  const tris = g => { let n = 0; g.traverse(o => { if (o.isMesh) n += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; }); return n; };
+  const NEED = { swim: ['tail'], paddle: ['finL', 'finR'], pulse: ['bell'], arms: ['arm0', 'arm1'], crawl: ['leg0', 'leg1'], clam: ['lid'], sway: [], still: [] };
+  (I.MARINE || []).forEach(x => {
+    assert.ok(J.MARINEMODELS[x.id], x.id + ' 沒有模型');
+    const g = J.MARINEMODELS[x.id](THREE, kit), a = g.userData.anim; g.updateMatrixWorld(true);
+    assert.ok(NEED[a], x.id + ' 動作 ' + a); NEED[a].forEach(n => assert.ok(g.getObjectByName(n), `${x.id} 少了 ${n}`));
+    assert.ok(tris(g) <= 2700, `${x.id} 面數 ${tris(g)}`);
+    if (x.speed === 0) assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.03, x.id + ' 固著的生物原點在底部');
+  });
+  const used = new Set(['dive.js', 'aquarium.js'].flatMap(f => [...fs.readFileSync(path.join(ROOT, 'src/isle', f), 'utf8').matchAll(/\['(\w+)', \d+\]/g)].map(m => m[1])));
+  used.forEach(k => {
+    assert.ok(J.REEFMODELS[k], '少了造景 ' + k);
+    const g = J.REEFMODELS[k](THREE, kit); g.updateMatrixWorld(true);
+    assert.ok(tris(g) <= 3800, `${k} 面數 ${tris(g)}`); assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.03, k + ' 原點在底部');
+  });
 });

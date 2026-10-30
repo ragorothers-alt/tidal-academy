@@ -14,7 +14,7 @@ const labStages = s => Object.values(s.lab || {}).reduce((a, r) => a + Math.min(
 export function score() {
   const s = S(), o = L.overall(), research = labStages(s), best = TA.S.streak.best || 0, concepts = Object.keys(L.CONCEPTS).filter(L.conceptVerified).length;
   const study = clamp(o.mastered / (o.total * 0.25)) * 0.35 + clamp(o.seen / (o.total * 0.6)) * 0.2 + clamp(research / 15) * 0.2 + clamp(best / 30) * 0.1 + clamp(concepts / 6) * 0.15;
-  const kinds = ['fish', 'bug', 'fossil', 'sea', 'mineral'], total = kinds.reduce((a, k) => a + list(k).length, 0);
+  const kinds = ['fish', 'bug', 'fossil', 'sea', 'mineral', 'marine'], total = kinds.reduce((a, k) => a + list(k).length, 0);
   const donated = kinds.reduce((a, k) => a + Object.keys(s.museum[k] || {}).length, 0), caught = kinds.reduce((a, k) => a + Object.keys(s.dex[k] || {}).length, 0);
   const friends = Object.values(s.fr || {}).reduce((a, v) => a + Math.min(16, v), 0) / (10 * 16);
   const room = (s.room && s.room.items) || [], cn = corners(s.room || { items: [] });

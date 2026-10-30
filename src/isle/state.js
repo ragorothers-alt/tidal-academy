@@ -6,7 +6,7 @@ import { watch } from './ledger.js';
 const TA = window.TA;
 export const I = TA.ISLE = TA.ISLE || {};
 export const POCKET_N = 20;
-export const KINDS = { fish: '魚', bug: '蟲', fossil: '化石', sea: '潮池生物', mineral: '礦物' };
+export const KINDS = { fish: '魚', bug: '蟲', fossil: '化石', sea: '潮池生物', mineral: '礦物', marine: '海洋生物' };
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const OBJ = ['garden', 'stars', 'mats', 'miles', 'plan', 'wordle', 'tablets', 'cram', 'settings', 'guests', 'room', 'design', 'closet', 'look', 'tot', 'typhoonTalk', 'afterTalk', 'quizcup', 'diyDay', 'tidePools', 'wisp', 'homeVisit', 'tourney', 'ev', 'fr', 'frDay', 'storage', 'milestones', 'stats', 'relocate', 'bond', 'giftDay', 'bdayDone', 'tips', 'rating', 'gemDay', 'genePractice', 'cupDay', 'elements', 'practice'];
@@ -73,7 +73,10 @@ export function practiced(id, right, total, ev) {
 }
 
 /* ---------- 物種 ---------- */
-export const list = k => (k === 'fish' ? I.FISH : k === 'bug' ? I.BUGS : k === 'sea' ? I.SEALIFE : k === 'mineral' ? I.MINERALS : k === 'food' ? I.FOODS : I.FOSSILS) || [];
+export const list = k => (k === 'fish' ? I.FISH : k === 'bug' ? I.BUGS : k === 'sea' ? I.SEALIFE : k === 'mineral' ? I.MINERALS : k === 'marine' ? I.MARINE : k === 'food' ? I.FOODS : I.FOSSILS) || [];
+/** 只拍照、不帶走的生物：潮池的保育類（沒有標價），以及潛水遇到的保育類、珊瑚、硨磲貝與鸚鵡螺（v9.0）。照片直接送進博物館 */
+const MARINE_PHOTO = new Set(['giant_clam', 'nautilus', 'staghorn_coral', 'brain_coral', 'soft_coral', 'sea_fan']);
+export const photoOnly = (k, sp) => !!sp && (k === 'sea' ? !sp.price : k === 'marine' ? !!sp.protected || MARINE_PHOTO.has(sp.id) : false);
 export const find = (k, id) => list(k).find(x => x.id === id);
 export function itemName(it) { if (!it) return ''; if (it.k === 'unk') return '未鑑定的化石'; if (it.k === 'ore') return '未鑑定的礦石'; if (it.k === 'pkg') return '要送出的筆記本'; const sp = find(it.k, it.id); return sp ? sp.name : it.id; }
 export function itemPrice(it) { if (it.k === 'unk') return 100; if (it.k === 'ore') return 150; if (it.k === 'pkg') return 0; const sp = find(it.k, it.id); return sp ? sp.price : 0; }
@@ -125,7 +128,7 @@ export function newDay(onNew) {
 export const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
 export const fmtHours = sp => !sp.hours ? '全天' : sp.hours.map(([a, b]) => (a === 0 && b === 24 ? '全天' : `${a}–${b} 時`)).join('、');
 export const fmtMonths = sp => !sp.months || sp.months.length === 12 ? '全年' : sp.months.join('、') + ' 月';
-export const WHERE = { sea: '海', river: '河', pond: '池塘', pier: '碼頭', flower: '花上', tree: '樹上', ground: '地面', air: '空中', rock: '岩石', water: '水面', beach: '沙灘', pool: '潮池', mud: '泥灘' };
+export const WHERE = { sea: '海', river: '河', pond: '池塘', pier: '碼頭', flower: '花上', tree: '樹上', ground: '地面', air: '空中', rock: '岩石', water: '水面', beach: '沙灘', pool: '潮池', mud: '泥灘', shallow: '淺灘', seagrass: '海草床', reef: '珊瑚礁', deep: '外海深處' };
 const SEAWHERE = { pool: '潮池', rock: '潮池岩石', mud: '泥灘' };
 /** 出沒地點名稱（潮池生物的 rock 是潮池邊的岩石） */
 export const whereName = (k, x) => ((k === 'sea' ? SEAWHERE : WHERE)[x.where] || '');

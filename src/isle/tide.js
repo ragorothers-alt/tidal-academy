@@ -18,6 +18,8 @@ const LOW = -0.35, W = [0, 10, 6, 3, 1.2, 0.4];
 let P = null, level = 0, pools = [], poolKey = '', busy = false;
 const group = new THREE.Group(); scene.add(group);
 export const isBusy = () => busy;
+/** v9.0 現在的潮位（約 -1 乾潮到 1 滿潮，跟著海面慢慢變；swim.js 依這個決定潛得到哪些地形） */
+export const lvl = () => level;
 export function init(player) {
   P = player;
   const s = S(); list('sea').filter(x => !x.price && s.dex.sea[x.id] && !s.museum.sea[x.id]).forEach(x => { s.museum.sea[x.id] = s.dex.sea[x.id]; });   // 以前拍過照的保育類：補進博物館

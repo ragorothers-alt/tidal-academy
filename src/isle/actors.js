@@ -251,6 +251,14 @@ function actPose(ch, gl, dt, u) {
     case 'chess': { const mv = pulse(t, 7, 1.2); headDown(0.35); arms(-0.8 * mv, 0.4 * mv, 0, -0.2 * (1 - mv), -0.8 * (1 - mv), -1.8 * (1 - mv)); break; }   // 托著下巴想，偶爾伸手走一步棋
     case 'kite': arms(-1.6 + s(t * 1.3) * 0.08, 0.2, -0.3, -0.6, -0.4, -0.9); if (free && gl.head) T(gl.head, AX, -0.4); break;
     case 'shop': { const p = pulse(t, 6, 1.4); headDown(0.2); arms(-0.6 * p, 0.4 * p, -0.6 * p, 0, 0, 0); break; }
+    case 'swim': case 'dive': {   // v9.0 游泳（海面）與潛水（身體由 main.js／dive.js 前傾）：停著時雙手在身側划水、腳慢慢踩；游動時蛙式
+      const m = u.swimK || 0, i = 1 - m, p = t * (a === 'dive' ? 2.2 : 2.6), st = Math.max(0, s(p)), kk = Math.max(0, s(p + 1.5)), sc = s(t * 2.5) * 0.25, fw = a === 'dive' ? -2.6 : -1.5;
+      T(R.rArm, AX, fw * m - 0.25 * i); T(R.lArm, AX, fw * m - 0.25 * i);
+      T(R.rArm, AZ, 0.9 * st * m + (1.1 + sc) * i); T(R.lArm, AZ, -0.9 * st * m - (1.1 + sc) * i);
+      T(R.rFore, AX, -0.6 * st * m); T(R.lFore, AX, -0.6 * st * m);
+      T(R.lUp, AX, -0.5 * kk * m + s(t * 3) * 0.3 * i); T(R.rUp, AX, -0.5 * kk * m - s(t * 3) * 0.3 * i);
+      T(R.lLeg, AX, kk * m + 0.3 * i); T(R.rLeg, AX, kk * m + 0.3 * i); break;
+    }
   }
 }
 /* 手上的道具（chars.js 的 setProps 放在角色底下）：每一格跟著手掌的位置，方向用角色自己的座標，換骨架也一樣 */

@@ -64,8 +64,8 @@ function rewards() {
     out.push({ key: 'dex_' + k, ok: () => kindFull('dex', k), m: { from: 'history', title: `${n}圖鑑收齊了！`, text: `你把島上所有的${n}都登錄進圖鑑了！一筆一筆的觀察紀錄，就是最好的博物學筆記。`, gift: { type: 'bells', n: 5000 }, giftLine: '隨信附上 5,000 鈴錢，當作研究經費吧。' } });
     out.push({ key: 'mus_' + k, ok: () => kindFull('museum', k), m: { from: 'history', title: `${n}展區全部捐齊了！`, text: `${n}展區的展示櫃一格都沒有空著了。來參觀的島民都說，這裡是潮汐博物館最熱鬧的一區。謝謝你。`, gift: { type: 'bells', n: 8000 }, giftLine: '隨信附上 8,000 鈴錢。' } });
   });
-  out.push({ key: 'dex_all', ok: () => KINDS.every(([k]) => kindFull('dex', k)), m: { from: 'history', title: '五種圖鑑全部收齊！', text: '魚、蟲、化石、潮間帶生物和礦物——你把這座島上能找到的生命與石頭都記下來了。這座獎盃，請放在房間最顯眼的地方。', gift: furn('trophy_naturalist') || { type: 'bells', n: 20000 }, giftLine: room.furn('trophy_naturalist') ? '隨信附上「島嶼博物學家獎盃」。' : '隨信附上 20,000 鈴錢。' } });
-  out.push({ key: 'mus_all', ok: () => KINDS.every(([k]) => kindFull('museum', k)), m: { from: 'history', title: '潮汐博物館全數捐齊！', text: '五個展區都滿了，潮汐博物館終於成為一座完整的博物館。這張感謝狀，代表全體島民的謝意。', gift: furn('trophy_curator') || { type: 'bells', n: 30000 }, giftLine: room.furn('trophy_curator') ? '隨信附上「潮汐博物館感謝狀」。' : '隨信附上 30,000 鈴錢。' } });
+  out.push({ key: 'dex_all', ok: () => KINDS.filter(([k]) => k !== 'marine').every(([k]) => kindFull('dex', k)), m: { from: 'history', title: '五種圖鑑全部收齊！', text: '魚、蟲、化石、潮間帶生物和礦物——你把這座島上能找到的生命與石頭都記下來了。這座獎盃，請放在房間最顯眼的地方。', gift: furn('trophy_naturalist') || { type: 'bells', n: 20000 }, giftLine: room.furn('trophy_naturalist') ? '隨信附上「島嶼博物學家獎盃」。' : '隨信附上 20,000 鈴錢。' } });
+  out.push({ key: 'mus_all', ok: () => KINDS.filter(([k]) => k !== 'marine').every(([k]) => kindFull('museum', k)), m: { from: 'history', title: '潮汐博物館全數捐齊！', text: '五個展區都滿了，潮汐博物館終於成為一座完整的博物館。這張感謝狀，代表全體島民的謝意。', gift: furn('trophy_curator') || { type: 'bells', n: 30000 }, giftLine: room.furn('trophy_curator') ? '隨信附上「潮汐博物館感謝狀」。' : '隨信附上 30,000 鈴錢。' } });
   FURN_GOALS.forEach(([n, b]) => out.push({ key: 'furn' + n, ok: () => furnCount() >= n, m: { from: 'shop', title: `家具收藏 ${n} 種！`, text: `聽說你的家具目錄已經登錄 ${n} 種了！常來店裡的客人裡，你是最會佈置房間的一位。這是店裡的一點心意。`, gift: { type: 'bells', n: b }, giftLine: `隨信附上 ${b.toLocaleString()} 鈴錢。` } }));
   return out;
 }

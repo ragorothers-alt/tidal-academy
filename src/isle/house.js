@@ -10,6 +10,7 @@
      gifts [[x, y, z, ry]]      送給主人的家具擺在這些位置（每格至少 1×1 公尺的空地）
      lights [[x, y, z, 色碼?, 強度倍率?, 光暈?]]   暖色點光，最多 6 盞（光暈大小預設 1；有燈罩的燈給小一點，0 是不要光暈）
      sun [x, y, z]              白天主光（從屋外照進窗戶）的方向，預設前右上方
+     indoor true                沒有窗的館（v9.0 海洋館）：燈整天維持同一個亮度，不靠窗外的天光
      bounce k                   四處反彈的光有住家的幾倍（預設 1）：窗多、牆淺的大廳（圖書館、博物館）光會在裡面來回反射，給 1.5–2.5；陰影也比較暖、霧比較遠
      cols [[x0, y0, z0, x1, y1, z1]]   額外的碰撞箱
      decor { x, y, z }          玩家家：「我的房間」8 × 8 公尺地板的中心（玩家的家具照存檔的格子擺在這裡，牆與地板標 paper 的換成玩家選的壁紙地板）
@@ -564,10 +565,11 @@ export function tick(dt, t, o) {
   const day = 1 - n, bk = cur.ud.bounce || 1;
   hemi.color.set(n > 0.5 ? '#d2b296' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#4a3a3c' : '#a893b8');   // v8.0：晚上四處反彈的是燈的暖光（月光只從窗戶進來）
   if (bk > 1) hemi.groundColor.lerp(_c.set('#d6b89c'), Math.min(1, (bk - 1) * 0.7) * day);   // v8.1 大廳：白天從蜂蜜木地板、奶油牆反彈上來的光偏暖
-  hemi.intensity = 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0'); camFill.intensity = (0.25 * day + 1.2 * n) * (1 - fpNow);
-  sun.intensity = day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b9c0ff' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
+  const inn = !!cur.ud.indoor;
+  hemi.intensity = inn ? 0.3 * bk : 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0'); camFill.intensity = (0.25 * day + 1.2 * n) * (1 - fpNow);
+  sun.intensity = inn ? 0.4 : day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b9c0ff' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
   scene.background.set(n > 0.5 ? '#1d1a34' : '#cbb8de');
-  extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光
+  extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (inn ? 7 : 2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光
   lampMats.forEach(m => { m.emissiveIntensity = 0.6 + n * 0.6; });   // v8.0：燈泡與擴散片收一點（以前晚上 1.9，泛光把小小的擴散片暈成一片白）
   shadeMats.forEach(m => { m.emissiveIntensity = 0.04 + n * 0.3; });   // 透光的燈罩：晚上透出一層琥珀色的光
   viewMat.uniforms.uNight.value = n;

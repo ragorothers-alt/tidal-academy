@@ -1,6 +1,6 @@
 /* 潮汐小島 · 收藏目錄的資料規則（純函式，tests/isle.test.cjs 直接測）：家具怎麼拿到、哪些算在目錄裡、收集獎勵的門檻。 */
 export const CATS = [['', '全部'], ['bed', '床'], ['seat', '椅子'], ['table', '桌子'], ['storage', '收納'], ['study', '學習'], ['light', '燈'], ['plant', '植物'], ['rug', '地毯'], ['deco', '擺飾'], ['trophy', '獎盃']];
-export const KINDS = [['fish', '魚類'], ['bug', '昆蟲'], ['fossil', '化石'], ['sea', '潮間帶生物'], ['mineral', '礦物']];
+export const KINDS = [['fish', '魚類'], ['bug', '昆蟲'], ['fossil', '化石'], ['sea', '潮間帶生物'], ['mineral', '礦物'], ['marine', '海洋生物']];
 /** 活動家具的來源（src 是 event:<名稱>） */
 export const EV = {
   after: '考後慶典', bug_cup: '週五捕蟲大會的獎盃', d100: '學測倒數 100 天', eve: '學測前夜', fish_cup: '週三釣魚大賽的獎盃',

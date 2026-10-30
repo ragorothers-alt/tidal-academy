@@ -4,7 +4,7 @@
    大賽中答錯不記（比賽就是比賽）。新手引導還沒完成時，採集答錯也照樣帶回（新手保護，newbie）。 */
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
-import { S, save, find, addItem, icon, stars, dayKey, freeSlots } from './state.js';
+import { S, save, find, addItem, icon, stars, dayKey, freeSlots, photoOnly } from './state.js';
 import { pickQ, pickQU, vocabQ, askQ, record } from './quiz.js';
 import * as miles from './miles.js';
 
@@ -23,10 +23,10 @@ export function add(k, id, q) {
 }
 /** 答錯時的提示句（接在原本的台詞後面） */
 export const told = '不過你記下了牠的樣子：手機「圖鑑」上方的觀察筆記裡答對一題，就能補完研究、帶回一隻。';
-const qOf = o => o.q === 'vocab' ? vocabQ() : o.q === 'sea' ? pickQU(['es-ocean'], 3) || pickQ('earth', 3) : pickQ(o.q, 2) || pickQ(o.q, 3);
+const qOf = o => o.q === 'vocab' ? vocabQ() : o.q === 'sea' ? pickQU(['es-ocean'], 3) || pickQ('earth', 3) : o.q === 'mbio' ? pickQU(['bi-evo', 'bi-eco'], 3) || pickQ('biology', 3) : o.q === 'mearth' ? pickQU(['es-ocean', 'es-climate'], 3) || pickQ('earth', 3) : pickQ(o.q, 2) || pickQ(o.q, 3);   // v9.0 潛水：生物或地科
 async function complete(o) {
   const sp = find(o.k, o.id); if (!sp) { notes().splice(notes().indexOf(o), 1); save(); return; }
-  const keep = !(o.k === 'sea' && !sp.price);   // 保育類只拍照：不進口袋
+  const keep = !photoOnly(o.k, sp);   // 保育類（與潛水遇到的珊瑚等）只拍照：不進口袋
   if (keep && !freeSlots()) { ui.toast('口袋滿了，先整理口袋再來補完', 'bad'); Audio.sfx('deny'); return; }
   const q = qOf(o); if (!q) return;
   ui.closePanel();
@@ -37,10 +37,10 @@ async function complete(o) {
   ui.passage(null); ui.closeDialog();
   notes().splice(notes().indexOf(o), 1);
   const s = S(), first = !s.dex[o.k][o.id]; s.dex[o.k][o.id] = s.dex[o.k][o.id] || Date.now();
-  if (!keep) s.museum.sea[o.id] = s.museum.sea[o.id] || Date.now();
+  if (!keep) s.museum[o.k][o.id] = s.museum[o.k][o.id] || Date.now();
   const room = keep ? addItem({ k: o.k, id: o.id }) : true; save(); miles.add(o.k);
   Audio.sfx('ok');
-  await ui.card({ pocket: keep && room, rare: sp.rarity >= 4, icon: icon(o.id, o.k), title: `研究補完：${sp.name}`, sub: keep ? '照著筆記又找到牠了！' : '照著筆記拍到了照片，已經送到博物館的潮池展區。', extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}` });
+  await ui.card({ pocket: keep && room, rare: sp.rarity >= 4, icon: icon(o.id, o.k), title: `研究補完：${sp.name}`, sub: keep ? '照著筆記又找到牠了！' : `照著筆記拍到了照片，已經送到博物館的${o.k === 'marine' ? '海洋館' : '潮池展區'}。`, extra: `<span class="stars">${stars(sp.rarity)}</span>${first ? '<em>新登錄圖鑑！</em>' : ''}` });
 }
 /** 圖鑑上方的觀察筆記；沒有筆記時回傳 null */
 export function section() {

@@ -888,6 +888,13 @@ body.in-dream #cv { filter: saturate(1.08) brightness(1.03); }
 .dt-cost { position: absolute; right: 4px; bottom: 3px; padding: 1px 6px; border-radius: 999px; background: #9a86e8; color: #fff; font-size: 11px; font-style: normal; font-weight: 800; }
 .dream-hud { position: fixed; left: 16px; top: 98px; z-index: 3; display: flex; align-items: baseline; gap: 6px; padding: 6px 14px; border-radius: 999px; background: rgba(255, 252, 240, .92); color: #7a5ad0; font-weight: 800; box-shadow: 0 4px 0 rgba(90, 74, 160, .18); pointer-events: none; }
 .dream-hud b { font-size: 18px; } .dream-hud small { color: #8a7ab0; font-size: 12px; }
+/* v9.0 潛水：上方中間的地名與氧氣條（快用完時變紅） */
+.dive-hud { position: fixed; left: 50%; top: max(14px, env(safe-area-inset-top)); transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 10px; padding: 7px 16px; border-radius: 999px; background: rgba(240, 252, 255, .9); color: #1f6f98; font-weight: 800; box-shadow: 0 4px 0 rgba(20, 80, 120, .18); pointer-events: none; }
+.dive-hud b { font-size: 16px; white-space: nowrap; } .dive-hud small { font-size: 12px; color: #4a8aa8; white-space: nowrap; }
+.dv-air { width: 140px; height: 10px; border-radius: 99px; background: rgba(31, 111, 152, .18); overflow: hidden; }
+.dv-air i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #5ad0ff, #9af0ff); transition: width .25s linear; }
+.dive-hud.low .dv-air i { background: linear-gradient(90deg, #ff8a6a, #ffb08a); }
+.card .dv-fact { display: block; margin-top: 6px; color: #3f7f9a; }
 
 /* 小地圖（minimap.js）：右上角的圓形插畫地圖——奶油色外框、框頂的方位針、右下的縮放鈕、下方的地名緞帶；原本右上的膠囊移到它下面 */
 .minimap { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 14px; width: 184px; z-index: 3; user-select: none; display: grid; justify-items: center; }
@@ -1499,7 +1506,7 @@ body.talking .minimap { z-index: 2; }   /* 對話時：選項泡泡往上長到�
   .quest .q-toggle::after { content: ''; position: absolute; inset: -9px; }
   .hx-pal button { width: 40px; height: 40px; }
   .choice { padding: 12px 16px; }
-  body.in-room .jump-btn, body.in-trip:not(.in-dream) .jump-btn { display: none; }
+  body.in-room .jump-btn, body.in-trip:not(.in-dream):not(.in-dive) .jump-btn { display: none; }   /* v9.0 潛水時跳躍鈕＝往上踢 */
 }
 @media (pointer: coarse) and (max-width: 640px) {
   .hud-br .bells { flex-wrap: wrap; justify-content: flex-end; max-width: 112px; gap: 2px 6px; padding: 6px 12px 6px 8px; border-radius: 22px; font-size: 15px; pointer-events: none; }
