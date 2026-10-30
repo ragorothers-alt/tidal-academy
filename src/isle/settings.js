@@ -10,7 +10,7 @@ import * as mind from './mind.js';
 import * as shake from './shake.js';
 
 const TA = window.TA;
-export const VERSION = '8.8.1';
+export const VERSION = '8.9.0';
 export const hooks = {};   // main.js 掛上來的開關（第一人稱視角）
 const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, phoneAll: false, noConf: false, noWhy: false, fs: 1, speed: 1, timer: 1, shake: true, haptic: true };
 /** 設定值：原地補上預設值（不換掉物件——設定面板拿著同一個物件改，換掉的話後面的修改就存不進去） */

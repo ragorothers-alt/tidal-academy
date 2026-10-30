@@ -6,6 +6,7 @@ import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
 import { pickQ, record, pick, dayKey } from './quiz.js';
 import { typhoon } from './weather.js';
+import { busyHours } from './schedule.js';
 
 const TA = window.TA;
 let VS = [], ctx = {};
@@ -19,7 +20,17 @@ function planFor() {
   const k = dayKey(); if (plan.day === k) return plan;
   const r = rng(seedOf(k)); plan = { day: k, home: {}, eve: {}, sleepy: {} };
   // 每天在家三個小時：白天一段兩小時（9–19 點之間）、晚上一小時（18–21 點其中一個整點）；各導師隨機錯開，島上同時大約只有兩位在家
-  VS.forEach((v, i) => { plan.home[v.sid] = 9 + Math.floor(r() * 9); plan.sleepy[v.sid] = r() < 0.5; plan.eve[v.sid] = 18 + Math.floor(r() * 4); if (plan.eve[v.sid] >= plan.home[v.sid] && plan.eve[v.sid] <= plan.home[v.sid] + 1) plan.eve[v.sid] = plan.home[v.sid] + 2; });   // 晚上那一小時不和白天那段重疊（重疊就接在後面）
+  // v8.9 避開作息表（schedule.js）排好的行程：和行程重疊就往後挪一小時，直到空出來
+  const today = new Date();
+  VS.forEach(v => {
+    const busy = busyHours(v.sid, today), free = h => !busy.has(h) && !busy.has(h + 1);
+    let h = 9 + Math.floor(r() * 9); const sl = r() < 0.5; let e = 18 + Math.floor(r() * 4);
+    for (let t = 0; t < 9 && !free(h); t++) h = 9 + (h - 8) % 9;
+    if (e >= h && e <= h + 1) e = h + 2;   // 晚上那一小時不和白天那段重疊（重疊就接在後面）
+    for (let t = 0; t < 4 && busy.has(e); t++) e = 18 + (e - 17) % 4;
+    if (e >= h && e <= h + 1) e = h + 2;
+    plan.home[v.sid] = h; plan.sleepy[v.sid] = sl; plan.eve[v.sid] = e;
+  });
   return plan;
 }
 /** 'out' 在外面、'home' 在家、'sleep' 睡著了（史遙住博物館，永遠在外面） */
@@ -66,7 +77,7 @@ export function update(dt, hour, player, busy) {
   }
   chatT -= dt; if (chatT > 0 || busy) return;
   chatT = 25 + Math.random() * 30;
-  const out = VS.filter(v => !v.away && where(v, hour) === 'out' && v.sid !== 'history');
+  const out = VS.filter(v => !v.away && !v.busyRt && where(v, hour) === 'out' && v.sid !== 'history');   // v8.9 照作息在做事的不拉去聊天
   const pairs = [];
   out.forEach(a => out.forEach(b => { if (a.sid < b.sid && chatsFor(a.sid, b.sid).length) { const d = Math.hypot(a.mesh.position.x - b.mesh.position.x, a.mesh.position.z - b.mesh.position.z); if (d < 16) pairs.push([a, b, d]); } }));
   if (!pairs.length) return;
@@ -78,7 +89,7 @@ export function update(dt, hour, player, busy) {
 }
 /** 島民自己決定去找朋友聊天（mind.js）：兩人都在外面、有可以聊的話題、中間走得到，就照一般閒聊的流程走過去聊；聊不成回傳 false */
 export function invite(A, B, hour, busy) {
-  if (busy || active || A.chatting || B.chatting || A.sitting || B.sitting || A.away || B.away || where(A, hour) !== 'out' || where(B, hour) !== 'out' || !chatsFor(A.sid, B.sid).length) return false;
+  if (busy || active || A.chatting || B.chatting || A.sitting || B.sitting || A.away || B.away || A.busyRt || B.busyRt || where(A, hour) !== 'out' || where(B, hour) !== 'out' || !chatsFor(A.sid, B.sid).length) return false;
   const mx = (A.mesh.position.x + B.mesh.position.x) / 2, mz = (A.mesh.position.z + B.mesh.position.z) / 2;
   if (!ctx.walkable(mx - 0.6, mz) || !ctx.walkable(mx + 0.6, mz)) return false;
   active = { A, B, c: pick(chatsFor(A.sid, B.sid)), pa: [mx - 0.6, mz], pb: [mx + 0.6, mz], stage: 'walk', t: 0 }; active.lines = active.c.lines.slice();

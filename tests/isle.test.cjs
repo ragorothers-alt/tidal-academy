@@ -16,7 +16,7 @@ if (fs.existsSync(path.join(ROOT, 'src/isle/data/homes.js'))) load('src/isle/dat
 if (fs.existsSync(path.join(ROOT, 'src/isle/data/guests.js'))) load('src/isle/data/guests.js');
 if (fs.existsSync(path.join(ROOT, 'src/isle/data/bday.js'))) load('src/isle/data/bday.js');
 if (fs.existsSync(path.join(ROOT, 'src/isle/data/lines2.js'))) load('src/isle/data/lines2.js');
-['stars', 'lines3', 'sealife', 'lines4', 'foods', 'minerals', 'lines5', 'lines6', 'timeline', 'elements', 'idioms'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });
+['stars', 'lines3', 'sealife', 'lines4', 'foods', 'minerals', 'lines5', 'lines6', 'timeline', 'elements', 'idioms', 'routines', 'lines8'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });
 ['researchfurn', 'research', 'collectfurn'].forEach(n => { if (fs.existsSync(path.join(ROOT, `src/isle/data/${n}.js`))) load(`src/isle/data/${n}.js`); });   // 導師研究計畫（家具要在 furniture.js 之後載入）
 const I = ctx.TA.ISLE;
 
@@ -547,4 +547,76 @@ test('公共建築的整棟室內：出生點、出口、互動點與展示位',
       assert.ok(ud.spots.some(s => s.kind === 'study' && s.subject === 'history'), '博物館的歷史互動點');
     }
   }
+});
+
+/* v8.9 島民作息：作息表、團體活動、地點與動作名稱、台詞互相對得上，在家時段也排得出來 */
+const schedule = () => import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/schedule.js')).href);
+test('島民作息與團體活動：時間、地點、動作、成員與出題科目', { skip: !I.ROUTINES && '尚未產生' }, async () => {
+  const Sc = await schedule(), src = fs.readFileSync(path.join(ROOT, 'src/isle/routine.js'), 'utf8');
+  const acts = Object.keys(Sc.ACT_NAMES), places = Object.keys(Sc.PLACE_NAMES), inner = re => (src.match(re) || ['', ''])[1];
+  assert.deepEqual([...inner(/export const ACTS = \{([\s\S]*?)\n\};/).matchAll(/(\w+): \{/g)].map(m => m[1]).sort(), [...acts].sort(), 'routine.js 的 ACTS 和 ACT_NAMES 要同一組');
+  assert.deepEqual([...inner(/PLACES = \{([\s\S]*?)\n {2}\};/).matchAll(/^ {4}(\w+): \{/gm)].map(m => m[1]).sort(), [...places].sort(), 'routine.js 的 PLACES 和 PLACE_NAMES 要同一組');
+  const subjects = ctx.TA.SUBJECTS.map(s => s.id), tutors = subjects.filter(s => s !== 'history');
+  assert.deepEqual(Object.keys(I.ROUTINES).sort(), [...tutors].sort(), '史遙以外的九位導師都有作息');
+  for (const [sid, R] of Object.entries(I.ROUTINES)) for (const k of ['weekday', 'weekend']) {
+    let end = 0;
+    [...R[k]].sort((a, b) => a[0] - b[0]).forEach(([from, to, place, act]) => {
+      const tag = `${sid}.${k} ${from}–${to}`;
+      assert.ok(from >= 5 && to <= 23 && from < to, tag + ' 時間'); assert.ok(from >= end, tag + ' 和前一段重疊'); end = to;
+      assert.ok(places.includes(place), tag + ' 地點 ' + place); assert.ok(acts.includes(act), tag + ' 動作 ' + act);
+    });
+  }
+  const ids = new Set();
+  I.GATHERINGS.forEach(g => {
+    assert.match(g.id, /^[a-z_]+$/); assert.ok(!ids.has(g.id), '重複 id ' + g.id); ids.add(g.id);
+    assert.ok(g.name && g.icon && g.days.length && g.days.every(d => d >= 0 && d <= 6), g.id + ' 名稱、圖示、星期');
+    assert.ok(g.from >= 5 && g.to <= 23 && g.from < g.to, g.id + ' 時間'); assert.ok(places.includes(g.place), g.id + ' 地點 ' + g.place);
+    g.days.forEach(d => {
+      const m = Sc.membersOf(g, d); assert.ok(m.length >= 2 && m.every(s => tutors.includes(s)), `${g.id} 星期${d} 的成員`);
+      m.forEach(s => assert.ok(acts.includes(Sc.actOf(g, s)), `${g.id} ${s} 的動作`));
+    });
+    if (typeof g.act === 'object') assert.deepEqual(Object.keys(g.act).sort(), [...g.who].sort(), g.id + ' 每位成員都有動作');
+    assert.ok(g.subj.length && g.subj.every(s => subjects.includes(s)), g.id + ' 出題科目');
+  });
+  for (let d = 0; d < 7; d++) {
+    const on = I.GATHERINGS.filter(g => g.days.includes(d));
+    on.forEach(a => on.forEach(b => { if (a !== b && a.place === b.place) assert.ok(a.to <= b.from || b.to <= a.from, `星期${d} ${a.id} 和 ${b.id} 同時用同一個地點`); }));
+  }
+});
+
+test('作息表：一天的行程不重疊、團體活動優先，在家時段排得出來', { skip: !I.ROUTINES && '尚未產生' }, async () => {
+  const Sc = await schedule(), keep = globalThis.TA; globalThis.TA = ctx.TA;   // schedule.js 從 globalThis.TA 讀資料
+  try {
+    for (let k = 0; k < 7; k++) {
+      const date = new Date(2026, 10, 1 + k), d = date.getDay();
+      for (const sid of Object.keys(I.ROUTINES)) {
+        const plan = Sc.dayPlan(sid, date), busy = Sc.busyHours(sid, date), tag = `${sid} 星期${d}`;
+        plan.forEach((b, i) => { if (i) assert.ok(plan[i - 1].to <= b.from, tag + ' 行程重疊 ' + Sc.clock(b.from)); assert.deepEqual(Sc.blockAt(sid, date, b.from + 0.01), b); });
+        I.GATHERINGS.filter(g => g.days.includes(d) && Sc.membersOf(g, d).includes(sid)).forEach(g => assert.ok(plan.some(b => b.gid === g.id), tag + ' 少了團體活動 ' + g.id));
+        assert.ok([9, 10, 11, 12, 13, 14, 15, 16, 17].some(h => !busy.has(h) && !busy.has(h + 1)), tag + ' 白天排不出兩小時在家');   // town.js 的 planFor
+        assert.ok([18, 19, 20, 21].some(h => !busy.has(h)), tag + ' 晚上排不出一小時在家');
+      }
+    }
+    assert.equal(Sc.blockAt('earth', new Date(2026, 10, 2), 3), null);
+    assert.deepEqual([Sc.clock(7.5), Sc.clock(18.25), Sc.clock(9)], ['7:30', '18:15', '9:00']);
+  } finally { globalThis.TA = keep; }
+});
+
+test('作息台詞：每位導師做的每件事、每場團體活動、揮手與島上的貓都有台詞', { skip: !(I.ROUTINES && I.LINES8) && '尚未產生' }, async () => {
+  const Sc = await schedule(), L = I.LINES8;
+  const ok = (a, n, tag) => assert.ok(Array.isArray(a) && a.length >= n && a.every(s => typeof s === 'string' && s.trim()), tag);
+  for (const [sid, R] of Object.entries(I.ROUTINES)) {
+    const acts = new Set(R.weekday.concat(R.weekend).map(b => b[3]));
+    I.GATHERINGS.forEach(g => g.days.forEach(d => { if (Sc.membersOf(g, d).includes(sid)) acts.add(Sc.actOf(g, sid)); }));
+    acts.forEach(a => { ok((L.act[sid] || {})[a], 2, `act.${sid}.${a}`); ok((L.bubble[sid] || {})[a], 2, `bubble.${sid}.${a}`); });
+    ok(L.wave[sid], 2, 'wave.' + sid); ok(L.cats.tutor[sid], 2, 'cats.tutor.' + sid);
+  }
+  I.GATHERINGS.forEach(g => {
+    const G = L.gather[g.id] || {}, all = new Set(g.days.flatMap(d => Sc.membersOf(g, d)));
+    ['invite', 'ask', 'ok', 'bad', 'bye'].forEach(k => ok(G[k], 1, `gather.${g.id}.${k}`));
+    assert.ok(Array.isArray(G.scene) && G.scene.length >= 2, `gather.${g.id}.scene`);
+    G.scene.forEach(([sid, t]) => { assert.ok(sid === '*' || all.has(sid), `gather.${g.id} 的說話者 ${sid} 不是成員`); assert.ok(t && t.trim()); });
+  });
+  assert.ok(L.cats.names.orange && L.cats.names.tux, '貓的名字');
+  ok(L.cats.pet, 3, 'cats.pet'); L.cats.pet.forEach(s => assert.ok(s.includes('{cat}'), '摸貓台詞要有 {cat}：' + s));
 });

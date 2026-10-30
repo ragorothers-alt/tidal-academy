@@ -227,6 +227,33 @@ export function setTool(ch, tool) {
   if (tool === 'shovel') { g.add(stick(0.7)); const b = mesh(S(0.12, 10, 8), M('#b8c0c8', { metalness: 0.4, roughness: 0.4 }), 0, 0.72, 0); b.scale.set(1, 1.3, 0.25); g.add(b); }
 }
 
+/* ---------- v8.9 做事時拿的道具（data/handprops.js；書、琴、扳手、茶杯……，澆水壺沿用手持工具的模型）----------
+   掛在角色底下，actors.js 每一格把它移到手掌的位置；right、left 是道具 id，null 表示空手 */
+const HPROTO = {};
+function propModel(id) {
+  const I = (window.TA.ISLE || {}), f = (I.HANDPROPS || {})[id] || (I.TOOLMODELS || {})[id];
+  if (f && HPROTO[id] !== null) {
+    try {
+      if (!HPROTO[id]) { const p = f(THREE, { mat: (c, o) => M(c, o) }); if (!(p && p.isObject3D)) throw new Error('沒有回傳 Object3D'); p.traverse(o => { o.userData = {}; if (o.isMesh) o.castShadow = true; }); HPROTO[id] = p; }
+      return HPROTO[id].clone(true);
+    } catch (e) { HPROTO[id] = null; console.warn('道具模型建立失敗，改用簡單造型：' + id, e); }
+  }
+  const g = new THREE.Group(), box = (w, h, d, c, y) => g.add(mesh(new THREE.BoxGeometry(w, h, d), M(c), 0, y || 0, 0));
+  if (/book|sketchbook|scroll|cards/.test(id)) box(0.2, 0.02, 0.15, id === 'book' ? '#3f6f78' : '#f4eedd', 0);
+  else if (id === 'cup') g.add(mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.08, 10), M('#f6d2c4'), 0.04, 0.04, 0));
+  else box(0.03, 0.22, 0.03, '#8a6a4a', 0.08);
+  return g;
+}
+export function setProps(ch, right, left) {
+  const u = ch.userData;
+  [['propR', right], ['propL', left]].forEach(([k, id]) => {
+    id = id || null; if ((u[k] ? u[k].userData.id : null) === id) return;
+    if (u[k]) { ch.remove(u[k]); u[k] = null; }
+    if (!id) return;
+    const g = new THREE.Group(), m = propModel(id); if (m) g.add(m); g.userData.id = id; ch.add(g); u[k] = g;
+  });
+}
+
 /* ---------- 表情 ---------- */
 /** 設定表情：'neutral' | 'happy' | 'surprised' | 'sad'，dur 秒後回到平常（0 表示一直維持） */
 export function setExpr(ch, expr, dur) { const u = ch.userData; u.expr = expr; u.exprT = dur || 0; }

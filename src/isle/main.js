@@ -1,9 +1,12 @@
 /* 潮汐小島 · 主程式：島民、對話選單、博物館、商店、口袋、手機、輸入與主迴圈。 */
 import * as THREE from 'three';
 import { scene, camera, renderer, U, sun, sky, applyTime, screenOf, skyU, bend, CURVE, HZ, cullable, dropTinyShadows } from './engine.js';
-import { N, C, T, terrain, groundAt, tileAt, isBridge, isFord, foamMat, seaMesh, waterY as fwY, GRID_SHIFT, tileOf, waterAt } from './terrain.js';
+import { N, C, T, terrain, groundAt, tileAt, isBridge, isFord, foamMat, seaMesh, waterY as fwY, GRID_SHIFT, tileOf, waterAt, warp } from './terrain.js';
 import { colliders, blocked, penetration, PLAZA, SITES, homes, onPier, PIER, seats, nudgeHome, flowerSpots, onRoad, spin as spinProps } from './props.js';
 import * as mind from './mind.js';
+import * as nav from './nav.js';   // v8.9 島民尋路
+import * as routine from './routine.js';   // v8.9 島民照作息做事、團體活動
+import * as fauna from './fauna.js';   // v8.9 跳出水面的魚、海豚、鯨魚、島上的貓
 import { chibi, animate, setTool, setExpr, setTalk, lookAt, clap, setSit, nameMesh } from './chars.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
@@ -209,6 +212,14 @@ const myHome = homes.find(h => h.owner === 'player');
   villagers.forEach(o => props3d.track(o.mesh, 0.7, 1.0, 0.9));   // 畫面外的島民不畫（影子落進畫面的只畫進陰影貼圖）
 }
 const sp = v => ({ name: v.name, color: v.color, voice: v.voice, mesh: v.mesh });   // mesh：作答後島民的表情（quiz.js askQ）
+/* v8.9 島民照作息做事：全島尋路（nav.js），作息與團體活動（routine.js），島上的動物（fauna.js） */
+nav.init({ ground, water: (x, z) => isWater(x, z), colliders, roads: ((TA.ISLE || {}).PLAN || {}).roads || [], warp });
+routine.init({ ground, villagers, player, slotPos: (st, k) => slotPos(st, k), seatY: st => seatY(st), seatFree: (st, k, self) => seatFree(st, k, self), standVillager: v => standVillager(v),
+  waterSpot: (x, z) => waterSpot(x, z), simT: () => simT, hour: () => hourOverride ?? nowHour(), date: () => simDate(), talking: () => talking, sp });
+fauna.init({ ground, player, villagers, simT: () => simT, hour: () => hourOverride ?? nowHour(), talking: () => talking, isWater: (x, z) => isWater(x, z), waterY: (x, z) => waterY(x, z) });
+/** 新加的島上生活（作息、動物）出錯時只停用那一塊並記一次警告，不讓整個主迴圈停下來 */
+const offMods = {};
+function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
 social.init(villagers, { paint: () => paintHud(), toast: t => ui.toast(t), giveFurn: id => room.addStorage(id) });
@@ -338,13 +349,19 @@ async function talk(v) {
   }
   finally { ui.closeDialog(); talking = null; paintHud(); }
 }
+/** v8.9 加入正在進行的團體活動（晨讀會、早操、合奏……）：一段小場景、一起解一題，大家的好感度 +1 */
+function joinGathering(g) {
+  if (talking) return;
+  talking = { name: 'gather' }; moveTo = null; life.cancel(); Audio.sfx('pop');
+  routine.join(g).finally(() => { talking = null; ui.closeDialog(); paintHud(); });
+}
 async function villagerTalk(v) {
   miles.addOnce('talk', v.sid);
   const s = S(), fr = s.fr[v.sid] || 0;
   const ml = move.movedLine(v); if (ml) await ui.say(sp(v), ml + tail(v));
   const bl = gifts.isBirthday(v) && ((gifts.pref(v) || {}).lines || {}).birthday, pb = gifts.playerBirthday() && (I.PLAYER_BDAY || {})[v.sid];
   if (bl || pb) await ui.say(sp(v), pick(bl || [pb]) + tail(v)); else
-  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside && houseSid !== 'museum' || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || bond.recall(v) || greetOf(v)) + tail(v));
+  await ui.say(sp(v), (yuehome.inside && v === earthV ? '你來啦……熱湯還在爐上。那張藍色扶手椅是留給你的，慢慢坐。' : (house.inside && houseSid !== 'museum' || room.inside && !room.isOwn()) && roomHost === v ? pick(['歡迎來我家！隨便坐～', '你來啦！家裡有點亂，別介意。', '歡迎！要喝杯茶嗎？']) : events.line(v) || routine.line(v) || bond.recall(v) || greetOf(v)) + tail(v));
   if (weather.typhoon() && (room.inside || yuehome.inside || house.inside && houseSid !== 'museum') && roomHost === v) await typhoonTalk(v);
   else if (weather.afterTyphoon()) { const s0 = S(); s0.afterTalk = s0.afterTalk && s0.afterTalk.d === dayKey() ? s0.afterTalk : { d: dayKey(), who: {} }; if (!s0.afterTalk.who[v.sid]) { s0.afterTalk.who[v.sid] = true; save(); await ui.say(sp(v), L5(v.sid, 'after', ['颱風過去了，大家都平安就好。'])); } }
   { const rem = planner.remind(v); if (rem) await ui.say(sp(v), rem); }
@@ -765,9 +782,11 @@ function phone() {
 function phoneVillagers() {
   const s = S(), body = ui.el('div', 'ph-list');
   const WH = { out: '在外面散步', home: '在家（可以拜訪）', sleep: '睡覺中' }, h = hourOverride ?? nowHour();
+  { const gs = routine.today(), joined = (s.gather && s.gather.d === dayKey() && s.gather.ids) || {};   // v8.9 今天的團體活動：走近按 E 就能加入
+    if (gs.length) body.appendChild(ui.el('div', 'ph-row ph-gather', `<span class="av" style="--c:#7cc7c0">🌿</span><div><b>今天的團體活動</b><small>${gs.map(x => `<span class="nw">${x.icon} ${x.time} ${ui.esc(x.name)}（${ui.esc(x.place)}）${joined[x.id] ? ' ✓' : h >= x.from && h < x.to ? ' · 進行中' : ''}</span>`).join('　')}</small></div>`)); }
   villagers.filter(v => !v.shop && !v.guest).forEach(v => {
-    const f = s.fr[v.sid] || 0, lv = town.bondLevel(v.sid), next = town.BOND_AT[lv];
-    const bd = gifts.pref(v); body.appendChild(ui.el('div', 'ph-row', `<span class="av" style="--c:${v.color}">${v.sub.short || ''}</span><div><b>${ui.esc(v.name)} <small>${WH[town.where(v, h)]}${town.homeHours(v) ? ' · 今天在家 <span class="nw">' + town.homeHours(v).replace('、', '</span>、<span class="nw">') + '</span>' : ''}${bd ? ' · 🎂 ' + gifts.fmtDate(bd.date) : ''}</small></b><small>${v.sub.name}導師 · <span class="hearts">${hearts(f)}</span> · 心事 ${lv}/${town.BOND_AT.length}${next ? `（好感度 ${f}/${next}）` : `（全部解鎖${bond.count(v.sid) ? ` · 共同回憶 ${bond.count(v.sid)}` : ''}）`}　今日 ${s.frDay[v.sid] || 0}/3</small></div>`));
+    const f = s.fr[v.sid] || 0, lv = town.bondLevel(v.sid), next = town.BOND_AT[lv], wh = town.where(v, h), doing = wh === 'out' && routine.status(v);
+    const bd = gifts.pref(v); body.appendChild(ui.el('div', 'ph-row', `<span class="av" style="--c:${v.color}">${v.sub.short || ''}</span><div><b>${ui.esc(v.name)} <small>${doing ? ui.esc(doing) : WH[wh]}${town.homeHours(v) ? ' · 今天在家 <span class="nw">' + town.homeHours(v).replace('、', '</span>、<span class="nw">') + '</span>' : ''}${bd ? ' · 🎂 ' + gifts.fmtDate(bd.date) : ''}</small></b><small>${v.sub.name}導師 · <span class="hearts">${hearts(f)}</span> · 心事 ${lv}/${town.BOND_AT.length}${next ? `（好感度 ${f}/${next}）` : `（全部解鎖${bond.count(v.sid) ? ` · 共同回憶 ${bond.count(v.sid)}` : ''}）`}　今日 ${s.frDay[v.sid] || 0}/3</small></div>`));
   });
   ui.panel('島民', body, { cls: 'phone' });
 }
@@ -1001,8 +1020,10 @@ function act() {
     return;
   }
   if (nearMail) { social.openMail(); return; }
-  if (nearV) { talk(nearV); return; }
+  if (nearV) { const g = routine.joinable(nearV); if (g) joinGathering(g); else talk(nearV); return; }
   { const st = nearSeat(); if (st) { sitDown(st); return; } }
+  const ch = fauna.handler();   // v8.9 摸摸島上的貓
+  if (ch) { talking = { name: 'cat' }; Promise.resolve(ch()).finally(() => { talking = null; }); return; }
   const dk = trip.handler();
   if (dk) { talking = { name: 'boat' }; Promise.resolve(dk()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); return; }
   const tb = tablets.handler();
@@ -1186,10 +1207,15 @@ function walkable(x, z, fromY, self) {
   const [tx, tz] = tileOf(x, z), t = T(tx, tz);
   if (!onPier(x, z) && !isBridge(tx, tz) && !isFord(tx, tz) && (t < 0 || t === 3 || t === 6)) return false;
   if (Math.abs(ground(x, z) - fromY) > 0.7) return false;
-  if (blocked(x, z, 0.25)) return false;
+  const sp = self && self.position;
+  if (blocked(x, z, 0.25)) {   // v8.9 已經陷進東西裡（從樹池座位站起來時）：往外走的這一步放行，否則四面都被擋死
+    const now = sp ? penetration(sp.x, sp.z, 0.25) : 0;
+    if (!(now > 0 && penetration(x, z, 0.25) <= now + 1e-4)) return false;
+  }
   // 角色之間的碰撞：只擋住「越走越近」的移動；已經重疊時（例如出門時剛好站在島民身上）允許往外走開
-  const sp = self && self.position, hit = q => { const d = Math.hypot(q.x - x, q.z - z); return d < 0.55 && (!sp || d < Math.hypot(q.x - sp.x, q.z - sp.z)); };
-  for (const v of villagers) if (v.mesh !== self && hit(v.mesh.position)) return false;
+  const hit = q => { const d = Math.hypot(q.x - x, q.z - z); return d < 0.55 && (!sp || d < Math.hypot(q.x - sp.x, q.z - sp.z)); };
+  const going = self && self.userData && self.userData.rtGo, ghost = going && self.userData.rtGhost;   // v8.9 兩位都在照作息趕路：錯身而過，不會在窄窄的踏石上互相卡住；一直被站著的人擋住時（rtGhost）也擦身過去
+  for (const v of villagers) if (v.mesh !== self && !(going && (ghost || v.mesh.userData.rtGo)) && hit(v.mesh.position)) return false;
   if (self !== player && player.position.y < ground(x, z) + 1.3 && hit(player.position)) return false;
   return true;
 }
@@ -1263,7 +1289,7 @@ function popTick() {
   if (simT < popAt) return;
   if ((S().settings && S().settings.popQuiz === false) || route.quiet()) { popAt = simT + 60; return; }   // 收工、散步模式、休息時間、剛拒絕過：不主動出題
   if (talking || sitting || life.busy || life.tourney || life.fishing() || design.active() || photo.active() || astro.isOpen() || focus.active() || ui.dialogOpen() || ui.cardOpen() || ui.panelOpen() || villagers.some(v => v.popQuiz)) { popAt = simT + 15; return; }   // 玩家正在忙：過一會兒再看
-  const p = player.position, c = villagers.filter(v => thinks(v) && !v.away && v.mesh.visible && !v.sitting && !v.sitGoal && !v.benchGoal && !v.chatting && !v.goPlayer && (L.BY_SUBJECT[v.sid] || []).length)
+  const p = player.position, c = villagers.filter(v => thinks(v) && !v.away && v.mesh.visible && !v.sitting && !v.sitGoal && !v.benchGoal && !v.chatting && !v.goPlayer && !v.busyRt && (L.BY_SUBJECT[v.sid] || []).length)   // 照作息在做事的不來打擾
     .map(v => [v, Math.hypot(v.mesh.position.x - p.x, v.mesh.position.z - p.z)]).filter(([, d]) => d > 3 && d < 28).sort((a, b) => a[1] - b[1]);
   if (!c.length) { popAt = simT + 20; return; }   // 附近沒人：20 秒後再找
   const v = c[Math.floor(Math.random() * Math.min(3, c.length))][0];
@@ -1345,7 +1371,7 @@ function sitTick(dt) {
   // 坐了 4 秒：附近有空的島民就走過來坐在另一邊
   if (!sitting.mate && sitting.t > 4 && !sitting.asked) {
     sitting.asked = true; const p = player.position;
-    const v = villagers.filter(v => !v.away && !v.chatting && !v.sitting && !v.sitGoal && talking !== v && Math.hypot(v.mesh.position.x - p.x, v.mesh.position.z - p.z) < 20)
+    const v = villagers.filter(v => !v.away && !v.chatting && !v.sitting && !v.sitGoal && !v.busyRt && talking !== v && Math.hypot(v.mesh.position.x - p.x, v.mesh.position.z - p.z) < 20)
       .sort((a, b) => Math.hypot(a.mesh.position.x - p.x, a.mesh.position.z - p.z) - Math.hypot(b.mesh.position.x - p.x, b.mesh.position.z - p.z))[0];
     if (v) { const slot = 1 - sitting.slot, [x, z] = slotPos(st, slot), k = st.edge ? -0.7 : 0.8; v.sitGoal = { seat: st, slot, x: x + Math.sin(st.ry) * k, z: z + Math.cos(st.ry) * k, until: simT + 14 }; v.target = [v.sitGoal.x, v.sitGoal.z]; v.wait = 99; sitting.mate = v; }
   }
@@ -2171,14 +2197,15 @@ function tick(fixed) {
   // 島民
   nearV = null; let best = 2.2;
   const hourNow = hourOverride ?? nowHour();
-  town.update(dt, hourNow, player, !!talking); popTick();
+  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t));
   mindCtx.hour = hourNow; mind.update(simT, villagers.filter(v => thinks(v) && !v.away && v.mesh.visible), mindCtx);
   const [plx, ply] = screenOf(player, 1.6), plD = camera.position.distanceTo(player.position);   // 角色頭上在畫面的位置：後面島民的名牌疊上來時淡一點
   villagers.forEach(v => {
     const away = whereOf(v, hourNow) !== 'out' && talking !== v;
     v.away = away; v.mesh.visible = !away;
-    if (away) { v.tag.style.opacity = 0; v.benchGoal = null; v.goPlayer = 0; return; }   // 回家或睡覺：要去的長椅與打招呼都取消
+    if (away) { v.tag.style.opacity = 0; v.benchGoal = null; v.goPlayer = 0; routine.off(v); return; }   // 回家或睡覺：要去的長椅與打招呼都取消，手上的事放下
     const m = v.mesh, dpx = player.position.x - m.position.x, dpz = player.position.z - m.position.z, dp = Math.hypot(dpx, dpz);
+    const rc = guard('routine', () => { const r = routine.tick(v, dt, dp); routine.nearTick(v, dp); return r; }, null);   // v8.9 照作息走過去、做事；null 表示照原本的方式自由活動
     let mv = 0;
     if (v.sitting) {
       const st = v.sitting.seat, [sx, sz] = slotPos(st, v.sitting.slot); m.position.set(sx, seatY(st), sz); m.rotation.y = st.ry; setSit(m, true);
@@ -2206,13 +2233,21 @@ function tick(fixed) {
     if (v.faceTo && !v.sitGoal && !(talking === v || dp < 2.4)) { const fx = v.faceTo.mesh.position.x - m.position.x, fz = v.faceTo.mesh.position.z - m.position.z; m.rotation.y = angLerp(m.rotation.y, Math.atan2(fx, fz), Math.min(1, dt * 6)); }
     else if (talking === v || (dp < 2.4 && !v.chatting && !v.sitGoal)) m.rotation.y = angLerp(m.rotation.y, Math.atan2(dpx, dpz), Math.min(1, dt * 6));
     else {
-      v.wait -= dt;
-      if (v.wait <= 0 && !v.chatting && !decide(v, dp, hourNow)) { v.target = [v.home[0] + (Math.random() - 0.5) * v.range * 2, v.home[1] + (Math.random() - 0.5) * v.range * 2]; v.wait = 3 + Math.random() * 5; }
-      const dx = v.target[0] - m.position.x, dz = v.target[1] - m.position.z, d = Math.hypot(dx, dz);
-      if (d > 0.2) { if (stepChar(m, dx / d, dz / d, dt, 1.3)) { mv = 1; m.rotation.y = angLerp(m.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 6)); } else v.target = [m.position.x, m.position.z]; }
+      if (rc) v.target = rc.target;
+      else {
+        v.wait -= dt;
+        if (v.wait <= 0 && !v.chatting && !decide(v, dp, hourNow)) { v.target = [v.home[0] + (Math.random() - 0.5) * v.range * 2, v.home[1] + (Math.random() - 0.5) * v.range * 2]; v.wait = 3 + Math.random() * 5; }
+      }
+      const dx = v.target[0] - m.position.x, dz = v.target[1] - m.position.z, d = Math.hypot(dx, dz), spd = rc ? rc.speed : 1.3;
+      if (d > 0.2 && spd > 0) { if (stepChar(m, dx / d, dz / d, dt, spd)) { mv = rc && rc.run ? 2 : 1; m.rotation.y = angLerp(m.rotation.y, Math.atan2(dx, dz), Math.min(1, dt * 6)); } else if (!rc) v.target = [m.position.x, m.position.z]; }
+      else if (rc && rc.face != null) m.rotation.y = angLerp(m.rotation.y, rc.face, Math.min(1, dt * 4));   // 做事時面向該看的地方（噴泉、海、攤位）
     }
     m.position.y += (ground(m.position.x, m.position.z) - m.position.y) * Math.min(1, dt * 10);
-    setTalk(m, talking === v && ui.typing() && ui.speakerName() === v.name);
+    if (photo.active() && dp < 9 && !v.chatting) {   // v8.9 拍照時附近的島民轉向鏡頭、笑一下（站著的還會揮手）
+      m.rotation.y = angLerp(m.rotation.y, Math.atan2(camera.position.x - m.position.x, camera.position.z - m.position.z), Math.min(1, dt * 4));
+      if (!v.posed) { v.posed = true; setExpr(m, 'happy', 4); if (!v.sitting) clap(m, 1.6); }
+    } else v.posed = false;
+    if (!v.mesh.userData.act || !(v.rt && v.rt.b && v.rt.b.act === 'sing')) setTalk(m, talking === v && ui.typing() && ui.speakerName() === v.name);
     lookAt(m, talking === v || dp < 4.5 ? headPos.copy(player.position).setY(player.position.y + 1.1) : (v.faceTo ? headPos.copy(v.faceTo.mesh.position).setY(v.faceTo.mesh.position.y + 1.1) : null));
     animate(m, dt, mv, t);
     const facing = (-dpx * Math.sin(player.rotation.y) - dpz * Math.cos(player.rotation.y)) / (dp || 1);
@@ -2225,8 +2260,9 @@ function tick(fixed) {
   nearDoor = locked || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
   nearMail = !!myHome && !locked && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
   if (nearDoor || nearMail) nearV = null;
-  const gHint = !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
-  const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? '聊天' : gHint ? gHint : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
+  const gHint = !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
+  const gj = nearV && routine.joinable(nearV);   // v8.9 走近正在進行的團體活動：按 E 加入
+  const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
   if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
   else if (pr) pr.remove();
   document.body.classList.toggle('placing', design.active());
