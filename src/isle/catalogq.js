@@ -5,7 +5,7 @@ export const KINDS = [['fish', '魚類'], ['bug', '昆蟲'], ['fossil', '化石'
 export const EV = {
   after: '考後慶典', bug_cup: '週五捕蟲大會的獎盃', d100: '學測倒數 100 天', eve: '學測前夜', fish_cup: '週三釣魚大賽的獎盃',
   garden: '花園：培育出四種豌豆', halloween: '潮汐夜祭（用糖果在商店兌換）', lantern: '元宵燈會', mid_autumn: '中秋',
-  mock_gold: '週末模擬考祭典（9 題以上）', night_market: '週六港邊夜市的集章卡（第 1、3、5 次集滿）', sports_day: '週日島嶼運動會的獎牌（第 1、3、5 面）', mock_silver: '週末模擬考祭典（7–8 題）', mock_bronze: '週末模擬考祭典（5–6 題）',
+  mock_gold: '週末模擬考祭典（9 題以上）', night_market: '週六港邊夜市的集章卡（第 1、3、5 次集滿）', sports_day: '週日島嶼運動會的獎牌（第 1、3、5 面）', kite_festival: '週六風箏節（第 1、3、5 次放風箏）', mock_silver: '週末模擬考祭典（7–8 題）', mock_bronze: '週末模擬考祭典（5–6 題）',
   newyear: '跨年', solstice: '冬至', spring: '春櫻', stars: '觀星（星座圖鑑、星之碎片）', weekly: '第一次參加週末模擬考祭典', xmas: '聖誕',
   dex_all: '五種圖鑑全部收齊', museum_all: '博物館五個展區全部捐齊',
 };

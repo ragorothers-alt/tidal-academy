@@ -74,15 +74,15 @@ const box = (x0, z0, x1, z1) => { const o = { x0, z0, x1, z1 }; colliders.push(o
 function npc(o, x, z, ry) { const ch = chibi(Object.assign({ kind: 'human', shirt: '#7fb2e5', pants: '#3f4f6a', hair: '#3a2a22', shoe: '#f2f2f2' }, o.look)); ch.position.set(x, groundAt(x, z), z); ch.rotation.y = ry; ch.traverse(m => { m.frustumCulled = false; }); B.g.add(ch); nameMesh(o.name, ch); B.npcs.push(ch); return ch; }
 /** 地上的線（跑道分隔線、起點、終點） */
 function stripe(x0, z0, x1, z1, color = '#ffffff') { const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), M(color, { roughness: 0.95 })); m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, groundAt((x0 + x1) / 2, (z0 + z1) / 2) + 0.025, (z0 + z1) / 2); m.receiveShadow = true; B.g.add(m); B.extra.push(m); }
-/** 彩色三角旗串：兩點之間一條微微下垂的繩子，掛著紅黃藍白綠的小三角旗 */
+/** 彩色三角旗串：兩點之間一條微微下垂的繩子，掛著紅黃藍白綠的小三角旗（風箏節也用：to = { g, extra }） */
 let flagGeo = null;
-function pennants(a, b) {
+export function pennants(a, b, to = B) {
   const pts = []; for (let i = 0; i <= 12; i++) { const k = i / 12; pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k - Math.sin(k * Math.PI) * 0.3, a[2] + (b[2] - a[2]) * k)); }
-  const curve = new THREE.CatmullRomCurve3(pts), cord = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.008, 4, false), M('#f4efe6')); B.g.add(cord); B.extra.push(cord);
+  const curve = new THREE.CatmullRomCurve3(pts), cord = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.008, 4, false), M('#f4efe6')); to.g.add(cord); to.extra.push(cord);
   if (!flagGeo) { flagGeo = new THREE.BufferGeometry(); flagGeo.setAttribute('position', new THREE.Float32BufferAttribute([-0.09, 0, 0, 0.09, 0, 0, 0, -0.2, 0], 3)); flagGeo.computeVertexNormals(); }
   const n = Math.max(4, Math.round(curve.getLength() / 0.32)), im = new THREE.InstancedMesh(flagGeo, M('#ffffff', { side: THREE.DoubleSide, roughness: 0.9 }), n), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color(), cols = ['#e86f5e', '#f5c94c', '#5b9be0', '#ffffff', '#7cc58a'], up = new THREE.Vector3(0, 1, 0), one3 = new THREE.Vector3(1, 1, 1);
   for (let i = 0; i < n; i++) { const p = curve.getPoint((i + 0.5) / n), tg = curve.getTangent((i + 0.5) / n); q.setFromAxisAngle(up, Math.atan2(-tg.z, tg.x)); m4.compose(p, q, one3); im.setMatrixAt(i, m4); im.setColorAt(i, c.set(cols[i % cols.length])); }
-  im.frustumCulled = false; B.g.add(im); B.extra.push(im);
+  im.frustumCulled = false; to.g.add(im); to.extra.push(im);
 }
 function build() {
   B = { g: new THREE.Group(), parts: [], cols: [], seats: [], npcs: [], extra: [], board: null, ath: [], ref: null, front: null, tugFlag: null, rope: null, ropeY: 0, hoop: null, bag: null };
@@ -114,7 +114,7 @@ function destroy() {
   B.cols.forEach(c => { const i = colliders.indexOf(c); if (i >= 0) colliders.splice(i, 1); });
   B.seats.forEach(st => { const i = seats.indexOf(st); if (i >= 0) seats.splice(i, 1); });
   B.parts.forEach(g => unregister(g));
-  B.extra.forEach(o => o.geometry && o.geometry !== flagGeo && o.geometry.dispose());
+  B.extra.forEach(o => o.geometry && o.geometry !== flagGeo && o.geometry.dispose());   // 三角旗共用同一份幾何，不丟掉
   scene.remove(B.g); B = null; run = toss = tug = pose = null; grass.refreshSoon(); if (bloom) bloom(); bloom = null;
 }
 /** 計分板：今天三個項目的成績 */

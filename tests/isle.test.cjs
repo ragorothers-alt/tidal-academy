@@ -904,3 +904,71 @@ test('島嶼運動會：裁判、選手、獎品與模型', () => {
   assert.match(src, /LANES = \[32\.2, 33\.2, 34\.2\], START = 2\.4, FINISH = 12\.4/, '跑道位置');
   assert.ok(fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8').includes('sportsday.playerPose()'), 'main.js 播玩家跑步的動作');
 });
+
+/* v9.4.2 風箏節：風向的題目和場景用同一套方位（尾巴、下風處、風從哪裡來），高度題的答案用題目給的 sin 值算得出來 */
+test('風箏節：風向、海陸風與高度的題目', async () => {
+  const Q = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/kiteq.js')).href);
+  let seed = 5; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const D = Q.DIRS, same = (a, b) => Math.abs(a[0] - b[0]) < 1e-9 && Math.abs(a[1] - b[1]) < 1e-9;
+  assert.ok(same(Q.vec(0), [0, -1]) && same(Q.vec(2), [1, 0]) && same(Q.vec(4), [0, 1]) && same(Q.vec(6), [-1, 0]), '北是 −z、東是 +x');
+  for (let i = 0; i < 8; i++) {
+    assert.equal(Q.opp(Q.opp(i)), i); const [a, b] = Q.vec(i), [c, d] = Q.vec(Q.opp(i)); assert.ok(Math.abs(a + c) < 1e-9 && Math.abs(b + d) < 1e-9, '反方向');
+    const s = Q.WIND.sock(rnd, i); assert.equal(s.opts[s.a], D[i] + '風', '風向袋：' + s.text); assert.ok(s.text.includes(`飄向${D[Q.opp(i)]}方`), '尾巴飄向下風處');
+    const k = Q.WIND.side(rnd, i); assert.equal(k.opts[k.a], D[Q.opp(i)] + '邊', '風箏在下風處：' + k.text);
+  }
+  const days = new Set(); for (let d = 1; d <= 28; d++) { const w = Q.windOn(`2026-11-${String(d).padStart(2, '0')}`); assert.ok([3, 4, 5].includes(w), '海風從南邊的海吹來（東南、南、西南）'); days.add(w); }
+  assert.ok(days.size >= 2, '每週的風向不一定一樣'); assert.equal(Q.windOn('2026-11-07'), Q.windOn('2026-11-07'), '同一天的風向固定');
+  for (let i = 0; i < 80; i++) {
+    Object.entries(Q.WIND).forEach(([kind, gen]) => { const q = gen(rnd); assert.equal(q.opts.length, 4, kind); assert.equal(new Set(q.opts).size, 4, kind + ' 選項不重複'); assert.ok(q.a >= 0 && q.a < 4 && q.why, kind); });
+    const b = Q.WIND.breeze(rnd); assert.equal(b.opts[b.a], b.text.includes('白天') ? '從海洋吹向陸地（海風）' : '從陸地吹向海洋（陸風）', b.text);
+    const m = Q.WIND.monsoon(rnd); assert.equal(m.opts[m.a], m.text.includes('秋冬') ? '東北季風' : '西南季風', m.text);
+    const o = Q.WIND.isobar(rnd); assert.equal(o.opts[o.a], o.text.match(/(甲|乙)地附近的等壓線比/)[1] + '地', '等壓線密的地方風強');
+    const t = Q.tailQ(rnd); assert.ok(/阻力/.test(t.opts[t.a]), '尾巴的作用');
+    [20, 30, 33, 40].forEach(L => [30, 45, 60].forEach(deg => {
+      const h = Q.heightQ(L, deg, rnd), s = Number(h.text.match(/sin \d+° ≈ ([\d.]+)/)[1]);
+      assert.equal(parseFloat(h.opts[h.a]), Math.round(L * s * 10) / 10, h.text); assert.equal(new Set(h.opts).size, 4, h.text + ' 選項不重複');
+    }));
+    const f = Q.flightQs(4, rnd); assert.equal(f.length, 3); assert.equal(f[0].kind, 'sock'); assert.equal(f[0].opts[f[0].a], '南風', '第一題看當天的風向袋'); assert.equal(new Set(f.map(q => q.kind)).size, 3, '三題不同種類');
+  }
+  // 島民在東岬放風箏：白天吹海風（東風），放風箏的人面向西邊，風箏在人的前方（下風處）
+  const r = fs.readFileSync(path.join(ROOT, 'src/isle/routine.js'), 'utf8');
+  assert.match(r, /cape: \{[^\n]*\]\], -Math\.PI \/ 2\)/, '東岬放風箏的人面向西邊');
+  assert.match(r, /x = m\.position\.x \+ fx \* d/, '風箏畫在人的前方');
+});
+
+/* v9.4.2 風箏節：師傅、五種風箏、遊客、來信、三件家具與模型的零件 */
+test('風箏節：師傅、風箏、遊客、獎品與模型', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, THREE }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  ['src/isle/data/furniture.js', 'src/isle/data/kitemodels.js', 'src/isle/data/kitefest.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), cx, { filename: f }));
+  const J = cx.TA.ISLE, K = J.KITEFEST, src = fs.readFileSync(path.join(ROOT, 'src/isle/kitefest.js'), 'utf8');
+  const lines = (a, n, tag) => { assert.ok(Array.isArray(a) && a.length >= n && a.every(t => typeof t === 'string' && t.length > 2 && t.length <= 60 && !/\d/.test(t)), tag); };
+  const hex = (o, tag) => Object.entries(o).forEach(([k, v]) => assert.match(v, /^#[0-9a-f]{6}$/i, `${tag}.${k}`));
+  assert.ok(K.master.name && K.master.name.length <= 4, '師傅的稱呼'); hex({ color: K.master.color }, '師傅'); hex(K.master.look, '師傅.look');
+  ['greet', 'pick', 'made', 'again', 'bye', 'rain'].forEach(f => lines(K.master[f], 2, 'master.' + f));
+  assert.equal(K.designs.map(d => d.id).join(), 'diamond,delta,box,fish,bird', '五種風箏');   // vm 裡的陣列原型不同，比字串
+  K.designs.forEach(d => { assert.ok(J.KITEMODELS[d.model], d.id + ' 的模型'); assert.ok(d.name && d.fact && d.fact.length <= 60 && !/\d/.test(d.fact), d.id + ' 的特色'); });
+  assert.equal(K.visitors.length, 4, '四位遊客'); assert.equal(new Set(K.visitors.map(v => v.design)).size, 4, '遊客的風箏都不一樣');
+  K.visitors.forEach(v => { assert.ok(v.name && K.designs.some(d => d.id === v.design), v.name); hex({ color: v.color }, v.name); hex(v.look, v.name + '.look'); });
+  ['start', 'gold', 'blue', 'stake'].forEach(f => lines(K.flight[f], 2, 'flight.' + f)); ['up', 'dip'].forEach(f => lines(K.flight[f], 3, 'flight.' + f));
+  lines(K.card.gold, 2, 'card.gold');
+  assert.ok(K.letter.from === 'earth' && K.letter.title && K.letter.text.length >= 100 && K.letter.close, '地科導師的介紹信');
+  assert.equal(K.prizes.length, 3, '三件家具');
+  K.prizes.forEach(f => assert.ok(J.FURNITURE.some(x => x.id === f.id && x.src === 'event:kite_festival'), f.id + ' 放進家具清單'));
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /kite_festival: '/, '家具目錄寫得出怎麼拿到');
+  const kit = { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), win: () => new THREE.MeshStandardMaterial() };
+  const need = { kf_gate: ['sign'], kf_booth: ['sign', 'keeper', 'front'], kf_windsock: ['sock'], kf_stake: ['exit'], kf_spool: ['exit'], kf_mat: [],
+    kf_kite_diamond: ['tail', 'seg0', 'seg5'], kf_kite_delta: ['tail_l', 'tail_r', 'l_seg0', 'r_seg3'], kf_kite_box: [], kf_kite_fish: ['tail', 'seg0'], kf_kite_bird: [] };
+  Object.entries(need).forEach(([k, parts]) => {
+    assert.ok(J.KITEMODELS[k], '少了 ' + k);
+    const g = J.KITEMODELS[k](THREE, kit); g.updateMatrixWorld(true);
+    parts.forEach(n => assert.ok(g.getObjectByName(n), `${k} 少了 ${n}`));
+    let tris = 0; g.traverse(o => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; });
+    assert.ok(tris <= (k.startsWith('kf_kite') ? 1500 : 3500), `${k} 面數 ${tris}`);
+    if (['kf_gate', 'kf_booth', 'kf_windsock', 'kf_stake', 'kf_mat'].includes(k)) assert.ok(Math.abs(new THREE.Box3().setFromObject(g).min.y) < 0.06, `${k} 原點在地面`);
+  });
+  ['kf_gate', 'kf_booth', 'kf_windsock', 'kf_stake', 'kf_mat'].forEach(k => assert.ok(src.includes(`'${k}'`), `kitefest.js 要用到 ${k}`));
+  // 風向袋往 local −Z 延伸：程式轉 sock 讓它指向下風處
+  const ws = J.KITEMODELS.kf_windsock(THREE, kit); ws.updateMatrixWorld(true); const sock = ws.getObjectByName('sock');
+  sock.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o); const lo = sock.worldToLocal(b.getCenter(new THREE.Vector3())); assert.ok(lo.z <= 0.05, '風向袋在 sock 的 −Z 那一側'); } });
+});

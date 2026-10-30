@@ -58,6 +58,7 @@ import * as story from './story.js';   // v9.2 主線「點亮星環」
 import * as works from './works.js';   // v9.2.1 公共建設
 import * as nightmarket from './nightmarket.js';   // v9.4.0 週六晚上的港邊夜市
 import * as sportsday from './sportsday.js';   // v9.4.1 週日的島嶼運動會
+import * as kitefest from './kitefest.js';   // v9.4.2 週六白天的風箏節
 import * as lexicon from './lexicon.js';   // 單字燈塔：翻卡、單字測驗、字表
 import * as profile from './profile.js';   // 我的檔案、船員登記、潮汐護符
 import * as lab from './lab.js';   // 導師研究計畫
@@ -239,6 +240,7 @@ cave.init({ leave: () => house.leave() });
 try { works.init({ busy: fn => worksBusy(fn), seat: () => sitting && sitting.seat, lookCastle: show => lookCastle(show), units: () => story.unitTotal(), lit: () => story.litCount(), paint: () => paintHud() }); } catch (e) { offMods.works = true; console.warn('公共建設出錯，先停用：', e); }   // v9.2.1 告示牌與蓋好的建設
 try { nightmarket.init({ busy: (fn, who) => worksBusy(fn, who), face: (dx, dz) => faceCam(dx, dz), date: () => simDate(), player, giveFurn: (id, sub) => giveFurn(id, sub), paint: () => paintHud(), started: () => started }); } catch (e) { offMods.nightmarket = true; console.warn('港邊夜市出錯，先停用：', e); }   // v9.4.0 週六晚上擺攤
 try { sportsday.init({ busy: (fn, who) => worksBusy(fn, who), view: (yaw, tilt) => sideCam(yaw, tilt), focus: (p, yaw, tilt) => { camFocus = p; if (yaw != null) camYaw = yaw; if (tilt != null) camV.tilt = tilt; }, date: () => simDate(), player, giveFurn: (id, sub) => giveFurn(id, sub), paint: () => paintHud(), started: () => started }); } catch (e) { offMods.sportsday = true; console.warn('島嶼運動會出錯，先停用：', e); }   // v9.4.1 週日的運動會
+try { kitefest.init({ busy: (fn, who) => worksBusy(fn, who), view: (yaw, tilt) => sideCam(yaw, tilt), face: (dx, dz, pitch) => faceCam(dx, dz, pitch), date: () => simDate(), player, giveFurn: (id, sub) => giveFurn(id, sub), paint: () => paintHud(), started: () => started }); } catch (e) { offMods.kitefest = true; console.warn('風箏節出錯，先停用：', e); }   // v9.4.2 週六白天的風箏節
 function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
@@ -793,7 +795,7 @@ function phone() {
       ['今日學習', '📚', '#9fe0a0', phoneToday], ['考科航線', '⛵', '#c8e4ff', phoneTrack], ['點亮星環' + (story.badge() ? '（!）' : ''), '💫', '#e6d8ff', () => story.open()], ['自由練習', '🧩', '#e8f0c0', phoneFree], ['模擬考', '📝', '#ffe0d0', () => hall.openMock()]
     ]],
     ['島上生活', [
-      ['信箱' + (social.unread() ? `（${social.unread()}）` : ''), '✉️', '#ffc8d8', () => social.openMail()], ['委託', '📋', '#c8e0ff', () => social.phoneList()], ['公共建設', '🏗', '#ffe2b8', () => works.openBoard()], ['港邊夜市', '🏮', '#ffd6c8', () => nightmarket.openCard()], ['運動會', '🏅', '#cfe6ff', () => sportsday.openCard()],
+      ['信箱' + (social.unread() ? `（${social.unread()}）` : ''), '✉️', '#ffc8d8', () => social.openMail()], ['委託', '📋', '#c8e0ff', () => social.phoneList()], ['公共建設', '🏗', '#ffe2b8', () => works.openBoard()], ['港邊夜市', '🏮', '#ffd6c8', () => nightmarket.openCard()], ['運動會', '🏅', '#cfe6ff', () => sportsday.openCard()], ['風箏節', '🪁', '#d8f0e4', () => kitefest.openCard()],
       ['潮汐里程' + (miles.badge() ? `（${miles.badge()}）` : ''), '🌊', '#a8e0f8', () => miles.open(id => { wardrobe.own('hats', id); ui.toast('到衣櫃換上新帽子吧'); })],
       ...(weather.typhoon() ? [['颱風電話', '📞', '#c0d0ff', typhoonPhone]] : []),
       ['島民', '🐰', '#ffb3c8', phoneVillagers], ['研究計畫' + (lab.firstReady(villagers.filter(v => !v.shop && !v.guest)) ? '（!）' : ''), '🔬', '#d8e0ff', () => lab.openBook(villagers.filter(v => !v.shop && !v.guest))], ['口袋', '🎒', '#ffd36b', () => openPockets()], ['地圖', '🗺', '#a6e3ff', phoneMap], ['潮汐表', '〽️', '#b0e0f0', () => tide.openTable(simDate())], ['島嶼評價', '⭐', '#ffe08a', () => rating.open()]
@@ -1063,7 +1065,7 @@ function act() {
   if (nearMail) { social.openMail(); return; }
   if (nearV) { const g = routine.joinable(nearV); if (g) joinGathering(g); else talk(nearV); return; }
   { const st = nearSeat(); if (st) { sitDown(st); return; } }
-  if (boat.act(player.position.x, player.position.z) || northcoast.act(player.position.x, player.position.z) || works.act(player.position.x, player.position.z) || (!offMods.nightmarket && nightmarket.act(player.position.x, player.position.z)) || (!offMods.sportsday && sportsday.act(player.position.x, player.position.z))) return;   // v9.1 坐上小船、走進潮洞
+  if (boat.act(player.position.x, player.position.z) || northcoast.act(player.position.x, player.position.z) || works.act(player.position.x, player.position.z) || (!offMods.nightmarket && nightmarket.act(player.position.x, player.position.z)) || (!offMods.sportsday && sportsday.act(player.position.x, player.position.z)) || (!offMods.kitefest && kitefest.act(player.position.x, player.position.z))) return;   // v9.1 坐上小船、走進潮洞
   const ch = fauna.handler();   // v8.9 摸摸島上的貓
   if (ch) { talking = { name: 'cat' }; Promise.resolve(ch()).finally(() => { talking = null; }); return; }
   const dk = trip.handler();
@@ -1691,7 +1693,7 @@ async function guestbook() {
 /** 暫時換成第一人稱、看向 (dx, dz) 那一邊；回傳換回原本視角的函式（夜市逛攤用：街只有三公尺寬，第三人稱的鏡頭總會被對面或背後的攤位擋住） */
 /** 比賽用的鏡頭：第三人稱、固定方位與遠近（v9.4.1 運動會從南邊側面看跑道）；回傳還原的函式 */
 function sideCam(yaw, tilt = 0) { const was = fpOn, y0 = camYaw, z0 = zoom, sc = scenicOn, t0 = camV.tilt; fpOn = false; camYaw = yaw; zoom = 1.3; scenicOn = false; camV.tilt = tilt; return () => { fpOn = was; camYaw = y0; zoom = z0; scenicOn = sc; camV.tilt = t0; camFocus = null; }; }
-function faceCam(dx, dz) { const was = fpOn, yaw = camYaw, pitch = fpPitch; fpOn = true; camYaw = -Math.atan2(dx, -dz); fpPitch = -0.14; return () => { fpOn = was; camYaw = yaw; fpPitch = pitch; }; }
+function faceCam(dx, dz, up = -0.14) { const was = fpOn, yaw = camYaw, pitch = fpPitch; fpOn = true; camYaw = -Math.atan2(dx, -dz); fpPitch = up; return () => { fpOn = was; camYaw = yaw; fpPitch = pitch; }; }
 function worksBusy(fn, who) { talking = who || { name: 'works' }; Promise.resolve(fn()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); }   // who：說話的人 { name, mesh }（夜市的攤主），對話鏡頭轉向他
 /** v9.2.1 觀景台的望遠鏡：暫時用第一人稱望向北方的城堡並拉近，看完回到原本的鏡頭 */
 async function lookCastle(show) {
@@ -2298,7 +2300,7 @@ function tick(fixed) {
   // 島民
   nearV = null; let best = 2.2;
   const hourNow = hourOverride ?? nowHour();
-  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t)); guard('swim', () => swim.update(dt, t)); guard('boatIdle', () => boat.update(dt, t)); guard('northcoast', () => northcoast.update()); guard('worksFx', () => works.update(dt, t)); guard('nightmarket', () => nightmarket.update(dt, t)); guard('sportsday', () => sportsday.update(dt, t));
+  town.update(dt, hourNow, player, !!talking); popTick(); guard('routine', () => routine.update(dt)); guard('fauna', () => fauna.update(dt, t)); guard('bluetears', () => bluetears.update(dt, { player, date: simDate(), hour: hourNow, inside: !!room.inside })); guard('harbor', () => harbor.update(dt, t)); guard('swim', () => swim.update(dt, t)); guard('boatIdle', () => boat.update(dt, t)); guard('northcoast', () => northcoast.update()); guard('worksFx', () => works.update(dt, t)); guard('nightmarket', () => nightmarket.update(dt, t)); guard('sportsday', () => sportsday.update(dt, t)); guard('kitefest', () => kitefest.update(dt, t));
   mindCtx.hour = hourNow; mind.update(simT, villagers.filter(v => thinks(v) && !v.away && v.mesh.visible), mindCtx);
   const [plx, ply] = screenOf(player, 1.6), plD = camera.position.distanceTo(player.position);   // 角色頭上在畫面的位置：後面島民的名牌疊上來時淡一點
   villagers.forEach(v => {
@@ -2361,7 +2363,7 @@ function tick(fixed) {
   nearDoor = locked || swimming || boat.isRiding() || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
   nearMail = !!myHome && !locked && !swimming && !boat.isRiding() && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
   if (nearDoor || nearMail || swimming || boat.isRiding()) nearV = null;
-  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || works.hint(player.position.x, player.position.z) || guard('nightmarket', () => nightmarket.hint(player.position.x, player.position.z), '') || guard('sportsday', () => sportsday.hint(player.position.x, player.position.z), '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
+  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || works.hint(player.position.x, player.position.z) || guard('nightmarket', () => nightmarket.hint(player.position.x, player.position.z), '') || guard('sportsday', () => sportsday.hint(player.position.x, player.position.z), '') || guard('kitefest', () => kitefest.hint(player.position.x, player.position.z), '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
   const gj = nearV && routine.joinable(nearV);   // v8.9 走近正在進行的團體活動：按 E 加入
   const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : swimming || boat.isRiding() ? '' : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
   if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }

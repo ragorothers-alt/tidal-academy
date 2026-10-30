@@ -1700,3 +1700,7 @@ body.picking .act-btn { opacity: 0; transform: scale(.85); pointer-events: none;
 .sd .sd-ev.gold { border-style: solid; border-color: #e2bf62; background: #fff7df; }
 .sd .sd-ev.gold i { background: #ffe9a8; }
 .sd .sd-ev small { font-size: 11.5px; font-weight: 800; color: var(--ink-2); }
+/* v9.4.2 風箏節的紀錄 */
+.kf .kf-lead { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
+.kf .kf-lead small { display: block; margin-top: 4px; font-weight: 700; color: var(--ink-2); }
+.kf .kf-now { margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; border: 2px solid #a9d8c0; background: #eefaf3; font-size: 13.5px; line-height: 1.55; }

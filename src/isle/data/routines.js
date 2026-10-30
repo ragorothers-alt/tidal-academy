@@ -51,6 +51,8 @@
       who: ['chinese', 'english', 'civics'], act: { chinese: 'read', english: 'cards', civics: 'read' }, subj: ['chinese', 'english', 'civics'] },
     { id: 'morning_exercise', name: '早操', icon: '🤸', days: [0, 6], from: 7.5, to: 8.25, place: 'fountain',
       who: ['geography', 'biology', 'physics', 'english'], act: 'stretch', subj: ['biology'] },
+    { id: 'kite_fest', name: '風箏節', icon: '🪁', days: [6], from: 13, to: 15, place: 'kiteFest',   // v9.4.2 週六白天的風箏節：在草地南邊背對大海放風箏（下雨不辦）
+      who: ['earth', 'geography', 'biology'], act: 'kite', subj: ['earth', 'physics'] },
     { id: 'sports_warmup', name: '運動會熱身', icon: '🏃', days: [0], from: 9, to: 10, place: 'sportsWarm',   // v9.4.1 週日的運動會開場：在跑道南邊做熱身操（下雨不辦）
       who: ['geography', 'biology', 'physics', 'english'], act: 'stretch', subj: ['physics'] },
     { id: 'market_lunch', name: '市集午餐', icon: '🍙', days: [0, 1, 2, 3, 4, 5, 6], from: 12, to: 13, place: 'market',

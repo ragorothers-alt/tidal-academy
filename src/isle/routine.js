@@ -14,6 +14,7 @@ import * as Audio from './audio.js';
 import * as weather from './weather.js';
 import * as nm from './nightmarket.js';
 import * as sd from './sportsday.js';
+import * as kf from './kitefest.js';
 import * as memo from './memo.js';
 import * as bond from './bond.js';
 import { I, S, save } from './state.js';
@@ -52,7 +53,7 @@ function places() {
     beach: { stand: facing([[-11, 36.6], [-13, 37.4], [-9, 35.6], [-15, 38.2]], 0.3) },
     camp: { stand: towards([[-22.7, 37.5], [-21.6, 37.9]], -21.8, 36.8) },   // 湯鍋靠海那一側（另一側是帳篷）
     hotel: { seats: near(W(26.3, 27.75), 1.5), stand: towards([[24.5, 26.6], [27.5, 26.4]], 28, 20) },
-    cape: { seats: near(W(34.43, -1.75), 1.5), stand: facing([[36.2, -3.2], [35.6, -1.2], [37.2, -2.3], [35.2, -4.2]], Math.PI / 2) },
+    cape: { seats: near(W(34.43, -1.75), 1.5), stand: facing([[36.2, -3.2], [35.6, -1.2], [37.2, -2.3], [35.2, -4.2]], -Math.PI / 2) },   // v9.4.2 白天吹海風（東風）：背對大海、面向西邊
     shrine: { seats: near(W(-31.2, -20.5), 1.5), stand: towards([[-26.4, -22.4], [-28, -22.4]], -27, -26) },
     spring: { stand: towards([[-21.5, -16.8], [-19.5, -16.6], [-23.5, -16.6]], -21, -13) },
     mill: { stand: towards([[-14.3, 1.3], [-14.9, 2]], -15.8, -1) },
@@ -68,7 +69,8 @@ function places() {
     picnic: { seats: st => !!st.picnic },
     nightMarket: { stand: nm.spots() },   // v9.4.0 週六晚上的港邊夜市：每一攤前面
     nightBusk: { stand: nm.buskSpots() },
-    sportsWarm: { stand: sd.spots() }   // v9.4.1 週日運動會開場前：跑道南邊
+    sportsWarm: { stand: sd.spots() },   // v9.4.1 週日運動會開場前：跑道南邊
+    kiteFest: { stand: kf.spots() }   // v9.4.2 週六的風箏節：草地南邊、面向下風處
   };
   return PLACES;
 }
@@ -239,7 +241,7 @@ function arrive(v, r) {
     else { const [x, z] = goalOf(sp); r.spot = { x, z, ry: sp.seat.ry }; }   // 位子被人坐走了：站在旁邊做
   }
   setProps(v.mesh, A.r, A.l); u.act = b.act;
-  if (b.act === 'kite') r.kite = makeKite(v);
+  if (b.act === 'kite') r.kite = makeKite(v, b.place);
 }
 /** 做事中：面向該看的方向、偶爾冒泡泡；做音樂的頭上冒音符 */
 function doing(v, r, dt, dp) {
@@ -263,19 +265,19 @@ function doing(v, r, dt, dp) {
 }
 
 /* ================= 風箏 ================= */
-function makeKite(v) {
+function makeKite(v, place) {
   const group = new THREE.Group(), k = modelClone('ACTSCENE', 'kite');
   if (k) group.add(k); else group.add(new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1), new THREE.MeshStandardMaterial({ color: '#ffb0c0', side: THREE.DoubleSide })));
   const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: '#f4f0e6', transparent: true, opacity: 0.8 }));
   line.frustumCulled = false; group.add(line); scene.add(group);
   const seed = v.sid.length * 1.7;
-  return { group, kite: k, line, seed, tail: k ? [0, 1, 2, 3, 4].map(i => k.getObjectByName('seg' + i)).filter(Boolean) : [] };
+  return { group, kite: k, line, seed, fest: place === 'kiteFest', tail: k ? [0, 1, 2, 3, 4].map(i => k.getObjectByName('seg' + i)).filter(Boolean) : [] };
 }
 const hp = new THREE.Vector3();
 function flyKite(v, K, dt) {
-  const m = v.mesh, t = ctx.simT() + K.seed, wind = 0.6;   // 東岬吹東風：風箏飄在玩家東邊的海上
-  const x = m.position.x + 7 + Math.sin(t * 0.37) * 1.4, z = m.position.z + Math.sin(t * 0.23 + K.seed) * 2.2, y = m.position.y + 7.5 + Math.sin(t * 0.51) * 0.8;
-  const kg = K.kite || K.group.children[0]; kg.position.set(x, y, z); kg.rotation.set(-0.35 + Math.sin(t * 0.9) * 0.08, -Math.PI / 2 + Math.sin(t * 0.6) * 0.25, Math.sin(t * 1.1) * 0.18 * wind);
+  const m = v.mesh, t = ctx.simT() + K.seed, wind = 0.6, [fx, fz] = K.fest ? kf.downwind() : [Math.sin(m.rotation.y), Math.cos(m.rotation.y)];   // v9.4.2 風箏飄在人的前方＝下風處（放風箏的人背對著風；以前畫在上風處的海上，方向反了）；風箏節照當天的風向
+  const d = 7 + Math.sin(t * 0.37) * 1.4, s = Math.sin(t * 0.23 + K.seed) * 2.2, x = m.position.x + fx * d + fz * s, z = m.position.z + fz * d - fx * s, y = m.position.y + 7.5 + Math.sin(t * 0.51) * 0.8;
+  const kg = K.kite || K.group.children[0]; kg.position.set(x, y, z); kg.rotation.set(-0.35 + Math.sin(t * 0.9) * 0.08, Math.atan2(fx, fz) - Math.PI + Math.sin(t * 0.6) * 0.25, Math.sin(t * 1.1) * 0.18 * wind);
   K.tail.forEach((s, i) => { s.rotation.z = Math.sin(t * 3 - i * 0.7) * 0.35; s.rotation.x = Math.sin(t * 2.3 - i * 0.6) * 0.15; });
   const hand = (m.userData.gltf && m.userData.gltf.rig && m.userData.gltf.rig.rHand) || null;
   if (hand) hand.getWorldPosition(hp); else hp.copy(m.position).setY(m.position.y + 1.2);
