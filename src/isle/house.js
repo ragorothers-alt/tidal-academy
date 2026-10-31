@@ -52,6 +52,17 @@ const VIEWTEX = (() => {
   c.fillStyle = 'rgba(150,186,150,0.95)'; c.beginPath(); c.moveTo(0, 470); [[90, 432], [180, 452], [260, 420], [360, 446], [440, 428], [512, 440]].forEach(([x, y]) => c.lineTo(x, y)); c.lineTo(512, 512); c.lineTo(0, 512); c.fill();   // 近處的草坡
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
+/* v9.3 天上城堡的窗外（ud.view = 'sky'）：上半是天色，下面是一片粉白的雲海，遠方浮著兩座淡淡的浮空島 */
+const SKYTEX = (() => {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 512; const c = cv.getContext('2d');
+  c.fillStyle = 'rgba(196,186,226,0.55)'; [[120, 236, 46, 16], [400, 222, 34, 12]].forEach(([x, y, w, h]) => { c.beginPath(); c.ellipse(x, y, w, h, 0, 0, 7); c.fill(); c.beginPath(); c.moveTo(x - w * 0.7, y + 4); c.lineTo(x, y + h * 3.2); c.lineTo(x + w * 0.7, y + 4); c.fill(); });   // 遠方的浮空島
+  for (let i = 0; i < 46; i++) {
+    const x = (i * 97) % 560 - 24, y = 300 + (i % 5) * 34 + Math.sin(i) * 10, r = 46 + (i % 4) * 16, g = c.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(255,246,250,0.98)'); g.addColorStop(0.6, 'rgba(250,232,242,0.8)'); g.addColorStop(1, 'rgba(250,232,242,0)'); c.fillStyle = g; c.beginPath(); c.ellipse(x, y, r * 1.6, r, 0, 0, 7); c.fill();
+  }
+  c.fillStyle = 'rgba(252,240,246,0.95)'; c.fillRect(0, 470, 512, 42);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
 /* v7.8 窗外是真的島：進門時從這棟房子在島上的位置拍一張全景（立方體貼圖），窗玻璃依視線方向取這張全景——
    看出去就是房子外面真正的街景、鄰居、樹、海與天空。拍好以前（或找不到房子）用下面的手繪窗景 */
 const ENV = { rt: null, on: { value: 0 }, rot: { value: new THREE.Matrix3() } };
@@ -229,7 +240,7 @@ function fxEnter() {
     return { l, w, a: Math.min(w.w * w.h, 4) };
   });
   // 燈的光暈（暖色、晚上比較大比較亮）
-  FX.halos = (cur.ud.lights || []).slice(0, 6).filter(l => l[5] !== 0).map(([x, y, z, c, , h]) => {
+  FX.halos = (cur.ud.lights || []).slice(0, (cur.ud.lights || []).length > 7 ? 24 : 6).filter(l => l[5] !== 0).map(([x, y, z, c, , h]) => {   // v9.3 燈位很多的大城堡：每個燈位都有光暈（光暈只是貼圖，不算燈）
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(c || '#ffd6a0').multiply(WARM), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     s.position.set(x, y, z); s.renderOrder = 6; s.userData.h = h ?? 1; scene.add(s); extra.push(s); return s;
   });
@@ -334,7 +345,7 @@ export const kit = {
 };
 
 export let inside = false;
-let P = null, cur = null, host = null, hostSaved = null, savedP = null, savedCurve = CURVE, onExit = null, armed = false, vy = 0, pull = 1, pUp = 0;
+let P = null, cur = null, host = null, hostSaved = null, savedP = null, savedCurve = CURVE, onExit = null, armed = false, vy = 0, pull = 1, pUp = 0, pool = null;
 const built = new Map(), extra = [], extraCols = [];
 const ray = new THREE.Raycaster(), DOWN = new THREE.Vector3(0, -1, 0), _o = new THREE.Vector3();
 export function init(player) { P = player; }
@@ -369,7 +380,7 @@ let guests = [], visitSpots = [], dressObjs = [], dressFn = null, beacon = null;
 /** v8.3 館裡的客人（main.js 播他們的對話） */
 export const guestsNow = () => guests.map(o => o.v);
 /** v8.3 重新擺「這次進門才有的東西」（博物館捐贈後馬上看得到新展品） */
-export function redress() { if (!inside || !dressFn) return; dressObjs.forEach(o => scene.remove(o)); dressObjs = dressFn(cur.ud) || []; dressObjs.forEach(addDress); }
+export function redress() { if (!inside || !dressFn) return; dressObjs.forEach(o => scene.remove(o)); dressObjs = dressFn(cur.ud, cur.g) || []; dressObjs.forEach(addDress); }
 /** 擺上這次的東西；userData.solid 的（例如特展台）會擋路 */
 function addDress(o) { scene.add(o); if (o.userData.solid) { o.updateMatrixWorld(true); extraCols.push(new THREE.Box3().setFromObject(o)); } }
 /** v8.3 換掉這次進門才有的互動點 */
@@ -412,11 +423,13 @@ export function enter(key, opt = {}) {
   const { g, ud } = cur; scene.add(g);
   extraCols.length = 0;
   (ud.lights || []).slice(0, 7).forEach(([x, y, z, c, k]) => { const l = new THREE.PointLight(new THREE.Color(c || '#ffd6a0').multiply(WARM), 1, 0, 2); l.position.set(x, y, z); l.userData.k = k || 1; scene.add(l); extra.push(l); });   // v8.7 第七盞留給圖書館接待區的淡薰衣草補光（書棲的臉白天不再收在暗面）
+  pool = (ud.lights || []).length > 7 ? { ls: extra.filter(l => l.isPointLight), t: 0 } : null;   // v9.3 燈比七盞多（天上城堡十間教室）：只開離玩家最近的七盞，走到哪裡就換到哪裡
+  viewMat.uniforms.map.value = ud.view === 'sky' ? SKYTEX : VIEWTEX;
   (opt.gifts || []).slice(0, (ud.gifts || []).length).forEach((f, i) => {
     const s = ud.gifts[i], m = buildFurniture(f); m.position.set(s[0], s[1], s[2]); m.rotation.y = s[3] || 0; m.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; } });
     scene.add(m); extra.push(m); m.updateMatrixWorld(true); if (f.cat !== 'rug') extraCols.push(new THREE.Box3().setFromObject(m));
   });
-  dressFn = opt.dress || null; dressObjs = (dressFn ? dressFn(ud) || [] : []); dressObjs.forEach(addDress);   // 這次進門才擺的東西（博物館捐贈過的展品、展區名牌）
+  dressFn = opt.dress || null; dressObjs = (dressFn ? dressFn(ud, g) || [] : []); dressObjs.forEach(addDress);   // 這次進門才擺的東西（博物館捐贈過的展品、展區名牌）；g：整棟室內（v9.3 學院的黑板留在模型上換貼圖）
   visitSpots = opt.spots ? (opt.spots(ud) || []).map(s => Object.assign({ y: 0, r: 1.1 }, s)) : [];   // v8.3 這次進門才有的互動點（展品、書架的各科）
   const sd = new THREE.Vector3(...(ud.sun || [0.45, 0.8, 0.55])).normalize();
   sun.position.copy(cur.ctr).addScaledVector(sd, cur.ext + 6); sun.target.position.copy(cur.ctr);
@@ -570,6 +583,10 @@ export function tick(dt, t, o) {
   hemi.intensity = inn ? 0.3 * bk : 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0'); camFill.intensity = (0.25 * day + 1.2 * n) * (1 - fpNow);
   sun.intensity = inn ? 0.4 : day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b9c0ff' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
   scene.background.set(cur.ud.bg || (n > 0.5 ? '#1d1a34' : '#cbb8de'));
+  if (pool && (pool.t -= dt) <= 0) {   // v9.3 七盞燈換到離玩家最近的七個燈位（隔著牆的房間本來就照不到，換過去看不出來）
+    pool.t = 0.4; const px = P.position.x, pz = P.position.z;
+    cur.ud.lights.map(l => [l, Math.hypot(l[0] - px, l[2] - pz)]).sort((a, b) => a[1] - b[1]).slice(0, pool.ls.length).forEach(([[x, y, z, c, k], ], i) => { const l = pool.ls[i]; l.position.set(x, y, z); l.color.set(c || '#ffd6a0').multiply(WARM); l.userData.k = k || 1; });
+  }
   extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (inn ? 7 : 2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光
   lampMats.forEach(m => { m.emissiveIntensity = 0.6 + n * 0.6; });   // v8.0：燈泡與擴散片收一點（以前晚上 1.9，泛光把小小的擴散片暈成一片白）
   shadeMats.forEach(m => { m.emissiveIntensity = 0.04 + n * 0.3; });   // 透光的燈罩：晚上透出一層琥珀色的光

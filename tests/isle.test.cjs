@@ -521,8 +521,8 @@ test('公共建築的整棟室內：出生點、出口、互動點與展示位',
   const std = () => new THREE.MeshStandardMaterial();
   const kit = { mat: std, rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null };
   const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8'), hooks = (main.match(/const HOUSE_HOOKS = \{([\s\S]*?)\};/) || ['', ''])[1];
-  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'], tidecave: ['cave'] };
-  for (const key of ['library', 'museum', 'aquarium', 'tidecave']) {
+  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'], tidecave: ['cave'], starcastle: ['academy'] };
+  for (const key of ['library', 'museum', 'aquarium', 'tidecave', 'starcastle']) {
     if (!fs.existsSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`))) { t.diagnostic(key + ' 還沒有整棟室內'); continue; }
     vm.runInContext(fs.readFileSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`), 'utf8'), cx, { filename: key });
     const fac = cx.TA && cx.TA.ISLE && cx.TA.ISLE.INTERIORS && cx.TA.ISLE.INTERIORS[key];
@@ -971,4 +971,62 @@ test('風箏節：師傅、風箏、遊客、獎品與模型', () => {
   // 風向袋往 local −Z 延伸：程式轉 sock 讓它指向下風處
   const ws = J.KITEMODELS.kf_windsock(THREE, kit); ws.updateMatrixWorld(true); const sock = ws.getObjectByName('sock');
   sock.traverse(o => { if (o.isMesh) { const b = new THREE.Box3().setFromObject(o); const lo = sock.worldToLocal(b.getCenter(new THREE.Vector3())); assert.ok(lo.z <= 0.05, '風向袋在 sock 的 −Z 那一側'); } });
+});
+/* v9.5.0 星環學院：光橋石門的零件、城堡室內的十間教室（黑板、星窗牆、互動點）與主程式的接線 */
+test('星環學院：光橋石門、城堡室內與十間教室', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, Date, JSON, THREE }; cx.window = cx; cx.globalThis = cx;
+  const c2d = new Proxy(function () {}, { get: (o, k) => (k === 'canvas' ? cv : k === 'measureText' ? () => ({ width: 10 }) : () => c2d), set: () => true });
+  const cv = { width: 64, height: 64, style: {}, getContext: () => c2d, toDataURL: () => '' };
+  cx.document = { createElement: () => Object.assign({}, cv) }; vm.createContext(cx);
+  ['src/isle/data/academymodels.js', 'src/isle/data/interiors_starcastle.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), cx, { filename: f }));
+  const J = cx.TA.ISLE, std = () => new THREE.MeshStandardMaterial();
+  const gate = J.ACADEMYMODELS.sa_gate(THREE, { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)) });
+  for (let i = 0; i < 10; i++) assert.ok(gate.getObjectByName('gem' + i) && gate.getObjectByName('gem' + i).isMesh, '徽章的寶石 gem' + i);
+  ['crystal_l', 'crystal_r', 'bridge', 'front', 'landing'].forEach(n => assert.ok(gate.getObjectByName(n), '石門少了 ' + n));
+  gate.updateMatrixWorld(true); assert.ok(gate.getObjectByName('bridge').position.z < -1 && gate.getObjectByName('front').position.z > 0.5, '光橋在石門 −Z 那一側、玩家站在 +Z 那一側');
+  assert.ok(J.ACADEMYMODELS.sa_plaque(THREE, { mat: std }).getObjectByName('face'), '石碑的碑面');
+  const g = J.INTERIORS.starcastle(THREE, { mat: std, rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null }), ud = g.userData;
+  assert.equal(ud.view, 'sky', '城堡的窗外是天空'); assert.ok(ud.lights.length > 7, '燈位比七盞多（house.js 只開最近的七盞）'); assert.ok(g.getObjectByName('ring_at'), '台座上的小星環位置');
+  const SECT = { chinese: 1, english: 2, history: 3, geography: 4, civics: 5, math: 7, physics: 8, chemistry: 9, biology: 10, earth: 11 };
+  const topics = new Set(ud.spots.filter(s => s.kind === 'hook:academy').map(s => s.topic));
+  ['ring', 'hall'].forEach(k => assert.ok(topics.has(k), '圓廳的互動點 ' + k));
+  const units = { chinese: 10, english: 9, math: 13, history: 8, geography: 8, civics: 9, physics: 8, chemistry: 7, biology: 7, earth: 7 };
+  Object.entries(SECT).forEach(([sid, k]) => {
+    const r = ud.rooms[sid]; assert.ok(r, '少了教室 ' + sid);
+    assert.ok(Math.abs(r.a - k * Math.PI / 6) < 1e-6, sid + ' 教室的方位');
+    const b = g.getObjectByName('board_' + sid); assert.ok(b && b.isMesh && b.userData.prop, sid + ' 的黑板是獨立網格（換貼圖）');
+    assert.ok(topics.has('lesson:' + sid) && topics.has('wall:' + sid), sid + ' 的講台與星窗互動點');
+    const [x0, z0, x1, z1] = r.wall, len = Math.hypot(x1 - x0, z1 - z0), per = Math.ceil(units[sid] / (units[sid] > 7 ? 2 : 1));
+    assert.ok(len * 0.88 / per >= 0.44, `${sid} 的星窗牆排得下 ${units[sid]} 扇窗（${len.toFixed(2)} 公尺）`);
+    assert.ok(Math.abs(Math.hypot(...r.wallN) - 1) < 1e-6 && r.plate.length >= 3, sid + ' 的牆面法向量與門牌');
+  });
+  const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8'), html = fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8');
+  assert.match(main, /enterPublic\('starcastle'/, '走過光橋進城堡'); assert.match(main, /starbridge\.liftPose\(dt\)/, '走上光橋時角色不貼地');
+  ['academymodels', 'academy', 'interiors_starcastle'].forEach(f => assert.ok(html.includes(`src/isle/data/${f}.js`), 'isle.html 要載入 ' + f));
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/starbridge.js'), 'utf8'), /export const NEED = 3;/, '點亮三座燈塔接起光橋');
+});
+
+/* v9.5.0 星環學院：守門人、十科的星影課堂台詞、學生證的規則與三件學院家具 */
+test('星環學院：守門人、星影課堂、學生證與家具', () => {
+  const cx = { console, Math }; cx.window = cx; cx.globalThis = cx; vm.createContext(cx);
+  ['src/isle/data/furniture.js', 'src/isle/data/academy.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), cx, { filename: f }));
+  const J = cx.TA.ISLE, A = J.ACADEMY, src = fs.readFileSync(path.join(ROOT, 'src/isle/academy.js'), 'utf8');
+  const lines = (a, n, tag) => assert.ok(Array.isArray(a) && a.length >= n && a.every(t => typeof t === 'string' && t.length > 2 && t.length <= 40 && !/\d/.test(t.replace(/\{\w+\}/g, ''))), tag);
+  assert.ok(A.host.name && A.host.title, '守門人的名字與稱號'); Object.values(A.host.look).filter(v => v !== 'human').forEach(v => assert.match(v, /^#[0-9a-f]{6}$/i, '守門人的配色'));
+  lines(A.gate.locked, 3, 'gate.locked'); lines(A.gate.first, 3, 'gate.first'); lines(A.gate.open, 3, 'gate.open');
+  assert.ok(A.gate.locked.every(t => t.includes('{n}')), '還差幾座燈塔');
+  ['greet', 'hello', 'about', 'hall'].forEach(k => lines(A[k], 2, k)); lines(A.ring, 3, 'ring');
+  assert.ok(A.letter.text.length >= 120 && A.letter.text.length <= 200 && A.letter.title, '光橋接起來那天的信');
+  const S = ['chinese', 'english', 'math', 'history', 'geography', 'civics', 'physics', 'chemistry', 'biology', 'earth'];
+  S.forEach(sid => {
+    assert.ok(/^.{2,6}教室$/.test(A.rooms[sid]), sid + ' 的教室名字');
+    const L = A.lesson[sid]; lines(L.intro, 3, sid + '.intro'); lines(L.good, 3, sid + '.good'); lines(L.soso, 3, sid + '.soso'); lines(L.low, 2, sid + '.low'); lines(L.light, 2, sid + '.light');
+  });
+  assert.equal(new Set(S.map(s => A.rooms[s])).size, 10, '十間教室的名字都不一樣');
+  assert.match(src, /PRIZE_AT = \[10, 30, 60\]/); assert.match(src, /BELL = 120, GEMS = 10/);
+  assert.ok(A.card.rule.includes('120') && A.card.rule.includes('10、30、60'), '學生證寫的獎勵和程式一致');
+  assert.equal(A.prizes.length, 3, '三件學院家具');
+  A.prizes.forEach(f => assert.ok(J.FURNITURE.some(x => x.id === f.id && x.src === 'event:star_academy'), f.id + ' 放進家具清單'));
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /star_academy: '/, '家具目錄寫得出怎麼拿到');
 });

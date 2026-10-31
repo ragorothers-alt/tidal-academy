@@ -1704,3 +1704,23 @@ body.picking .act-btn { opacity: 0; transform: scale(.85); pointer-events: none;
 .kf .kf-lead { margin: 0 0 10px; font-size: 13.5px; line-height: 1.55; }
 .kf .kf-lead small { display: block; margin-top: 4px; font-weight: 700; color: var(--ink-2); }
 .kf .kf-now { margin: 0 0 10px; padding: 10px 12px; border-radius: 14px; border: 2px solid #a9d8c0; background: #eefaf3; font-size: 13.5px; line-height: 1.55; }
+/* v9.3 光橋：走上光橋時畫面慢慢亮成一片白，進城堡後散開 */
+.sa-white { position: fixed; inset: 0; z-index: 9000; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 42%, #ffffff 0%, #f4f6ff 55%, #e6e8ff 100%); transition: opacity .9s ease-out; }
+.sa-white.rise { opacity: 1; transition: opacity 1.9s ease-in 1.5s; }
+.sa-white.flash { opacity: 1; transition: none; }
+/* v9.3 星環學院的學生證 */
+.sa-card .sa-id { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: linear-gradient(135deg, #2e3566, #4a4f8f 60%, #8a86c6); color: #fff6e6; }
+.sa-card .sa-seal { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; background: radial-gradient(circle, #fff4d0, #e2c27a 70%); color: #4a4f8f; box-shadow: 0 0 14px rgba(255, 236, 180, .6); }
+.sa-card .sa-id > div:nth-child(2) { flex: 1 1 auto; min-width: 0; }
+.sa-card .sa-id b { display: block; font-size: 16px; }
+.sa-card .sa-id small { display: block; margin-top: 2px; font-size: 12px; font-weight: 700; color: #d9dcff; }
+.sa-card .sa-n { text-align: center; }
+.sa-card .sa-n b { font-size: 26px; line-height: 1; }
+.sa-card .sa-rule, .sa-card .sa-prize { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.sa-card .sa-lock { margin: 10px 0 0; padding: 9px 12px; border-radius: 12px; background: #eef0ff; border: 2px dashed #a9b0e6; font-size: 13px; line-height: 1.5; }
+.sa-card .sa-rooms { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.sa-card .sa-rooms li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 10px; border-radius: 12px; background: var(--cream-2); border-left: 5px solid var(--c); }
+.sa-card .sa-rooms li b { font-size: 13.5px; }
+.sa-card .sa-rooms li span { font-size: 13px; font-weight: 800; }
+.sa-card .sa-rooms li small { grid-column: 1 / -1; font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+.sa-card .sa-rooms li em { grid-column: 1 / -1; font-style: normal; font-size: 11.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
