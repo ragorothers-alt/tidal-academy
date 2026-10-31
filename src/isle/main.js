@@ -7,7 +7,7 @@ import * as mind from './mind.js';
 import * as nav from './nav.js';   // v8.9 島民尋路
 import * as routine from './routine.js';   // v8.9 島民照作息做事、團體活動
 import * as fauna from './fauna.js';   // v8.9 跳出水面的魚、海豚、鯨魚、島上的貓
-import { chibi, animate, setTool, setExpr, setTalk, lookAt, clap, setSit, nameMesh } from './chars.js';
+import { chibi, animate, setTool, setExpr, setTalk, lookAt, clap, gesture, setSit, nameMesh } from './chars.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as life from './life.js';
@@ -187,7 +187,8 @@ function cheer(e) {
   setTimeout(() => Audio.sfx('clap'), 300);
   near.forEach((v, i) => setTimeout(() => {
     v.faceTo = { mesh: player }; v.wait = Math.max(v.wait, 3.5); v.target = [v.mesh.position.x, v.mesh.position.z];
-    clap(v.mesh, 2.2); ui.emote(v.mesh, rare || e.first ? '🎉' : '👏', '#ffb84a');
+    if (rare || e.first) gesture(v.mesh, 'cheer', 2.6); else clap(v.mesh, 2.2);   // v9.6 稀有或第一次：歡呼
+    ui.emote(v.mesh, rare || e.first ? '🎉' : '👏', '#ffb84a');
     ui.bubble(v.mesh, pick(rare || (e.first && i === 0) ? CHEER.wow : CHEER[e.kind] || CHEER.fish), 2400);
     setTimeout(() => { if (v.faceTo && v.faceTo.mesh === player) v.faceTo = null; }, 3000);
   }, 200 + i * 260));
@@ -2387,7 +2388,7 @@ function tick(fixed) {
     m.position.y += (ground(m.position.x, m.position.z) - m.position.y) * Math.min(1, dt * 10);
     if (photo.active() && dp < 9 && !v.chatting) {   // v8.9 拍照時附近的島民轉向鏡頭、笑一下（站著的還會揮手）
       m.rotation.y = angLerp(m.rotation.y, Math.atan2(camera.position.x - m.position.x, camera.position.z - m.position.z), Math.min(1, dt * 4));
-      if (!v.posed) { v.posed = true; setExpr(m, 'happy', 4); if (!v.sitting) clap(m, 1.6); }
+      if (!v.posed) { v.posed = true; setExpr(m, 'happy', 4); if (!v.sitting) { gesture(m, Math.random() < 0.5 ? 'wave' : 'cheer', 2.2); v.faceTo = { mesh: camera }; setTimeout(() => { if (v.faceTo && v.faceTo.mesh === camera) v.faceTo = null; }, 2400); } }   // v9.6 停下來揮手或歡呼
     } else v.posed = false;
     if (!v.mesh.userData.act || !(v.rt && v.rt.b && v.rt.b.act === 'sing')) setTalk(m, talking === v && ui.typing() && ui.speakerName() === v.name);
     lookAt(m, talking === v || dp < 4.5 ? headPos.copy(player.position).setY(player.position.y + 1.1) : (v.faceTo ? headPos.copy(v.faceTo.mesh.position).setY(v.faceTo.mesh.position.y + 1.1) : null));

@@ -334,5 +334,10 @@ export function animate(ch, dt, moving, t, rate = 1) {   // rate：步伐快慢�
 }
 /** 拍手 d 秒（島民替你喝采） */
 export function clap(ch, d) { ch.userData.clapT = d || 2; setExpr(ch, 'happy', d || 2); }
+/** v9.6 模型裡的動作 d 秒：揮手（wave）、歡呼（cheer）、跳舞（dance）；Q 版或模型沒有這個動作就改成拍手 */
+export function gesture(ch, kind, d = 2.5) {
+  const u = ch.userData;
+  if (u.gltf && u.gltf.acts[kind]) { u.gest = kind; u.gestT = d; setExpr(ch, 'happy', d); } else clap(ch, Math.min(d, 1.5));
+}
 /** 坐下／站起來（姿勢由 animate 處理，位置與高度由呼叫端決定） */
 export function setSit(ch, on) { ch.userData.sit = !!on; }

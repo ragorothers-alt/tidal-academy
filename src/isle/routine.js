@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import * as nav from './nav.js';
 import { dayPlan, gatheringsOn, gathering, actOf, clock, PLACE_NAMES, ACT_NAMES } from './schedule.js';
-import { setProps, setSit, setTalk, setExpr, clap } from './chars.js';
+import { setProps, setSit, setTalk, setExpr, gesture } from './chars.js';
 import { scene } from './engine.js';
 import { colliders, seats, SITES, PLAZA, modelClone } from './props.js';
 import { register } from './props3d.js';
@@ -345,7 +345,7 @@ export function nearTick(v, dp) {
   const now = ctx.simT(); if (now - (waveAt.get(v) ?? -1e9) < 180 || now - waveAny < 12) return;
   const lines = (L8().wave || {})[v.sid]; if (!lines || !lines.length) return;
   waveAt.set(v, now); waveAny = now;
-  if (!v.sitting) { clap(v.mesh, 1.5); v.faceTo = { mesh: ctx.player }; setTimeout(() => { if (v.faceTo && v.faceTo.mesh === ctx.player) v.faceTo = null; }, 2600); }
+  if (!v.sitting) { gesture(v.mesh, 'wave', 2.4); v.faceTo = { mesh: ctx.player }; setTimeout(() => { if (v.faceTo && v.faceTo.mesh === ctx.player) v.faceTo = null; }, 2600); }
   else setExpr(v.mesh, 'happy', 1.5);
   ui.bubble(v.mesh, pick(lines), 2600); Audio.blip(v.voice || 400);
 }

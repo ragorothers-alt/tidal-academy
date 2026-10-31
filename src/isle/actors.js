@@ -101,13 +101,15 @@ function hatY(model, head) {
   hv.set(hw.x, top - 0.01, hw.z); head.worldToLocal(hv);
   return THREE.MathUtils.clamp(hv.y - 0.4 * 0.42 / HEIGHT, 0.02, 0.2);
 }
+const ALIAS = { wave_goodbye_02: 'wave', dance_02: 'dance' };   // v9.6 旅客模型多帶的動作：揮手、歡呼（cheer）、跳舞
 export async function dress(ch, key) {
-  const id = CAST[key]; if (!id || !READY.has(id) || !ch || ch.userData.gltf) return false;
+  const id = CAST[key] || (/^guest:/.test(key || '') ? 'guest_' + key.slice(6) : null);   // v9.6 旅客（sid 'guest:<id>'）的模型是 guest_<id>
+  if (!id || !READY.has(id) || !ch || ch.userData.gltf) return false;
   let g; try { g = await loadModel(id); } catch (e) { console.warn('角色模型載入失敗：', id, e); return false; }
   const u = ch.userData, model = cloneSkinned(g.scene); model.scale.setScalar(HEIGHT); let mix = false; model.traverse(o => { if (o.isBone && /^mixamorig/.test(o.name)) mix = true; }); model.rotation.y = mix ? 0 : FACING;   // 網頁版匯出（Mixamo 骨架）本來就朝 +Z
   u.body.visible = false; ch.add(model);
   const mixer = new THREE.AnimationMixer(model), acts = {};
-  g.animations.forEach(c => { acts[c.name.replace(/\.\d+$/, '')] = mixer.clipAction(c); });   // 網頁版匯出的名稱帶 .001
+  g.animations.forEach(c => { const n = c.name.replace(/\.\d+$/, ''); acts[ALIAS[n] || n] = mixer.clipAction(c); });   // 網頁版匯出的名稱帶 .001
   if (acts.walk) acts.walk.timeScale = 1.25; if (acts.run) acts.run.timeScale = 1.1;
   if (acts.greet_01) { acts.greet_01.setLoop(THREE.LoopRepeat); }
   const head = findBone(model, ['Head']), hand = findBone(model, ['R_Hand', 'R_Wrist', 'RightHand']);
@@ -124,7 +126,53 @@ export async function dress(ch, key) {
     spine: B(['Spine1', 'Spine', 'Spine01']), lUp: B(['LeftUpLeg', 'L_Thigh']), lLeg: B(['LeftLeg', 'L_Calf']), rUp: B(['RightUpLeg', 'R_Thigh']), rLeg: B(['RightLeg', 'R_Calf']) };
   u.gltf = { mixer, acts, cur: null, model, head, rig, useT: 1, useKind: null, base: model.position.clone(), baseS: HEIGHT, face: faceSkin(model, id) };
   play(u.gltf, 'idle');
+  if (!acts.wave || !acts.cheer || !acts.dance) shareClips(id).then(c => { for (const k in c) if (!acts[k]) acts[k] = mixer.clipAction(c[k]); }).catch(e => console.warn('共用動作換算失敗：', id, e));
   return true;
+}
+/* ---------- v9.6 共用動作：島民的舊模型只有待機、走路、跑步、坐下、打招呼。揮手、歡呼、跳舞從共用動作包（tools/anim_pack.py，旅客模型的骨架與動作）
+   換算過來：每一格算出來源骨頭相對綁定姿勢轉了多少（角色座標），再套到這個模型對應骨頭的綁定姿勢上；兩邊的骨頭靜止方向不同也不影響 ---------- */
+const PACK = 'anim_extra', SHARE = { wave_goodbye_02: 'wave', cheer: 'cheer', dance_02: 'dance' };
+const TRIPO_BONE = { Hips: 'Hip', Spine: 'Waist', Spine1: 'Spine01', Spine2: 'Spine02', Neck: 'NeckTwist01', Head: 'Head',   // Mixamo → Tripo 骨架（CLI 版模型）
+  LeftShoulder: 'L_Clavicle', LeftArm: 'L_Upperarm', LeftForeArm: 'L_Forearm', LeftHand: 'L_Hand', RightShoulder: 'R_Clavicle', RightArm: 'R_Upperarm', RightForeArm: 'R_Forearm', RightHand: 'R_Hand',
+  LeftUpLeg: 'L_Thigh', LeftLeg: 'L_Calf', LeftFoot: 'L_Foot', LeftToeBase: 'L_ToeBase', RightUpLeg: 'R_Thigh', RightLeg: 'R_Calf', RightFoot: 'R_Foot', RightToeBase: 'R_ToeBase' };
+const shared = {}, sq = new THREE.Quaternion(), sp = new THREE.Vector3(), ss3 = new THREE.Vector3();
+function bindPose(root) {   // 原始場景（快取裡沒播過動作的那份）每個節點的世界旋轉與位置，就是綁定姿勢
+  root.updateMatrixWorld(true); const out = new Map();
+  root.traverse(o => { const q = new THREE.Quaternion(), p = new THREE.Vector3(); o.matrixWorld.decompose(p, q, ss3); out.set(o, { q, p }); });
+  return out;
+}
+function shareClips(id) {
+  return shared[id] || (shared[id] = Promise.all([loadModel(PACK, 'none'), loadModel(id)]).then(([src, tgt]) => {
+    const sRoot = src.scene, tRoot = tgt.scene, sBind = bindPose(sRoot), tBind = bindPose(tRoot), sBy = {}, tBy = {}, tBones = [];
+    sRoot.traverse(o => { sBy[o.name.replace(/^mixamorig:?/, '')] = o; });
+    tRoot.traverse(o => { if (o.isBone) { tBy[o.name.replace(/^mixamorig:?/, '')] = o; tBones.push(o); } });   // 由上而下：父骨頭先
+    const tripo = !tBy.Hips, yq = new THREE.Quaternion().setFromAxisAngle(AY, tripo ? Math.PI / 2 : 0), yqi = yq.clone().invert();   // Tripo 骨架正面朝 +X
+    const pairs = Object.keys(TRIPO_BONE).map(n => [sBy[n], tBy[tripo ? TRIPO_BONE[n] : n]]).filter(([s, t]) => s && t), from = new Map(pairs.map(([s, t]) => [t, s]));
+    const sHip = sBy.Hips, tHip = tBy[tripo ? 'Hip' : 'Hips'], ratio = tBind.get(tHip).p.y / sBind.get(sHip).p.y, out = {};
+    for (const clip of src.animations) {
+      const name = SHARE[clip.name.replace(/\.\d+$/, '')]; if (!name) continue;
+      const mixer = new THREE.AnimationMixer(sRoot); mixer.clipAction(clip).play();
+      const n = Math.max(2, Math.round(clip.duration * 30) + 1), times = new Float32Array(n), qv = new Map(pairs.map(([, t]) => [t, new Float32Array(n * 4)])), pv = new Float32Array(n * 3), world = new Map();
+      for (let i = 0; i < n; i++) {
+        const t = Math.min(clip.duration, i / 30); times[i] = t; mixer.setTime(t); sRoot.updateMatrixWorld(true);
+        for (const b of tBones) {
+          const s = from.get(b), pw = world.get(b.parent) || tBind.get(b.parent).q;   // 父節點這一格的世界旋轉（不是骨頭的父節點維持綁定姿勢）
+          let w;
+          if (s) { s.getWorldQuaternion(sq); w = sq.clone().multiply(sBind.get(s).q.clone().invert()).premultiply(yq).multiply(yqi).multiply(tBind.get(b).q); }
+          else w = pw.clone().multiply(b.quaternion);   // 沒有對應的骨頭（手指、扭轉骨）跟著父骨頭
+          world.set(b, w);
+          if (s) pw.clone().invert().multiply(w).toArray(qv.get(b), i * 4);
+        }
+        sHip.getWorldPosition(sp).sub(sBind.get(sHip).p).applyQuaternion(yq).multiplyScalar(ratio).add(tBind.get(tHip).p);
+        tHip.parent.worldToLocal(sp).toArray(pv, i * 3);
+      }
+      mixer.stopAllAction(); mixer.uncacheRoot(sRoot);
+      const tracks = pairs.map(([, t]) => new THREE.QuaternionKeyframeTrack(t.name + '.quaternion', times, qv.get(t)));
+      tracks.push(new THREE.VectorKeyframeTrack(tHip.name + '.position', times, pv));
+      out[name] = new THREE.AnimationClip(name, clip.duration, tracks);
+    }
+    return out;
+  }));
 }
 /* ---------- 疊加姿勢：在骨架動作之上，以角色自己的座標軸旋轉骨頭（v7.0） ----------
    角色座標：+Z 前、+Y 上、+X 左。flex：繞 X 軸往前抬（手臂、大腿）；負值往後。 */
@@ -170,9 +218,10 @@ function airPose(ch, gl, k) {
   turn(ch, R.lUp, AX, -0.75 * k); turn(ch, R.rUp, AX, -0.55 * k); turn(ch, R.lLeg, AX, 1.15 * k); turn(ch, R.rLeg, AX, 0.9 * k);
   turn(ch, R.lArm, AZ, -0.9 * k); turn(ch, R.rArm, AZ, 0.9 * k); turn(ch, R.lArm, AX, -0.5 * k); turn(ch, R.rArm, AX, -0.5 * k);
 }
+const START = { wave: 3.1 };   // v9.6 從哪一秒開始播：wave_goodbye_02 前 3 秒是低頭看錶，3.1–4.9 秒才舉手揮
 function play(gl, name) {
   if (gl.cur === name) return; const a = gl.acts[name]; if (!a) return;
-  a.reset().setEffectiveWeight(1).fadeIn(0.25).play();
+  a.reset().setEffectiveWeight(1).fadeIn(0.25).play(); a.time = START[name] || 0;
   if (gl.cur && gl.acts[gl.cur]) gl.acts[gl.cur].fadeOut(0.25);
   gl.cur = name;
 }
@@ -181,7 +230,9 @@ const tq = new THREE.Quaternion(), tv = new THREE.Vector3(), tm = new THREE.Matr
 export function animateModel(ch, dt, moving, rate = 1) {
   const u = ch.userData, gl = u.gltf;
   if (u.clapT > 0) u.clapT -= dt;
-  play(gl, u.sit ? 'sit' : u.clapT > 0 ? 'greet_01' : moving === 2 ? 'run' : moving ? 'walk' : 'idle');
+  if (u.gestT > 0) u.gestT -= dt;
+  const gest = u.gestT > 0 && gl.acts[u.gest] ? u.gest : null;   // v9.6 揮手、歡呼、跳舞（chars.gesture）：站著不動時才播
+  play(gl, u.sit ? 'sit' : u.clapT > 0 ? 'greet_01' : moving === 2 ? 'run' : moving ? 'walk' : gest || 'idle');
   gl.mixer.update(moving ? dt * rate : dt);   // 走路動作跟著速度放慢
   // 看著對方：在動作之上把頭轉向目標（左右 ±60°、上下 ±25°）
   if (u.look && gl.head && !u.sit) {

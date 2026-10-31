@@ -9,6 +9,8 @@ import { I, S, save, icon } from './state.js';
 import { pick, dayKey } from './quiz.js';
 import { drill, picker } from './drill.js';
 import * as gifts from './gifts.js';
+import * as actors from './actors.js';
+import { gesture } from './chars.js';
 
 const TA = window.TA;
 let ctx = null;
@@ -23,6 +25,7 @@ const tail = v => (v.catch && Math.random() < 0.5 ? v.catch : '');
 function makeNpc(g, home, range) {
   const v = Object.assign({}, g, { roomLayout: g.home, sid: 'guest:' + g.id, guest: true, color: g.shirt || '#ffb86b', sub: { name: '旅客', short: '旅', color: g.shirt || '#ffb86b' } });
   v.home = home.slice(); v.range = range; v.mesh = ctx.chibi(v); v.mesh.traverse(m => { m.frustumCulled = cullable(m); }); scene.add(v.mesh);
+  actors.dress(v.mesh, v.sid);   // v9.6 旅客換上人形 3D 模型（還沒做好模型的維持 Q 版）
   v.mesh.position.set(home[0], groundAt(home[0], home[1]), home[1]); v.target = home.slice(); v.wait = 2;
   v.tag = ui.el('div', 'tag', `${ui.esc(v.name)}<small>${v.resident ? '新島民' : '旅客'}</small>`); v.tag.style.setProperty('--c', v.color); document.getElementById('labels').appendChild(v.tag);
   ctx.villagers.push(v);
@@ -61,6 +64,7 @@ const freePlot = () => plots.findIndex((p, i) => !p.built && !Object.values(st()
 /* ---------- 對話 ---------- */
 export async function talk(v) {
   const G = st(), sp = spOf(v), L1 = v.lines || {}, id = v.id;
+  gesture(v.mesh, 'wave', 2.6);   // v9.6 見面先揮手
   if (!v.resident && !G.met[id]) { G.met[id] = dayKey(); save(); for (const l of (L1.arrive || ['你好，我是來旅行的。'])) await ui.say(sp, l + tail(v)); }
   else if (gifts.isBirthday(v)) await ui.say(sp, pick(((gifts.pref(v) || {}).lines || {}).birthday || ['今天是我的生日！']));
   else await ui.say(sp, pick(v.resident ? (L1.settled || L1.greet || ['你好！']) : (L1.greet || ['你好！'])) + tail(v));
@@ -80,6 +84,7 @@ export async function talk(v) {
     if (k === 'move') {
       const pi = freePlot();
       if (pi < 0) { await ui.say(sp, '島上好像沒有空地了呢……謝謝你的心意！'); continue; }
+      gesture(v.mesh, 'dance', 6);   // 開心得跳起舞來
       for (const l of (L1.movein || ['我很樂意搬來！'])) await ui.say(sp, l);
       G.moved[id] = { plot: pi, day: dayKey() }; save();
       await ui.card({ icon: icon('ticket', 'pkg'), title: `${v.name}決定搬來潮汐小島！`, sub: '明天就會在空地上蓋好房子。' });
@@ -93,6 +98,7 @@ export async function talk(v) {
       const pass = r.ok >= Math.min(4, r.n), before = G.pts[id] || 0, b = 300 + r.ok * 100;
       G.pts[id] = Math.min(PTS, before + r.ok); if (pass) G.prog[id] = (G.prog[id] || 0) + 1; S().bells += b; Audio.sfx(pass ? 'catch' : 'pop');
       save();
+      if (pass) gesture(v.mesh, 'cheer', 3.2);   // 通過時歡呼
       await ui.say(sp, `${pass ? pick(L1.pass || ['太棒了！']) : pick(L1.fail || ['沒關係，明天再一起讀。'])}（答對 ${r.ok} / ${r.n}，+${b} 鈴錢${v.resident ? '' : ` · 讀書夥伴 ${G.pts[id]} / ${PTS}`}）`);
       if (!v.resident && before < PTS && G.pts[id] >= PTS) await ui.say(sp, '你已經是我最好的讀書夥伴了。如果島上有空地……我想搬過來住。');
       ctx.paint();

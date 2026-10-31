@@ -1089,3 +1089,33 @@ test('星環學院：星環之頂的平台與最終首領', () => {
   assert.ok(fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8').includes('src/isle/data/interiors_starsummit.js'), 'isle.html 要載入星環之頂');
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /star_summit: '/, '家具目錄寫得出怎麼拿到');
 });
+
+/* v9.6.0 旅客的人形模型：十二位旅客各一個 Tripo 模型（八個動作），舊模型從共用動作包換算揮手、歡呼、跳舞 */
+test('旅客的人形模型與共用動作', () => {
+  const glb = id => {   // 模型檔裡 base64 的 GLB → JSON
+    const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64');
+    assert.equal(b.toString('latin1', 0, 4), 'glTF', id + ' 是 GLB'); return JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12)));
+  };
+  const clips = js => (js.animations || []).map(a => a.name.replace(/\.\d+$/, ''));
+  const list = fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8');
+  I.GUESTS.forEach(g => {
+    const id = 'guest_' + g.id, js = glb(id);
+    assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡');
+    ['idle', 'walk', 'run', 'sit', 'greet_01', 'wave_goodbye_02', 'cheer', 'dance_02'].forEach(c => assert.ok(clips(js).includes(c), id + ' 的動作 ' + c));
+    assert.ok(js.nodes.some(n => n.name === 'mixamorig:Hips') && js.nodes.some(n => n.name === 'mixamorig:RightHand'), id + ' 是 Mixamo 骨架');
+    const tris = js.meshes.reduce((n, m) => n + m.primitives.reduce((k, p) => k + js.accessors[p.indices].count / 3, 0), 0);
+    assert.ok(tris > 8000 && tris <= 13000, id + ' 的面數 ' + tris);
+  });
+  const pack = glb('anim_extra');
+  assert.deepEqual(clips(pack).sort(), ['cheer', 'dance_02', 'wave_goodbye_02'], '共用動作包的動作'); assert.ok(!pack.meshes && !pack.images, '共用動作包只有骨架');
+  assert.ok(pack.animations.every(a => a.channels.every(c => c.target.path === 'rotation' || pack.nodes[c.target.node].name === 'mixamorig:Hips')), '共用動作包只有旋轉與臀部位移');
+  const actors = fs.readFileSync(path.join(ROOT, 'src/isle/actors.js'), 'utf8');
+  assert.match(actors, /'guest_' \+ key\.slice\(6\)/, '旅客 sid 對應到 guest_<id> 模型');
+  assert.match(actors, /SHARE = \{ wave_goodbye_02: 'wave', cheer: 'cheer', dance_02: 'dance' \}/, '舊模型換算揮手、歡呼、跳舞');
+  ['Hips', 'Spine1', 'Head', 'LeftArm', 'RightForeArm', 'LeftUpLeg', 'RightFoot'].forEach(b => assert.match(actors, new RegExp('\\b' + b + ": '"), 'Mixamo → Tripo 骨頭對應 ' + b));
+  const guest = fs.readFileSync(path.join(ROOT, 'src/isle/guest.js'), 'utf8');
+  assert.match(guest, /actors\.dress\(v\.mesh, v\.sid\)/, '旅客換上模型');
+  ['wave', 'cheer', 'dance'].forEach(k => assert.ok(guest.includes(`gesture(v.mesh, '${k}'`), '旅客的動作 ' + k));
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/routine.js'), 'utf8'), /gesture\(v\.mesh, 'wave'/, '島民遠遠看到你會揮手');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/gifts.js'), 'utf8'), /gesture\(v\.mesh, 'dance'/, '壽星會跳舞');
+});

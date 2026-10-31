@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { renderer, camera, M, mesh, U, CURVE, bend, scene as mainScene, leafGeo, canopyCards, cardMat, CARD_DEPTH } from './engine.js';
 import { tuftKit } from './grass.js';
-import { animate, chibi, lookAt, setExpr, setSit } from './chars.js';
+import { animate, chibi, lookAt, setExpr, setSit, gesture } from './chars.js';
 import { buildFurniture, disposeFurniture, loadThumbs, furn } from './room.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
@@ -736,7 +736,7 @@ export function jump() {
   if (!inside || look || jmp.n >= 3) return;
   if (pSeat) { standUp(); return; }
   jmp.air = true; jmp.n++; jmp.v = JV[jmp.n - 1];
-  if (jmp.n === 3) { jmp.flip = 0.0001; lastTrick = performance.now() / 1000; dwellers.forEach(d => { if (Math.hypot(d.m.position.x - P.position.x, d.m.position.z - P.position.z) < 6) setExpr(d.m, 'happy', 1.6); }); }
+  if (jmp.n === 3) { jmp.flip = 0.0001; lastTrick = performance.now() / 1000; dwellers.forEach(d => { if (Math.hypot(d.m.position.x - P.position.x, d.m.position.z - P.position.z) < 6) { gesture(d.m, 'cheer', 1.8); d.hold = 1.8; } }); }   // v9.6 附近的島民停下來替你歡呼（坐著的只會笑）
   Audio.sfx(jmp.n === 1 ? 'swish' : jmp.n === 2 ? 'pop' : 'catch');
 }
 /** 高度：地面上貼著地走（走出崖邊會開始落下），空中受重力；落進河裡會回到上一個站穩的地方。回傳是否在空中 */
@@ -816,7 +816,7 @@ export function tick(dt, t, ix, iz, len, moving, run, locked) {
       dw.sitT -= dt; const s = seatPose(dw.seat);
       if (!s || dw.sitT <= 0 || !(D.items || []).includes(dw.seat)) { setSit(m, false); if (s) m.position.set(s.x + s.fx * 0.85, groundY(s.x + s.fx * 0.85, s.z + s.fz * 0.85), s.z + s.fz * 0.85); dw.seat = null; dw.wait = 2; }
       else { m.position.set(s.x, s.y, s.z); m.rotation.y = s.ry; lookAt(m, dp < 3 ? P.position.clone().setY(P.position.y + 1.1) : null); }
-    } else if (dp < 2) { m.rotation.y = Math.atan2(P.position.x - m.position.x, P.position.z - m.position.z); lookAt(m, P.position.clone().setY(P.position.y + 1.1)); }
+    } else if (dp < 2 || dw.hold > 0) { dw.hold = (dw.hold || 0) - dt; m.rotation.y = Math.atan2(P.position.x - m.position.x, P.position.z - m.position.z); lookAt(m, P.position.clone().setY(P.position.y + 1.1)); }
     else {
       dw.wait -= dt;
       if (dw.wait <= 0 || !dw.target) {

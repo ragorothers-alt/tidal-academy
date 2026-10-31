@@ -6,6 +6,7 @@ import { pick, dayKey } from './quiz.js';
 import * as miles from './miles.js';
 import * as memo from './memo.js';
 import * as bond from './bond.js';
+import { gesture } from './chars.js';
 
 let roomApi = null;
 export function init(r) { roomApi = r; }
@@ -79,6 +80,7 @@ export async function celebrate(v, sp) {
   if (s.bdayDone[k]) { await ui.say(sp, pick(L.party || ['謝謝你的祝福！'])); return; }
   s.bdayDone[k] = true; if (!v.guest) s.fr[v.sid] = Math.min(20, (s.fr[v.sid] || 0) + 1); s.bells += 500; save();
   Audio.sfx('catch'); ui.emote(v.mesh, '🎉', '#ffb84a'); memo.add(`替${v.name}慶生`, '生日快樂！', { key: k, icon: '🎂' });
+  if (v.mesh && !v.sitting) gesture(v.mesh, 'dance', 6);   // v9.6 壽星開心得跳起舞來
   for (const l of (L.party || ['謝謝你記得我的生日！'])) await ui.say(sp, l);
   await ui.say(sp, '這是生日派對的回禮：500 鈴錢！要是有禮物……我也會很開心喔。');
 }
