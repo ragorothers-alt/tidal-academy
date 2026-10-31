@@ -16,7 +16,8 @@ import * as voyage from './voyage.js';
 import * as memo from './memo.js';
 import * as story from './story.js';
 import { HOST, isOpen } from './starbridge.js';
-import { HALL_NEED, hallOpen, lessons, summary as hallSummary, openCard, opening as hallOpening } from './greathall.js';
+import { HALL_NEED, hallOpen, lessons, summary as hallSummary, openCard, opening as hallOpening, summitOpen } from './greathall.js';
+import { wins as summitWins } from './summit.js';
 
 const TA = window.TA, L = TA.L;
 export const PRIZE_AT = [10, 30, 60];
@@ -245,7 +246,7 @@ export function open() {
   body.innerHTML = `<div class="sa-id"><div class="sa-seal">✦</div><div><b>${ui.esc(card.title || '星環學院學生證')}</b><small>${ui.esc(h.title || '星環學院')} · ${ui.esc(h.name)}</small></div><div class="sa-n"><b>${a.total || 0}</b><small>堂課</small></div></div>
     <p class="sa-rule">${ui.esc(card.rule || '')}</p>
     ${isOpen() ? '' : `<p class="sa-lock">光橋還沒接起來：再點亮 ${Math.max(0, 3 - story.litCount())} 座單元燈塔，學院台地東北角的光橋石門就會通往城堡。</p>`}
-    ${hallSummary()}
+    ${hallSummary()}${summitOpen() ? `<p class="sa-prize">星環之頂：${summitWins() ? `已經驅散最終首領 ${summitWins()} 次` : '大講堂講台後的樓梯打開了，最終首領在上面等你'}</p>` : ''}
     <p class="sa-prize">${nextP ? `再上 ${nextP - (a.total || 0)} 堂課，可以拿到下一件學院家具（${a.prizes || 0}／${PRIZE_AT.length}）` : '三件學院家具都拿到了'}</p>
     <ul class="sa-rooms">${rows}</ul>`;
   ui.panel('星環學院', body, { cls: 'phone' });

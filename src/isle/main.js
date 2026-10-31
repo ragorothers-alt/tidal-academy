@@ -62,6 +62,7 @@ import * as kitefest from './kitefest.js';   // v9.4.2 週六白天的風箏節
 import * as starbridge from './starbridge.js';   // v9.3 通往天上城堡的光橋
 import * as academy from './academy.js';   // v9.3 城堡裡的星環學院
 import * as greathall from './greathall.js';   // v9.5.1 星環學院的大講堂（總模擬考）
+import * as summit from './summit.js';   // v9.5.2 星環之頂的最終首領
 import * as lexicon from './lexicon.js';   // 單字燈塔：翻卡、單字測驗、字表
 import * as profile from './profile.js';   // 我的檔案、船員登記、潮汐護符
 import * as lab from './lab.js';   // 導師研究計畫
@@ -246,7 +247,8 @@ try { sportsday.init({ busy: (fn, who) => worksBusy(fn, who), view: (yaw, tilt) 
 try { kitefest.init({ busy: (fn, who) => worksBusy(fn, who), view: (yaw, tilt) => sideCam(yaw, tilt), face: (dx, dz, pitch) => faceCam(dx, dz, pitch), date: () => simDate(), player, giveFurn: (id, sub) => giveFurn(id, sub), paint: () => paintHud(), started: () => started }); } catch (e) { offMods.kitefest = true; console.warn('風箏節出錯，先停用：', e); }   // v9.4.2 週六白天的風箏節
 try { starbridge.init({ busy: fn => worksBusy(fn), view: (yaw, tilt) => sideCam(yaw, tilt), enter: () => enterAcademy(), lit: () => story.litCount(), player, started: () => started }); } catch (e) { offMods.starbridge = true; console.warn('光橋出錯，先停用：', e); }   // v9.3 學院台地東北角的光橋石門
 academy.init({ paint: () => paintHud(), giveFurn: (id, sub) => giveFurn(id, sub), enterHall: () => goHall() });
-  greathall.init({ paint: () => paintHud(), giveFurn: (id, sub) => giveFurn(id, sub) });
+  greathall.init({ paint: () => paintHud(), giveFurn: (id, sub) => giveFurn(id, sub), enterSummit: () => goSummit() });
+  summit.init({ paint: () => paintHud(), giveFurn: (id, sub) => giveFurn(id, sub) });
 function guard(name, fn, fallback) { if (offMods[name]) return fallback; try { return fn(); } catch (e) { offMods[name] = true; console.warn(name + ' 出錯，先停用：', e); return fallback; } }
 async function giveFurn(id, sub) { const f = room.furn(id); if (!f) return; room.addStorage(id); await ui.card({ icon: room.thumb(id), title: `得到「${f.name}」！`, sub: (sub ? sub + '<br>' : '') + '回家按 F 擺出來吧。' }); }
 move.apply(villagers);   // 已生效的房屋搬遷（要在其他系統讀取房子位置之前）
@@ -309,7 +311,7 @@ const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS
   review: () => libAct('rv'), vocab: () => libAct('voc'), mistakes: () => libAct('book'), words: () => libAct('word'),   // v8.1 圖書館的功能點
   libnotes: sid => { ui.closeDialog(); library.openNotes(sid || shelfSid()); },   // v8.3 十科書架：面向哪一格就翻開哪一科
   wing: k => museum.openWing(k),   // 博物館的展區（topic 是展區）
-  exhibit: t => museum.exhibitCard(t.k, t.id), theme: () => themeAct(), box: () => donationBox(), guestbook: () => guestbook(), aquarium: () => goAquarium(), aqtank: t => aquarium.openTank(t), cave: t => cave.act(t), academy: t => academy.act(t), starhall: t => greathall.act(t) };   // v9.5.1 大講堂的考桌、成績單與樓梯   // v9.3 星環學院的星環、教室與大講堂   // v9.0 海洋館、v9.1 潮洞   // v8.3 展品、小特展、捐贈箱、留言簿
+  exhibit: t => museum.exhibitCard(t.k, t.id), theme: () => themeAct(), box: () => donationBox(), guestbook: () => guestbook(), aquarium: () => goAquarium(), aqtank: t => aquarium.openTank(t), cave: t => cave.act(t), academy: t => academy.act(t), starhall: t => greathall.act(t), starsummit: t => summit.act(t) };   // v9.5.2 星環之頂的祭壇   // v9.5.1 大講堂的考桌、成績單與樓梯   // v9.3 星環學院的星環、教室與大講堂   // v9.0 海洋館、v9.1 潮洞   // v8.3 展品、小特展、捐贈箱、留言簿
 trip.init(player, () => { const x = PIER.x, z = PIER.z + PIER.len - 1.4; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
 spirit.init(player, () => skyU.night.value > 0.5);
 diy.init(player, myHome, { thumb: id => room.thumb(id), addStorage: (id, n) => room.addStorage(id, n) });
@@ -1715,15 +1717,23 @@ function enterAcademy(spawn) {   // spawn：從大講堂走回來時站在北邊
 }
 const HALL_SPAWN = [0, 0, -4.6, 0];   // 圓廳北邊大講堂的門前，面向圓廳
 /** v9.5.1 圓廳 ⇄ 大講堂：從北邊大門走進大講堂，出來回到大門前（不回島上） */
-function goHall() {
+function goHall(spawn) {   // spawn：從星環之頂走下來時站在樓梯前（v9.5.2）
   if (!house.has('starhall')) { ui.toast('大講堂還在整理，下次再來吧'); return; }
   house.leave({ keep: true }); academy.undress();   // 先不跑圓廳出門的回呼（那會把角色放回光橋石門前）
-  if (!enterPublic('starhall', academy.host(), starbridge.DOOR(), { dress: (ud, g) => greathall.dress(ud, g), after: () => { greathall.undress(); setTimeout(() => enterAcademy(HALL_SPAWN), 0); } })) { enterAcademy(HALL_SPAWN); return; }
-  setTimeout(() => ui.toast('大講堂：講台前五張考桌一科一張，講台後的星圖黑板貼成績單'), 700);
+  if (!enterPublic('starhall', academy.host(), starbridge.DOOR(), { spawn, dress: (ud, g) => greathall.dress(ud, g), after: () => { greathall.undress(); setTimeout(() => enterAcademy(HALL_SPAWN), 0); } })) { enterAcademy(HALL_SPAWN); return; }
+  if (!spawn) setTimeout(() => ui.toast('大講堂：講台前五張考桌一科一張，講台後的星圖黑板貼成績單'), 700);
+}
+const SUMMIT_BACK = [-6.0, 0.45, -6.1, 0];   // 大講堂講台西側的樓梯前，面向講堂
+/** v9.5.2 大講堂 ⇄ 星環之頂：從講台後的樓梯走上去，下來回到樓梯前 */
+function goSummit() {
+  if (!house.has('starsummit')) { ui.toast('星環之頂還在整理，下次再來吧'); return; }
+  house.leave({ keep: true }); greathall.undress();
+  if (!enterPublic('starsummit', academy.host(), starbridge.DOOR(), { dress: (ud, g) => summit.dress(ud, g), after: () => { summit.undress(); setTimeout(() => goHall(SUMMIT_BACK), 0); } })) { goHall(SUMMIT_BACK); return; }
+  setTimeout(() => { ui.toast('星環之頂：中央的祭壇可以挑戰最終首領'); summit.opening(); }, 700);
 }
 async function academyTalk() {
   if (talking) return; talking = { name: 'academy' };
-  try { await (houseSid === 'starhall' ? greathall.talk() : academy.talk()); } finally { ui.closeDialog(); talking = null; paintHud(); }
+  try { await (houseSid === 'starsummit' ? summit.talk() : houseSid === 'starhall' ? greathall.talk() : academy.talk()); } finally { ui.closeDialog(); talking = null; paintHud(); }
 }
 /** v9.1 走進北海岸的潮洞（退潮時；出洞回到洞口前的沙灘） */
 function enterCave() {
@@ -2241,7 +2251,8 @@ function houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow) {
   if (houseSid === 'aquarium') guard('aquarium', () => aquarium.tick(dt, t));
   if (houseSid === 'tidecave') guard('cave', () => cave.tick(dt));
   if (houseSid === 'starcastle') guard('academy', () => academy.tick(dt, t));
-  if (houseSid === 'starhall') guard('greathall', () => greathall.tick(dt, t));   // v9.5.1 成績單出爐：結果頁關掉後望舒宣布   // v9.3 小星環慢慢轉、新點亮的燈塔讓星窗亮起來   // v9.1 潮水漲回來就提醒出洞   // v9.0 水族缸裡的生物游動
+  if (houseSid === 'starhall') guard('greathall', () => greathall.tick(dt, t));   // v9.5.1 成績單出爐：結果頁關掉後望舒宣布
+  if (houseSid === 'starsummit') guard('summit', () => summit.tick(dt, t));   // v9.5.2 大星環慢慢轉、水晶柱呼吸；挑戰結束後望舒說話   // v9.3 小星環慢慢轉、新點亮的燈塔讓星窗亮起來   // v9.1 潮水漲回來就提醒出洞   // v9.0 水族缸裡的生物游動
   if (!house.inside) return;
   houseHand.update(dt, { active: fpK > 0.92, show: fpNow && !talking && !ui.dialogOpen() && !ui.cardOpen() && !ui.panelOpen(), camera, tool: player.userData.tool, umbrella: false, fishing: false, moving, run, yaw: camYaw, pitch: fpPitch, t });
   photo.grab(renderer.domElement); memo.grab(renderer.domElement);

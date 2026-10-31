@@ -521,8 +521,8 @@ test('公共建築的整棟室內：出生點、出口、互動點與展示位',
   const std = () => new THREE.MeshStandardMaterial();
   const kit = { mat: std, rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null };
   const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8'), hooks = (main.match(/const HOUSE_HOOKS = \{([\s\S]*?)\};/) || ['', ''])[1];
-  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'], tidecave: ['cave'], starcastle: ['academy'], starhall: ['starhall'] };
-  for (const key of ['library', 'museum', 'aquarium', 'tidecave', 'starcastle', 'starhall']) {
+  const need = { library: ['review', 'vocab', 'mistakes', 'libnotes', 'words'], museum: ['wing'], aquarium: ['aqtank'], tidecave: ['cave'], starcastle: ['academy'], starhall: ['starhall'], starsummit: ['starsummit'] };
+  for (const key of ['library', 'museum', 'aquarium', 'tidecave', 'starcastle', 'starhall', 'starsummit']) {
     if (!fs.existsSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`))) { t.diagnostic(key + ' 還沒有整棟室內'); continue; }
     vm.runInContext(fs.readFileSync(path.join(ROOT, `src/isle/data/interiors_${key}.js`), 'utf8'), cx, { filename: key });
     const fac = cx.TA && cx.TA.ISLE && cx.TA.ISLE.INTERIORS && cx.TA.ISLE.INTERIORS[key];
@@ -1059,4 +1059,33 @@ test('星環學院：大講堂的考桌、成績單與台詞', () => {
   assert.ok(fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8').includes('src/isle/data/interiors_starhall.js'), 'isle.html 要載入大講堂');
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/hall.js'), 'utf8'), /export function runMock\(group, n, drill, pace, opt = \{\}\)/, '大講堂用潮汐考場的模擬考');
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /star_grand: '/, '家具目錄寫得出怎麼拿到');
+});
+
+/* v9.5.2 星環之頂：露天平台的祭壇、大星環與十根水晶柱，主程式的接線；最終首領的台詞、規則與家具 */
+test('星環學院：星環之頂的平台與最終首領', () => {
+  const THREE = require(path.join(ROOT, 'vendor/three/three.cjs'));
+  const cx = { console, Math, Date, JSON, THREE }; cx.window = cx; cx.globalThis = cx;
+  const c2d = new Proxy(function () {}, { get: (o, k) => (k === 'canvas' ? cv : k === 'measureText' ? () => ({ width: 10 }) : () => c2d), set: () => true });
+  const cv = { width: 64, height: 64, style: {}, getContext: () => c2d, toDataURL: () => '' };
+  cx.document = { createElement: () => Object.assign({}, cv) }; vm.createContext(cx);
+  ['src/core/registry.js', 'src/isle/data/furniture.js', 'src/isle/data/academy.js', 'src/isle/data/interiors_starsummit.js'].forEach(f => vm.runInContext(fs.readFileSync(path.join(ROOT, f), 'utf8'), cx, { filename: f }));
+  const J = cx.TA.ISLE, std = () => new THREE.MeshStandardMaterial();
+  const g = J.INTERIORS.starsummit(THREE, { mat: (c, o) => new THREE.MeshStandardMaterial(Object.assign({ color: c }, o)), rbox: (w, h, d) => new THREE.BoxGeometry(w, h, d), view: std, glass: std, lamp: std, shade: std, furn: () => null }), ud = g.userData;
+  assert.ok(ud.indoor && ud.bg, '星環之頂整天是星空'); assert.ok(g.getObjectByName('ring_big'), '頭上大星環的位置');
+  assert.ok(ud.spots.some(s => s.kind === 'hook:starsummit' && s.topic === 'altar'), '祭壇的互動點');
+  const mats = new Set(); cx.TA.SUBJECTS.forEach(s => { const p = g.getObjectByName('pillar_' + s.id); assert.ok(p && p.isMesh && p.userData.prop, s.id + ' 的水晶柱'); mats.add(p.material.uuid); });
+  assert.equal(mats.size, cx.TA.SUBJECTS.length, '每根水晶柱有自己的材質（依點亮比例發光）');
+  const src = fs.readFileSync(path.join(ROOT, 'src/isle/summit.js'), 'utf8'), T = J.ACADEMY.summit;
+  assert.match(src, /PHASE_HP = 60, FIRST_GEMS = 200, WIN_GEMS = 40, EXTRA_HEARTS = 2;/);
+  ['首次勝利 200 潮晶', '之後每次勝利 40 潮晶', '每顆再 +5', '回復一顆心'].forEach(k => assert.ok(T.rule.includes(k), '星環之頂的規則和程式一致：' + k));
+  const lines = (a, n, tag) => assert.ok(Array.isArray(a) && a.length >= n && a.every(t => typeof t === 'string' && t.length > 2 && t.length <= 40 && !/[0-9０-９]/.test(t)), tag);
+  assert.ok(T.boss.name && /^[A-Z ]{4,24}$/.test(T.boss.en) && T.boss.lore.length <= 60, '最終首領的名字與介紹');
+  lines(T.intro, 4, 'summit.intro'); ['hello', 'altar', 'win', 'lose'].forEach(k => lines(T[k], 3, 'summit.' + k)); lines(T.next, 2, 'summit.next'); lines(T.first, 6, 'summit.first');
+  cx.TA.GROUPS.forEach(k => lines(T.phase[k], 2, '首領化成 ' + k + ' 的台詞'));
+  assert.ok(T.memo.title && T.memo.text.length <= 80, '首勝的手帳');
+  assert.ok(J.FURNITURE.some(x => x.id === T.prize.id && x.src === 'event:star_summit'), '首勝的家具');
+  const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8');
+  assert.match(main, /enterPublic\('starsummit'/, '從大講堂走上星環之頂'); assert.match(main, /starsummit: t => summit\.act\(t\)/, '祭壇接到 summit');
+  assert.ok(fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8').includes('src/isle/data/interiors_starsummit.js'), 'isle.html 要載入星環之頂');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/catalogq.js'), 'utf8'), /star_summit: '/, '家具目錄寫得出怎麼拿到');
 });
