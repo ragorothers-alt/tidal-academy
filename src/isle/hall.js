@@ -146,8 +146,9 @@ export function openMock() {
   keyFn = e => { if (e.code === 'Enter') { runMock(group, n, drill, pace); return true; } return false; };
 }
 
-function runMock(group, n, drill, pace) {
-  const ids = L.pickMock(group, n, drill), views = ids.map(id => L.view(L.Q[id])), label = `${group} ${drill ? L.DRILLS[drill].name + '專練' : '模擬考'}`;
+/** opt（v9.5.1 星環學院大講堂的總模擬考）：{ where 面板標題前綴, label 考卷名稱, tag 記在 TA.S.exams 的標記, again: false 結果頁不給再考一次, done(r) 交卷後、結果頁之前（可以改 r：extra、heading、sub） } */
+export function runMock(group, n, drill, pace, opt = {}) {
+  const ids = L.pickMock(group, n, drill), views = ids.map(id => L.view(L.Q[id])), label = opt.label || `${group} ${drill ? L.DRILLS[drill].name + '專練' : '模擬考'}`, where = opt.where || '潮汐考場';
   if (!ids.length) { ui.toast('這一科的題目還沒準備好'); return; }
   const limit = L.mockSeconds(group, n === 'full' ? n : ids.length), t0 = Date.now(), answers = {}, flags = {};
   let i = 0, done = false, clock = 0, at = Date.now();
@@ -192,10 +193,12 @@ function runMock(group, n, drill, pace) {
     });
     const pts = log.reduce((s, x) => s + x.score, 0), pct = Math.round(pts / ids.length * 100), secs = Math.round((Date.now() - t0) / 1000);
     const units = {}; log.forEach(x => { const u = L.Q[x.id].unit; units[u] = units[u] || [0, 0]; units[u][1]++; if (x.ok) units[u][0]++; });
-    TA.S.exams.push(Object.assign({ at: Date.now(), group, n: ids.length, c: correct, pts, secs, units }, drill ? { drill } : {}));   // 題型專練另外標記：不算進級分估算
+    TA.S.exams.push(Object.assign({ at: Date.now(), group, n: ids.length, c: correct, pts, secs, units }, drill ? { drill } : {}, opt.tag ? { tag: opt.tag } : {}));   // 題型專練另外標記：不算進級分估算
     xp += L.gain(log.filter(x => x.ans !== null).length * 3, 0).xp; const gems = Math.round(pct / 5); if (gems) L.gain(0, gems);
     L.checkAch(); TA.Store.save();
-    showResult({ mode: 'mock', title: label, group, total: ids.length, correct, pct, secs, limit, log, xp, gems, again: () => runMock(group, n, drill, pace), extra: paceHtml(ids, views, answers, first, spent, flags, pace), onBody: paceBind(group) });
+    const r = { mode: 'mock', title: label, where, group, total: ids.length, correct, pct, pts, secs, limit, log, xp, gems, again: opt.again === false ? null : () => runMock(group, n, drill, pace, opt), extra: paceHtml(ids, views, answers, first, spent, flags, pace), onBody: paceBind(group) };
+    if (opt.done) opt.done(r);
+    showResult(r);
   };
   body.querySelector('.prev').onclick = () => go(i - 1);
   body.querySelector('.next').onclick = () => go(i + 1);
@@ -203,7 +206,7 @@ function runMock(group, n, drill, pace) {
   body.querySelector('.submit').onclick = () => submit(false);
   pal.onclick = e => { const b = e.target.closest('[data-k]'); if (b) go(+b.dataset.k); };
   const guard = () => done ? Promise.resolve(true) : confirmIn(body, '離開模擬考？', '這次的作答不會保存，也不會計分。', '離開');
-  open(`潮汐考場 · ${label}`, body, { guard, onClose: () => { done = true; clearInterval(clock); } });
+  open(`${where} · ${label}`, body, { guard, onClose: () => { done = true; clearInterval(clock); } });
   keyFn = e => {
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return false;
     if (e.code === 'ArrowLeft') { go(i - 1); return true; } if (e.code === 'ArrowRight' || e.code === 'Enter') { go(i + 1); return true; }
@@ -344,7 +347,7 @@ export function showResult(r) {
   if (r.again) body.querySelector('.again').onclick = () => r.again();
   if (r.onBody) r.onBody(body);
   body.querySelector('.done').onclick = () => ui.closePanel();
-  open(r.mode === 'mock' ? '潮汐考場 · 成績' : r.title + ' · 結果', body, { onClose: () => clearInterval(retryClock) });
+  open(r.mode === 'mock' ? `${r.where || '潮汐考場'} · 成績` : r.title + ' · 結果', body, { onClose: () => { clearInterval(retryClock); if (r.onClose) r.onClose(); } });
   if ((r.mode === 'mock' && r.pct >= 80) || (r.mode === 'set' && r.correct === r.total && r.total >= 5)) Audio.sfx('catch'); else Audio.sfx('coin');
 }
 

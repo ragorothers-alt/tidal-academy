@@ -151,10 +151,10 @@ function runRush(sid) {
 
 /* ---------- 燈塔首領戰 ---------- */
 const BASE_T = { math: 80, physics: 65, chemistry: 65, english: 45, chinese: 45 };
-const timeFor = (q, rage) => Math.round(((BASE_T[q.subject] || 40) + (q.d === 3 ? 15 : 0) + (q.passage ? 35 : 0) + (q.type === 'multi' ? 15 : q.type === 'fill' ? 40 : 0)) * (rage ? 0.8 : 1));
+export const timeFor = (q, rage) => Math.round(((BASE_T[q.subject] || 40) + (q.d === 3 ? 15 : 0) + (q.passage ? 35 : 0) + (q.type === 'multi' ? 15 : q.type === 'fill' ? 40 : 0)) * (rage ? 0.8 : 1));
 /** 這週（最近 7 天）有學習的天數：首領戰多一顆心看這個，不看連續天數（v7.1：連續紀錄只是紀念，不給戰力） */
 const weekDays = () => { let n = 0; for (let i = 0; i < 7; i++) { const d = new Date(); d.setDate(d.getDate() - i); const r = (TA.S.days || {})[TA.U.dayKey(d)]; if (r && (L.studyMin(r) >= L.STREAK_Q || r.focus)) n++; } return n; };
-const heartsMax = () => 3 + (weekDays() >= 3 ? 1 : 0);
+export const heartsMax = () => 3 + (weekDays() >= 3 ? 1 : 0);
 /** 首領介紹：海獸、規則與紀錄 */
 export function openBoss(sid) {
   const s = subj(sid), b = TA.BOSSES[sid], rec = TA.S.boss[sid], st = L.subjectStats(sid), body = ui.el('div', 'hall vb-intro');

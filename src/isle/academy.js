@@ -1,5 +1,5 @@
 /* 潮汐小島 · 星環學院（v9.3.0）：走過光橋（starbridge.js）進到天上城堡裡的學院（室內 data/interiors_starcastle.js，Codex 製作；文字 data/academy.js）。
-   中央圓廳：守門人（data/academy.js 的 host）、台座上浮著十色小星環（依各科點亮的比例發光）、北邊的大講堂大門（v9.3.1 開放）。
+   中央圓廳：守門人（data/academy.js 的 host）、台座上浮著十色小星環（依各科點亮的比例發光）、北邊的大講堂大門（累計上幾堂星環課後打開，v9.5.1 greathall.js）。
    圓廳周圍十間教室，一科一間：
    - 門牌、黑板（寫著這間教室最近一堂課的板書）、左牆一排「星窗」（一扇一個單元，燈塔點亮了就亮——城堡亮起的窗就是這些）。
    - 講台的星石「上星環課」：那一科的導師用星影上課——選一個單元 → 讀一則潮汐筆記 → 答三題；三題全對而那座燈塔還沒點亮，就問要不要馬上做單元試煉。
@@ -16,6 +16,7 @@ import * as voyage from './voyage.js';
 import * as memo from './memo.js';
 import * as story from './story.js';
 import { HOST, isOpen } from './starbridge.js';
+import { HALL_NEED, hallOpen, lessons, summary as hallSummary, openCard, opening as hallOpening } from './greathall.js';
 
 const TA = window.TA, L = TA.L;
 export const PRIZE_AT = [10, 30, 60];
@@ -171,7 +172,10 @@ async function run(topic) {
     const i = await ui.ask(sp, `十段星環，一段一科：一共點亮了 ${lit}／${tot} 座單元燈塔。`, ['看各科的星環', '好']); if (i === 0) { ui.closeDialog(); story.open(); }
     return;
   }
-  if (k === 'hall') { await ui.say(sp, one(D().hall) || '大講堂的門還關著。'); return; }
+  if (k === 'hall') {   // v9.5.1 大講堂：累計上 HALL_NEED 堂星環課後打開
+    if (!hallOpen()) { await ui.say(sp, (one(D().hall) || '再上 {n} 堂星環課，大講堂的門就會打開。').replace(/\{n\}/g, HALL_NEED - lessons())); return; }
+    await hallOpening(); ui.closeDialog(); if (ctx && ctx.enterHall) ctx.enterHall(); return;   // 第一次開門：望舒先在門前說幾句，再一起走進去
+  }
   if (k === 'wall' && sid) return wall(sid);
   if (k === 'lesson' && sid) return lesson(sid);
 }
@@ -241,8 +245,10 @@ export function open() {
   body.innerHTML = `<div class="sa-id"><div class="sa-seal">✦</div><div><b>${ui.esc(card.title || '星環學院學生證')}</b><small>${ui.esc(h.title || '星環學院')} · ${ui.esc(h.name)}</small></div><div class="sa-n"><b>${a.total || 0}</b><small>堂課</small></div></div>
     <p class="sa-rule">${ui.esc(card.rule || '')}</p>
     ${isOpen() ? '' : `<p class="sa-lock">光橋還沒接起來：再點亮 ${Math.max(0, 3 - story.litCount())} 座單元燈塔，學院台地東北角的光橋石門就會通往城堡。</p>`}
+    ${hallSummary()}
     <p class="sa-prize">${nextP ? `再上 ${nextP - (a.total || 0)} 堂課，可以拿到下一件學院家具（${a.prizes || 0}／${PRIZE_AT.length}）` : '三件學院家具都拿到了'}</p>
     <ul class="sa-rooms">${rows}</ul>`;
   ui.panel('星環學院', body, { cls: 'phone' });
+  const gc = body.querySelector('.sa-gc'); if (gc) gc.onclick = () => openCard();
 }
 export const debug = () => ({ rec: JSON.parse(JSON.stringify(rec())), dressed: !!(R && R.ring), wins: R ? (R.wins || []).length : 0, boards: R && R.boards ? Object.keys(R.boards).length : 0 });
