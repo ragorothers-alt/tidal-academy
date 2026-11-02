@@ -1,0 +1,6 @@
+{
+  "name": "tidal-mind",
+  "private": true,
+  "type": "module",
+  "description": "潮汐小島 · 島民的心思：Cloudflare Worker，用 OpenAI Decisions API 替島民做決定（部署：npx wrangler@4 deploy）"
+}

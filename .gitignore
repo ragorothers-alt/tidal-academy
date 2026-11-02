@@ -5,3 +5,5 @@ node_modules/
 .face-work/
 dist/
 .playwright-cli/
+.dev.vars*
+.wrangler/

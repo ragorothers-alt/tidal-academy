@@ -2,9 +2,9 @@
 
 > 把每一題，都變成照亮海面的光。
 
-離線、免帳號的學測備戰遊戲，目前版本 **9.6.0**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
+離線、免帳號的學測備戰遊戲，目前版本 **9.7.0**。建置後打開 `dist/isle.html`，雙擊就能玩，不需要伺服器或網路（字型除外，離線時改用系統字型）。所有學習模式都在島上；舊的 `index.html`（學習中心）會自動轉到小島。
 
-**線上版**：<https://ragorothers-alt.github.io/tidal-academy/>——推上 `main` 時，GitHub Actions 會跑測試、執行 `python build.py`，把 `dist/` 發布到 GitHub Pages（`.github/workflows/pages.yml`）。線上版可以安裝到電腦桌面或手機主畫面（手機「設定」→「安裝到這台裝置」；iPhone 用 Safari 的「分享 → 加入主畫面」），第一次打開後沒有網路也能玩；角色模型、配樂與示意圖玩到時才存，也可以在設定按「下載全部」一次存好（約 45 MB）。有新版本時畫面下方會出現提示，按「更新」就換成新版。進度存在各自瀏覽器的 localStorage；線上版沒有 laya 轉送，島民改用本機的作息決定要做什麼。
+**線上版**：<https://ragorothers-alt.github.io/tidal-academy/>——推上 `main` 時，GitHub Actions 會跑測試、執行 `python build.py`，把 `dist/` 發布到 GitHub Pages（`.github/workflows/pages.yml`）。線上版可以安裝到電腦桌面或手機主畫面（手機「設定」→「安裝到這台裝置」；iPhone 用 Safari 的「分享 → 加入主畫面」），第一次打開後沒有網路也能玩；角色模型、配樂與示意圖玩到時才存，也可以在設定按「下載全部」一次存好（約 45 MB）。有新版本時畫面下方會出現提示，按「更新」就換成新版。進度存在各自瀏覽器的 localStorage。線上版沒有 laya 轉送；有 AI 通行碼的人可以在設定輸入，讓島民透過 OpenAI 自己做決定（見下面的「島民自己做決定」），沒有的話島民用本機的作息決定要做什麼。
 
 ## 潮汐小島：動物森友會式的學測生活
 
@@ -41,7 +41,7 @@
 | **釣魚大賽與捕蟲大會** | 每週三（Lexi 主持）與週五（森主持）的限時 3 分鐘比賽：釣魚要答英文單字、捉蟲要答國文題，魚越大、蟲越稀有分數越高；金／銀獎可得獎盃家具，銅獎與參加獎送鈴錢 |
 | **季節與倒數活動** | 週末模擬考祭典（國英數社自 10 題，依成績得金／銀／銅獎盃）、學測倒數 100／30／7 天、跨年煙火、學測前夜、考後慶典、春櫻、中秋 |
 | **拜訪島民的家** | 九位導師每天有在家時段，可以進門拜訪、在房間裡聊天；深夜有人會睡著。九間導師住宅各有主題（例如雷恩家有特斯拉線圈燈和牛頓擺），加上玩家自己的家；史遙在博物館，沒有獨立住家入口。主人不在家也能進去逛，桌上留有各自的紙條；整棟室內的書桌先聊故事再練 3 題，指定展示點依提示翻筆記或圖鑑 |
-| **島民的日常與好感度** | 島民會在路上相遇聊天，招呼與閒聊的同組台詞輪完才重複；十位導師各有雨天招呼。離線或關閉 laya 時，仍會偶爾依天氣與時段看花、到水邊、回家門口躲雨，晚上較少去廣場。好感度到 4／8／12／16／20 時觸發五段心事，第 3 段之後可開「讀書會」（5 題、鈴錢加倍）。滿 20 後，練習額度內的好感，以及送禮、委託、並坐、到他家一起讀書多出的好感會累積成共同回憶，每 3 點寫一筆回憶錄 |
+| **島民的日常與好感度** | 島民會在路上相遇聊天，招呼與閒聊的同組台詞輪完才重複；十位導師各有雨天招呼。沒有連上 AI（OpenAI 或 laya）或關閉時，仍會偶爾依天氣與時段看花、到水邊、回家門口躲雨，晚上較少去廣場。好感度到 4／8／12／16／20 時觸發五段心事，第 3 段之後可開「讀書會」（5 題、鈴錢加倍）。滿 20 後，練習額度內的好感，以及送禮、委託、並坐、到他家一起讀書多出的好感會累積成共同回憶，每 3 點寫一筆回憶錄 |
 | **島民作息與團體活動** | 九位導師各有平日與週末的作息：墨言在溪邊寫詩、弦在大樹下拉小提琴、嵐清晨沿環島步道慢跑、雷恩修水車、晶晶在市集泡果茶、岳在海灘營地煮湯……時間到了自己找路走過去，拿著書、畫冊、小提琴、扳手等道具做事。從遠處走近時會揮手，聊天時先說說手上在做的事。每週的團體活動：平日晨讀會、週末早操、每天的市集午餐與碼頭看夕陽、週三與週六大樹下合奏、週二與週四下棋、週日放風箏、週五與週六觀星會、週六野餐；走近按 `E` 加入，聊幾句再一起解一題（鈴錢 200，答對再加 300），在場的導師好感度 +1，寫進回憶錄，每場一天一次。手機「島民」列出今天的團體活動與每位導師在哪裡做什麼；下雨、颱風天戶外行程取消，在家時段會避開行程 |
 | **島上的動物** | 廣場的橘貓「橘寶」、碼頭附近的賓士貓「襪襪」會散步、坐下、打盹，走近按 `E` 摸摸牠，路過的導師也會停下來逗貓。白天海上偶爾有海豚群躍出水面；鯨魚會噴氣、露出背和尾鰭，四到十月比較常見；水面不時有魚跳起來 |
 | **導師研究計畫** | 好感度 4 以上和導師聊天選「研究計畫」：每位導師一個三階段的長期研究（例如雷恩的潮流點燈實驗、晶晶的海水分離筆記、岳的震央定位）。每個階段要好感度（8／14／20）、這一科的學習成果（累計答對 30 題 → 3 個單元試煉 2 星以上 → 熟練 40 題）與研究經費；完成後一起做研究（劇情裡帶出課本上的知識點），得到研究家具（共 30 件）。手機「研究計畫」看進度 |
@@ -165,6 +165,7 @@ src/isle/      engine 渲染與日夜 · terrain 地形 · props 場景物件 ·
                hall 潮汐考場（模擬考、練習組、結果頁、錯題本、成績統計）· voyage 航海圖/單元試煉/每日潮汐/激流衝刺/首領戰 · lexicon 單字燈塔 · lexq 單字出題（純函式）· profile 我的檔案與船員登記 · challenge 連續挑戰與主動出題 · feel 手感 · main 主程式
                nav 島上找路（格子地圖 + A*）· schedule 島民作息表（純函式）· routine 島民照作息做事、團體活動 · fauna 島上的動物（貓、海豚、鯨魚、跳魚）· actors 人形模型的動作與做事姿勢（舊模型的揮手、歡呼、跳舞從共用動作包換算；動作包用 tools/anim_pack.py 製作）· bluetears 藍眼淚 · harbor 碼頭的燈、船、浮標與燈塔光束 · pwa 網頁版的安裝、離線與更新提示 · swim 游泳與潛點 · dive 潛水的海底 · aquarium 博物館的海洋館 · boat 小划船 · northcoast 北海岸的擺設與潮洞洞口 · cave 潮洞裡的探索 · story 主線「點亮星環」（章節、城堡的窗、十段星環）· works 公共建設（告示牌、捐款、隔天完工、觀景台與咖啡館與溫泉的互動）· nightmarket 週六港邊夜市（擺攤、先算再玩、開獎、集章卡）· sportsday 週日島嶼運動會（擺場、短跑、擲沙包、拔河、緞帶與獎牌）· sportq 運動會的物理題與運動（純函式）· kitefest 週六風箏節（工坊、放風箏、天上的風箏與風向袋）· kiteq 風箏節的地科與物理題（純函式）· starbridge 學院台地的光橋石門與光橋（在畫面上瞄準城堡）· academy 城堡裡的星環學院（守門人、小星環、十間教室的星環課、星窗與學生證）· greathall 大講堂的總模擬考（考桌、成績單、星圖黑板）· summit 星環之頂的最終首領（一科一個階段）與結局儀式
 src/isle/data/ islandplan 島嶼規劃（tools/planpack.cjs 從 tools/island_plan.json 產生）· bldmodels*/lmmodels*/propmodels*/toolmodels/furnmodels 程式化模型（img2threejs 重建）· creatures 圖鑑 · villagers 島民 · lines 委託/來信/活動台詞 · furniture 家具 · homes 島民的家/閒聊/好感度事件 · guests 旅客/館員/圖書館/評價 · bday 生日與喜好 · lines2 大賽/弱點委託/互贈禮物/搬遷台詞 · lines3 作客台詞 · stars 星表與流星雨 · sealife 潮間帶生物 · lines4 夜祭台詞 · foods 料理 · minerals 礦物 · lines5 颱風與熱氣球台詞 · lines6 冬季節慶與考前台詞 · lines7 雨天/初次共同經歷/外出紙條 · contrast 易混題對照 · museum_themes 小特展主題 · hall_visits 來館台詞 · icons 像素圖示 · routines 作息與團體活動 · lines8 作息/團體活動/揮手/貓的台詞 · faunamodels 動物模型 · handprops 手持道具 · actscene 棋桌、野餐桌、風箏、湯鍋 · harbormodels 漁船、小划船、碼頭燈柱、浮標 · marine 海洋生物 · marinemodels／reefmodels 海洋生物與海底造景模型 · marineicons 海洋生物圖示 · northmodels 北海岸的海蝕柱、海蝕拱、潮洞洞口 · interiors_aquarium／interiors_tidecave 海洋館與潮洞的室內 · story 主線十二章的台詞與信 · worksmodels 公共建設的告示牌、工地、觀景台、溫泉、咖啡館 · nightmodels 夜市的攤位、牌樓、餐桌與八攤道具 · nightmarket 夜市的攤主、小吃與科學小知識、集章獎品 · sportmodels 運動會的拱門、帳篷、計分板、頒獎台與器材 · sportsday 運動會的裁判、選手、台詞與獎牌家具 · kitemodels 風箏節的布條門、工坊、風向袋、五種風箏與線軸 · kitefest 風箏節的師傅、風箏、遊客、台詞與家具 · academymodels 光橋石門與石碑 · academy 星環學院的守門人、星影課堂台詞與學院家具 · interiors_starcastle 天上城堡的圓廳與十間教室 · interiors_starhall 大講堂（講台、五張考桌、星圖黑板、通往星環之頂的樓梯）· interiors_starsummit 星環之頂（祭壇、十根水晶柱、星空與雲海）
+worker/        Cloudflare Worker：島民的心思（OpenAI Decisions API、通行碼、每個 IP 的限流、全站每日 token 上限）
 src/core/      registry 科目與題庫註冊 · util · store 存檔 · learn 學習引擎 · creature 首領海獸繪製
 src/data/      各科題庫與單字（格式見 tools/CONTENT_GUIDE.md）
 vendor/three/  three.js r160（MIT）
@@ -174,7 +175,35 @@ vendor/three/  three.js r160（MIT）
 
 渲染效能：頂點著色器把遠處往下彎（`engine.js` 的 `uCurve`），所以視錐剔除也照同樣的彎曲判斷（`bentHit`）；新加的物件用 `cullable(o)` 設 `frustumCulled`，一般不要直接關掉剔除。靜態的群組用 `props.js` 的 `mergeStatic` 合併（會順便做陰影替身）；之後要換材質或移動的零件放在 `userData.prop` 子群組或設 `userData.noCull`。
 
-進入整棟室內時，先以黑幕遮住建模與著色器預先編譯；離開時清理此次建立的光效、展品圖卡與家具專屬幾何，夢境島也追蹤並釋放自有幾何與材質，共用資源保留。家具縮圖每批最多補兩張、面板關閉即停止，釣線重用頂點緩衝；窗景材質複製時共用 uniforms。laya 連線失敗會逐步延長重試，連續 5 次失敗後停止自動嘗試，打開設定可立即重試；沒有代理服務的環境直接停止自動重試。
+進入整棟室內時，先以黑幕遮住建模與著色器預先編譯；離開時清理此次建立的光效、展品圖卡與家具專屬幾何，夢境島也追蹤並釋放自有幾何與材質，共用資源保留。家具縮圖每批最多補兩張、面板關閉即停止，釣線重用頂點緩衝；窗景材質複製時共用 uniforms。OpenAI／laya 連線失敗會逐步延長重試，連續 5 次失敗後停止自動嘗試，打開設定可立即重試；沒有代理服務又沒有通行碼的環境直接停止自動重試。
+
+### 島民自己做決定（OpenAI Decisions API／laya）
+
+島民每 12 秒把外面島民的情況（個性、季節時間天氣、在哪裡、身邊有誰、玩家多遠、剛剛做了什麼）送給決策引擎，拿回「接下來想做什麼」「心情」「想不想主動找玩家」的機率（`src/isle/mind.js`）。後端依序試：
+
+1. **OpenAI Decisions API**（`gpt-6-luna`，透過 Cloudflare Worker `worker/`）：玩家在設定的「AI 通行碼」輸入通行碼後才會用。OpenAI 金鑰與通行碼都是 Worker 的 secret，不會出現在前端、存檔或 repo；通行碼只存在那台裝置的 localStorage（`tidal-mind-code`），不在匯出的備份裡。
+2. **laya**：開發伺服器 `tools/serve.py` 的 `/api/laya/` 轉送，位址與 key 用環境變數 `LAYA_URL`、`LAYA_API_KEY` 或 `~/.config/tidal-academy/laya.json`。
+3. 都沒有時，島民照本機的作息與天氣時段自己走。
+
+Worker 的防盜用：要帶通行碼（`ACCESS_CODE` 可用逗號放好幾組，少於 8 個字的不算）、只收 `ORIGINS` 列出的網站、題目與選項寫死在 Worker 裡、每個 IP 每分鐘最多 `PER_MINUTE` 次、全站每天最多 `DAILY_TOKENS` 個 token（預設 500 萬，約 0.5 美元；用 SQLite 版 Durable Object 記帳，UTC 0 點、台灣早上 8 點重算）。這些上限都在 `worker/wrangler.jsonc`。估計一位玩家每小時不到 0.1 美元；Cloudflare 用免費方案就夠。
+
+部署（需要 Cloudflare 免費帳號，在 `worker/` 資料夾裡執行；建議在 OpenAI 另開一個這個遊戲專用的 project 與金鑰，帳單用預付額度、關掉自動儲值）：
+
+```bash
+cd worker
+npx wrangler@4 login                       # 瀏覽器授權 Cloudflare 帳號
+npx wrangler@4 deploy                      # 第一次會請你選 workers.dev 子網域；印出 https://tidal-mind.<子網域>.workers.dev
+npx wrangler@4 secret put OPENAI_API_KEY   # 貼上 OpenAI 金鑰（只存在 Cloudflare，之後連後台都看不到）
+npx wrangler@4 secret put ACCESS_CODE      # 通行碼（至少 8 個字，可用逗號放好幾組，給不同的人）
+```
+
+部署後把網址填進 `src/isle/mind.js` 的 `CLOUD`，推上 `main`，設定裡才會出現「AI 通行碼」。確認 Worker 正常：
+
+```bash
+curl -H "Origin: https://ragorothers-alt.github.io" -H "Authorization: Bearer <通行碼>" https://tidal-mind.<子網域>.workers.dev/health
+```
+
+回 `{"status":"ok","quota":"ok"}` 就好了。換掉或收回通行碼：再跑一次 `secret put ACCESS_CODE`；調整每日上限：改 `wrangler.jsonc` 的 `DAILY_TOKENS` 後 `deploy`；緊急停用：`npx wrangler@4 delete`（遊戲會自動退回本機作息）。本機測試 Worker：`worker/.dev.vars` 寫 `OPENAI_API_KEY=…`、`ACCESS_CODE=…`（已在 `.gitignore`），跑 `npx wrangler@4 dev`（8787 埠），再在遊戲頁的主控台執行 `localStorage.setItem('tidal-mind-url', 'http://127.0.0.1:8787')`。
 
 ## 限制
 

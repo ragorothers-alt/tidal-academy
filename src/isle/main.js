@@ -1324,7 +1324,7 @@ function standUp() {
   villagers.forEach(v => { if (v.sitting && v.sitting.seat === st) v.standAt = simT + 2.5; });
   sitting = null;
 }
-/* ---------- 島民自己做決定（mind.js 透過 laya 決定，這裡把決定變成走去哪裡、做什麼） ---------- */
+/* ---------- 島民自己做決定（mind.js 透過 OpenAI 或 laya 決定，這裡把決定變成走去哪裡、做什麼） ---------- */
 const thinks = v => !v.shop && !v.guest && v.sid !== 'history';
 let greetAnyT = -1e9;
 const HOBBY = { chinese: '✍️', english: '📖', math: '📐', history: '🏺', geography: '🧭', civics: '⚖️', physics: '🔭', chemistry: '⚗️', biology: '🌱', earth: '🪨' };   // 做自己的事：各科島民的興趣   // 店長與博物館的史遙守在崗位上
@@ -1378,7 +1378,7 @@ function greetPlayer(v) {
   if (!lines.length) return;
   ui.bubble(v.mesh, lines[Math.floor(Math.random() * lines.length)], 3600); Audio.blip(v.voice || 400); setExpr(v.mesh, 'happy', 2);
 }
-/** v8.6 laya 連不上（或關掉）時的本機小動作：一半的時候照天氣與時段自己決定——晴天白天多停在花旁、傍晚到水邊看夕陽、
+/** v8.6 OpenAI 與 laya 都連不上（或關掉）時的本機小動作：一半的時候照天氣與時段自己決定——晴天白天多停在花旁、傍晚到水邊看夕陽、
     下雨時回家門口躲雨、晚上少去廣場；另一半照原本的作息走 */
 function localPlan(v, hour) {
   if (mind.enabled() && mind.status() === true) return null;
@@ -1389,7 +1389,7 @@ function localPlan(v, hour) {
     : { stroll: 0.25, hobby: 0.2, plaza: night ? 0.05 : 0.15, bench: 0.15, flowers: !night && hour >= 8 && !gold ? 0.35 : 0.03, water: gold ? 0.4 : 0.08, friend: 0.2 };
   return { probs, mood: null, greet: 0.12, local: true, shelter: rain };
 }
-/** 島民要選下一步：拿 laya 的決定（連不上時偶爾用 localPlan），在目前做得到的事情裡挑一件，變成目的地與停留時間；沒有決定就回傳 false */
+/** 島民要選下一步：拿 OpenAI 或 laya 的決定（連不上時偶爾用 localPlan），在目前做得到的事情裡挑一件，變成目的地與停留時間；沒有決定就回傳 false */
 function decide(v, dp, hour) {
   if (!thinks(v)) return false;
   const p = mind.take(v, simT) || localPlan(v, hour); if (!p) return false;

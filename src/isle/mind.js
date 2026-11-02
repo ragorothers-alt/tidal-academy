@@ -1,9 +1,10 @@
-/* 潮汐小島 · 島民的心思：用 laya（不生成文字、一次就給出選擇的決策引擎）讓島民自己決定接下來做什麼。
+/* 潮汐小島 · 島民的心思：用「不生成文字、一次就給出選擇」的決策引擎讓島民自己決定接下來做什麼。後端有兩種：
+   - OpenAI Decisions API：透過 Cloudflare 上的 Worker（worker/）轉送，要在設定輸入通行碼；OpenAI 金鑰只在 Worker 裡
+   - laya：透過開發伺服器（tools/serve.py）的 /api/laya/ 轉送，API key 只在伺服器端
    每隔一段時間，把外面島民的情況（個性、季節時間天氣、在哪裡、身邊有誰、玩家多遠、剛剛做了什麼）一次送出，
    拿回「接下來想做什麼」「心情」「想不想主動找玩家」的機率；島民做完上一件事、要選下一步時，
    main.js 會在目前做得到的事情裡依這些機率挑一件（不是每次都挑最高的那件，島上才不會大家做一樣的事）。
-   laya 透過開發伺服器（tools/serve.py）的 /api/laya/ 轉送，API key 只在伺服器端；
-   連不上（例如網頁版、伺服器沒開）時不送任何東西，島民照原本的方式隨意走動。 */
+   有通行碼就先試 OpenAI，連不上再試 laya；都連不上（例如網頁版沒有通行碼、伺服器沒開）時不送任何東西，島民照原本的方式隨意走動。 */
 import * as weather from './weather.js';
 import * as seasons from './seasons.js';
 import { I, S } from './state.js';
@@ -26,24 +27,49 @@ const QUESTIONS = {
   mood: { type: 'choice', instructions: '這位島民現在的心情？', criteria: crit(MOODS) },
   greet: { type: 'noul', instructions: '這位島民現在想主動走過去跟玩家說話嗎？' }
 };
-const API = 'api/laya/', EVERY = 12, STALE = 90, PER_CALL = 16;
+const API = 'api/laya/', EVERY = 12, STALE = 90, PER_CALL = 16, FRESH = 40;   // FRESH：OpenAI 照 token 計費，還沒用掉、40 秒內的決定先不重問
+export const CLOUD = '';   // v9.7 Cloudflare 上的 Worker 網址（部署 worker/ 後填上；空白時設定裡不出現通行碼）
+const KEY = { code: 'tidal-mind-code', url: 'tidal-mind-url' };   // 通行碼只存在這台裝置的 localStorage（不放進存檔，匯出的備份裡沒有）；url 是測試用、換一個 Worker
 
-let online = null, busy = false, nextAt = 0, probeAt = 0, fails = 0, noProxy = false;
+let online = null, busy = false, nextAt = 0, probeAt = 0, fails = 0, noProxy = false, via = null, why = null, bad = 0;   // bad：連續幾次問了卻沒拿到決定（例如 OpenAI 那邊出錯，但連線檢查是通的）
 const plans = new Map();   // sid → { probs, mood, greet, at, used }
 export const enabled = () => (S().settings || {}).laya !== false;
 /** null：還沒試過；true：連得上；false：連不上 */
 export const status = () => online;
-
-export async function probe() {
-  try { const r = await fetch(API + 'health', { cache: 'no-store' }); noProxy = r.status === 404 || r.status === 403;   // 沒有轉送（網頁版）或轉送只給本機用（區網裝置）：不再自動重試
-  online = r.ok && (await r.json()).status === 'ok'; }
-  catch (e) { online = false; }
-  fails = online ? 0 : fails + 1;
-  return online;
+/** 正在用哪一種：'cloud'（OpenAI，透過 Cloudflare）、'laya'（本機轉送）；連不上時是 null */
+export const backend = () => via;
+/** 連不上 OpenAI 的原因：'code'（通行碼不對）、'quota'（今天的額度用完了）；其他情況是 null */
+export const reason = () => why;
+const local = k => { try { return localStorage.getItem(KEY[k]) || ''; } catch (e) { return ''; } };
+export const cloudUrl = () => (local('url') || CLOUD).replace(/\/+$/, '');
+export const code = () => local('code');
+/** 設定裡輸入（或清掉）通行碼：存在這台裝置，接著重新檢查連線 */
+export function setCode(c) {
+  try { if (c) localStorage.setItem(KEY.code, c); else localStorage.removeItem(KEY.code); } catch (e) { /* 無痕模式等存不進去 */ }
+  online = null; via = null; why = null; fails = 0; bad = 0; probeAt = 0;
 }
-/** 連不上時多久再試：沒有轉送（網頁版，404）就不再自動試；伺服器暫時連不上就 1、2、5、10 分鐘慢慢拉長，
-    連續 5 次都不行就停下來，不再在主控台一直留下 503（打開設定會立刻重試，島民照本機的作息走） */
-const retryIn = () => (noProxy || fails > 4 ? Infinity : [60, 120, 300, 600][fails - 1] || 60);
+const cloud = () => (cloudUrl() && code() ? { url: cloudUrl(), code: code() } : null);
+
+/** 檢查連線：有通行碼先問 Worker，不行再問本機的 laya 轉送（結果最後才一起寫回，檢查到一半時島民照舊用原本的後端） */
+export async function probe() {
+  const cl = cloud(); let w = null, ok = false;
+  if (cl) {
+    try { const r = await fetch(cl.url + '/health', { cache: 'no-store', headers: { Authorization: 'Bearer ' + cl.code } }), j = r.ok ? await r.json() : {};
+      w = r.status === 401 ? 'code' : j.quota === 'out' ? 'quota' : null;
+      if (j.status === 'ok' && !w) { online = true; via = 'cloud'; why = null; fails = 0; return true; } }
+    catch (e) { /* 連不上 Worker：接著試本機的 laya */ }
+  }
+  try { const r = await fetch(API + 'health', { cache: 'no-store' }); noProxy = r.status === 404 || r.status === 403;   // 沒有轉送（網頁版）或轉送只給本機用（區網裝置）：不再自動重試
+  ok = r.ok && (await r.json()).status === 'ok'; }
+  catch (e) { ok = false; }
+  online = ok; via = ok ? 'laya' : null; why = w;
+  fails = ok ? 0 : fails + 1;
+  return ok;
+}
+/** 連不上時多久再試：通行碼不對就等玩家改好（設定裡改了會立刻重試）；今天的額度用完了就半小時後再看；
+    沒有 laya 轉送（網頁版，404）又沒有通行碼就不再自動試；伺服器暫時連不上就 1、2、5、10 分鐘慢慢拉長，
+    連續 5 次都不行就停下來，不再在主控台一直留下錯誤（打開設定會立刻重試，島民照本機的作息走） */
+const retryIn = () => (why === 'code' ? Infinity : why === 'quota' ? 1800 : (noProxy && !cloud()) || fails > 4 ? Infinity : [60, 120, 300, 600][fails - 1] || 60);
 
 const PAST = { stroll: '在島上散步', plaza: '在廣場大樹下', bench: '坐在長椅上休息', flowers: '在花叢邊看花', water: '在水邊吹海風', friend: '和其他島民聊天', player: '和玩家打招呼', hobby: '在做自己喜歡的事' };
 const PART = h => (h < 5 ? '深夜' : h < 11 ? '早上' : h < 13 ? '中午' : h < 17 ? '下午' : h < 19 ? '傍晚' : '晚上');
@@ -65,16 +91,23 @@ export function update(now, list, ctx) {
   if (online !== true) { if (now >= probeAt) { probeAt = Infinity; probe().then(() => { probeAt = now + retryIn(); }); } return; }
   if (busy || now < nextAt || !list.length) return;
   nextAt = now + EVERY;
-  const vs = list.slice().sort((a, b) => ctx.playerDist(a) - ctx.playerDist(b)).slice(0, PER_CALL);   // 離玩家近的先問
-  const items = vs.map(v => ({ state: { body: describe(v, ctx) }, questions: QUESTIONS }));
+  const cl = via === 'cloud' ? cloud() : null;
+  const vs = list.filter(v => { const p = plans.get(v.sid); return !cl || !p || p.used || now - p.at > FRESH; })   // OpenAI：還有新鮮決定的島民這次不問
+    .sort((a, b) => ctx.playerDist(a) - ctx.playerDist(b)).slice(0, PER_CALL);   // 離玩家近的先問
+  if (!vs.length) return;
+  const req = cl ? fetch(cl.url + '/decide', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + cl.code }, body: JSON.stringify({ villagers: vs.map(v => describe(v, ctx)) }) })
+    : fetch(API + 'predict_batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: vs.map(v => ({ state: { body: describe(v, ctx) }, questions: QUESTIONS })) }) });
   busy = true;
-  fetch(API + 'predict_batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) })
-    .then(r => (r.ok ? r.json() : Promise.reject(new Error('laya ' + r.status))))
-    .then(j => (j.results || []).forEach((res, i) => {
+  req.then(r => (r.ok ? r.json() : r.json().catch(() => ({})).then(j => Promise.reject(Object.assign(new Error('mind ' + r.status), { status: r.status, why: j.error })))))
+    .then(j => { bad = 0; (j.results || []).forEach((res, i) => {
       const a = res && res.answers; if (!a || !a.action || !a.action.probabilities) return;
       plans.set(vs[i].sid, { probs: a.action.probabilities, mood: a.mood && a.mood.choice, greet: a.greet ? a.greet.noul : 0, at: now, used: false });
-    }))
-    .catch(() => { online = false; fails = 1; probeAt = now + 60; })   // 斷線：一分鐘後再試，這段時間島民照原本的方式走動
+    }); })
+    .catch(e => {
+      if (cl && e.status === 429 && e.why === 'rate') { nextAt = now + 30; return; }   // 問得太快（例如同時開了好幾個分頁）：晚一點再問
+      online = false; via = null; why = cl && e.status === 401 ? 'code' : cl && e.status === 429 ? 'quota' : null; fails = 1; bad++;
+      probeAt = now + (why ? retryIn() : bad > 4 ? Infinity : [60, 120, 300, 600][bad - 1]);   // 斷線：1、2、5、10 分鐘後再試，連續 5 次就停（打開設定會重試），這段時間島民照原本的方式走動
+    })
     .finally(() => { busy = false; });
 }
 

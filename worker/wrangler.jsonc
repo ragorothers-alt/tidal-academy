@@ -1,0 +1,18 @@
+// 潮汐小島 · 島民的心思（Cloudflare Worker）的設定。部署步驟見 README 的「島民自己做決定（OpenAI）」。
+// 金鑰與通行碼不要寫在這裡：用 npx wrangler secret put OPENAI_API_KEY、npx wrangler secret put ACCESS_CODE
+{
+  "name": "tidal-mind",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "vars": {
+    "MODEL": "gpt-6-luna",
+    "DAILY_TOKENS": "5000000",   // 全站每天最多用掉的 token（約 0.5 美元），超過就讓島民照本機的作息走，UTC 0 點重算
+    "PER_MINUTE": "6",           // 每個 IP 每分鐘最多問幾次（遊戲每 12 秒問一次）
+    "ORIGINS": "https://ragorothers-alt.github.io,http://127.0.0.1:8765,http://localhost:8765"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "LIMITER", "class_name": "Limiter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Limiter"] }]
+}

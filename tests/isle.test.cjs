@@ -1119,3 +1119,92 @@ test('旅客的人形模型與共用動作', () => {
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/routine.js'), 'utf8'), /gesture\(v\.mesh, 'wave'/, '島民遠遠看到你會揮手');
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/gifts.js'), 'utf8'), /gesture\(v\.mesh, 'dance'/, '壽星會跳舞');
 });
+
+/* v9.7.0 島民透過 Cloudflare 上的 Worker 用 OpenAI Decisions API 做決定：通行碼、來源、限流、每日上限，回答換成 laya 的格式 */
+test('島民的心思（Worker）：OpenAI Decisions 的請求與回答、通行碼、限流與每日上限', async () => {
+  const W = await import(require('url').pathToFileURL(path.join(ROOT, 'worker/index.js')).href);
+  const CODE = 'test-pass-1234', ORIGIN = 'https://ragorothers-alt.github.io', sent = [], real = globalThis.fetch;
+  const env = { OPENAI_API_KEY: 'sk-test', ACCESS_CODE: 'short, ' + CODE, ORIGINS: ORIGIN + ',http://127.0.0.1:8765', MODEL: 'gpt-6-luna', DAILY_TOKENS: '100000', PER_MINUTE: '50' };
+  const store = new Map(); let lim = null;
+  env.LIMITER = { idFromName: n => n, get: () => ({ fetch: (u, init) => (lim = lim || new W.Limiter({ storage: { get: async k => store.get(k), put: async (k, v) => { store.set(k, v); } } }, env)).fetch(new Request(u, init)) }) };
+  let reply = body => ({ answers: [
+    { type: 'choice', name: 'action', choice: 'flowers', probabilities: [{ value: 'flowers', probability: 0.6 }, { value: 'stroll', probability: 0.3 }, { value: 'bogus', probability: 0.1 }], confidence: 0.5 },
+    { type: 'choice', name: 'mood', choice: 'happy', probabilities: [], confidence: 0.4 },
+    body.input.includes('拒答') ? { type: 'refusal', name: 'greet' } : { type: 'predicate', name: 'greet', probability: 0.25 }
+  ], usage: { input_tokens: 300 } });
+  globalThis.fetch = async (u, init) => { const b = JSON.parse(init.body); sent.push({ u, h: init.headers, b }); const j = reply(b); return j ? new Response(JSON.stringify(j), { status: 200 }) : new Response('{}', { status: 500 }); };
+  const waits = [];
+  const call = (p, o = {}) => W.default.fetch(new Request('https://tidal-mind.test' + p, { method: o.method || (o.body ? 'POST' : 'GET'), body: o.body && JSON.stringify(o.body),
+    headers: { ...(o.origin === null ? {} : { Origin: o.origin || ORIGIN }), ...(o.code === null ? {} : { Authorization: 'Bearer ' + (o.code || CODE) }), 'CF-Connecting-IP': o.ip || '1.2.3.4' } }), env, { waitUntil: q => waits.push(q) });
+  try {
+    assert.equal((await call('/health', { origin: 'https://evil.example' })).status, 403, '別的網站不能用');
+    assert.equal((await call('/health', { origin: null })).status, 403, '沒有來源（例如 curl）不能用');
+    const pre = await call('/decide', { method: 'OPTIONS', code: null });
+    assert.equal(pre.status, 204); assert.equal(pre.headers.get('Access-Control-Allow-Origin'), ORIGIN); assert.match(pre.headers.get('Access-Control-Allow-Headers'), /Authorization/);
+    assert.equal((await call('/health', { code: 'wrong-pass-0000' })).status, 401, '通行碼不對');
+    assert.equal((await call('/health', { code: 'short' })).status, 401, '少於 8 個字的通行碼不算');
+    assert.equal((await call('/health', { code: null })).status, 401, '沒帶通行碼');
+    const h = await call('/health'); assert.equal(h.status, 200); assert.deepEqual(await h.json(), { status: 'ok', quota: 'ok' });
+    assert.equal(h.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+    assert.equal(sent.length, 0, '檢查連線不呼叫 OpenAI');
+
+    const r = await call('/decide', { body: { villagers: ['島民：墨言。個性：安靜', '島民：森。拒答測試'] } }); await Promise.all(waits);
+    assert.equal(r.status, 200); const j = await r.json();
+    assert.equal(sent.length, 2, '每位島民各問一次');
+    sent.forEach(s => {
+      assert.equal(s.u, 'https://api.openai.com/v1/decisions'); assert.equal(s.h.Authorization, 'Bearer sk-test'); assert.equal(s.b.model, 'gpt-6-luna');
+      assert.deepEqual(s.b.questions.map(q => [q.name, q.type]), [['action', 'choice'], ['mood', 'choice'], ['greet', 'predicate']]);
+      assert.deepEqual(s.b.questions[0].choices.map(c => c.value), Object.keys(W.ACTIONS)); assert.ok(!Object.keys(W.ACTIONS).includes('player'), '打招呼不放進選項');
+      assert.match(s.b.safety_identifier, /^tidal-[0-9a-f]{24}$/); assert.ok(!s.b.safety_identifier.includes(CODE), '不送出通行碼本身');
+    });
+    assert.equal(sent[0].b.input, '島民：墨言。個性：安靜');
+    assert.deepEqual(j.results[0].answers, { action: { choice: 'flowers', probabilities: { flowers: 0.6, stroll: 0.3 } }, mood: { choice: 'happy' }, greet: { noul: 0.25 } }, '換成 laya 的格式、不認得的選項丟掉');
+    assert.equal(j.results[1].answers.greet.noul, 0, '拒答的題目當作 0');
+    assert.equal(store.get('usage').tokens, 600, '照實際用量記帳');
+
+    assert.equal((await call('/decide', { body: { villagers: Array(17).fill('x') } })).status, 422, '一次最多 16 位');
+    assert.equal((await call('/decide', { body: { villagers: ['x'.repeat(601)] } })).status, 422, '描述太長');
+    assert.equal((await call('/decide', { body: { villagers: [{ q: '別的問題' }] } })).status, 422, '只收文字描述');
+    assert.equal((await call('/decide', { body: { villagers: [] } })).status, 422);
+    assert.equal((await call('/nope')).status, 404);
+    const n0 = sent.length;
+    reply = () => ({ answers: [{ type: 'refusal', name: 'action' }], usage: { input_tokens: 10 } });
+    const rf = await (await call('/decide', { body: { villagers: ['x'] } })).json(); await Promise.all(waits);
+    assert.deepEqual(rf.results, [null], '想做什麼被拒答：這位島民照原本的方式走');
+    reply = () => null;
+    assert.equal((await call('/decide', { body: { villagers: ['x'] } })).status, 502, 'OpenAI 全部失敗'); await Promise.all(waits);
+    assert.equal(sent.length, n0 + 2);
+
+    env.PER_MINUTE = '2'; reply = () => ({ answers: [], usage: { input_tokens: 1 } });
+    assert.equal((await call('/decide', { ip: '9.9.9.9', body: { villagers: ['x'] } })).status, 200);
+    assert.equal((await call('/decide', { ip: '9.9.9.9', body: { villagers: ['x'] } })).status, 200);
+    const lr = await call('/decide', { ip: '9.9.9.9', body: { villagers: ['x'] } }); assert.equal(lr.status, 429); assert.deepEqual(await lr.json(), { error: 'rate' }, '同一個 IP 一分鐘內問太多次');
+    assert.equal((await call('/decide', { ip: '8.8.8.8', body: { villagers: ['x'] } })).status, 200, '別的 IP 不受影響'); await Promise.all(waits);
+
+    env.PER_MINUTE = '50'; env.DAILY_TOKENS = String(store.get('usage').tokens + 500);
+    const q = await call('/decide', { ip: '7.7.7.7', body: { villagers: ['x', 'y'] } }); assert.equal(q.status, 429); assert.deepEqual(await q.json(), { error: 'quota' }, '預留的額度超過每日上限');
+    store.set('usage', { day: store.get('usage').day, tokens: +env.DAILY_TOKENS }); lim = null;   // 記帳員重新啟動：從存起來的用量讀回
+    assert.deepEqual(await (await call('/health')).json(), { status: 'ok', quota: 'out' }, '今天的額度用完了');
+    store.set('usage', { day: '2000-01-01', tokens: 9e9 }); lim = null;
+    assert.deepEqual(await (await call('/health')).json(), { status: 'ok', quota: 'ok' }, '隔天重新計算');
+    delete env.OPENAI_API_KEY; assert.equal((await call('/health')).status, 503, '沒設金鑰');
+    env.ACCESS_CODE = ''; assert.equal((await call('/health')).status, 401, '沒設通行碼時誰都不能用');
+  } finally { globalThis.fetch = real; }
+});
+
+test('島民的心思：Worker 的選項和遊戲一致、金鑰與通行碼不進 repo 和存檔', async () => {
+  const W = await import(require('url').pathToFileURL(path.join(ROOT, 'worker/index.js')).href);
+  const src = fs.readFileSync(path.join(ROOT, 'src/isle/mind.js'), 'utf8');
+  const block = name => Object.fromEntries([...src.match(new RegExp(`export const ${name} = \\{([\\s\\S]*?)\\};`))[1].matchAll(/(\w+): \['([^']+)'/g)].map(m => [m[1], m[2]]));
+  const act = block('ACTIONS'); delete act.player;
+  assert.deepEqual(W.ACTIONS, act, 'Worker 的行動說明和 mind.js 一樣'); assert.deepEqual(W.MOODS, block('MOODS'), 'Worker 的心情說明和 mind.js 一樣');
+  assert.deepEqual(W.QUESTIONS.map(q => q.instructions), [...src.matchAll(/instructions: '([^']+)'/g)].map(m => m[1]), '問法和 laya 一樣');
+  assert.match(src, /localStorage\.setItem\(KEY\.code/, '通行碼存在 localStorage'); assert.ok(!/settings[^\n]*code/i.test(src), '通行碼不放進存檔的設定');
+  assert.match(src, /Authorization: 'Bearer ' \+ cl\.code/, '通行碼放在 Authorization');
+  const conf = fs.readFileSync(path.join(ROOT, 'worker/wrangler.jsonc'), 'utf8');
+  assert.match(conf, /"new_sqlite_classes": \["Limiter"\]/, '記帳員用免費方案可用的 SQLite 版 Durable Object');
+  assert.match(conf, /"ORIGINS": "https:\/\/ragorothers-alt\.github\.io,/); assert.match(conf, /"DAILY_TOKENS": "\d+"/);
+  assert.ok(!/OPENAI_API_KEY"\s*:|ACCESS_CODE"\s*:|sk-[A-Za-z0-9]/.test(conf), '金鑰與通行碼不寫在設定檔（用 wrangler secret）');
+  const ign = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
+  ['.dev.vars', '.wrangler/'].forEach(p => assert.ok(ign.includes(p), '.gitignore 擋掉 ' + p));
+});
