@@ -1276,6 +1276,12 @@ test('雲霧茶村：村民與製茶資料、模型清單、場景接線', () =>
   const placed = [...new Set([...src.matchAll(/\['(tv_[a-z_]+)', -?[\d.]+, -?[\d.]+,/g)].map(m => m[1]))];
   assert.ok(placed.length >= 30, '村裡的擺設 ' + placed.length + ' 種');
   placed.forEach(id => { assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡'); const js = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); });
+  ids.forEach(id => {   // v9.9.1 村民的人形模型
+    assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡');
+    const js = glb(id), clips = js.animations.map(a => a.name.replace(/\.\d+$/, ''));
+    ['idle', 'walk', 'run', 'sit', 'greet_01', 'wave_goodbye_02', 'cheer', 'dance_02'].forEach(c => assert.ok(clips.includes(c), id + ' 的動作 ' + c));
+    assert.ok(js.nodes.some(n => n.name === 'mixamorig:Hips'), id + ' 是 Mixamo 骨架');
+  });
   // 場景接線：燈籠港車站轉交、資料、存檔、時刻
   const lan = fs.readFileSync(path.join(ROOT, 'src/isle/lantern.js'), 'utf8');
   assert.match(lan, /import \* as tea from '\.\/tea\.js'/); assert.match(lan, /if \(tea\.inside\) return tea\.tick\(/, '在茶村裡由茶村自己畫');
