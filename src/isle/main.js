@@ -36,6 +36,7 @@ import * as cooking from './cooking.js';
 import * as ores from './rocks.js';
 import * as balloon from './balloon.js';
 import * as trip from './trip.js';
+import * as lantern from './lantern.js';   // v9.8 燈籠港
 import * as focus from './focus.js';
 import * as planner from './planner.js';
 import * as words from './words.js';
@@ -113,7 +114,7 @@ import * as moon from './moon.js';
 import * as dream from './dream.js';
 import * as passport from './passport.js';
 /** 在神秘島或博物館裡（不在主島場景） */
-const elsewhere = () => trip.inside || museum.inside || dreamisle.inside || shopin.inside || yuehome.inside || house.inside || dive.inside;
+const elsewhere = () => trip.inside || lantern.inside || museum.inside || dreamisle.inside || shopin.inside || yuehome.inside || house.inside || dive.inside;
 import { drill, picker } from './drill.js';
 import { pickQ, pickQU, askQ, record, pick, bag, dayKey } from './quiz.js';
 import * as figs from './figs.js';
@@ -314,6 +315,7 @@ const HOUSE_HOOKS = { dex: YUE_HOOKS.dex, soup: YUE_HOOKS.soup, notes: YUE_HOOKS
   wing: k => museum.openWing(k),   // 博物館的展區（topic 是展區）
   exhibit: t => museum.exhibitCard(t.k, t.id), theme: () => themeAct(), box: () => donationBox(), guestbook: () => guestbook(), aquarium: () => goAquarium(), aqtank: t => aquarium.openTank(t), cave: t => cave.act(t), academy: t => academy.act(t), starhall: t => greathall.act(t), starsummit: t => summit.act(t) };   // v9.5.2 星環之頂的祭壇   // v9.5.1 大講堂的考桌、成績單與樓梯   // v9.3 星環學院的星環、教室與大講堂   // v9.0 海洋館、v9.1 潮洞   // v8.3 展品、小特展、捐贈箱、留言簿
 trip.init(player, () => { const x = PIER.x, z = PIER.z + PIER.len - 1.4; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });
+lantern.init(player, () => { const x = PIER.x - PIER.hw + 0.5, z = PIER.z + PIER.len - 1.6; player.position.set(x, ground(x, z), z); player.rotation.y = 0; camPos.copy(player.position).add(camOff); paintHud(); });   // v9.8 從燈籠港搭渡輪回來，站在碼頭西側
 spirit.init(player, () => skyU.night.value > 0.5);
 diy.init(player, myHome, { thumb: id => room.thumb(id), addStorage: (id, n) => room.addStorage(id, n) });
 let gardenMsg = '';
@@ -1057,6 +1059,7 @@ function act() {
   if (dive.inside) { const dh = dive.handler(); if (dh) { talking = { name: 'dive' }; Promise.resolve(dh()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); } return; }
   if (boat.isRiding()) { boat.act(player.position.x, player.position.z); return; }   // v9.1 船上：停回碼頭、上岸
   if (swimming) { const sp = swim.near(player.position.x, player.position.z); if (sp) { moveTo = null; dive.enter(sp); } else boat.act(player.position.x, player.position.z); return; }   // v9.0 游泳中：只能在潛點潛下去（或爬上小船）
+  if (lantern.inside) { const lh = lantern.townHandler(); if (lh) { talking = { name: 'lantern' }; Promise.resolve(lh()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); } return; }   // v9.8 燈籠港
   if (trip.inside) { const th = trip.tripHandler(); if (th) { talking = { name: 'trip' }; Promise.resolve(th()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); } return; }
   if (room.inside) {
     const host = roomHost;
@@ -1077,7 +1080,7 @@ function act() {
   if (boat.act(player.position.x, player.position.z) || northcoast.act(player.position.x, player.position.z) || works.act(player.position.x, player.position.z) || (!offMods.starbridge && starbridge.act(player.position.x, player.position.z)) || (!offMods.nightmarket && nightmarket.act(player.position.x, player.position.z)) || (!offMods.sportsday && sportsday.act(player.position.x, player.position.z)) || (!offMods.kitefest && kitefest.act(player.position.x, player.position.z))) return;   // v9.1 坐上小船、走進潮洞
   const ch = fauna.handler();   // v8.9 摸摸島上的貓
   if (ch) { talking = { name: 'cat' }; Promise.resolve(ch()).finally(() => { talking = null; }); return; }
-  const dk = trip.handler();
+  const dk = trip.handler() || lantern.handler();   // v9.8 碼頭西側的渡輪
   if (dk) { talking = { name: 'boat' }; Promise.resolve(dk()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); return; }
   const tb = tablets.handler();
   if (tb) { talking = { name: 'tablet' }; Promise.resolve(tb()).finally(() => { talking = null; ui.closeDialog(); paintHud(); }); return; }
@@ -2296,9 +2299,9 @@ function tick(fixed) {
   if (room.inside || elsewhere()) { player.userData.umbrella.visible = dreamisle.inside && dreamisle.raining() && !player.userData.tool; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; }); }   // 室內不撐傘（傘只在島上的每一格依雨勢更新，進門前在下雨就會一直撐著）；回到島上的下一格自動恢復
   if (room.inside) { roomTick(dt, t, ix, iz, len, moving, locked); return; }
   if (elsewhere()) {
-    if (trip.inside || yuehome.inside || shopin.inside || dive.inside) applyTime(hourOverride ?? nowHour());   // 天色跟著主島的時間，岳家的窗景與燈光也跟著變化
-    if (yuehome.inside) yuehome.tick(dt, t, ix, iz, len, moving, run, locked, skyU.night.value); else if (shopin.inside) shopin.tick(dt, t, ix, iz, len, moving, run, locked, skyU.night.value); else if (museum.inside) museum.tick(dt, t, ix, iz, len, moving, run, locked); else if (dreamisle.inside) dreamisle.tick(dt, t, ix, iz, len, moving, run, locked); else if (dive.inside) dive.tick(dt, t, ix, iz, len, moving, run, locked); else trip.tick(dt, t, ix, iz, len, moving, run, locked);
-    let pr = $('labels').querySelector('.prompt'); const h = !locked && (yuehome.inside ? yuehome.hint() : shopin.inside ? shopin.hint() : museum.inside ? museum.hint() : dreamisle.inside ? dreamisle.hint() : dive.inside ? dive.hint() : trip.tripHint());
+    if (trip.inside || lantern.inside || yuehome.inside || shopin.inside || dive.inside) applyTime(hourOverride ?? nowHour());   // 天色跟著主島的時間，岳家的窗景與燈光也跟著變化
+    if (yuehome.inside) yuehome.tick(dt, t, ix, iz, len, moving, run, locked, skyU.night.value); else if (shopin.inside) shopin.tick(dt, t, ix, iz, len, moving, run, locked, skyU.night.value); else if (museum.inside) museum.tick(dt, t, ix, iz, len, moving, run, locked); else if (dreamisle.inside) dreamisle.tick(dt, t, ix, iz, len, moving, run, locked); else if (dive.inside) dive.tick(dt, t, ix, iz, len, moving, run, locked); else if (lantern.inside) lantern.tick(dt, t, ix, iz, len, moving, run, locked); else trip.tick(dt, t, ix, iz, len, moving, run, locked);
+    let pr = $('labels').querySelector('.prompt'); const h = !locked && (yuehome.inside ? yuehome.hint() : shopin.inside ? shopin.hint() : museum.inside ? museum.hint() : dreamisle.inside ? dreamisle.hint() : dive.inside ? dive.hint() : lantern.inside ? lantern.townHint() : trip.tripHint());
     if (h) {
       if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); }
       pr.innerHTML = `<kbd>E</kbd>${h}`; const [x, y] = screenOf(player, 2.25);
@@ -2403,7 +2406,7 @@ function tick(fixed) {
   nearDoor = locked || swimming || boat.isRiding() || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
   nearMail = !!myHome && !locked && !swimming && !boat.isRiding() && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
   if (nearDoor || nearMail || swimming || boat.isRiding()) nearV = null;
-  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || works.hint(player.position.x, player.position.z) || guard('starbridge', () => starbridge.hint(player.position.x, player.position.z), '') || guard('nightmarket', () => nightmarket.hint(player.position.x, player.position.z), '') || guard('sportsday', () => sportsday.hint(player.position.x, player.position.z), '') || guard('kitefest', () => kitefest.hint(player.position.x, player.position.z), '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
+  const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || works.hint(player.position.x, player.position.z) || guard('starbridge', () => starbridge.hint(player.position.x, player.position.z), '') || guard('nightmarket', () => nightmarket.hint(player.position.x, player.position.z), '') || guard('sportsday', () => sportsday.hint(player.position.x, player.position.z), '') || guard('kitefest', () => kitefest.hint(player.position.x, player.position.z), '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || lantern.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
   const gj = nearV && routine.joinable(nearV);   // v8.9 走近正在進行的團體活動：按 E 加入
   const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : swimming || boat.isRiding() ? '' : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
   if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
@@ -2604,4 +2607,4 @@ scene.traverse(o => { o.frustumCulled = cullable(o); }); dropTinyShadows(scene);
 paintHud(); paintTools();
 requestAnimationFrame(frame);
 addEventListener('pagehide', () => { if (TA.importing) return; if (!room.inside && !elsewhere()) S().pos = [player.position.x, player.position.z]; TA.Store.flush(); });
-window.__isle = { yuehome, house, shopin, swim, dive, boat, swimming: () => swimming, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, enterLibrary, enterMuseum, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };
+window.__isle = { lantern, yuehome, house, shopin, swim, dive, boat, swimming: () => swimming, dailyStock, renderer, camera, camOff: () => camOff, popNow: () => { popAt = 0; }, fp: { set: setFp, aim: (y, p) => { camYaw = y; fpPitch = p; }, state: () => ({ fpOn, fpK, camYaw, fpPitch, fpFocus }) }, scenicCfg: () => ({ SCENIC, SCENIC_L }), SITES, guest, weather, winter, act, diy, openFurnShop, hotel, dreamisle, cheer, visit, enterLibrary, enterMuseum, homeWithGifts, seats, sitDown, standUp, sitState: () => sitting, memo, T, N, C, rating, DOORS, town, social, events, room, enterHome, tick, player, villagers, setHour: h => { hourOverride = h; paintHud(); }, talk, life, S, start: startGame, equip };

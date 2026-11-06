@@ -9,7 +9,7 @@ export const POCKET_N = 20;
 export const KINDS = { fish: '魚', bug: '蟲', fossil: '化石', sea: '潮池生物', mineral: '礦物', marine: '海洋生物' };
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
-const OBJ = ['garden', 'stars', 'mats', 'miles', 'plan', 'wordle', 'tablets', 'cram', 'settings', 'guests', 'room', 'design', 'closet', 'look', 'tot', 'typhoonTalk', 'afterTalk', 'quizcup', 'diyDay', 'tidePools', 'wisp', 'homeVisit', 'tourney', 'ev', 'fr', 'frDay', 'storage', 'milestones', 'stats', 'relocate', 'bond', 'giftDay', 'bdayDone', 'tips', 'rating', 'gemDay', 'genePractice', 'cupDay', 'elements', 'practice'];
+const OBJ = ['garden', 'stars', 'mats', 'miles', 'plan', 'wordle', 'tablets', 'cram', 'settings', 'guests', 'room', 'design', 'closet', 'look', 'tot', 'typhoonTalk', 'afterTalk', 'quizcup', 'diyDay', 'tidePools', 'wisp', 'homeVisit', 'tourney', 'ev', 'fr', 'frDay', 'storage', 'milestones', 'stats', 'relocate', 'bond', 'giftDay', 'bdayDone', 'tips', 'rating', 'gemDay', 'genePractice', 'cupDay', 'elements', 'practice', 'lantern'];
 const ARR = ['recipes', 'foods', 'spots', 'reqs', 'mail', 'papers', 'vgifts'];
 const NULLOBJ = ['focusRun', 'buff'];
 const num = v => typeof v === 'number' && isFinite(v);

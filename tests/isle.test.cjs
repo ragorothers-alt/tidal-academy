@@ -1208,3 +1208,45 @@ test('島民的心思：Worker 的選項和遊戲一致、金鑰與通行碼不�
   const ign = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
   ['.dev.vars', '.wrangler/'].forEach(p => assert.ok(ign.includes(p), '.gitignore 擋掉 ' + p));
 });
+
+/* v9.8.0 燈籠港：搭渡輪去的港鎮（獨立場景）、九位鎮民的人形模型、文昌廟每天求一次讀書籤 */
+test('燈籠港：鎮民與文昌廟資料、模型清單、場景接線', () => {
+  load('src/isle/data/lantern.js'); const L = I.LANTERN;
+  assert.ok(L && L.ferry && L.ferry.captain && L.temple && L.tips.length, '燈籠港資料');
+  const ids = ['lp_wen', 'lp_shulan', 'lp_chayi', 'lp_bingbing', 'lp_chen', 'lp_axin', 'lp_kui', 'lp_heng', 'lp_mian'];
+  assert.deepEqual(Array.from(L.residents, r => r.id).sort(), [...ids].sort(), '九位鎮民');   // vm 裡的陣列原型不同，先轉成這邊的陣列
+  L.residents.forEach(r => {
+    assert.ok(r.name && r.role && /^#[0-9a-f]{6}$/i.test(r.color), r.id + ' 的名字、身分與顏色');
+    [['first', 2], ['greet', 6], ['chat', 8], ['night', 3]].forEach(([k, n]) => {
+      assert.equal(r[k].length, n, r.id + ' 的 ' + k);
+      r[k].forEach(s => assert.ok(typeof s === 'string' && s.trim() && [...s].length <= 40, r.id + ' 的 ' + k + '：' + s));
+    });
+  });
+  const T = L.temple, ranks = T.ranks.map(r => r.rank);
+  assert.deepEqual(Array.from(T.ranks, r => r.min), [3, 2, 1, 0], '籤等依答對題數，由高到低');
+  ranks.forEach(rk => assert.ok(T.slips.some(s => s.rank === rk), rk + ' 至少一張籤'));
+  T.slips.forEach((s, i) => {
+    assert.ok(ranks.includes(s.rank) && s.meaning && s.advice, '第 ' + i + ' 張籤的欄位');
+    const ls = s.poem.split(/[，。]/).filter(Boolean); assert.equal(ls.length, 4, '籤詩四句：' + s.poem); ls.forEach(l => assert.equal([...l].length, 7, '七言：' + l));
+  });
+  const glb = id => { const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64'); return JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12))); };
+  const list = fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8'), src = fs.readFileSync(path.join(ROOT, 'src/isle/lantern.js'), 'utf8');
+  const placed = [...new Set([...src.matchAll(/\['(lp_[a-z_]+)', -?[\d.]+, -?[\d.]+,/g)].map(m => m[1]))];
+  assert.ok(placed.length >= 28, '鎮上的擺設 ' + placed.length + ' 種');
+  [...placed, ...ids].forEach(id => assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡'));
+  ids.forEach(id => {
+    const js = glb(id), clips = js.animations.map(a => a.name.replace(/\.\d+$/, ''));
+    ['idle', 'walk', 'run', 'sit', 'greet_01', 'wave_goodbye_02', 'cheer', 'dance_02'].forEach(c => assert.ok(clips.includes(c), id + ' 的動作 ' + c));
+    assert.ok(js.nodes.some(n => n.name === 'mixamorig:Hips'), id + ' 是 Mixamo 骨架');
+  });
+  placed.forEach(id => { const js = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); });
+  // 場景接線：主島碼頭的渡輪、進出燈籠港、每幀、提示與按鍵
+  const main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8');
+  assert.match(main, /import \* as lantern from '\.\/lantern\.js'/); assert.match(main, /lantern\.init\(player,/);
+  assert.match(main, /lantern\.inside\) lantern\.tick\(/, '在燈籠港裡由燈籠港自己畫'); assert.match(main, /lantern\.townHandler\(\)/); assert.match(main, /lantern\.hint\(\)/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8'), /src\/isle\/data\/lantern\.js/, 'isle.html 載入燈籠港資料');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/actors.js'), 'utf8'), /\/\^lp_\/\.test\(key \|\| ''\) \? key/, '鎮民 id 直接對應同名模型');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/state.js'), 'utf8'), /const OBJ = \[[^\]]*'lantern'/, '存檔有燈籠港的欄位');
+  assert.match(src, /s\.pray === dayKey\(\)/, '文昌廟一天求一次籤'); assert.match(src, /gesture\(f\.m, 'wave'/, '鎮民第一次見面揮手');
+  assert.match(src, /function fadeTick/, '擋住玩家的高建築會變半透明');
+});
