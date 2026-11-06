@@ -13,6 +13,7 @@ import * as Audio from './audio.js';
 import { I, S, save, dayKey } from './state.js';
 import { pickQ, record, pick } from './quiz.js';
 import * as memo from './memo.js';
+import * as tea from './tea.js';   // v9.9 車站通車：搭登山小火車去雲霧茶村
 
 const D = () => I.LANTERN || {};
 const LAND = 0.35, NIGHT_SUN = new THREE.Color('#9fb4ff'), NIGHT_SKY = new THREE.Color('#8aa3d6'), NIGHT_GND = new THREE.Color('#414c46');
@@ -175,6 +176,7 @@ const onPierDeck = (x, z) => Math.abs(x) < 1.3 && z > 17.6 && z < 26.8;
 const onLand = (x, z) => x > -20.6 && x < 20.6 && z > -22.4 && z < 18.2;
 const blocked = (x, z) => boxes.some(b => x > b.x0 - 0.28 && x < b.x1 + 0.28 && z > b.z0 - 0.28 && z < b.z1 + 0.28);
 export function tick(dt, t, ix, iz, len, moving, run, locked) {
+  if (tea.inside) return tea.tick(dt, t, ix, iz, len, moving, run, locked);   // 在茶村裡由茶村自己畫
   if (moving && !locked) {
     ix /= len; iz /= len; const sp = run ? 4.8 : 2.8 * (0.3 + 0.7 * Math.min(1, len)), nx = P.position.x + ix * sp * dt, nz = P.position.z + iz * sp * dt;
     const ok = (x, z) => (onLand(x, z) || onPierDeck(x, z)) && !blocked(x, z);
@@ -219,8 +221,11 @@ const near = (x, z, r) => Math.hypot(P.position.x - x, P.position.z - z) < r;
 const nearFolk = () => folk.filter(f => near(f.m.position.x, f.m.position.z, 1.9)).sort((a, b) => Math.hypot(a.m.position.x - P.position.x, a.m.position.z - P.position.z) - Math.hypot(b.m.position.x - P.position.x, b.m.position.z - P.position.z))[0] || null;
 const atFerry = () => near(1.0, 25.6, 1.5);
 const atTemple = () => near(0, -12.9, 1.6);
-export function townHint() { if (atFerry()) return '搭渡輪回潮汐小島'; const f = nearFolk(); if (f) return `和${f.r.name}聊天`; if (atTemple()) return '參拜文昌帝君'; return ''; }
-export function townHandler() { if (atFerry()) return home; const f = nearFolk(); if (f) return () => chat(f); if (atTemple()) return pray; return null; }
+const atStation = () => near(11.4, 5.0, 1.3);   // 木造車站門口
+/** 從茶村搭小火車回來：站在車站門口，面向老街 */
+const backFromTea = () => { sc.add(P); P.position.set(11.4, LAND + 0.15, 5.0); P.rotation.y = W; camPos.set(11.4, 10, 16); };
+export function townHint() { if (tea.inside) return tea.hint(); if (atFerry()) return '搭渡輪回潮汐小島'; if (atStation()) return '搭小火車去雲霧茶村'; const f = nearFolk(); if (f) return `和${f.r.name}聊天`; if (atTemple()) return '參拜文昌帝君'; return ''; }
+export function townHandler() { if (tea.inside) return tea.handler(); if (atFerry()) return home; if (atStation()) return () => tea.ride(P, backFromTea); const f = nearFolk(); if (f) return () => chat(f); if (atTemple()) return pray; return null; }
 async function home() {
   const F = D().ferry || {};
   if (await ui.ask(captain(), pick(F.back || ['要回潮汐小島了嗎？']), ['回去', '再逛逛'], { keys: true }) !== 0) return;
@@ -270,4 +275,5 @@ async function pray() {
   } finally { if (wen) wen.talk = false; }
 }
 export const debugEnter = () => enter();
-export const debug = { folk, player: () => P, dock: DOCK };   // 測試用：鎮民、玩家、主島的渡輪碼頭
+export const debugTea = () => { if (!inside) enter(); tea.enter(P, backFromTea); };   // 測試用：直接進茶村
+export const debug = { folk, player: () => P, dock: DOCK, tea: tea.debug };   // 測試用：鎮民、玩家、主島的渡輪碼頭、茶村

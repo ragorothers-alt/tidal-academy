@@ -103,7 +103,7 @@ function hatY(model, head) {
 }
 const ALIAS = { wave_goodbye_02: 'wave', dance_02: 'dance' };   // v9.6 旅客模型多帶的動作：揮手、歡呼（cheer）、跳舞
 export async function dress(ch, key) {
-  const id = CAST[key] || (/^guest:/.test(key || '') ? 'guest_' + key.slice(6) : /^lp_/.test(key || '') ? key : null);   // v9.6 旅客（sid 'guest:<id>'）的模型是 guest_<id>
+  const id = CAST[key] || (/^guest:/.test(key || '') ? 'guest_' + key.slice(6) : /^(lp|tv)_/.test(key || '') ? key : null);   // v9.6 旅客（sid 'guest:<id>'）的模型是 guest_<id>
   if (!id || !READY.has(id) || !ch || ch.userData.gltf) return false;
   let g; try { g = await loadModel(id); } catch (e) { console.warn('角色模型載入失敗：', id, e); return false; }
   const u = ch.userData, model = cloneSkinned(g.scene); model.scale.setScalar(HEIGHT); let mix = false; model.traverse(o => { if (o.isBone && /^mixamorig/.test(o.name)) mix = true; }); model.rotation.y = mix ? 0 : FACING;   // 網頁版匯出（Mixamo 骨架）本來就朝 +Z

@@ -1245,8 +1245,46 @@ test('燈籠港：鎮民與文昌廟資料、模型清單、場景接線', () =>
   assert.match(main, /import \* as lantern from '\.\/lantern\.js'/); assert.match(main, /lantern\.init\(player,/);
   assert.match(main, /lantern\.inside\) lantern\.tick\(/, '在燈籠港裡由燈籠港自己畫'); assert.match(main, /lantern\.townHandler\(\)/); assert.match(main, /lantern\.hint\(\)/);
   assert.match(fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8'), /src\/isle\/data\/lantern\.js/, 'isle.html 載入燈籠港資料');
-  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/actors.js'), 'utf8'), /\/\^lp_\/\.test\(key \|\| ''\) \? key/, '鎮民 id 直接對應同名模型');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/actors.js'), 'utf8'), /\/\^\(lp\|tv\)_\/\.test\(key \|\| ''\) \? key/, '鎮民 id 直接對應同名模型');
   assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/state.js'), 'utf8'), /const OBJ = \[[^\]]*'lantern'/, '存檔有燈籠港的欄位');
   assert.match(src, /s\.pray === dayKey\(\)/, '文昌廟一天求一次籤'); assert.match(src, /gesture\(f\.m, 'wave'/, '鎮民第一次見面揮手');
   assert.match(src, /function fadeTick/, '擋住玩家的高建築會變半透明');
+});
+
+/* v9.9.0 雲霧茶村：從燈籠港車站搭登山小火車上山（由燈籠港轉交）、山嵐製茶廠每天做一次茶、雲海觀景台的望遠鏡 */
+test('雲霧茶村：村民與製茶資料、模型清單、場景接線', () => {
+  load('src/isle/data/teavillage.js'); const T = I.TEA;
+  assert.ok(T && T.train && T.train.conductor && T.factory && T.clouds && T.shrine.length && T.tips.length, '茶村資料');
+  ['go', 'arrive', 'back', 'night'].forEach(k => assert.ok(T.train[k].length >= 2, '小火車的 ' + k));
+  const ids = ['tv_ama', 'tv_shifu', 'tv_lin', 'tv_teacher', 'tv_conductor', 'tv_chaguan', 'tv_yun', 'tv_xiaoman'];
+  assert.deepEqual(Array.from(T.residents, r => r.id).sort(), [...ids].sort(), '八位村民');
+  T.residents.forEach(r => {
+    assert.ok(r.name && r.role && /^#[0-9a-f]{6}$/i.test(r.color), r.id + ' 的名字、身分與顏色');
+    [['first', 2], ['greet', 6], ['chat', 8], ['night', 3]].forEach(([k, n]) => {
+      assert.equal(r[k].length, n, r.id + ' 的 ' + k);
+      r[k].forEach(s => assert.ok(typeof s === 'string' && s.trim() && [...s].length <= 40, r.id + ' 的 ' + k + '：' + s));
+    });
+  });
+  const F = T.factory;
+  assert.deepEqual(Array.from(F.steps, s => s.name), ['萎凋', '炒菁', '揉捻'], '三道工序');
+  assert.deepEqual(Array.from(F.grades, g => g.min), [3, 2, 1, 0], '茶的等級依答對題數，由高到低');
+  F.grades.forEach(g => assert.equal(F.teas.filter(t => t.grade === g.grade).length, 4, g.grade + ' 四款茶'));
+  F.teas.forEach(t => assert.ok(t.name && t.note && t.advice, t.name + ' 的品茶描述與讀書建議'));
+  ['dawn', 'day', 'dusk', 'night'].forEach(k => assert.ok(T.clouds[k].length >= 2, '雲海的 ' + k));
+  const glb = id => { const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64'); return JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12))); };
+  const list = fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8'), src = fs.readFileSync(path.join(ROOT, 'src/isle/tea.js'), 'utf8');
+  const placed = [...new Set([...src.matchAll(/\['(tv_[a-z_]+)', -?[\d.]+, -?[\d.]+,/g)].map(m => m[1]))];
+  assert.ok(placed.length >= 30, '村裡的擺設 ' + placed.length + ' 種');
+  placed.forEach(id => { assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡'); const js = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); });
+  // 場景接線：燈籠港車站轉交、資料、存檔、時刻
+  const lan = fs.readFileSync(path.join(ROOT, 'src/isle/lantern.js'), 'utf8');
+  assert.match(lan, /import \* as tea from '\.\/tea\.js'/); assert.match(lan, /if \(tea\.inside\) return tea\.tick\(/, '在茶村裡由茶村自己畫');
+  assert.match(lan, /tea\.ride\(P, backFromTea\)/, '車站門口搭小火車'); assert.match(lan, /if \(tea\.inside\) return tea\.hint\(\)/); assert.match(lan, /if \(tea\.inside\) return tea\.handler\(\)/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8'), /src\/isle\/data\/teavillage\.js/, 'isle.html 載入茶村資料');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/state.js'), 'utf8'), /const OBJ = \[[^\]]*'teavillage'/, '存檔有茶村的欄位');
+  assert.match(fs.readFileSync(path.join(ROOT, 'src/isle/engine.js'), 'utf8'), /hourNow\.value = h;/, '記下目前的遊戲時刻');
+  assert.match(src, /s\.tea === dayKey\(\)/, '製茶廠一天做一次茶'); assert.match(src, /h = hourNow\.value/, '望遠鏡依遊戲時刻挑句子');
+  assert.match(src, /gesture\(f\.m, 'wave'/, '村民第一次見面揮手'); assert.match(src, /function fadeTick/, '擋住玩家的高建築會變半透明');
+  load('src/isle/data/lantern.js');
+  const old = JSON.stringify(I.LANTERN); ['整修', '尚未通車', '還沒通車', '等通車', '沒有火車'].forEach(w => assert.ok(!old.includes(w), '燈籠港車站已通車，不再說「' + w + '」'));
 });

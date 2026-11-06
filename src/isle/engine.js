@@ -1343,7 +1343,9 @@ function refreshEnv(key, dir, night) {
   SHINY.forEach(m => { m.envMap = rt.texture; m.envMapIntensity = m.userData.envK; if (first) m.needsUpdate = true; });
 }
 /** 依小時設定光照，回傳太陽方向 */
+export const hourNow = { value: 12 };   // v9.9 目前的遊戲時刻（含調時間），給雲海望遠鏡挑晨昏的句子
 export function applyTime(h) {
+  hourNow.value = h;
   let i = 0; while (i < KEYS.length - 2 && KEYS[i + 1][0] <= h) i++;
   const [h0, A] = KEYS[i], [h1, B] = KEYS[i + 1], k = THREE.MathUtils.smoothstep(h, h0, h1);
   skyU.top.value.copy(lerpC(A.top, B.top, k)); skyU.mid.value.copy(lerpC(A.mid, B.mid, k)); skyU.bot.value.copy(lerpC(A.bot, B.bot, k)); skyU.sea.value.copy(lerpC(A.sea, B.sea, k));
