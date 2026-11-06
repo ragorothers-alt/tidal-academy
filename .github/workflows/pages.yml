@@ -44,3 +44,5 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          timeout: 1800000   # 模型與示意圖約 230 MB：同步檔案要十分鐘以上，預設的十分鐘會在同步完成那一刻逾時
