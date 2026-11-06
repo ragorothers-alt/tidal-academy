@@ -6,7 +6,7 @@ import { scene, M, mesh, U, bend, cullable } from './engine.js';
 import { N, C, T, tileAt, legacyTile, groundAt, WATER_Y, ramp2X, PLANNED, STAIRS, warp } from './terrain.js';
 import { tree, rock, bush, bench, blocked, colliders, seats, wildFlowers, label, rnd, SITES, modelClone, mergeStatic } from './props.js';
 import * as ui from './ui.js';
-import { register } from './props3d.js';
+import { register, realize } from './props3d.js';
 import * as glow from './glow.js';
 import * as Audio from './audio.js';
 
@@ -118,7 +118,7 @@ function buildFalls() {
 function shrine(x, z) {
   const g = new THREE.Group(); g.position.set(x, groundAt(x, z), z);
   const m = modelClone('LMMODELS', 'shrine');
-  if (m) g.add(m); else {
+  if (m) { g.add(m); realize(g, 'LMMODELS', 'shrine'); } else {   // v9.11 寫實模型
     const stone = M('#efe7d6', {}, 'stone'), gold = M('#d8b45a', { metalness: 0.7, roughness: 0.35 });
     g.add(mesh(new THREE.CylinderGeometry(1.75, 1.85, 0.3, 24), stone, 0, 0.15, 0), mesh(new THREE.CylinderGeometry(1.5, 1.6, 0.18, 24), stone, 0, 0.39, 0));
     for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + Math.PI / 6; g.add(mesh(new THREE.CylinderGeometry(0.13, 0.15, 2.3, 10), stone, Math.cos(a) * 1.2, 1.63, Math.sin(a) * 1.2)); }

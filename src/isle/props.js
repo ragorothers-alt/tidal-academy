@@ -1,7 +1,7 @@
 /* 潮汐小島 · 場景物件：房子、博物館、商店、燈塔、路燈、橋、樹、花草與碰撞。 */
 import * as THREE from 'three';
 import { scene, bend, M, mesh, nightMats, lamps, leafGeo, mergedIco, canopyCards, cardMat, CARD_DEPTH, cullable } from './engine.js';
-import { register, unregister, registerAt } from './props3d.js';
+import { register, unregister, registerAt, realize } from './props3d.js';
 import { ULTRA } from './perf.js';
 import { roadPavers, plazaModel, homeClearance } from './plazamodels.js';
 import * as glow from './glow.js';
@@ -426,7 +426,7 @@ function museum(x, z) {
   g.add(mesh(new THREE.BoxGeometry(1.2, 1.8, 0.1), M('#6b4f3a'), 0, 1.25, 1.72));
   [-1.9, 1.9].forEach(wx => g.add(mesh(new THREE.BoxGeometry(0.9, 1.1, 0.1), windowMat(), wx, 1.9, 1.72)));
   const sg = label('潮汐博物館', '#5b8fd6', 2.6, 0.62); sg.position.set(0, 3.9, 2.56); g.add(sg);
-  altBuilding('museum', g, [sg]);
+  altBuilding('museum', g, [sg]); realize(g, 'BLDMODELS', 'museum', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); boxC(x - 3.6, z - 2.6, x + 3.6, z + 1.9);
   SITES.museum = { x, z, front: [x + 0.5, z + 3.6] }; BLDG.museum = g;
 }
@@ -438,7 +438,7 @@ function shop(x, z) {
   for (let i = 0; i < 7; i++) { const a = mesh(new THREE.BoxGeometry(0.5, 0.06, 1), M(i % 2 ? '#ffffff' : '#ff8a7a'), -1.5 + i * 0.5, 2.05, 1.75); a.rotation.x = 0.45; g.add(a); }
   g.add(mesh(new THREE.BoxGeometry(1.4, 0.9, 0.08), windowMat(), -0.6, 1.2, 1.42), mesh(new THREE.BoxGeometry(0.75, 1.3, 0.08), M('#8a5a3b'), 0.9, 0.9, 1.42));
   const sg = label('潮汐商店', '#5fbf6a', 2.0, 0.5); sg.position.set(0, 2.95, 1.6); g.add(sg);
-  altBuilding('shop', g, [sg]);
+  altBuilding('shop', g, [sg]); realize(g, 'BLDMODELS', 'shop', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); boxC(x - 1.8, z - 1.5, x + 1.8, z + 1.5);
   SITES.shop = { x, z, front: [x - 0.4, z + 2.5] };
 }
@@ -450,7 +450,7 @@ function lighthouse(x, z) {
   glow.emit({ x, y: y + 5.4, z, kind: 'beacon' });   // 燈室：照亮四周 26 公尺
   g.add(mesh(new THREE.BoxGeometry(0.6, 1.0, 0.1), M('#8a5a3b'), 0, 0.5, 0.9));
   const sg = label('燈塔競技場', '#ef6f5e', 1.8, 0.45); sg.position.set(0, 1.35, 0.95); g.add(sg);
-  altBuilding('lighthouse', g, [sg]);
+  altBuilding('lighthouse', g, [sg]); realize(g, 'BLDMODELS', 'lighthouse', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z, r: 1 });
   SITES.lighthouse = { x, z, door: [x, z + 1.75] };
 }
@@ -465,7 +465,7 @@ function libraryHall(x, z) {
   ['#c0392b', '#2980b9', '#27ae60', '#d4ac0d', '#8e44ad'].forEach((c, i) => g.add(mesh(new THREE.BoxGeometry(0.16, 0.42, 0.2), M(c), -0.4 + i * 0.2, 3.12, 1.74)));   // 山牆前的一排書（招牌）
   g.add(mesh(new THREE.BoxGeometry(1.3, 0.06, 0.3), M('#7a5236', {}, 'wall'), 0, 2.88, 1.72));
   const sg = label('潮汐圖書館', '#5a8a5a', 2.2, 0.55); sg.position.set(0, 2.45, 1.66); g.add(sg);
-  altBuilding('library', g, [sg]);
+  altBuilding('library', g, [sg]); realize(g, 'BLDMODELS', 'library', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); boxC(x - 1.95, z - 1.55, x + 1.95, z + 1.55);
   SITES.library = { x, z, door: [x, z + 2.2] }; BLDG.library = g;
 }
@@ -481,7 +481,7 @@ function examHall(x, z) {
   g.add(mesh(new THREE.BoxGeometry(1.0, 1.5, 0.08), M('#6b4f3a'), 0, 1.05, 1.62));
   [-1.5, 1.5].forEach(wx => g.add(mesh(new THREE.BoxGeometry(0.9, 0.9, 0.08), windowMat(), wx, 1.7, 1.62)));
   const sg = label('潮汐考場', '#5b8fd6', 2.2, 0.55); sg.position.set(0, 2.45, 1.66); g.add(sg);
-  altBuilding('exam', g, [sg]);
+  altBuilding('exam', g, [sg]); realize(g, 'BLDMODELS', 'exam', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); boxC(x - 1.95, z - 1.55, x + 1.95, z + 1.55);
   SITES.exam = { x, z, door: [x, z + 2.2] };
 }
@@ -675,7 +675,7 @@ function board(x, z) {   // 廣場告示牌：島嶼評價
   g.add(mesh(new THREE.BoxGeometry(1.4, 0.9, 0.08), M('#c99a62'), 0, 1.15, 0));
   const sg = label('島嶼評價', '#ffb84a', 1.2, 0.3); sg.position.set(0, 1.42, 0.05); g.add(sg);
   [['#fff3dc', -0.32], ['#dff4ff', 0.05], ['#ffe0ea', 0.36]].forEach(([c, dx], i) => g.add(mesh(new THREE.BoxGeometry(0.28, 0.32, 0.02), M(c), dx, 1.05 - (i % 2) * 0.06, 0.05)));
-  altBuilding('board', g, [sg]);
+  altBuilding('board', g, [sg]); realize(g, 'BLDMODELS', 'board', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z, r: 0.7 });
   SITES.board = { x, z, door: [x, z + 1.1] };
 }
@@ -686,6 +686,7 @@ function telescope(x, z) {   // 學院台地上的觀星台（晚上可以觀星
   tube.add(mesh(new THREE.CylinderGeometry(0.13, 0.11, 1.3, 14), M('#f4f0e6'), 0, 0.2, 0), mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.12, 14), M('#3b5a8a'), 0, 0.85, 0), mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.2, 8), M('#3a3040'), 0, -0.52, 0));
   const sg = label('天文望遠鏡', '#3b5a8a', 1.3, 0.32); sg.position.set(0, 0.35, 0.45); g.add(sg);
   if (altBuilding('telescope', g, [sg])) sg.position.set(0, 0.4, 1.0);   // 新模型的平台比較大：招牌插在平台前緣
+  realize(g, 'BLDMODELS', 'telescope', [sg]);
   mergeStatic(g); g.traverse(o => { o.frustumCulled = cullable(o); });
   scene.add(g); register(g); colliders.push({ x, z, r: 0.6 });
   SITES.telescope = { x, z, door: [x, z + 1.4] };
@@ -699,12 +700,12 @@ function camp(x, z) {   // 沙灘上的露營地
   [0, 1, 2].forEach(i => { const l = mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 6), M('#8a5a3b'), 1.4 + Math.cos(i * 2.1) * 0.18, 0.06, 0.9 + Math.sin(i * 2.1) * 0.18); l.rotation.z = Math.PI / 2; l.rotation.y = i * 2.1; g.add(l); });
   const lg = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.9, 8), M('#a57a4f'), 1.4, 0.16, 1.7); lg.rotation.z = Math.PI / 2; g.add(lg);
   const sg = label('露營地', '#ff9a6a', 1.1, 0.28); sg.position.set(-1.3, 1.1, 0.6); g.add(sg); g.add(mesh(new THREE.CylinderGeometry(0.04, 0.04, 1, 6), M('#8a5a3b'), -1.3, 0.5, 0.55));
-  altBuilding('camp', g, [sg]);
+  altBuilding('camp', g, [sg]); realize(g, 'BLDMODELS', 'camp', [sg]);   // v9.11 寫實模型載好就換上
   mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z: z - 0.3, r: 1.1 }, { x: x + 0.9, z: z + 1.2, r: 0.4 });
   SITES.camp = { x, z, spot: [x + 0.4, z + 1.8] };
 }
 function fountain(x, z) {   // 廣場中央的噴泉：白石水池、金色渾天儀與發光的藍水晶
-  const g = placed(x, z), m = modelClone('LMMODELS', 'fountain');
+  const g = placed(x, z), m = modelClone('LMMODELS', 'fountain'); if (m) realize(g, 'LMMODELS', 'fountain');   // v9.11 寫實模型
   if (m) g.add(m); else {
     g.add(mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.5, 32), ivory(), 0, 0.25, 0), mesh(new THREE.CylinderGeometry(1.42, 1.42, 0.06, 32), M('#7fd0e0', { transparent: true, opacity: 0.8, roughness: 0.1 }), 0, 0.44, 0));
     g.add(mesh(new THREE.CylinderGeometry(0.28, 0.4, 1.4, 16), ivory(), 0, 1.0, 0), mesh(new THREE.OctahedronGeometry(0.3), M('#9fd8ff', { emissive: '#7fc8ff', emissiveIntensity: 0.9 }), 0, 1.98, 0));
@@ -731,7 +732,7 @@ function waterwheel(x, z) {
 /** 每格：轉動水車（main.js 在島上時呼叫） */
 export function spin(dt) { for (const s of spinners) s.o.rotation[s.ax || 'x'] += s.w * dt; }
 function gate(x, z) {   // 碼頭與城鎮之間的城門
-  const g = placed(x, z), m = modelClone('LMMODELS', 'gate');
+  const g = placed(x, z), m = modelClone('LMMODELS', 'gate'); realize(g, 'LMMODELS', 'gate');
   if (m) g.add(m); else {
     [-1, 1].forEach(sd => { g.add(mesh(new THREE.BoxGeometry(1.1, 3.4, 1.2), ivory(), sd * 2.3, 1.7, 0), mesh(new THREE.BoxGeometry(1.3, 0.25, 1.4), gold(), sd * 2.3, 3.5, 0)); });
     const lin = mesh(new THREE.BoxGeometry(5.8, 0.6, 1.3), ivory(), 0, 3.6, 0); g.add(lin);
@@ -742,7 +743,7 @@ function gate(x, z) {   // 碼頭與城鎮之間的城門
   SITES.gate = { x, z };
 }
 function stall(x, z) {   // 市集攤位
-  const g = placed(x, z), m = modelClone('BLDMODELS', 'market');
+  const g = placed(x, z), m = modelClone('BLDMODELS', 'market'); realize(g, 'BLDMODELS', 'market');
   if (m) g.add(m); else {
     g.add(mesh(new THREE.BoxGeometry(2.2, 0.9, 1.1), M('#a57a4f', {}, 'wall'), 0, 0.45, 0));
     [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz]) => g.add(mesh(new THREE.BoxGeometry(0.1, 2.2, 0.1), M('#8a5a3b'), sx * 1.1, 1.1, sz * 0.6)));
@@ -936,7 +937,7 @@ function decorations() {
       const [x, z] = warp(px, pz); if (!free(x, z, r)) continue;
       if (MANY.has(key) && instanced(table, key, x, z, rot != null ? rot : ry || 0)) { colliders.push({ x, z, r }); if (key === 'crystal_lamp') glow.emit({ x, y: groundAt(x, z) + 0.75, z, kind: 'crystal', power: 0.6 }); return [x, z]; }
       const m = modelClone(table, key); if (!m) return null;
-      const g = placed(x, z, rot != null ? rot : ry || 0); g.add(m); mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z, r }); return [x, z];
+      const g = placed(x, z, rot != null ? rot : ry || 0); g.add(m); realize(g, table, key); mergeStatic(g); scene.add(g); register(g); colliders.push({ x, z, r }); return [x, z];   // 雕像、水井：有寫實模型就換
     }
     return null;
   };

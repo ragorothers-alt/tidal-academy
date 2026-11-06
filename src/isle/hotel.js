@@ -12,7 +12,7 @@ import { chibi, animate, lookAt, nameMesh } from './chars.js';
 import * as actors from './actors.js';
 import { scene as roomScene } from './room.js';
 import { loadThumbs } from './room.js';
-import { register } from './props3d.js';
+import { register, realize } from './props3d.js';
 import * as ui from './ui.js';
 import * as challenge from './challenge.js';   // 答對後可以接著連續挑戰（challenge.js 也會用到這裡，循環相依要用 import * as）
 import * as Audio from './audio.js';
@@ -116,6 +116,7 @@ function building(x, z) {
   [-1.15, 1.15].forEach(px => { g.add(mesh(new THREE.CylinderGeometry(0.2, 0.16, 0.35, 10), wood, px, 0.48, 2.3)); for (let i = 0; i < 5; i++) { const lf = mesh(new THREE.SphereGeometry(0.28, 7, 5), M('#5fb35a', {}, 'pine'), px + Math.cos(i * 1.26) * 0.22, 0.95, 2.3 + Math.sin(i * 1.26) * 0.22, { noCast: true }); lf.scale.set(1.3, 0.25, 0.5); lf.rotation.y = -i * 1.26; lf.rotation.z = -0.5; g.add(lf); } });
   g.add(mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 6), white, 2.9, 3.4, 1.4)); g.add(mesh(new THREE.BoxGeometry(0.6, 0.38, 0.03), M('#ff9a7a'), 3.2, 4.25, 1.4));
   if (altBuilding('hotel', g, [sg])) {   // Codex 重建的白石飯店（佔地比舊的大一點）
+    realize(g, 'BLDMODELS', 'hotel', [sg]);   // v9.11 寫實模型載好就換上
     mergeStatic(g); scene.add(g); register(g); colliders.push({ x0: x - 3.45, z0: z - 2.95, x1: x + 3.45, z1: z + 2.95 });
     return { x, z, door: [x, z + 3.9], g };
   }

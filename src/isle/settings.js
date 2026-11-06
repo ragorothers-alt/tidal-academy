@@ -11,7 +11,7 @@ import * as shake from './shake.js';
 import * as pwa from './pwa.js';
 
 const TA = window.TA;
-export const VERSION = '9.10.0';
+export const VERSION = '9.11.0';
 export const hooks = {};   // main.js 掛上來的開關（第一人稱視角）
 const DEF = { lowPerf: false, ultra: false, music: true, fx: true, popQuiz: true, keepGoing: true, phoneAll: false, noConf: false, noWhy: false, fs: 1, speed: 1, timer: 1, shake: true, haptic: true };
 /** 設定值：原地補上預設值（不換掉物件——設定面板拿著同一個物件改，換掉的話後面的修改就存不進去） */
@@ -57,6 +57,7 @@ export function open() {
     const sb = ui.el('button', 'btn gold', c.season && c.season !== 'auto' ? seasons.NAMES[c.season] + '天' : `自動（${seasons.NAMES[seasons.auto()]}）`); sb.type = 'button';
     sb.onclick = () => { const o = seasons.ORDER; c.season = o[(o.indexOf(c.season || 'auto') + 1) % o.length]; save(); draw(); setTimeout(() => seasons.banner(), 300); };
     body.appendChild(row('季節', '島上的景色：自動依日期（冬天積雪、秋天紅葉、春天落櫻），也可以固定成喜歡的季節', sb));
+    body.appendChild(row('寫實建築', '主島的博物館、商店、圖書館、考場、燈塔、飯店、市集、城門、噴泉、祠堂與碼頭的船換成半寫實的 3D 模型（約 12 MB，玩到時才下載）；關掉就是原本的卡通造型。極省電畫質不載入。重新整理後生效', toggle(c.real !== false, () => { c.real = c.real === false; save(); ui.toast('重新整理後生效'); draw(); })));   // v9.11
     { const lv = c.lowPerf ? (c.ultra ? 2 : 1) : 0, NAMES = ['標準', '省電', '極省電'];   // 畫質：點一下換下一級
       const b = ui.el('button', 'btn ' + (lv ? 'gold' : 'off'), NAMES[lv]); b.type = 'button';
       b.onclick = () => { const n = (lv + 1) % 3; c.lowPerf = n > 0; c.ultra = n === 2; save(); ui.toast(NAMES[n] + '：重新整理後生效'); draw(); };

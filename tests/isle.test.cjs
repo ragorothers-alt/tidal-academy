@@ -1311,6 +1311,25 @@ test('博物館 3D 標本：每種魚、昆蟲、化石都有小巧的靜態模�
   assert.ok(['sea', 'mineral'].every(k => mu.includes(`w.k !== '${k}'`)), '潮池生物與礦物還是圖卡');
 });
 
+test('主島寫實模型：精修模型是小巧的靜態模型，建築與地標載好就換上，設定可關、極省電不載', () => {
+  const list = fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8');
+  const glb = id => { const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64'); return { js: JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12))), bytes: b.length }; };
+  const p3 = fs.readFileSync(path.join(ROOT, 'src/isle/props3d.js'), 'utf8'), RF = JSON.parse(p3.match(/const RF = (\{[^}]+\})/)[1].replace(/(\w+):/g, '"$1":').replace(/'/g, '"'));
+  const src = f => fs.readFileSync(path.join(ROOT, 'src/isle', f), 'utf8');
+  const wired = [['props.js', 'BLDMODELS', ['museum', 'shop', 'lighthouse', 'library', 'exam', 'board', 'telescope', 'camp', 'market']], ['props.js', 'LMMODELS', ['gate', 'fountain']], ['hotel.js', 'BLDMODELS', ['hotel']], ['diy.js', 'BLDMODELS', ['diy']], ['highland.js', 'LMMODELS', ['shrine']]];
+  wired.forEach(([f, t, keys]) => keys.forEach(k => {
+    assert.ok(src(f).includes(`realize(g, '${t}', '${k}'`), f + ' 的 ' + k + ' 換上寫實模型');
+    const id = RF[t] + k; assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡');
+    const { js, bytes } = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); assert.ok(bytes < 800e3, id + ' 不超過 800 KB（' + bytes + '）');
+  }));
+  assert.match(src('props.js'), /realize\(g, table, key\); mergeStatic\(g\)/, '雕像與水井（decorations 的 put）也換');
+  assert.match(src('harbor.js'), /realize\(g, 'HARBORMODELS', key\)/, '碼頭的船'); assert.match(src('harbor.js'), /realize\(m, 'HARBORMODELS', 'pier_lamp'\)/, '碼頭的燈柱');
+  ['statue', 'well'].forEach(k => assert.ok(list.includes(`"rf_lm_${k}"`))); ['fishing_boat', 'rowboat', 'pier_lamp'].forEach(k => assert.ok(list.includes(`"rf_harbor_${k}"`)));
+  assert.match(p3, /c\.real !== false && !ULTRA/, '設定可關、極省電不載'); assert.match(src('settings.js'), /row\('寫實建築'/, '設定面板有「寫實建築」開關');
+  assert.match(p3, /!o\.g\.userData\.real && o\.g\.userData\.glow/, '換上寫實模型的建築不掛牆上的藤蔓');
+  assert.match(p3, /if \(WIN_BLD\.has\(id\)\) nightWindows\(/, '有窗的建築夜裡亮窗');
+});
+
 test('設定的「下載全部」標示的大小跟模型與示意圖的實際大小差不到兩成', () => {
   const size = d => fs.readdirSync(path.join(ROOT, d)).reduce((a, f) => a + fs.statSync(path.join(ROOT, d, f)).size, 0);
   const mb = (size('src/isle/models') + size('src/isle/figs')) / 1048576;

@@ -6,7 +6,7 @@ import { scene, M, mesh, cullable } from './engine.js';
 import { C, tileAt, groundAt } from './terrain.js';
 import { trees, rocks, blocked, colliders, label, altBuilding, onRoad, mergeStatic } from './props.js';
 import * as ui from './ui.js';
-import { register } from './props3d.js';
+import { register, realize } from './props3d.js';
 import * as challenge from './challenge.js';   // 答對後可以接著連續挑戰（challenge.js 也會用到這裡，循環相依要用 import * as）
 import * as Audio from './audio.js';
 import { I, S, save, icon } from './state.js';
@@ -79,6 +79,7 @@ function buildBench(home) {
     g.add(mesh(new THREE.BoxGeometry(0.3, 0.06, 0.12), M('#d8b88a'), -0.3, 0.8, -0.1), mesh(new THREE.BoxGeometry(0.26, 0.06, 0.1), M('#c8a070'), -0.28, 0.86, -0.08));
     const sg = label('DIY 工作台', '#c99a62', 1.0, 0.26); sg.position.set(0, 1.1, 0.32); g.add(sg);
     const alt = altBuilding('diy', g, [sg]);   // Codex 重建的工作台（遮雨篷、工具架）
+    if (alt) realize(g, 'BLDMODELS', 'diy', [sg]);   // v9.11 寫實模型
     mergeStatic(g); g.traverse(o => { o.frustumCulled = cullable(o); }); scene.add(g); register(g); colliders.push(alt ? { x0: x - 1.0, z0: z - 0.6, x1: x + 1.0, z1: z + 0.6 } : { x0: x - 0.62, z0: z - 0.34, x1: x + 0.62, z1: z + 0.34 });
     return { x, z, door: [x, z + (alt ? 1.2 : 0.95)] };
   }

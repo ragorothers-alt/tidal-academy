@@ -6,6 +6,7 @@ import { scene, scene as SCENE, renderer, sun, sunFar, HZ, bend, camera, U, leaf
 import * as shadows from './shadows.js';
 import * as glow from './glow.js';
 import { ULTRA } from './perf.js';
+import { S } from './state.js';
 const isGlass = m => !Array.isArray(m) && nightMats.includes(m) && m.userData.kind === 'glass';   // kit.win() 的窗玻璃與燈籠
 import { loadModel } from './actors.js';
 import { MODEL_IDS } from './model-list.js';
@@ -316,8 +317,62 @@ const ORIGIN = { position: new THREE.Vector3() };
 export function registerAt(model, x, y, z, r, sh, hy) { placed.push({ g: ORIGIN, model, r, hy: hy ?? r, cx: x, cy: y, cz: z, sh: sh || null }); }   // r：水平半徑、hy：上下的半高；sh：會投影的網格（影子落不進看得到的地方時不畫進陰影貼圖）
 /** 除錯：每種狀態有幾個（0 不畫、1 畫面裡、2 只畫進陰影貼圖）與這一格會投影的數量 */
 export const cullStats = () => placed.reduce((m, o) => { m['s' + (o.st || 0)]++; if (o.rn) m.near++; if (o.rf) m.far++; return m; }, { s0: 0, s1: 0, s2: 0, near: 0, far: 0, n: placed.length });
-/** 有窗戶的建築群組（walldress.js 在牆上掛藤蔓與花用） */
-export const buildings = () => placed.filter(o => o.g.userData && o.g.userData.glow && o.g.userData.glow.some(e => e.kind === 'window')).map(o => o.g);
+/** 有窗戶的建築群組（walldress.js 在牆上掛藤蔓與花用；換上寫實模型的不算：藤蔓是照原本的牆面擺的） */
+export const buildings = () => placed.filter(o => o.g.userData && !o.g.userData.real && o.g.userData.glow && o.g.userData.glow.some(e => e.kind === 'window')).map(o => o.g);
+/* v9.11 寫實模型（Tripo 精修，models/rf_<…>.js）：建築與地標照常用程式化模型蓋好、合併、登記剔除，寫實模型載好再換上——
+   等比縮到原本外觀的佔地（不超出碰撞框）、水平置中、底部對齊；keep 裡的物件（招牌）和燈光留著，夜裡窗戶的燈光照舊。
+   設定「寫實建築」關掉或極省電畫質時不換。程式化模型與寫實模型是同一張設定圖；Tripo 生成的正面朝 +X，轉檔時已轉成和程式化模型一樣朝 +Z */
+const RF = { BLDMODELS: 'rf_bld_', LMMODELS: 'rf_lm_', HARBORMODELS: 'rf_harbor_', WORKSMODELS: 'rf_works_', ACADEMYMODELS: 'rf_academy_' };
+export const realOn = () => { const c = S().settings || {}; return c.real !== false && !ULTRA; };
+export const realId = (table, key) => (RF[table] || '') + key;
+const rfInv = new THREE.Matrix4(), rfM = new THREE.Matrix4(), rfB = new THREE.Box3(), rfT = new THREE.Box3(), rfS = new THREE.Vector3(), rfC = new THREE.Vector3();
+/** 夜裡亮窗：從顏色貼圖挑出窗玻璃做成發光遮罩，交給 engine 的 nightMats 跟著天色亮起。
+    玻璃在貼圖上是中性到偏冷的灰（白天看起來偏藍是天光）：不偏暖（米色石牆、木頭的紅比藍多）、不偏紫（紫色屋頂的綠比紅少）、不太飽和、中等亮度（白色灰泥太亮、深藍的旗子太暗）。
+    只用在有窗的建築（WIN_BLD）：水井、雕像的灰石頭也是中性灰 */
+const WIN_BLD = new Map([['rf_bld_museum', 0.32], ['rf_bld_shop', 0.32], ['rf_bld_lighthouse', 0.32], ['rf_bld_library', 0.2], ['rf_bld_exam', 0.32], ['rf_bld_hotel', 0.32]]);   // 亮度下限：0.32 以下的深藍是旗子、招牌底；圖書館的哥德式長窗是很暗的灰（也沒有深藍的旗子）
+const WIN_DONE = new WeakSet();
+export function glassMask(img, lo = 0.32, n = 256) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = n; const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0, n, n);
+  const d = cx.getImageData(0, 0, n, n), p = d.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i] / 255, g = p[i + 1] / 255, b = p[i + 2] / 255, v = Math.max(r, g, b), s = v > 0 ? (v - Math.min(r, g, b)) / v : 0, cool = b - r + 0.025;
+    const k = cool > 0 && g - r > -0.025 && s < 0.25 && v > lo && v < 0.85 ? Math.min(1, cool * 25) * Math.min(1, (v - lo) * 5, (0.85 - v) * 8) : 0;
+    p[i] = p[i + 1] = p[i + 2] = Math.round(k * 255); p[i + 3] = 255;
+  }
+  cx.putImageData(d, 0, 0); return cv;
+}
+function nightWindows(model, lo) {
+  model.traverse(o => {
+    const m = o.isMesh && o.material; if (!m || !m.map || !m.map.image || WIN_DONE.has(m)) return; WIN_DONE.add(m);
+    try {
+      const t = new THREE.CanvasTexture(glassMask(m.map.image, lo)); t.flipY = m.map.flipY; t.colorSpace = THREE.SRGBColorSpace;
+      m.emissive = new THREE.Color('#ffc477'); m.emissiveMap = t; m.emissiveIntensity = 0; m.userData.glowK = 1.1; m.needsUpdate = true; nightMats.push(m);
+    } catch (e) { console.warn('窗戶遮罩做不出來（貼圖讀不到）：', e); }
+  });
+}
+export function realize(g, table, key, keep = []) {
+  const id = realId(table, key); if (!RF[table] || !realOn() || !READY.has(id)) return false;
+  g.userData.real = id;
+  loadModel(id, 'plain').then(gl => {
+    if (!g.parent) return;   // 已經拆掉（搬遷）
+    const ent = placed.find(o => o.g === g), cont = ent ? ent.model : g, old = cont.children.filter(c => !keep.includes(c) && !c.isLight);
+    g.updateMatrixWorld(true); rfInv.copy(g.matrixWorld).invert(); rfB.makeEmpty();
+    old.forEach(c => c.traverse(o => { if (!o.isMesh || o.userData.shadowProxy) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); rfB.union(rfT.copy(o.geometry.boundingBox).applyMatrix4(rfM.multiplyMatrices(rfInv, o.matrixWorld))); }));
+    if (rfB.isEmpty()) return;
+    const model = gl.scene.clone(true); model.updateMatrixWorld(true);
+    rfT.setFromObject(model); const ms = rfT.getSize(new THREE.Vector3()), mc = rfT.getCenter(new THREE.Vector3()); rfB.getSize(rfS); rfB.getCenter(rfC);
+    const k = Math.min(rfS.x / ms.x, rfS.z / ms.z);
+    model.scale.setScalar(k); model.position.set(rfC.x - mc.x * k, rfB.min.y - rfT.min.y * k, rfC.z - mc.z * k);
+    model.name = 'real:' + id; if (WIN_BLD.has(id)) nightWindows(model, WIN_BLD.get(id));
+    old.forEach(c => cont.remove(c)); cont.add(model);   // 原本的幾何不釋放：modelClone 的零件和原型共用
+    if (ent) {   // 剔除用的包圍體與投影清單照新模型重算
+      g.updateMatrixWorld(true); cBox.setFromObject(g); cBox.getSize(cSize); cBox.getCenter(cCtr);
+      Object.assign(ent, { r: Math.hypot(cSize.x, cSize.z) * 0.5 + 0.3, hy: cSize.y * 0.5 + 0.3, cy: cCtr.y - g.position.y, cx: cCtr.x - g.position.x, cz: cCtr.z - g.position.z });
+      ent.sh = []; cont.traverse(o => { if (o.isMesh && o.castShadow) ent.sh.push(o); });
+    }
+  }).catch(e => console.warn('寫實模型載入失敗，維持原本的模型：' + id, e));
+  return true;
+}
 /** 拆掉的群組（房屋搬遷）不再剔除 */
 export function unregister(g) { const i = placed.findIndex(o => o.g === g); if (i >= 0) placed.splice(i, 1); (g.userData.glow || []).forEach(glow.unemit); g.userData.glow = null; }
 /** 包圍體（視空間中心 y = vy、深度 depth；往上 ey、前後 ez）彎曲後在畫面上最高到哪裡（NDC y）：

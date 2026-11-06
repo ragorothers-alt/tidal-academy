@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { scene, camera, M, U, lampK } from './engine.js';
 import { seaMesh, groundAt } from './terrain.js';
 import { PIER, SITES, colliders, modelClone } from './props.js';
-import { register } from './props3d.js';
+import { register, realize } from './props3d.js';
 import * as glow from './glow.js';
 
 const DECK = 0.47;   // 碼頭甲板的走路高度（main.js 的 ground）
@@ -57,7 +57,7 @@ export function init() {
   // 燈柱：甲板兩側各兩根，燈頭的手臂伸向甲板中間
   [pz + len * 0.24, pz + len * 0.66].forEach(z => [-1, 1].forEach(sd => {
     const m = modelClone('HARBORMODELS', 'pier_lamp'); if (!m) return;
-    const x = px + sd * (hw - 0.14); m.position.set(x, DECK, z); m.rotation.y = sd < 0 ? 0 : Math.PI; scene.add(m); m.updateMatrixWorld(true);
+    const x = px + sd * (hw - 0.14); m.position.set(x, DECK, z); m.rotation.y = sd < 0 ? 0 : Math.PI; scene.add(m); m.updateMatrixWorld(true); realize(m, 'HARBORMODELS', 'pier_lamp');   // v9.11 寫實模型（燈光位置照原本的燈頭）
     colliders.push({ x, z, r: 0.14 });
     const l = m.getObjectByName('light'); if (l) { l.getWorldPosition(tmp); glow.emit({ x: tmp.x, y: tmp.y, z: tmp.z, kind: 'lamp', power: 0.8 }); streak(tmp.x, tmp.z, '#ffc77e', z + sd); }
   }));
@@ -66,7 +66,7 @@ export function init() {
   // 船：漁船靠在東側（左舷的碰墊貼著碼頭）、小划船靠在西側；槳收進船裡
   const boat = (key, x, z, ry, cr) => {
     const m = modelClone('HARBORMODELS', key); if (!m) return null;
-    const g = new THREE.Group(); g.position.set(x, seaMesh.position.y, z); g.rotation.y = ry; g.add(m); scene.add(g); register(g);
+    const g = new THREE.Group(); g.position.set(x, seaMesh.position.y, z); g.rotation.y = ry; g.add(m); scene.add(g); register(g); realize(g, 'HARBORMODELS', key);   // v9.11 寫實模型（整艘船跟著群組晃）
     const col = { x, z, r: cr }; colliders.push(col); boats.push({ g, m, key, col, home: [x, z, ry], ph: Math.random() * 6.28, y0: 0 });
     return m;
   };
