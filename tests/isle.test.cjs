@@ -1294,3 +1294,27 @@ test('雲霧茶村：村民與製茶資料、模型清單、場景接線', () =>
   load('src/isle/data/lantern.js');
   const old = JSON.stringify(I.LANTERN); ['整修', '尚未通車', '還沒通車', '等通車', '沒有火車'].forEach(w => assert.ok(!old.includes(w), '燈籠港車站已通車，不再說「' + w + '」'));
 });
+
+test('博物館 3D 標本：每種魚、昆蟲、化石都有小巧的靜態模型，展廳換上立體標本', () => {
+  const list = fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8');
+  const glb = id => { const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64'); return { js: JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12))), bytes: b.length }; };
+  [['fish', I.FISH], ['bug', I.BUGS], ['fossil', I.FOSSILS]].forEach(([k, L]) => L.forEach(x => {
+    const id = 'sp_' + k + '_' + x.id; assert.ok(list.includes(`"${id}"`), id + ' 在模型清單裡');
+    const { js, bytes } = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); assert.ok(bytes < 400e3, id + ' 不超過 400 KB（' + bytes + '）');
+  }));
+  const files = fs.readdirSync(path.join(ROOT, 'src/isle/models')).filter(f => f.startsWith('sp_'));
+  assert.equal(files.length, I.FISH.length + I.BUGS.length + I.FOSSILS.length, '沒有多出來的標本模型');
+  const mu = fs.readFileSync(path.join(ROOT, 'src/isle/museum.js'), 'utf8');
+  assert.match(mu, /actors\.READY\.has\(specId\(w\.k, sp\.id\)\)/, '有模型的展品換成立體標本，其餘照舊用圖卡');
+  assert.match(mu, /if \(k === 'bug'\) inner\.rotation\.y = Math\.PI/, '昆蟲（模型頭朝 +Z）躺進標本盒後頭朝上');
+  assert.match(mu, /tight && hasPlate \? ph \+ 0\.01 : 0/, '密排的格子讓出下緣的名牌');
+  assert.ok(['sea', 'mineral'].every(k => mu.includes(`w.k !== '${k}'`)), '潮池生物與礦物還是圖卡');
+});
+
+test('設定的「下載全部」標示的大小跟模型與示意圖的實際大小差不到兩成', () => {
+  const size = d => fs.readdirSync(path.join(ROOT, d)).reduce((a, f) => a + fs.statSync(path.join(ROOT, d, f)).size, 0);
+  const mb = (size('src/isle/models') + size('src/isle/figs')) / 1048576;
+  const said = +fs.readFileSync(path.join(ROOT, 'src/isle/pwa.js'), 'utf8').match(/一次存好（約 (\d+) MB）/)[1];
+  assert.ok(Math.abs(said - mb) / mb < 0.2, `設定寫約 ${said} MB，實際 ${mb.toFixed(1)} MB：加了模型記得改 pwa.js 和 README`);
+  assert.ok(fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8').includes(`一次存好（約 ${said} MB）`), 'README 寫的大小跟設定一致');
+});

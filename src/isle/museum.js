@@ -9,6 +9,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import * as post from './post.js';
 import { S, save, list, icon, whereName, stars, fmtMonths, fmtHours } from './state.js';
+import * as actors from './actors.js';   // v9.10 3D 標本
 
 const W = 18, D = 14, HW = W / 2, HD = D / 2;
 export let inside = false;
@@ -229,6 +230,41 @@ function signMesh(w, n, total, [x, y, z, ry, wd]) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(wd || 1.6, (wd || 1.6) / 4), new THREE.MeshStandardMaterial({ map: t, emissiveMap: t, emissive: new THREE.Color('#ffffff'), emissiveIntensity: 0.25, roughness: 0.9 }));
   m.position.set(x, y, z); m.rotation.y = ry || 0; signs.push(m); return m;
 }
+/* ---------- v9.10 3D 標本：有模型（models/sp_<種類>_<id>.js，Tripo 生成）的展品換成立體標本，沒有的照舊用圖卡 ----------
+   魚與化石側面朝外、立在展示位上；昆蟲像標本盒裡的標本，背面朝向圖卡的方向（斜面展示台就跟著斜）。大小縮到圖卡的邊長。 */
+export const specId = (k, id) => 'sp_' + k + '_' + id;
+const SPEC = new Map();   // 模型 id → 正規化後的原型（最長邊 1、水平置中、底部在 0）
+function specProto(k, mid) {
+  if (!SPEC.has(mid)) SPEC.set(mid, actors.loadModel(mid, 'plain').then(gl => {
+    const root = gl.scene.clone(true), inner = new THREE.Group(), g = new THREE.Group(); inner.add(root); g.add(inner);
+    let b = new THREE.Box3().setFromObject(root); const sz0 = b.getSize(new THREE.Vector3());
+    if (k === 'bug') inner.rotation.y = Math.PI;   // Tripo 模型的頭在 +Z：轉到 -Z，躺進標本盒後頭朝上
+    else if (sz0.z > sz0.x * 1.15) inner.rotation.y = Math.PI / 2;   // 魚、化石：長軸在 Z 的轉成沿 X，側面才會朝外（頭朝右）
+    g.updateMatrixWorld(true); b = new THREE.Box3().setFromObject(inner); const sz = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3()), n = 1 / Math.max(sz.x, sz.y, sz.z, 1e-6);
+    inner.position.set(-c.x * n, -b.min.y * n, -c.z * n); inner.scale.multiplyScalar(n);
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    Object.assign(g.userData, { w: sz.x * n, h: sz.y * n, d: sz.z * n }); return g;
+  }).catch(() => null));
+  return SPEC.get(mid);
+}
+/** 一件立體標本：先回傳空的群組，模型載好再放進去（失敗就補上圖卡）。low 是展示位下緣被名牌佔掉的高度，標本縮放到上面剩下的空間 */
+function specimen(k, id, [x, y, z], ry, s, t, low, fallback) {
+  const g = new THREE.Group(); g.position.set(x, y, z);
+  if (k === 'bug') g.rotation.set(Math.PI / 2 - t, ry, 0, 'YXZ');   // 背面朝外（斜面就跟著斜）
+  else g.rotation.set(-t, ry, 0, 'YXZ');
+  specProto(k, specId(k, id)).then(p => {
+    if (!p) { fallback && fallback(); return; }
+    const u = p.userData, H = s - low, m = p.clone(true);
+    if (k === 'bug') {   // 躺平的標本：寬看 X、高看 Z（-Z 朝上），置中在名牌上方的空間
+      const f = Math.min(s * 0.92 / u.w, H * 0.9 / u.d); m.scale.setScalar(f); m.position.set(0, 0, -low / 2);
+    } else {
+      const f = Math.min(s * (k === 'fish' ? 1.04 : 0.95) / u.w, H * (k === 'fish' ? 0.9 : 0.95) / u.h); m.scale.setScalar(f);
+      m.position.y = -s / 2 + low + (k === 'fish' ? (H - u.h * f) / 2 : 0.01);   // 魚在水族格裡上下置中，化石放在下緣
+    }
+    g.add(m);
+  });
+  return g;
+}
 /** 進新館時呼叫（house.enter 的 dress）：回傳要擺進場景的圖卡與名牌 */
 let placed = new Map(), spotList = [];
 export function dress(ud) {
@@ -243,16 +279,18 @@ export function dress(ud) {
     L2.forEach((sp, i) => {
       const p = pos[i]; if (!p || !got[sp.id]) return;
       const [x, y, z] = p, ry = p[3] || 0, sz = p[4] || 0.42, t = p[5] || 0;
-      const c = atlasCell(icon(sp.id, w.k)); if (c >= 0) cards.push([x, y, z, ry, sz, c, t]);
+      // 圖卡正下方有空位就掛名牌在下面；排得很密的水族格、標本櫃（下面緊接著另一格）改成貼在圖卡下緣的一條名牌
+      const ph0 = sz * 1.15 * NL.ch / NL.cw, tight = pos.some((q, j) => q && j !== i && Math.abs(q[0] - x) < sz && Math.abs(q[2] - z) < 0.35 && q[1] < y && y - q[1] < sz / 2 + (q[4] || 0.42) / 2 + ph0 + 0.05);
+      const pw = tight ? sz : sz * 1.15, ph = pw * NL.ch / NL.cw, hasPlate = pi < PLATE_N;
+      if (w.k !== 'sea' && w.k !== 'mineral' && actors.READY.has(specId(w.k, sp.id))) out.push(specimen(w.k, sp.id, [x, y, z], ry, sz, t, tight && hasPlate ? ph + 0.01 : 0));   // v9.10 有 3D 標本就不畫圖卡（讓出下緣的名牌）
+      else { const c = atlasCell(icon(sp.id, w.k)); if (c >= 0) cards.push([x, y, z, ry, sz, c, t]); }
       placed.set(w.k + ':' + sp.id, [x, y, z]);
       spotList.push({ x, y: 0, z, r: 1.05, kind: 'hook:exhibit', label: `看看「${sp.name}」`, topic: { k: w.k, id: sp.id } });   // v8.3 走到展品前按 E 看這一件
-      if (pi < PLATE_N) {
+      if (hasPlate) {
         const at = got[sp.id], d = typeof at === 'number' ? new Date(at) : null, mine = first && first.k === w.k && first.id === sp.id;
         const uv = drawPlate(pc, pi++, sp.name, mine ? `★ ${me}的第一件` : d ? `${d.getMonth() + 1}/${d.getDate()} 捐贈` : '', w.color);
-        // 圖卡正下方有空位就掛在下面；排得很密的水族格、標本櫃（下面緊接著另一格）改成貼在圖卡下緣的一條名牌
-        const ct = Math.cos(t), st = Math.sin(t), sx = Math.sin(ry), cx = Math.cos(ry), ph0 = sz * 1.15 * NL.ch / NL.cw;
-        const tight = pos.some((q, j) => q && j !== i && Math.abs(q[0] - x) < sz && Math.abs(q[2] - z) < 0.35 && q[1] < y && y - q[1] < sz / 2 + (q[4] || 0.42) / 2 + ph0 + 0.05);
-        const pw = tight ? sz : sz * 1.15, ph = pw * NL.ch / NL.cw, off = tight ? sz / 2 - ph / 2 : sz / 2 + ph / 2 + 0.03, f = tight ? 0.004 : 0;
+        const ct = Math.cos(t), st = Math.sin(t), sx = Math.sin(ry), cx = Math.cos(ry);
+        const off = tight ? sz / 2 - ph / 2 : sz / 2 + ph / 2 + 0.03, f = tight ? 0.004 : 0;
         plates.push([x + off * sx * st + f * sx * ct, y - off * ct + f * st, z + off * cx * st + f * cx * ct, ry, pw, ph, t, ...uv]);
       }
     });

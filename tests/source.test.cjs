@@ -77,13 +77,14 @@ test('src 裡沒有藏在 // 註解後面的程式碼', () => {
 test('src 裡每個 .js 都解析得過（模組或一般腳本皆可）', () => {
   const list = files(path.join(ROOT, 'src'), []).concat(['data', 'models'].flatMap(d => { const p = path.join(ROOT, 'src/isle', d); return fs.existsSync(p) ? files(p, []) : []; }));
   const code = `const vm = require('vm'), fs = require('fs'), bad = [];
-for (const f of JSON.parse(process.argv[1])) { const s = fs.readFileSync(f, 'utf8'); let err = null;
+for (const f of JSON.parse(fs.readFileSync(0, 'utf8'))) { const s = fs.readFileSync(f, 'utf8'); let err = null;
   try { new vm.SourceTextModule(s); } catch (e) { err = e; }
   if (err) { try { new vm.Script(s); err = null; } catch (e) {} }
   if (err) bad.push(f + ': ' + err.message); }
 process.stdout.write(JSON.stringify(bad));`;
-  const r = require('child_process').spawnSync(process.execPath, ['--experimental-vm-modules', '--no-warnings', '-e', code, JSON.stringify(list)], { encoding: 'utf8' });
-  assert.equal(r.status, 0, r.stderr);
+  // v9.10 檔案清單從 stdin 傳（標本模型一多，放在命令列會超過 Windows 的 32 KB 上限，子程序根本跑不起來）
+  const r = require('child_process').spawnSync(process.execPath, ['--experimental-vm-modules', '--no-warnings', '-e', code], { input: JSON.stringify(list), encoding: 'utf8', maxBuffer: 64 << 20 });
+  assert.equal(r.status, 0, (r.error && r.error.message) || r.stderr);
   const bad = JSON.parse(r.stdout).map(s => path.relative(ROOT, s));
   assert.deepEqual(bad, [], '這些檔案有語法錯誤：\n' + bad.join('\n'));
 });
