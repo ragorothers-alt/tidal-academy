@@ -1314,7 +1314,7 @@ test('博物館 3D 標本：每種魚、昆蟲、化石都有小巧的靜態模�
 test('主島寫實模型：精修模型是小巧的靜態模型，建築與地標載好就換上，設定可關、極省電不載', () => {
   const list = fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8');
   const glb = id => { const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64'); return { js: JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12))), bytes: b.length }; };
-  const p3 = fs.readFileSync(path.join(ROOT, 'src/isle/props3d.js'), 'utf8'), RF = JSON.parse(p3.match(/const RF = (\{[^}]+\})/)[1].replace(/(\w+):/g, '"$1":').replace(/'/g, '"'));
+  const p3 = fs.readFileSync(path.join(ROOT, 'src/isle/props3d.js'), 'utf8'), rl = fs.readFileSync(path.join(ROOT, 'src/isle/real.js'), 'utf8'), RF = JSON.parse(rl.match(/const RF = (\{[^}]+\})/)[1].replace(/(\w+):/g, '"$1":').replace(/'/g, '"'));
   const src = f => fs.readFileSync(path.join(ROOT, 'src/isle', f), 'utf8');
   const wired = [['props.js', 'BLDMODELS', ['museum', 'shop', 'lighthouse', 'library', 'exam', 'board', 'telescope', 'camp', 'market']], ['props.js', 'LMMODELS', ['gate', 'fountain']], ['hotel.js', 'BLDMODELS', ['hotel']], ['diy.js', 'BLDMODELS', ['diy']], ['highland.js', 'LMMODELS', ['shrine']]];
   wired.forEach(([f, t, keys]) => keys.forEach(k => {
@@ -1325,9 +1325,32 @@ test('主島寫實模型：精修模型是小巧的靜態模型，建築與地�
   assert.match(src('props.js'), /realize\(g, table, key\); mergeStatic\(g\)/, '雕像與水井（decorations 的 put）也換');
   assert.match(src('harbor.js'), /realize\(g, 'HARBORMODELS', key\)/, '碼頭的船'); assert.match(src('harbor.js'), /realize\(m, 'HARBORMODELS', 'pier_lamp'\)/, '碼頭的燈柱');
   ['statue', 'well'].forEach(k => assert.ok(list.includes(`"rf_lm_${k}"`))); ['fishing_boat', 'rowboat', 'pier_lamp'].forEach(k => assert.ok(list.includes(`"rf_harbor_${k}"`)));
-  assert.match(p3, /c\.real !== false && !ULTRA/, '設定可關、極省電不載'); assert.match(src('settings.js'), /row\('寫實建築'/, '設定面板有「寫實建築」開關');
+  assert.match(rl, /c\.real !== false && !ULTRA/, '設定可關、極省電不載'); assert.match(src('settings.js'), /row\('寫實模型'/, '設定面板有「寫實模型」開關');
   assert.match(p3, /!o\.g\.userData\.real && o\.g\.userData\.glow/, '換上寫實模型的建築不掛牆上的藤蔓');
   assert.match(p3, /if \(WIN_BLD\.has\(id\)\) nightWindows\(/, '有窗的建築夜裡亮窗');
+});
+
+test('海洋生物與家具的寫實模型：每一件都對得上、是小巧的靜態模型，載好就換上，縮圖與會合併網格的場景不換', () => {
+  const list = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/isle/model-list.js'), 'utf8').match(/MODEL_IDS = (\[[^\]]*\])/)[1]);
+  const glb = id => { const s = fs.readFileSync(path.join(ROOT, `src/isle/models/${id}.js`), 'utf8'), b = Buffer.from(s.match(/\] = '([^']+)'/)[1], 'base64'); return { js: JSON.parse(b.toString('utf8', 20, 20 + b.readUInt32LE(12))), bytes: b.length }; };
+  const src = f => fs.readFileSync(path.join(ROOT, 'src/isle', f), 'utf8'), data = f => fs.readFileSync(path.join(ROOT, 'src/isle/data', f), 'utf8');
+  const marine = list.filter(i => i.startsWith('rf_marine_')), furn = list.filter(i => i.startsWith('rf_furn_'));
+  assert.equal(marine.length, 30, '30 種海洋生物'); assert.ok(furn.length >= 80, '家具的寫實模型（' + furn.length + '）');
+  const mm = data('marinemodels.js'), ff = data('furniture.js') + data('dreamfurn.js') + data('hotelfurn.js') + data('researchfurn.js') + data('collectfurn.js');
+  marine.forEach(id => { const k = id.slice(10); assert.ok(mm.includes('MARINEMODELS.' + k + ' ') || mm.includes("'" + k + "'"), id + ' 對得上程式化的海洋生物'); });
+  furn.forEach(id => assert.ok(new RegExp(`id:\\s*['"]${id.slice(8)}['"]`).test(ff), id + ' 對得上家具資料'));
+  [...marine, ...furn].forEach(id => { const { js, bytes } = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); assert.ok(bytes < 600e3, id + ' 不超過 600 KB（' + bytes + '）'); });
+  const rl = src('real.js');
+  assert.match(rl, /MARINEMODELS: 'rf_marine_', FURNMODELS: 'rf_furn_'/, '寫實模型的前綴');
+  assert.match(rl, /const hit = cachedModel\(id\);\s*if \(hit\) put\(hit\)/, '載過的模型當場換上（房間重擺不閃）');
+  assert.match(rl, /const WRAP = new WeakMap\(\)/, '換上的模型不放 userData（clone 會序列化）');
+  assert.match(src('dive.js'), /if \(table === 'MARINEMODELS'\) realSwap\(c, table, key, 'max'\)/, '潛水與海洋館的生物換上寫實模型');
+  assert.match(src('dive.js'), /realMove\(m, cr\.anim/, '潛水：整隻輕輕動'); assert.match(src('aquarium.js'), /realMove\(m, d\.anim/, '海洋館：整隻輕輕動');
+  assert.match(src('room.js'), /realSwap\(m, 'FURNMODELS', f\.id, 'box'/, '家具等比縮進原本的包圍盒');
+  assert.match(src('room.js'), /buildFurniture\(f, false\); sc\.add\(m\)/, '縮圖用程式化模型（當場畫好）');
+  assert.match(src('room.js'), /ghost = buildFurniture\(f, ghostify\); ghostify\(ghost\)/, '擺放預覽換上寫實模型時也是半透明');
+  assert.match(src('shopin.js'), /o\.userData\.noBake\) return/, '商店展示的寫實家具不合併網格'); assert.match(src('shopin.js'), /keepGeo = o\.userData\.noBake = true/, '寫實家具的共用幾何離店不釋放');
+  assert.match(src('yuehome.js'), /buildFurniture\(f,false\)/, '岳家的禮物會合併網格：用程式化模型');
 });
 
 test('設定的「下載全部」標示的大小跟模型與示意圖的實際大小差不到兩成', () => {

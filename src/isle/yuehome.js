@@ -161,7 +161,7 @@ function gifts(p,shown){
  // A reserved exhibition shelf makes even very large gifted furniture safe at the door.
  const rows=Math.ceil(list.length/2),height=Math.max(.16,rows*.58);box(p,1.12,height,.055,M('navy'),-2.75,height/2,2.13,.02);[-3.3,-2.2].forEach(x=>box(p,.045,height+.1,.55,M('wood'),x,height/2,2.45));
  for(let i=0;i<=rows;i++)box(p,1.15,.045,.63,M('wood'),-2.75,.055+i*.58,2.43,.01);
- list.forEach((f,i)=>{if(!GIFT_MODELS.has(f.id))GIFT_MODELS.set(f.id,buildFurniture(f));const model=GIFT_MODELS.get(f.id).clone(true),bb=new THREE.Box3().setFromObject(model),size=bb.getSize(new THREE.Vector3()),center=bb.getCenter(new THREE.Vector3());prepareGift(model);
+ list.forEach((f,i)=>{if(!GIFT_MODELS.has(f.id))GIFT_MODELS.set(f.id,buildFurniture(f,false));const model=GIFT_MODELS.get(f.id).clone(true),bb=new THREE.Box3().setFromObject(model),size=bb.getSize(new THREE.Vector3()),center=bb.getCenter(new THREE.Vector3());prepareGift(model);
  const fit=Math.min(.48/Math.max(size.x,.01),.46/Math.max(size.y,.01),.48/Math.max(size.z,.01),.8),holder=new THREE.Group();holder.position.set(-3.02+i%2*.55,.08+Math.floor(i/2)*.58,2.42);model.scale.setScalar(fit);model.position.set(-center.x*fit,-bb.min.y*fit,-center.z*fit);holder.add(model);p.add(holder);});
  box(p,1.17,.035,.03,M('gold'),-2.75,height+.08,2.13);collider(-2.75,2.43,1.15,.64,0,'gifts');spot('gifts','看看珍藏的禮物家具',-1.85,2.32,{r:.8,names:list.map(f=>f.name)});
 }

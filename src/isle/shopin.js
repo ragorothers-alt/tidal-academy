@@ -170,8 +170,8 @@ function displayFurniture(s, st) {
   (st.furn || []).slice(0, spots.length).forEach((f, i) => {
     const sp = spots[i];
     platform(s, sp.x, sp.z, sp.w, sp.d);
-    const m = buildFurniture(f);
-    m.traverse(o => { o.userData.keepGeo = true; });   // clone 與房間共用幾何，離店時不能釋放
+    const m = buildFurniture(f, w => w.traverse(o => { o.userData.keepGeo = o.userData.noBake = true; }));   // 寫實模型的幾何是快取共用的
+    m.traverse(o => { o.userData.keepGeo = true; if (m.userData.real) o.userData.noBake = true; });   // clone 與房間共用幾何，離店時不能釋放；會換上寫實模型的不合併（換上時才藏得起原本的）
     const bb = new THREE.Box3().setFromObject(m), sz = bb.getSize(new THREE.Vector3()), ct = bb.getCenter(new THREE.Vector3());
     const fit = Math.min(1, (sp.w - 0.12) / Math.max(sz.x, 0.01), (sp.d - 0.15) / Math.max(sz.z, 0.01), 1.7 / Math.max(sz.y, 0.01));   // 正面朝 +z（鏡頭與門口那一側）
     const hold = new THREE.Group(); hold.position.set(sp.x, 0.26, sp.z); hold.rotation.y = sp.ry;
@@ -313,7 +313,7 @@ function bakeInto(root) {
   root.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), buckets = new Map();
   root.traverse(o => {
-    if (!o.isMesh || o.isSkinnedMesh || Array.isArray(o.material)) return;
+    if (!o.isMesh || o.isSkinnedMesh || Array.isArray(o.material) || o.userData.noBake) return;
     const m = o.material, g = o.geometry;
     if (!m || (m.userData && m.userData.own) || !g || !g.attributes || !g.attributes.position || !g.attributes.normal) return;
     if (!buckets.has(m)) buckets.set(m, []);

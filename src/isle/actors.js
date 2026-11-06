@@ -43,6 +43,8 @@ export function loadModel(id, kind) {
     }, rej);
   })));
 }
+/** 已經載好的模型（沒有就 null）：可以當場用，不必等 Promise */
+export const cachedModel = id => cache[id] || null;
 // 骨頭名稱：Tripo 骨架（Head、R_Hand）或網頁版匯出的 Mixamo 骨架（mixamorig:Head，GLTFLoader 會去掉冒號）
 const findBone = (root, names) => { let b = null; root.traverse(o => { if (!b && o.isBone && names.includes(o.name.replace(/^mixamorig:?/, ''))) b = o; }); return b; };
 

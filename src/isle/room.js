@@ -5,6 +5,7 @@ import * as post from './post.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
+import { swap as realSwap } from './real.js';
 
 export const scene = new THREE.Scene();
 scene.background = (() => {   // 房間外面：中間微亮的暖褐色漸層（像一盞燈照著的小房間），不是一整片死黑
@@ -106,8 +107,10 @@ const mat = (c, e) => M(c, e ? (typeof e === 'string' ? { emissive: new THREE.Co
 const KIT = { mat: (c, o, k) => M(c, o, k), rbox: (w, h, d, r) => rbox(w, h, d, r || 0) };
 const FURN_GEO = new WeakMap();   // v8.6 零件家具自己建立的幾何（方盒與原型仍共用）
 const PROTO = {};   // 程式化模型每種只建一次，之後 clone（共用幾何與材質；房間、夢境島、縮圖會重複用到同一件）
-/** 依零件組出家具模型（原點在佔地中心地板）；有程式化模型（TA.ISLE.FURNMODELS[id]）就用它，建立失敗才退回零件 */
-export function buildFurniture(f) {
+/** v9.12 寫實家具（Tripo 精修）：等比縮進原本的包圍盒，佔地、碰撞照舊。real === false 不換（縮圖、會合併網格的場景）；real 是函式：換上之後呼叫 */
+const withReal = (m, f, real) => { if (real !== false) realSwap(m, 'FURNMODELS', f.id, 'box', typeof real === 'function' ? real : null); return m; };
+/** 依零件組出家具模型（原點在佔地中心地板）；有程式化模型（TA.ISLE.FURNMODELS[id]）就用它，建立失敗才退回零件；有寫實模型的載好再換上 */
+export function buildFurniture(f, real) {
   const fac = (I.FURNMODELS || {})[f.id];
   if (fac && PROTO[f.id] !== null) {
     try {
@@ -117,7 +120,7 @@ export function buildFurniture(f) {
         p.traverse(o => { o.userData = {}; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
         PROTO[f.id] = p;
       }
-      const m = PROTO[f.id].clone(true); m.userData.fid = f.id; return m;
+      const m = PROTO[f.id].clone(true); m.userData.fid = f.id; return withReal(m, f, real);
     } catch (e) { PROTO[f.id] = null; console.warn('程式化家具模型建立失敗，改用零件：' + f.id, e); }
   }
   const g = new THREE.Group(), own = new Set();
@@ -138,7 +141,7 @@ export function buildFurniture(f) {
     m.castShadow = true; m.receiveShadow = true; g.add(m);
   });
   g.userData.fid = f.id;
-  return g;
+  return withReal(g, f, real);
 }
 
 /** v8.6 只釋放零件家具的專屬幾何，不碰原型、方盒與 M() 材質 */
@@ -154,7 +157,7 @@ export function thumb(id) {
   const f = furn(id); if (!f) return '';
   if (!thumbR) { thumbR = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); thumbR.setSize(112, 112); thumbR.outputColorSpace = THREE.SRGBColorSpace; thumbR.toneMapping = THREE.ACESFilmicToneMapping; }
   const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight('#ffffff', '#8a7a6a', 1.6)); const d = new THREE.DirectionalLight('#ffffff', 1.6); d.position.set(-2, 4, 3); sc.add(d);
-  const m = buildFurniture(f); sc.add(m);
+  const m = buildFurniture(f, false); sc.add(m);   // 縮圖一律用程式化模型（要當場畫好；同一張設定圖，外形一樣）
   const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3()), ctr = box.getCenter(new THREE.Vector3()), r = Math.max(size.x, size.y, size.z) * 0.95 + 0.1;
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50); cam.position.set(ctr.x + r * 1.3, ctr.y + r * 1.2, ctr.z + r * 1.9); cam.lookAt(ctr);
   const saved = U.uCurve.value; U.uCurve.value = 0; thumbR.render(sc, cam); U.uCurve.value = saved;
@@ -412,7 +415,8 @@ export function openDecor() {
 function startPlace(id) {
   cancelPlace();
   const f = furn(id); mode = { id, r: 0, x: 3, z: 3 };
-  ghost = buildFurniture(f); ghost.traverse(m => { if (m.isMesh) { m.material = m.material.clone(); m.material.transparent = true; m.material.opacity = 0.6; m.castShadow = false; } }); scene.add(ghost);
+  const ghostify = o => o.traverse(m => { if (m.isMesh && !m.userData.ghost) { m.userData.ghost = true; m.material = m.material.clone(); m.material.transparent = true; m.material.opacity = 0.6; m.castShadow = false; } });
+  ghost = buildFurniture(f, ghostify); ghostify(ghost); scene.add(ghost);   // 寫實模型晚一點才換上：換上時也變半透明（材質各自 clone，不會染到別的家具）
   moveGhost(0, 0); ui.toast('擺放模式：R 旋轉、E 放下、Esc 取消');
 }
 function moveGhost(dx, dz) {

@@ -18,6 +18,7 @@ import * as miles from './miles.js';
 import * as feel from './feel.js';
 import * as fieldnote from './fieldnote.js';
 import * as tide from './tide.js';
+import { swap as realSwap, realMove } from './real.js';
 
 export let inside = false;
 const DIVE = { name: '海底', color: '#2f86b8', voice: 520 };
@@ -83,7 +84,9 @@ export function model(table, key) {
     catch (e) { console.warn('海洋模型建立失敗：' + id, e); PROTO[id] = null; }
   }
   const p = PROTO[id]; if (!p) return null;
-  const c = p.clone(true); c.userData = Object.assign({}, p.userData); return c;
+  const c = p.clone(true); c.userData = Object.assign({}, p.userData);
+  if (table === 'MARINEMODELS') realSwap(c, table, key, 'max');   // v9.12 寫實模型載好就換上（零件動畫改成整隻擺動，見 realMove）
+  return c;
 }
 function fallback(sp) { const g = new THREE.Group(); const m = new THREE.Mesh(O(new THREE.SphereGeometry(0.12, 12, 8)), M('#f0a070')); m.scale.set(1, 0.7, 1.6); g.add(m); g.userData.anim = sp.speed ? 'swim' : 'still'; return g; }
 
@@ -213,6 +216,7 @@ function spawn() {
 }
 function crTick(cr, dt, t, locked) {
   const m = cr.m, sp = cr.sp, p = m.position, ph = cr.ph, s = Math.sin;
+  realMove(m, cr.anim, t, ph, sp.speed);   // 換上寫實模型的：整隻輕輕動
   // 零件的動作
   if (cr.parts.tail) cr.parts.tail.rotation.y = s(t * (2 + sp.speed * 2) + ph) * 0.35;
   if (cr.parts.finL) { cr.parts.finL.rotation.z = s(t * 1.8 + ph) * 0.55; cr.parts.finR && (cr.parts.finR.rotation.z = -s(t * 1.8 + ph) * 0.55); }

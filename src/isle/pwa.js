@@ -50,7 +50,7 @@ export function rows(row, redraw) {
   }
   if (ready || (navigator.serviceWorker && navigator.serviceWorker.controller)) {
     const b = ui.el('button', 'btn', '下載全部'); b.type = 'button';
-    const r = row('離線遊玩', '遊戲本體已經存在這台裝置，沒有網路也能玩。角色模型、配樂與示意圖玩到時才存；按「下載全部」一次存好（約 195 MB），之後完全不用網路', b);
+    const r = row('離線遊玩', '遊戲本體已經存在這台裝置，沒有網路也能玩。角色模型、配樂與示意圖玩到時才存；按「下載全部」一次存好（約 230 MB），之後完全不用網路', b);
     const note = r.querySelector('small');
     ask('status', d => { if (d.total) { const all = d.cached >= d.total; note.textContent += `（已存 ${d.cached}／${d.total} 個）`; if (all) { b.textContent = '已全部下載'; b.className = 'btn off'; b.disabled = true; } } });
     b.onclick = () => {

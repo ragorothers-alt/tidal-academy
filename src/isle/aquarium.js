@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import * as ui from './ui.js';
 import { S, list, icon, stars, fmtHours, fmtMonths, whereName, photoOnly } from './state.js';
 import { model, fishGeo, HAB } from './dive.js';
+import { realMove } from './real.js';
 
 const DECO = {
   reef: [['coral_table', 2], ['coral_branch', 4], ['coral_round', 3], ['rock_a', 2], ['anemone_bed', 2], ['sea_urchins', 1]],
@@ -59,10 +60,11 @@ function stock() {
     const m = model('MARINEMODELS', sp.id); if (!m) return;
     const anim = m.userData.anim || 'still', kind = sp.speed === 0 ? 'fixed' : ['crawl', 'still', 'clam', 'sway'].includes(anim) ? 'crawl' : 'swim';
     const L = (sp.size || 20) / 100, s = THREE.MathUtils.clamp(0.35 / Math.max(0.12, Math.min(L, 1)), 1, 2.2);   // 小生物放大一點，看得清楚
-    m.scale.setScalar(s); const p = inTank(tk, kind !== 'swim', 0.35); m.position.copy(p); m.rotation.y = rnd() * 6.28; root.add(m);
+    m.scale.setScalar(s); const top = new THREE.Box3().setFromObject(m).max.y;   // 模型頂端離原點多高：游到缸頂時整隻留在水裡（僧帽水母的浮囊不會冒出缸外）
+    const p = inTank(tk, kind !== 'swim', 0.35); m.position.copy(p); m.rotation.y = rnd() * 6.28; root.add(m);
     const parts = { tail: m.getObjectByName('tail'), finL: m.getObjectByName('finL'), finR: m.getObjectByName('finR'), bell: m.getObjectByName('bell'), lid: m.getObjectByName('lid'), arms: [], legs: [] };
     for (let k = 0; k < 16; k++) { const a = m.getObjectByName('arm' + k), l = m.getObjectByName('leg' + k); if (a) parts.arms.push(a); if (l) parts.legs.push(l); }
-    dwellers.push({ m, sp, anim, kind, parts, tk, ph: rnd() * 6.28, goal: null, dir: new THREE.Vector3(Math.cos(p.x), 0, Math.sin(p.z)).normalize() });
+    dwellers.push({ m, sp, anim, kind, parts, tk, top, ph: rnd() * 6.28, goal: null, dir: new THREE.Vector3(Math.cos(p.x), 0, Math.sin(p.z)).normalize() });
     placed.add(sp.id);
   });
 }
@@ -80,6 +82,7 @@ export function tick(dt, t) {
     const m = d.m;
     if (d.deco) { if (m.userData.sway) m.rotation.z = s(t * 0.8 + m.userData.ph) * 0.04; continue; }
     const P = d.parts, ph = d.ph, sp = d.sp;
+    realMove(m, d.anim, t, ph, sp.speed);   // v9.12 換上寫實模型的：整隻輕輕動
     if (P.tail) P.tail.rotation.y = s(t * (2 + sp.speed * 2) + ph) * 0.35;
     if (P.finL) { P.finL.rotation.z = s(t * 1.8 + ph) * 0.55; if (P.finR) P.finR.rotation.z = -s(t * 1.8 + ph) * 0.55; }
     if (P.bell) { const k = Math.max(0, s(t * 2.1 + ph)); P.bell.scale.set(1 + k * 0.12, 1 - k * 0.16, 1 + k * 0.12); }
@@ -93,6 +96,7 @@ export function tick(dt, t) {
     d.dir.lerp(tmp, Math.min(1, dt * 0.9)).normalize();
     const spd = d.kind === 'crawl' ? 0.07 + sp.speed * 0.03 : [0, 0.14, 0.26, 0.4][sp.speed] || 0.2;
     m.position.addScaledVector(d.dir, spd * dt); clampIn(d.tk, m.position);
+    const y1 = (d.tk.cyl ? d.tk.cyl[4] : d.tk.box[4]) - d.top - 0.05; if (m.position.y > y1) m.position.y = Math.max(y1, d.tk.cyl ? d.tk.cyl[3] : d.tk.box[1]);
     if (d.kind === 'crawl') m.position.y = d.tk.cyl ? d.tk.cyl[3] : d.tk.box[1];
     m.rotation.y = Math.atan2(d.dir.x, d.dir.z);
   }

@@ -321,10 +321,8 @@ export const cullStats = () => placed.reduce((m, o) => { m['s' + (o.st || 0)]++;
 export const buildings = () => placed.filter(o => o.g.userData && !o.g.userData.real && o.g.userData.glow && o.g.userData.glow.some(e => e.kind === 'window')).map(o => o.g);
 /* v9.11 寫實模型（Tripo 精修，models/rf_<…>.js）：建築與地標照常用程式化模型蓋好、合併、登記剔除，寫實模型載好再換上——
    等比縮到原本外觀的佔地（不超出碰撞框）、水平置中、底部對齊；keep 裡的物件（招牌）和燈光留著，夜裡窗戶的燈光照舊。
-   設定「寫實建築」關掉或極省電畫質時不換。程式化模型與寫實模型是同一張設定圖；Tripo 生成的正面朝 +X，轉檔時已轉成和程式化模型一樣朝 +Z */
-const RF = { BLDMODELS: 'rf_bld_', LMMODELS: 'rf_lm_', HARBORMODELS: 'rf_harbor_', WORKSMODELS: 'rf_works_', ACADEMYMODELS: 'rf_academy_' };
-export const realOn = () => { const c = S().settings || {}; return c.real !== false && !ULTRA; };
-export const realId = (table, key) => (RF[table] || '') + key;
+   設定「寫實模型」關掉或極省電畫質時不換。程式化模型與寫實模型是同一張設定圖；Tripo 生成的正面朝 +X，轉檔時已轉成和程式化模型一樣朝 +Z */
+import { RF, realOn, realId } from './real.js';   // v9.12 寫實模型的設定搬到 real.js（海洋生物、家具也用）
 const rfInv = new THREE.Matrix4(), rfM = new THREE.Matrix4(), rfB = new THREE.Box3(), rfT = new THREE.Box3(), rfS = new THREE.Vector3(), rfC = new THREE.Vector3();
 /** 夜裡亮窗：從顏色貼圖挑出窗玻璃做成發光遮罩，交給 engine 的 nightMats 跟著天色亮起。
     玻璃在貼圖上是中性到偏冷的灰（白天看起來偏藍是天光）：不偏暖（米色石牆、木頭的紅比藍多）、不偏紫（紫色屋頂的綠比紅少）、不太飽和、中等亮度（白色灰泥太亮、深藍的旗子太暗）。
