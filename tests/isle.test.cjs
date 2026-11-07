@@ -1336,7 +1336,7 @@ test('海洋生物與家具的寫實模型：每一件都對得上、是小巧�
   const src = f => fs.readFileSync(path.join(ROOT, 'src/isle', f), 'utf8'), data = f => fs.readFileSync(path.join(ROOT, 'src/isle/data', f), 'utf8');
   const marine = list.filter(i => i.startsWith('rf_marine_')), furn = list.filter(i => i.startsWith('rf_furn_'));
   assert.equal(marine.length, 30, '30 種海洋生物'); assert.ok(furn.length >= 80, '家具的寫實模型（' + furn.length + '）');
-  const mm = data('marinemodels.js'), ff = data('furniture.js') + data('dreamfurn.js') + data('hotelfurn.js') + data('researchfurn.js') + data('collectfurn.js');
+  const mm = data('marinemodels.js'), ff = data('furniture.js') + data('dreamfurn.js') + data('hotelfurn.js') + data('researchfurn.js') + data('collectfurn.js') + data('nightmarket.js') + src('hotel.js');   // 飯店大廳的三件寫在 hotel.js
   marine.forEach(id => { const k = id.slice(10); assert.ok(mm.includes('MARINEMODELS.' + k + ' ') || mm.includes("'" + k + "'"), id + ' 對得上程式化的海洋生物'); });
   furn.forEach(id => assert.ok(new RegExp(`id:\\s*['"]${id.slice(8)}['"]`).test(ff), id + ' 對得上家具資料'));
   [...marine, ...furn].forEach(id => { const { js, bytes } = glb(id); assert.ok(!js.animations && !js.skins, id + ' 是靜態模型'); assert.ok(bytes < 600e3, id + ' 不超過 600 KB（' + bytes + '）'); });
