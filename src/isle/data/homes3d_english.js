@@ -5,19 +5,19 @@
   I.BLDMODELS=I.BLDMODELS||{};
   I.BLDMODELS['home_english']=function(THREE,kit){
     const M={
-      plaster: kit.mat('#fff4ee', { roughness: 0.84, metalness: 0 }, 'plaster'),
+      plaster: kit.mat('#ebe2d8', { roughness: 0.84, metalness: 0 }, 'plaster'),
       stone: kit.mat('#d9c8b6', { roughness: 0.84, metalness: 0 }, 'stone'),
       stoneShade: kit.mat('#b8a490', { roughness: 0.84, metalness: 0 }, 'stone'),
       wood: kit.mat('#b07a4a', { roughness: 0.84, metalness: 0 }, 'wood'),
       honey: kit.mat('#d6a363', { roughness: 0.84, metalness: 0 }, 'wood'),
       dark: kit.mat('#654835', { roughness: 0.84, metalness: 0 }, 'wood'),
-      roof: kit.mat('#d98aa0', { roughness: 0.84, metalness: 0 }, 'roof'),
-      roofShade: kit.mat('#bd708c', { roughness: 0.84, metalness: 0 }, 'roof'),
-      blue: kit.mat('#8cc8ef', { roughness: 0.84, metalness: 0 }, 'wood'),
+      roof: kit.mat('#b5767c', { roughness: 0.84, metalness: 0 }, 'roof'),
+      roofShade: kit.mat('#9b6068', { roughness: 0.84, metalness: 0 }, 'roof'),
+      blue: kit.mat('#7fa7c4', { roughness: 0.84, metalness: 0 }, 'wood'),
       gold: kit.mat('#d9ad59', { roughness: 0.42, metalness: 0.65 }, 'metal'),
       leaf: kit.mat('#6f8e62', { roughness: 0.84, metalness: 0 }),
-      pink: kit.mat('#edb0c9', { roughness: 0.84, metalness: 0 }),
-      lavender: kit.mat('#a695cf', { roughness: 0.84, metalness: 0 }),
+      pink: kit.mat('#cf98a9', { roughness: 0.84, metalness: 0 }),
+      lavender: kit.mat('#8b82ad', { roughness: 0.84, metalness: 0 }),
       chalk: kit.mat('#30474c', { roughness: 0.84, metalness: 0 }),
       glass: kit.win()
     };

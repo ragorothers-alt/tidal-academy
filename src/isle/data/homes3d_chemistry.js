@@ -7,23 +7,23 @@
     const STAGE = 3;
     const g = new THREE.Group(); g.name = 'home-chemistry-glass-tea-laboratory';
     const M = {
-      plaster: kit.mat('#f6f1e4', { roughness: .92 }, 'plaster'),
+      plaster: kit.mat('#ebe5d6', { roughness: .92 }, 'plaster'),
       stone: kit.mat('#d8c8ac', { roughness: .94 }, 'stone'),
       wood: kit.mat('#a77648', { roughness: .8 }, 'wood'),
       dark: kit.mat('#68482f', { roughness: .87 }, 'wood'),
       roof: kit.mat('#4f8f7a', { roughness: .84 }, 'roof'),
-      mint: kit.mat('#62c9a0', { roughness: 0.43, metalness: 0.6 }, 'metal'),
-      clear: kit.mat('#d8fff0', { roughness: .08, metalness: .02, transparent: true, opacity: .19, depthWrite: false, side: THREE.DoubleSide }),
-      pink: kit.mat('#ff9ec4', { roughness: .36 }),
-      amber: kit.mat('#ffc66b', { roughness: .33 }),
-      aqua: kit.mat('#8fe3c8', { roughness: .34 }),
+      mint: kit.mat('#5b9f86', { roughness: 0.43, metalness: 0.6 }, 'metal'),
+      clear: kit.mat('#d3e8df', { roughness: .08, metalness: .02, transparent: true, opacity: .19, depthWrite: false, side: THREE.DoubleSide }),
+      pink: kit.mat('#cf8ea3', { roughness: .36 }),
+      amber: kit.mat('#dcaa5c', { roughness: .33 }),
+      aqua: kit.mat('#80bba9', { roughness: .34 }),
       copper: kit.mat('#b8763d', { roughness: 0.3, metalness: 0.72 }, 'metal'),
       leaf: kit.mat('#5d874e', { roughness: .94 }),
       leafLight: kit.mat('#93b55f', { roughness: .94 }),
-      lavender: kit.mat('#b8a0dc', { roughness: .86 }),
-      cream: kit.mat('#fff2ce', { roughness: .88 }),
+      lavender: kit.mat('#9488b2', { roughness: .86 }),
+      cream: kit.mat('#efe4c8', { roughness: .88 }),
       // Centralized same-colour finishes for the canopy and clay vessels.
-      canopyFabric: kit.mat('#fff2ce', { roughness: .88 }, 'fabric'),
+      canopyFabric: kit.mat('#efe4c8', { roughness: .88 }, 'fabric'),
       clay: kit.mat('#a77648', { roughness: .42 }, 'ceramic'),
       glow: kit.win()
     };

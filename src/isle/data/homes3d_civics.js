@@ -6,25 +6,25 @@
     const g = new THREE.Group(); g.name = 'home-civics';
     const parts = new Map(), batches = new Map(); let part = 'foundation', parent = g;
     const M = {
-      plaster: kit.mat('#fbf3e4', { roughness: .93 }, 'plaster'),
+      plaster: kit.mat('#ece4d4', { roughness: .93 }, 'plaster'),
       stone: kit.mat('#c8bea7', { roughness: .95 }, 'stone'),
-      cream: kit.mat('#eee0bd', { roughness: .86 }, 'stone'),
+      cream: kit.mat('#e3d6b6', { roughness: .86 }, 'stone'),
       wood: kit.mat('#98704d', { roughness: .82 }, 'wood'),
       honey: kit.mat('#bd9561', { roughness: .76 }, 'wood'),
       dark: kit.mat('#554631', { roughness: .9 }, 'wood'),
-      roof: kit.mat('#e0b25a', { roughness: .86 }, 'roof'),
-      roofLight: kit.mat('#edc477', { roughness: .80 }, 'roof'),
-      roofDark: kit.mat('#b58b42', { roughness: .87 }, 'roof'),
+      roof: kit.mat('#c9a25f', { roughness: .86 }, 'roof'),
+      roofLight: kit.mat('#d6b377', { roughness: .80 }, 'roof'),
+      roofDark: kit.mat('#a07e46', { roughness: .87 }, 'roof'),
       brass: kit.mat('#d1a654', { roughness: 0.42, metalness: 0.62 }, 'metal'),
-      coral: kit.mat('#e6735c', { roughness: .88 }, 'fabric'),
+      coral: kit.mat('#c46a56', { roughness: .88 }, 'fabric'),
       leaf: kit.mat('#70834f', { roughness: .94 }),
-      pink: kit.mat('#e9a8b6', { roughness: .91 }),
-      lavender: kit.mat('#b3a0d0', { roughness: .91 }),
+      pink: kit.mat('#cc939f', { roughness: .91 }),
+      lavender: kit.mat('#958aae', { roughness: .91 }),
       // Shared textile/paper swatches: preserve the cream masonry and flower colours.
-      fabricCream: kit.mat('#eee0bd', { roughness: .88 }, 'fabric'),
-      noteCoral: kit.mat('#e6735c', { roughness: .91 }, 'paper'),
-      noteCream: kit.mat('#eee0bd', { roughness: .91 }, 'paper'),
-      noteLavender: kit.mat('#b3a0d0', { roughness: .91 }, 'paper'),
+      fabricCream: kit.mat('#e3d6b6', { roughness: .88 }, 'fabric'),
+      noteCoral: kit.mat('#c46a56', { roughness: .91 }, 'paper'),
+      noteCream: kit.mat('#e3d6b6', { roughness: .91 }, 'paper'),
+      noteLavender: kit.mat('#958aae', { roughness: .91 }, 'paper'),
       glass: kit.win()
     };
     function assembly(id) { part=id; parent=g; }

@@ -8,7 +8,7 @@
     const PASS = 3;
     // One shared material per palette entry; host batching keeps the rotor separate.
     const M = {
-      plaster: kit.mat('#f0e6d8', { roughness: .91 }, 'plaster'),
+      plaster: kit.mat('#e6dccc', { roughness: .91 }, 'plaster'),
       stone: kit.mat('#d8c8ac', { roughness: .92 }, 'stone'),
       stoneShade: kit.mat('#b9a88e', { roughness: .96 }, 'stone'),
       oak: kit.mat('#9a663f', { roughness: .83 }, 'wood'),
@@ -18,11 +18,11 @@
       roofLight: kit.mat('#df8b4b', { roughness: .79 }, 'roof'),
       copper: kit.mat('#b8763d', { roughness: 0.42, metalness: 0.6 }, 'metal'),
       brass: kit.mat('#d5ad56', { roughness: 0.38, metalness: 0.62 }, 'metal'),
-      cyan: kit.mat('#5ee7f0', { roughness: .24, metalness: .15, emissive: '#5ee7f0', emissiveIntensity: .15 }),
+      cyan: kit.mat('#63ccd6', { roughness: .24, metalness: .15, emissive: '#5ee7f0', emissiveIntensity: .15 }),
       leaf: kit.mat('#658451', { roughness: .95 }),
       leafLight: kit.mat('#94a55f', { roughness: .94 }),
-      pink: kit.mat('#ec9fbb', { roughness: .85 }),
-      lavender: kit.mat('#aa86c5', { roughness: .86 }),
+      pink: kit.mat('#cb8ea2', { roughness: .85 }),
+      lavender: kit.mat('#8d7aa8', { roughness: .86 }),
       glass: kit.win()
     };
     const batches = new Map(), parts = {}, pivots = {

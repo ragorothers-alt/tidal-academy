@@ -6,7 +6,7 @@
   I.BLDMODELS['home_player'] = function (THREE, kit) {
 const g = new THREE.Group(); g.name = 'home-player';
     const M = {
-      plaster: kit.mat('#f4e6d0', { roughness: 0.91, metalness: 0 }, 'plaster'),
+      plaster: kit.mat('#e9dcc6', { roughness: 0.91, metalness: 0 }, 'plaster'),
       stone: kit.mat('#ded0ba', { roughness: 0.92, metalness: 0 }, 'stone'),
       stoneShade: kit.mat('#b5a28a', { roughness: 0.95, metalness: 0 }, 'stone'),
       oak: kit.mat('#8b5a36', { roughness: 0.82, metalness: 0 }, 'wood'),
@@ -17,10 +17,10 @@ const g = new THREE.Group(); g.name = 'home-player';
       gold: kit.mat('#d4aa59', { roughness: 0.4, metalness: 0.65 }, 'metal'),
       leaf: kit.mat('#617747', { roughness: 0.92, metalness: 0 }),
       leafLight: kit.mat('#8c9d61', { roughness: 0.92, metalness: 0 }),
-      pink: kit.mat('#e3a0b9', { roughness: 0.88, metalness: 0 }),
-      lavender: kit.mat('#ac88c5', { roughness: 0.9, metalness: 0 }),
-      cream: kit.mat('#fff0cf', { roughness: 0.88, metalness: 0 }),
-      water: kit.mat('#90cdd1', { roughness: 0.24, metalness: 0 }),
+      pink: kit.mat('#c98d9f', { roughness: 0.88, metalness: 0 }),
+      lavender: kit.mat('#8e7ca8', { roughness: 0.9, metalness: 0 }),
+      cream: kit.mat('#efe3c8', { roughness: 0.88, metalness: 0 }),
+      water: kit.mat('#6f9c9c', { roughness: 0.24, metalness: 0 }),
       glass: kit.win(),
     };
     // All primitives are merged only within their named assembly and shared material.

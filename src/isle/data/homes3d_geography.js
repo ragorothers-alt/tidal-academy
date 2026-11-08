@@ -6,9 +6,9 @@
     const g = new THREE.Group(); g.name = 'home-geography';
     const parts = new Map(), batches = new Map(); let part = 'foundation', parent = g;
     const M = {
-      plaster: kit.mat('#f2e8d6', { roughness: .93 }, 'plaster'),
+      plaster: kit.mat('#e7ddca', { roughness: .93 }, 'plaster'),
       stone: kit.mat('#c8bea7', { roughness: .95 }, 'stone'),
-      cream: kit.mat('#eee0bd', { roughness: .86 }, 'stone'),
+      cream: kit.mat('#e3d6b6', { roughness: .86 }, 'stone'),
       wood: kit.mat('#8b6a45', { roughness: .82 }, 'wood'),
       honey: kit.mat('#bd9561', { roughness: .76 }, 'wood'),
       dark: kit.mat('#554631', { roughness: .9 }, 'wood'),
@@ -16,12 +16,12 @@
       roofLight: kit.mat('#8aa86e', { roughness: .80 }, 'roof'),
       roofDark: kit.mat('#526f45', { roughness: .87 }, 'roof'),
       brass: kit.mat('#d1a654', { roughness: 0.42, metalness: 0.62 }, 'metal'),
-      coral: kit.mat('#de8651', { roughness: .86 }, 'fabric'),
+      coral: kit.mat('#c27b52', { roughness: .86 }, 'fabric'),
       leaf: kit.mat('#70834f', { roughness: .94 }),
-      pink: kit.mat('#e9a8b6', { roughness: .91 }),
-      lavender: kit.mat('#b3a0d0', { roughness: .91 }),
+      pink: kit.mat('#cc939f', { roughness: .91 }),
+      lavender: kit.mat('#958aae', { roughness: .91 }),
       // Travel textiles share one roughness bucket; stone steps and roof tiles keep their finish.
-      travelCream: kit.mat('#eee0bd', { roughness: .86 }, 'fabric'),
+      travelCream: kit.mat('#e3d6b6', { roughness: .86 }, 'fabric'),
       travelGreen: kit.mat('#6f9a5e', { roughness: .86 }, 'fabric'),
       travelShade: kit.mat('#526f45', { roughness: .86 }, 'fabric'),
       glass: kit.win()

@@ -5,19 +5,19 @@
   I.BLDMODELS=I.BLDMODELS||{};
   I.BLDMODELS['home_math']=function(THREE,kit){
     const M={
-      plaster: kit.mat('#f1ecf7', { roughness: 0.84, metalness: 0 }, 'plaster'),
-      stone: kit.mat('#d4c8d6', { roughness: 0.84, metalness: 0 }, 'stone'),
-      stoneShade: kit.mat('#b3a3bc', { roughness: 0.84, metalness: 0 }, 'stone'),
+      plaster: kit.mat('#e4e0d8', { roughness: 0.84, metalness: 0 }, 'plaster'),
+      stone: kit.mat('#c8c1b8', { roughness: 0.84, metalness: 0 }, 'stone'),
+      stoneShade: kit.mat('#a49c93', { roughness: 0.84, metalness: 0 }, 'stone'),
       wood: kit.mat('#ac815c', { roughness: 0.84, metalness: 0 }, 'wood'),
       honey: kit.mat('#d6b17a', { roughness: 0.84, metalness: 0 }, 'wood'),
       dark: kit.mat('#2b2d42', { roughness: 0.45, metalness: 0.6 }, 'metal'),
-      roof: kit.mat('#7f86c9', { roughness: 0.84, metalness: 0 }, 'roof'),
-      roofShade: kit.mat('#6872af', { roughness: 0.84, metalness: 0 }, 'roof'),
+      roof: kit.mat('#68728f', { roughness: 0.84, metalness: 0 }, 'roof'),
+      roofShade: kit.mat('#58617a', { roughness: 0.84, metalness: 0 }, 'roof'),
       ivory: kit.mat('#fbfbf6', { roughness: 0.84, metalness: 0 }, 'ceramic'),
       gold: kit.mat('#d9ad59', { roughness: 0.42, metalness: 0.65 }, 'metal'),
       leaf: kit.mat('#748962', { roughness: 0.84, metalness: 0 }),
-      pink: kit.mat('#edb0c9', { roughness: 0.84, metalness: 0 }),
-      lavender: kit.mat('#a695cf', { roughness: 0.84, metalness: 0 }),
+      pink: kit.mat('#cf98a9', { roughness: 0.84, metalness: 0 }),
+      lavender: kit.mat('#8b82ad', { roughness: 0.84, metalness: 0 }),
       glass: kit.win()
     };
     // Geometry is batched by semantic assembly and shared palette material.
