@@ -110,7 +110,7 @@ export async function build() {
 
 /* 雲的三色（sRGB 色票 → 線性）：清晨、正午、黃金時段、夜晚各一組 [暗面, 亮面, 薄邊]（consult3 §4） */
 const TRI = { uCShd: { value: new THREE.Color() }, uCLit: { value: new THREE.Color() }, uCRim: { value: new THREE.Color() }, uCMix: { value: 0.35 } };
-const TRIS = { dawn: ['#9a9cb2', '#f2d4bc', '#fff0da'], day: ['#a8b4c6', '#eef1f5', '#ffffff'], gold: ['#a49ea8', '#f4d8b8', '#ffe6c2'], night: ['#283044', '#4c5672', '#7c88a6'] };   // v9.13 半寫實：白天受光是白、背光是天光的藍灰；晨昏的亮面帶暖金；夜裡是月光下的深藍灰
+const TRIS = { dawn: ['#9a9cb2', '#f2d4bc', '#fff0da'], day: ['#a8b4c6', '#eef1f5', '#ffffff'], gold: ['#a49ea8', '#f4d8b8', '#ffe6c2'], night: ['#1e2534', '#363f58', '#56627e'] };   // v9.13 半寫實：白天受光是白、背光是天光的藍灰；晨昏的亮面帶暖金；夜裡是月光下的深藍灰
 const triC = Object.fromEntries(Object.entries(TRIS).map(([k, v]) => [k, v.map(c => new THREE.Color(c))]));
 const HZ = { sea: 0 }, col = new THREE.Color(), gold = new THREE.Color('#f2d0aa'), dawnC = new THREE.Color('#ffdcc0'), nightC = new THREE.Color('#3a4868'), rainC = new THREE.Color('#a4a9b4');   // v9.13：黃昏染暖金、清晨淡橘、夜裡深藍灰
 /** 每格更新：horizonNdc(x, z) 是該方向畫面地平線的 NDC 高度、yForNdc 反推世界高度（都由 fantasy.js 提供），golden、night 0–1
@@ -123,7 +123,7 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
   const sd = skyU.sunDir.value, sAz = Math.atan2(sd.x, -sd.z);
   { const dw = skyU.dawn.value, nk = THREE.MathUtils.smoothstep(night, 0, 0.6), gl = gloom();   // 雲的三色跟著時段
     ['uCShd', 'uCLit', 'uCRim'].forEach((u, i) => { TRI[u].value.copy(triC.day[i]).lerp(triC.dawn[i], dw).lerp(triC.gold[i], golden).lerp(triC.night[i], nk); });
-    TRI.uCMix.value = 0.58 * (1 - gl * 0.8); }   // 陰雨天不染粉紫
+    TRI.uCMix.value = (0.58 + 0.22 * nk) * (1 - gl * 0.8); }   // v9.15：夜裡多用三色、少用貼圖本身的白亮高光——月光下的雲是暗的剪影   // 陰雨天不染粉紫
   col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.4).lerp(nightC, THREE.MathUtils.smoothstep(night, 0, 0.6));   // 清晨粉桃、黃昏橘粉（v7.5：0.92 → 0.72，整朵雲不再全是橘色）；天一暗雲就跟著暗下來，夜裡是月光下的深藍
   { const gl = gloom() * (1 - night * 0.6), st = Math.max(0, skyU.gloom.value - 1); col.lerp(rainC, gl * 0.85).multiplyScalar((1 - gl * 0.5) * (1 - st * 0.7)); }   // v8.7 再暗一點，暴風雨更暗   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
   sprites.forEach(o => {

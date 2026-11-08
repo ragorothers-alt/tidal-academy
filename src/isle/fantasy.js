@@ -512,7 +512,7 @@ function updateBg(night, gold) {
    三層畫在 canvas 上的圖案（外圈符文與刻度、中圈星芒、內圈刻紋）各自慢慢轉；白天很淡、黃昏金色、夜裡藍白發光。
    永遠面向鏡頭、略微仰起成橢圓；加法混色、不寫深度，被城堡與雲擋住的地方自然看不到 */
 const ring = { g: null, layers: [], col: new THREE.Color() };
-const RING_DAY = new THREE.Color('#e4c6ec'), RING_DUSK = new THREE.Color('#ffd9ae'), RING_NIGHT = new THREE.Color('#bfc5f0');
+const RING_DAY = new THREE.Color('#e8e6de'), RING_DUSK = new THREE.Color('#ffd9ae'), RING_NIGHT = new THREE.Color('#b4c0dc');   // v9.15：白天是淡淡的白（以前粉紫）、夜裡偏冷的月白
 function ringTex(draw) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 1024; const c = cv.getContext('2d');
   c.translate(512, 512); c.strokeStyle = c.fillStyle = '#ffffff'; c.lineCap = c.lineJoin = 'round'; draw(c);
@@ -591,10 +591,10 @@ function updateRing(dt, t, night) {
   const gold = Math.min(1, skyU.glow.value * 2);
   hazeU.uFarDay.value = (1 - night) * (1 - gold * 0.85) * (1 - gloomK * 0.5);
   ring.col.copy(RING_DAY).lerp(RING_DUSK, gold).lerp(RING_NIGHT, night);
-  const op = ((0.035 + gold * 0.035) * (1 - night) + night * 0.095) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
+  const op = ((0.035 + gold * 0.035) * (1 - night) + night * 0.062) * (1 - gloomK * 0.75), pulse = 0.92 + 0.08 * Math.sin(t * 0.8);   // v6.93：星環退到城堡後面當陪襯（夜裡也不壓過城堡）；陰雨天幾乎看不見
   const fl = ring.flare || 0, boost = 1 + (ring.total || 0) * 1.6 + fl * 2.5; ring.flare = Math.max(0, fl - dt * 0.4);   // v9.2：點亮得越多，整圈星環越清楚；剛點亮時亮一下
   ring.layers.forEach(o => { o.m.rotation.z += o.spin * dt; o.m.material.color.copy(ring.col); o.m.material.opacity = Math.min(1, op * o.w * pulse * boost); });
-  if (ring.seg) ring.seg.m.material.opacity = Math.min(1, ((0.2 + gold * 0.2) * (1 - night) + night * 0.7) * (1 - gloomK * 0.6) * (1 + fl * 0.8));
+  if (ring.seg) ring.seg.m.material.opacity = Math.min(1, ((0.2 + gold * 0.2) * (1 - night) + night * 0.5) * (1 - gloomK * 0.6) * (1 + fl * 0.8));
 }
 
 const farMaterialCache = new WeakMap();

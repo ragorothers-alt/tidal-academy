@@ -103,10 +103,11 @@ function collide(g, kind) {
   if (kind === 'posts') { const w = Math.min(1.0, hx * 0.3); [-1, 1].forEach(sd => boxes.push({ x0: cx + sd * (hx - w / 2) - w / 2, x1: cx + sd * (hx - w / 2) + w / 2, z0: cz - hz, z1: cz + hz })); return; }
   const k = typeof kind === 'number' ? kind : 1; boxes.push({ x0: cx - hx * k, x1: cx + hx * k, z0: cz - hz * k, z1: cz + hz * k });
 }
+const HARBOR = '#2a6274';   // v9.15 半寫實：港內的海水是深一點的藍綠（以前亮青色 #4fb6d6）
 /** 地面：草地、石板（老街、廟埕、碼頭前）、沙灘，邊緣斜進海裡 */
 const paved = (x, z) => (Math.abs(x) < 2.9 && z > -9 && z < 17.6) || (Math.abs(x) < 8.5 && z > -21 && z < -8.4) || (z > 2.3 && z < 4.9 && x > -12 && x < 12.2) || (Math.abs(x) < 9.6 && z > 15 && z < 17.8) || (x > 7 && x < 15.5 && z > -10.5 && z < -8);
 function ground() {
-  const X0 = -24, X1 = 24, Z0 = -26, Z1 = 22, G1 = new THREE.Color('#86b03a'), G2 = new THREE.Color('#64962c'), STONE = new THREE.Color('#cdbfae'), STONE2 = new THREE.Color('#b9a996'), SAND = new THREE.Color('#f0e0b8'), BED = new THREE.Color('#9fd8c8'), col = new THREE.Color();
+  const X0 = -24, X1 = 24, Z0 = -26, Z1 = 22, G1 = new THREE.Color('#6d8c45'), G2 = new THREE.Color('#53723a'), STONE = new THREE.Color('#c4b8a6'), STONE2 = new THREE.Color('#ab9d8a'), SAND = new THREE.Color('#dccaa2'), BED = new THREE.Color('#8aa89a'), col = new THREE.Color();
   const nx = X1 - X0, nz = Z1 - Z0, P3 = [], C = [], idx = [];
   const edge = (x, z) => Math.max(Math.abs(x) - 21, z < 0 ? -z - 23 : z - 18.6, Math.hypot(Math.max(0, Math.abs(x) - 18), Math.max(0, -z - 20)) - 3);   // 離海岸的距離（> 0 在海裡）
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
@@ -122,7 +123,7 @@ function ground() {
 }
 /** 木棧碼頭：從岸邊往南伸進海裡 */
 function pier() {
-  const g = new THREE.Group(), wood = M('#a8865e', { roughness: 0.85 }), dark = M('#7a5c3e');
+  const g = new THREE.Group(), wood = M('#8f7659', { roughness: 0.88 }, 'wood'), dark = M('#5e4936', {}, 'wood');   // v9.15：風吹日曬的灰褐木板，有木紋與一塊塊板子的深淺
   g.add(mesh(new THREE.BoxGeometry(3.0, 0.18, 8.4), wood, 0, 0.42, 23.0));
   for (let k = 0; k < 8; k++) g.add(mesh(new THREE.BoxGeometry(3.0, 0.02, 0.04), dark, 0, 0.52, 19.2 + k * 1.05, { noCast: true }));   // 木板縫
   [-1, 1].forEach(sd => { for (let k = 0; k < 4; k++) g.add(mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.6, 8), dark, sd * 1.4, -0.3, 19.6 + k * 2.4)); });   // 樁
@@ -130,12 +131,12 @@ function pier() {
 }
 function build() {
   sc = new THREE.Scene(); const sky = new THREE.Color('#cfe8ff'); sc.background = sky; sc.fog = new THREE.Fog(sky, 40, 95);
-  const hemi = new THREE.HemisphereLight('#e8f2ff', '#8ab868', 1.1), sun = new THREE.DirectionalLight('#fff4e0', 2.3); sc.add(hemi);
+  const hemi = new THREE.HemisphereLight('#e8f2ff', '#7d8a5a', 1.1), sun = new THREE.DirectionalLight('#fff4e0', 2.3); sc.add(hemi);
   sun.position.set(10, 18, 8); sun.castShadow = true; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, far: 80 }); sc.add(sun, sun.target);
   const lamps = new THREE.Group(); sc.add(lamps);
   sc.userData.amb = { hemi, sun, lamps };
-  seaMat = seaMat || bend(new THREE.MeshStandardMaterial({ color: '#4fb6d6', roughness: 0.12, transparent: true, opacity: 0.8 }), 'water');
-  deepMat = deepMat || new THREE.MeshBasicMaterial({ color: new THREE.Color('#4fb6d6').multiplyScalar(0.7), fog: true });
+  seaMat = seaMat || bend(new THREE.MeshStandardMaterial({ color: HARBOR, roughness: 0.1, transparent: true, opacity: 0.86 }), 'water');
+  deepMat = deepMat || new THREE.MeshBasicMaterial({ color: new THREE.Color(HARBOR).multiplyScalar(0.7), fog: true });
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), seaMat); sea.rotation.x = -Math.PI / 2; sea.position.y = -0.05; sea.receiveShadow = true; sc.add(sea);
   const deep = new THREE.Mesh(new THREE.PlaneGeometry(220, 220), deepMat); deep.rotation.x = -Math.PI / 2; deep.position.y = -1.2; sc.add(deep);
   sc.add(ground(), pier());
@@ -193,10 +194,10 @@ export function tick(dt, t, ix, iz, len, moving, run, locked) {
   // 時間跟著主島走：晚上主光換成月光、街燈亮起來
   const n = skyU.night.value, amb = sc.userData.amb;
   sc.background.copy(skyU.bot.value); sc.fog.color.copy(skyU.bot.value);
-  amb.hemi.intensity = 1.1 * (1 - n * 0.45); amb.hemi.color.set('#e8f2ff').lerp(NIGHT_SKY, n); amb.hemi.groundColor.set('#8ab868').lerp(NIGHT_GND, n);
+  amb.hemi.intensity = 1.1 * (1 - n * 0.45); amb.hemi.color.set('#e8f2ff').lerp(NIGHT_SKY, n); amb.hemi.groundColor.set('#7d8a5a').lerp(NIGHT_GND, n);
   amb.sun.intensity = 2.3 * (1 - n * 0.72); amb.sun.color.set('#fff4e0').lerp(NIGHT_SUN, n);
   amb.lamps.children.forEach(l => { l.intensity = n > 0.35 ? 6 * Math.min(1, (n - 0.35) * 3) : 0; });
-  seaMat.color.set('#4fb6d6').multiplyScalar(1 - n * 0.55); deepMat.color.set('#4fb6d6').multiplyScalar(0.7 * (1 - n * 0.6));
+  seaMat.color.set(HARBOR).multiplyScalar(1 - n * 0.55); deepMat.color.set(HARBOR).multiplyScalar(0.7 * (1 - n * 0.6));
   const fx = post.fx, dof0 = fx.dof; fx.golden = 0; fx.clear = 1; fx.sunVis = 0; fx.night = n; fx.focus = camera.position.distanceTo(P.position); fx.dof = dof0 * 0.6; fx.haze.copy(sc.background);
   post.render(t, sc, camera);
   fx.dof = dof0;
