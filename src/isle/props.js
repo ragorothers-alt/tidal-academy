@@ -209,12 +209,13 @@ export function bush(x, z) {
 /** 圓潤的石頭：細分二十面體用雜訊推擠表面，頂部帶苔蘚綠（頂點色） */
 export function rockGeo(r, det) {
   const g = mergedIco(r, det || 3), p = g.attributes.position, v = new THREE.Vector3(), cols = [];   // 共用頂點：岩石表面平滑
-  const k1 = rnd() * 10, k2 = rnd() * 10, base = new THREE.Color('#ffffff'), moss = new THREE.Color('#9ccf7a');
+  const k1 = rnd() * 10, k2 = rnd() * 10, base = new THREE.Color('#ffffff'), wetC = new THREE.Color('#5a544c'), moss = new THREE.Color('#8a9a5c'), sm = THREE.MathUtils.smoothstep;   // v9.15 半寫實：濕暗下緣、深橄欖苔（rnd 仍只抽兩次）
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i); const n = v.clone().normalize();
-    const d = 1 + Math.sin(n.x * 3.1 + k1) * Math.cos(n.z * 2.7 + k2) * 0.12 + Math.sin(n.y * 5.3 + n.x * 4.1 + k1) * 0.05;
+    const d = 1 + Math.sin(n.x * 3.1 + k1) * Math.cos(n.z * 2.7 + k2) * 0.12 + Math.sin(n.y * 5.3 + n.x * 4.1 + k1) * 0.05 + Math.sin(n.x * 8.3 - n.z * 6.1 + k2 * 1.7) * Math.cos(n.y * 7.1 + k1) * 0.045;   // v9.15 半寫實：多一層中頻起伏，不是光滑的圓麵包
     v.copy(n).multiplyScalar(r * d); v.y *= n.y < 0 ? 0.35 : 0.8; p.setXYZ(i, v.x, v.y, v.z);
-    const c = base.clone().lerp(moss, THREE.MathUtils.smoothstep(n.y, 0.55, 0.9) * 0.85); cols.push(c.r, c.g, c.b);
+    const tone = 0.9 + Math.sin(n.x * 11.3 + n.z * 7.9 + k2) * Math.sin(n.y * 9.1 + k1) * 0.1, wet = 1 - sm(n.y, 0.25, 0.45), mk = sm(Math.sin(n.x * 6.7 + k1) * Math.cos(n.z * 5.9 + k2), 0.2, 0.65) * sm(n.y, 0.3, 0.45) * (1 - sm(n.y, 0.55, 0.75));
+    const c = base.clone().multiplyScalar(tone).lerp(wetC, wet * 0.6).lerp(moss, mk * 0.7); cols.push(c.r, c.g, c.b);   // v9.15 半寫實：深淺斑駁、貼地一圈濕暗、苔只在側面低處（以前整個頂蓋淡綠）
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); g.computeVertexNormals(); return g;
 }
@@ -1013,7 +1014,7 @@ function plazaPaving() {
 /** 水邊的石頭：小溪兩岸、池塘一圈、大河兩岸每隔一段一顆圓潤的石頭（參考插畫的溪岸與池畔），踏石、橋、路那幾段空著。
     全部合併成一個網格（原本每顆石頭各畫一次） */
 function rimStones() {
-  const mat = M('#ddd3c2', { vertexColors: true }, 'stone'), geos = [0, 1, 2, 3].map(() => rockGeo(0.32, 2)), g = new THREE.Group();
+  const mat = M('#a29c90', { vertexColors: true }, 'stone'), geos = [0, 1, 2, 3].map(() => rockGeo(0.32, 2)), g = new THREE.Group();   // v9.15 半寫實：溪石是灰褐（以前奶油米白）
   const stone = (x, z, k, sink) => { if (isBridgeAt(x, z) || onRoad(x, z) || blocked(x, z, 0.3)) return; const m = mesh(geos[Math.floor(rnd() * 4)], mat, x, groundAt(x, z) - sink, z); m.scale.set(k * 1.3, k * 0.75, k); m.rotation.y = rnd() * 6.28; g.add(m); STEP_STONES.push({ x, z, r: 0.35 * k }); };
   const along = (P, w, gap, closed) => {
     for (let i = 0; i < P.length - (closed ? 0 : 1); i++) {
@@ -1131,18 +1132,18 @@ export function flowerGeos() {
   // 標準72 tris／朵（原176），三階花高共用幾何；花瓣有弧度、葉片折成淺V。
   if (ULTRA) {
     const flat = (r, n, y) => new THREE.CircleGeometry(r, n).rotateX(-Math.PI / 2).translate(0, y, 0);
-    return (FLOWER_GEOS = { stemG: merge([new THREE.CylinderGeometry(0.008, 0.012, 0.26, 3, 1, true).translate(0, 0.13, 0)]), headG: merge([flat(0.095, 5, 0).rotateX(-0.25).translate(0, 0.27, 0)]), coreG: merge([flat(0.03, 4, 0.29)]) });
+    return (FLOWER_GEOS = { stemG: merge([new THREE.CylinderGeometry(0.008, 0.012, 0.26, 3, 1, true).translate(0, 0.13, 0)]), headG: merge([flat(0.07, 5, 0).rotateX(-0.25).translate(0, 0.27, 0)]), coreG: merge([flat(0.022, 4, 0.29)]) });
   }
   const leaf = (sign, y) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0,y,0, sign*.035,y+.02,-.023,sign*.085,y+.035,0, 0,y,0,sign*.085,y+.035,0,sign*.035,y+.02,.023],3));g.computeVertexNormals();return g; };
-  const stemG = merge([new THREE.CylinderGeometry(0.006, 0.009, 0.26, 4, 1, true).translate(0, 0.13, 0), leaf(1, .07), leaf(-1, .13)]);
-  const petals = []; for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; petals.push(new THREE.SphereGeometry(0.045, 5, 2).scale(1.12, 0.32, 0.72).translate(0.05, 0, 0).rotateY(a)); }
-  const headG = merge(petals).rotateX(-0.25).translate(0, 0.27, 0), coreG = new THREE.SphereGeometry(0.026, 5, 2).scale(1, 0.6, 1).translate(0, 0.285, 0);
+  const stemG = merge([new THREE.CylinderGeometry(0.0045, 0.007, 0.26, 4, 1, true).translate(0, 0.13, 0), leaf(1, .07), leaf(-1, .13)]);   // v9.15 半寫實：莖細一點，不像一根根小棍子
+  const petals = []; for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; petals.push(new THREE.SphereGeometry(0.032, 5, 2).scale(1.12, 0.32, 0.72).translate(0.034, 0, 0).rotateZ(0.35).rotateY(a)); }   // v9.15 半寫實：花頭直徑約 14 公分（以前 23），花瓣往上翹成淺杯
+  const headG = merge(petals).rotateX(-0.25).translate(0, 0.27, 0), coreG = new THREE.SphereGeometry(0.019, 5, 2).scale(1, 0.7, 1).translate(0, 0.28, 0);
   return (FLOWER_GEOS = { stemG, headG, coreG });
 }
 /** 莖、花冠、花心合成一個幾何（v7.3：一塊野花原本三個 InstancedMesh，現在一個）：顏色烘進頂點色，aTint 標出要染上每朵花顏色的花瓣 */
 function flowerOne() {
   const { stemG, headG, coreG } = flowerGeos(), P = [], N = [], C = [], T = [];
-  [[stemG, '#7f9e72', 0], [headG, '#ffffff', 1], [coreG, '#e8c48b', 0]].forEach(([g0, hex, tint]) => {
+  [[stemG, '#7fa05a', 0], [headG, '#ffffff', 1], [coreG, '#d6a332', 0]].forEach(([g0, hex, tint]) => {
     const g = g0.index ? g0.toNonIndexed() : g0, c = new THREE.Color(hex), n = g.attributes.position.count;
     P.push(...g.attributes.position.array); N.push(...g.attributes.normal.array);
     for (let i = 0; i < n; i++) { C.push(c.r, c.g, c.b); T.push(tint); }
@@ -1159,10 +1160,11 @@ function flowerOne() {
   const chunks = new Map(); let total = 0, gardenSeed = 7741;
   const R = () => { gardenSeed = (gardenSeed * 16807) % 2147483647; return (gardenSeed - 1) / 2147483646; };
   let FS = 'autumn'; try { FS = seasonNow(); } catch (e) { FS = seasonAuto(); }
+  const Wh = '#eeebe2', Ye = '#e2bf48', Pk = '#c99aab', Vi = '#9384b4', Wa = '#e9e2d0', Gd = '#d4aa3c';   // v9.15 半寫實：野花以白、黃為主，偶爾灰粉、灰紫（以前粉彩）
   const SEASON_FP = {
-    spring: { pal: ['#fff3e6', '#fff3e6', '#f4a8c8', '#f4a8c8', '#b9a2e6', '#f0d48a'], BC: ['#f4a8c8', '#fff3e6', '#b9a2e6', '#fff3e6', '#f4a8c8'], FIELD: [['#f4a8c8', '#fff3e6'], ['#b9a2e6', '#fff3e6'], ['#f4a8c8', '#b9a2e6'], ['#fff3e6', '#f0d48a']] },
-    summer: { pal: ['#ffffff', '#ffffff', '#a9c8f0', '#b9a2e6', '#b9a2e6', '#f4a8c8'], BC: ['#a9c8f0', '#ffffff', '#b9a2e6', '#ffffff', '#f4a8c8'], FIELD: [['#a9c8f0', '#ffffff'], ['#b9a2e6', '#ffffff'], ['#ffffff', '#f4a8c8'], ['#cfe6f4', '#b9a2e6']] },
-    autumn: { pal: ['#fbefdc', '#fbefdc', '#b9a2e6', '#b9a2e6', '#d48fae', '#eec67a'], BC: ['#b9a2e6', '#fbefdc', '#d48fae', '#fbefdc', '#eec67a'], FIELD: [['#b9a2e6', '#fbefdc'], ['#d48fae', '#fbefdc'], ['#eec67a', '#fbefdc'], ['#b9a2e6', '#d48fae']] },
+    spring: { pal: [Wh, Wh, Ye, Pk, Wh, Ye], BC: [Wh, Ye, Wh, Pk, Wh], FIELD: [[Wh, Ye], [Ye, Wh], [Wh, Pk], [Wh, Vi]] },
+    summer: { pal: [Wh, Ye, Wh, Vi, Wh, Ye], BC: [Wh, Ye, Vi, Wh, Wh], FIELD: [[Wh, Ye], [Ye, Wh], [Vi, Wh], [Wh, Vi]] },
+    autumn: { pal: [Wa, Wa, Vi, Gd, Pk, Gd], BC: [Wa, Gd, Vi, Wa, Gd], FIELD: [[Vi, Wa], [Gd, Wa], [Wa, Gd], [Wa, Pk]] },
     winter: { pal: ['#fbf4ea', '#fbf4ea', '#c8d4f0', '#c8d4f0', '#d8cdee', '#ffffff'], BC: ['#c8d4f0', '#fbf4ea', '#d8cdee', '#ffffff', '#c8d4f0'], FIELD: [['#e8eef8', '#ffffff'], ['#c8d4f0', '#ffffff'], ['#d8cdee', '#ffffff'], ['#ffffff', '#f2e6d2']] }
   };
 

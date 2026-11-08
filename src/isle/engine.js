@@ -253,7 +253,7 @@ const WATER_FN = `
    螢幕空間倒影（岸邊的燈、房子、樹倒映在水裡）、遠方的天空與城堡用方向查找、岸線依深度柔和淡出並帶一圈碎泡。
    uLate = 0（省電模式、室內、其他小島）時照舊用一般的半透明混色 */
 export const WL = { uLate: { value: 0 }, uOpq: { value: null }, uOpqD: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uNF: { value: new THREE.Vector2(0.5, 500) },
-  uPrj: { value: new THREE.Matrix4() }, uSSR: { value: 1 }, uAbs: { value: new THREE.Vector3(0.78, 0.40, 0.30) }, uAbsSea: { value: new THREE.Vector3(0.90, 0.40, 0.22) }, uScat: { value: new THREE.Color('#39576b') }, uDbg: { value: 0 }, uSplit: { value: 0 } };   // uSplit：這一格島上用兩階段（地形的水底不再自己染色）
+  uPrj: { value: new THREE.Matrix4() }, uSSR: { value: 1 }, uAbs: { value: new THREE.Vector3(0.90, 0.45, 0.50) }, uAbsSea: { value: new THREE.Vector3(0.90, 0.40, 0.22) }, uScat: { value: new THREE.Color('#2c4d4a') }, uDbg: { value: 0 }, uSplit: { value: 0 } };   // uSplit：這一格島上用兩階段（地形的水底不再自己染色）；v9.15 半寫實：淡水也吃藍光、散射回深青綠
 const LATE_W = `
   uniform float uLate; uniform sampler2D uOpq; uniform sampler2D uOpqD; uniform vec2 uRes; uniform vec2 uNF; uniform mat4 uPrj; uniform float uSSR; uniform vec3 uAbs; uniform vec3 uAbsSea; uniform vec3 uScat; uniform float uDbg;
   float taLin(float d){ return uNF.x * uNF.y / (uNF.y - d * (uNF.y - uNF.x)); }
@@ -868,10 +868,13 @@ export function bend(mat, kind) {
           #ifdef TA_SEA
             float wCalm = 0.0; vec3 wS = seaSpec, wAbs = uAbsSea, wA = mix(wAlb * 0.3, vec3(0.16, 0.24, 0.32), 0.5);   // 淺灘淡藍、深處灰藍；保留透過水面的砂底
           #else
-            float wCalm = vWP.y > 0.8 ? 1.0 : 0.5; vec3 wS = reflectedLight.directSpecular * 0.6, wAbs = uAbs, wA = mix(uScat, wAlb * 0.3, 0.2);   // 河與小溪：偏青綠，越深越暗
+            float wCalm = vWP.y > 0.8 ? 1.4 : 0.5; vec3 wS = reflectedLight.directSpecular * 0.6, wAbs = uAbs, wA = mix(uScat, wAlb * 0.3, 0.2);   // 河與小溪：偏青綠，越深越暗
+            #ifdef USE_COLOR_ALPHA
+            wAbs *= mix(1.45, 0.55, vColor.a);   // v9.15 半寫實：河心吸收多（暗青綠），岸邊清透看得到砂石底
+            #endif
             if (vPond > 0.0) {   // v7.4 池塘：很靜（白沫只剩一成），池心當成更深的水——吸收多、散射回深青綠 #3D7778；岸邊淺、看得到砂底
               float pk = smoothstep(0.12, 1.0, vPond);
-              wCalm = 1.8; wAbs = uAbs * (1.0 + pk * 2.2); wA = mix(wA, vec3(0.047, 0.184, 0.188) * 0.42, pk);
+              wCalm = 1.8; wAbs = uAbs * (1.0 + pk * 2.2); wA = mix(wA, vec3(0.040, 0.150, 0.118) * 0.42, pk);   // v9.15 半寫實：池心深青綠帶橄欖
             }
           #endif
           #ifdef TA_SEA

@@ -86,7 +86,7 @@
       const q=new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),n);
       for(let j=0;j<5;j++) {
         const a=j*Math.PI*.4+seed*.35,c=Math.cos(a),s=Math.sin(a);
-        const raw=[[0,0,r*.12],[-r*.30,r*.07,r*.42],[-r*.31,r*.18,r*.8],[0,r*.22,r],[r*.31,r*.18,r*.8],[r*.30,r*.07,r*.42]];
+        const raw=[[0,0,r*.1],[-r*.36,r*.1,r*.4],[-r*.34,r*.27,r*.78],[0,r*.34,r*.9],[r*.34,r*.27,r*.78],[r*.36,r*.1,r*.4]];   // v9.15 半寫實：花瓣寬、末端圓鈍並上翹成淺杯（以前尖菱形）
         const pts=raw.map(p=>new THREE.Vector3(p[0]*c+p[2]*s,p[1],p[2]*c-p[0]*s).applyQuaternion(q).add(new THREE.Vector3(x,y,z)).toArray());
         put(meshFrom(pts,[0,2,1,0,3,2,0,4,3,0,5,4,0,1,2,0,2,3,0,3,4,0,4,5]),mat,'petals');
       }
@@ -118,7 +118,7 @@
 
   I.PROPMODELS['flower_pots'] = function (THREE, kit) {
     const t=tools(THREE,kit,'flower-pots');
-    const M={wood:kit.mat('#A48C62',{roughness:.8},'wood'),terra:kit.mat('#DDAEAD',{roughness:.9},'ceramic'),ivory:kit.mat('#E6DCCA',{roughness:.64},'ceramic'),gold:kit.mat('#E8C48B',{roughness:.4,metalness:0.6},'metal'),leaf:kit.mat('#779D80',{roughness:.92},'sway'),blue:kit.mat('#B89CDE',{roughness:.8}),yellow:kit.mat('#F2D69A',{roughness:.82}),pink:kit.mat('#EE9FC5',{roughness:.83}),navy:kit.mat('#A48C62',{roughness:.65},'ceramic')};
+    const M={wood:kit.mat('#A48C62',{roughness:.8},'wood'),terra:kit.mat('#B5765A',{roughness:.9},'ceramic'),ivory:kit.mat('#E6DCCA',{roughness:.64},'ceramic'),gold:kit.mat('#E8C48B',{roughness:.4,metalness:0.6},'metal'),leaf:kit.mat('#4F7A3C',{roughness:.92},'sway'),blue:kit.mat('#8A74B0',{roughness:.8}),yellow:kit.mat('#DDB13E',{roughness:.82}),pink:kit.mat('#C2607A',{roughness:.83}),navy:kit.mat('#A48C62',{roughness:.65},'ceramic')};   // v9.15 半寫實：陶盆是赤陶色、深綠葉、花是玫紅／金黃／薰衣草紫
     const ivoryPetals=kit.mat('#E6DCCA',{roughness:.64});
     M.leaf.userData.polishSurface='garden-leaves';
     const pots=[{x:0,z:-.075,h:.43,r:.205,mat:M.wood,type:0},{x:-.252,z:.11,h:.255,r:.15,mat:M.terra,type:1},{x:.252,z:.105,h:.275,r:.162,mat:M.ivory,type:2}];
@@ -150,7 +150,7 @@
 
   I.PROPMODELS['flower_bed'] = function (THREE, kit) {
     const t=tools(THREE,kit,'flower-bed');
-    const M={stone:kit.mat('#E6DCCA',{roughness:.88},'stone'),stoneShade:kit.mat('#BCB4A8',{roughness:.91},'stone'),navy:kit.mat('#A48C62',{roughness:.66}),soil:kit.mat('#81796D',{roughness:1}),leaf:kit.mat('#74997F',{roughness:.93},'sway'),leafLight:kit.mat('#ABC993',{roughness:.91},'sway'),blue:kit.mat('#ED9BC2',{roughness:.82}),white:kit.mat('#FFF7EF',{roughness:.84}),yellow:kit.mat('#F2D79D',{roughness:.83}),lavender:kit.mat('#B89DDD',{roughness:.84})};
+    const M={stone:kit.mat('#E6DCCA',{roughness:.88},'stone'),stoneShade:kit.mat('#BCB4A8',{roughness:.91},'stone'),navy:kit.mat('#A48C62',{roughness:.66}),soil:kit.mat('#81796D',{roughness:1}),leaf:kit.mat('#4E7539',{roughness:.93},'sway'),leafLight:kit.mat('#7C9E52',{roughness:.91},'sway'),blue:kit.mat('#C2607A',{roughness:.82}),white:kit.mat('#F1EEE6',{roughness:.84}),yellow:kit.mat('#DDB13E',{roughness:.83}),lavender:kit.mat('#8A74B0',{roughness:.84})};   // v9.15 半寫實：深綠葉、玫紅／白／金黃／薰衣草紫
     M.soil.userData.polishSurface='soil';
     for(const m of [M.leaf,M.leafLight])m.userData.polishSurface='garden-leaves';
     // Inlay is a continuous ring sandwiched between stone courses, with genuine depth.
@@ -172,7 +172,7 @@
       const cx=-.91+i*.26,cz=i%2?.10:-.10,cy=.34+.025*(i%3);
       // Broad, overlapping leaves replace the exposed flattened dough-like masses.
       if(stage>0){for(let j=0;j<21;j++){const a=j*2.39996+i*.7,u=Math.sqrt((j+.3)/21),xx=cx+Math.sin(a)*.13*u,zz=j%4===0?.215:cz+Math.cos(a)*.175*u,yy=.335+.105*Math.sqrt(1-u*u);t.leaf(xx,yy,zz,.12+.014*(j%3),.082,a,.12+((j%5)-2)*.16,(i+j)%4?M.leaf:M.leafLight);}}
-      if(stage>1){for(let j=0;j<8;j++){const a=j*2.39996+i*.9,u=.24+.086*j,xx=cx+Math.sin(a)*.18*u,zz=j%3===0?.27+.035*((i+j)%2):cz+Math.cos(a)*.18*u,yy=.405+.047*((i+j)%3);const colors=[M.blue,M.white,M.lavender,M.blue,M.white,M.lavender,M.blue,M.white,M.yellow];t.rod([xx,.37,zz],[xx,yy,zz],.004,M.leaf,'foliage');t.bloom(xx,yy,zz,.062+.006*((j+i)%3),colors[(j+i*2)%9],M.yellow,j+i*7);}}
+      if(stage>1){for(let j=0;j<12;j++){const a=j*2.39996+i*.9,u=.2+.06*j,xx=cx+Math.sin(a)*.18*u,zz=j%3===0?.27+.035*((i+j)%2):cz+Math.cos(a)*.18*u,yy=.405+.047*((i+j)%3);const colors=[M.blue,M.white,M.lavender,M.blue,M.white,M.lavender,M.blue,M.white,M.yellow];t.rod([xx,.37,zz],[xx,yy,zz],.004,M.leaf,'foliage');t.bloom(xx,yy,zz,.042+.006*((j+i)%3),colors[(j+i*2)%9],M.yellow,j+i*7);}}   // v9.15 半寫實：每叢 12 朵、花小一號
     }
     if(stage>1){
       for(let i=0;i<5;i++){

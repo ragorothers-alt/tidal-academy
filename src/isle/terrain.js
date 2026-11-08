@@ -263,11 +263,11 @@ export const terrain = (function build() {
   let inWall = false, surface = [0, 0, 0, 0];
   const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); WALL.push(inWall); SF.push(...surface); };
   const quad = (a, b, c, d, ca, cb, cc, cd) => { push(...a, ca); push(...b, cb); push(...c, cc); push(...a, ca); push(...c, cc); push(...d, cd); };
-  const BED_SH = new THREE.Color('#c8d3b6'), BED_DP = new THREE.Color('#91afa6');   // 池底：淺岸的砂、池心的深青綠（Codex 第二輪 C6）
+  const BED_SH = new THREE.Color('#ad9f80'), BED_DP = new THREE.Color('#5f6450');   // 池底：淺岸的砂、池心的深青綠（Codex 第二輪 C6）
   const grassC = (x, z, hi) => { const n = noise(x * 0.45, z * 0.45); return new THREE.Color(hi ? '#8ea676' : '#86a06c').lerp(new THREE.Color(hi ? '#a8bb88' : '#a2b682'), n * 0.48); };   // v9.13 半寫實：草地底色是真的草綠（以前是淡鼠尾草綠）
   const sandC = (x, z) => new THREE.Color('#e8d8bc').lerp(new THREE.Color('#d9cdb8'), noise(x * 0.5, z * 0.5) * 0.7);   // 細沙（v9.13：暗一點的自然沙色，白天不再整片發白）
-  const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#c8d3b6').lerp(new THREE.Color('#b7c9b8'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? (pondOf(tx, tz) ? BED_SH.clone().lerp(BED_DP, pondK(pondOf(tx, tz), x, z)) : new THREE.Color('#9fbdaf')) : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙；池塘（v7.4）岸邊是淺色的砂底、往池心漸深
-  const lip = new THREE.Color('#86a06c'), cliffT = new THREE.Color('#d8c7b4'), cliffB = new THREE.Color('#a69d92'), sandW = new THREE.Color('#e9dfce'), sandWB = new THREE.Color('#c7cfd0'), bankB = new THREE.Color('#bdc9b6');
+  const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#b3a685').lerp(new THREE.Color('#948b74'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? (pondOf(tx, tz) ? BED_SH.clone().lerp(BED_DP, pondK(pondOf(tx, tz), x, z)) : new THREE.Color('#8a826c')) : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙；池塘（v7.4）岸邊是淺色的砂底、往池心漸深；v9.15 半寫實：溪底、河底是灰褐砂石
+  const lip = new THREE.Color('#86a06c'), cliffT = new THREE.Color('#d8c7b4'), cliffB = new THREE.Color('#a69d92'), sandW = new THREE.Color('#e9dfce'), sandWB = new THREE.Color('#c7cfd0'), bankB = new THREE.Color('#7a7660');   // v9.15 半寫實：小溪岸坡貼水處是濕泥
   const bankSl = (x, z) => 0.42 + noise(x * 0.7, z * 0.7) * 0.18;   // 草岸斜坡在這個角點的寬度
   const rockG = new THREE.Color('#8d9d9a'), rockT = new THREE.Color('#d8c7b4'), rockB = new THREE.Color('#a69d92'), soil = new THREE.Color('#9c8f80'), wc = new THREE.Color();
   /* 崖壁：從 b 到 a 的一面牆（底 y0、兩端的頂 yb、ya），細分成 3 × n 格。中間的頂點用世界座標的向量場水平推移，
@@ -286,6 +286,7 @@ export const terrain = (function build() {
       const band = 0.86 + 0.16 * noise(y * 3.4 + (x + z) * 0.25, (x - z) * 0.9), rocky = THREE.MathUtils.smoothstep(noise(x * 0.9 + 3, z * 0.9 + y * 1.3), 0.55, 0.8);
       const topSoil = THREE.MathUtils.smoothstep(v + (noise(x * 3.1, z * 3.1) - 0.5) * 0.12, 0.78, 0.9);   // 崖頂一層薄土
       wc.copy(rockB).lerp(rockT, v).lerp(rockG, rocky * 0.5).lerp(cliffT, 0.25).lerp(soil, topSoil * 0.85).multiplyScalar(band * (0.72 + 0.28 * Math.min(1, v * 2.5)));   // 灰米色岩層、灰色岩塊、牆腳較暗
+      if (y0 === HT[3] || y0 === HT[6]) wc.multiplyScalar(1 - 0.26 * THREE.MathUtils.smoothstep(y, y0, y0 + 0.55) * (1 - THREE.MathUtils.smoothstep(y, y0 + 0.7, y0 + 1.1)));   // v9.15 半寫實：岸壁貼水一帶是濕的深色
       pt.push([[px, y, pz], wc.clone()]);
     }
     if (surface[2]) {
@@ -482,8 +483,8 @@ water.river = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColo
    河中央是較深的藍；流進沙灘或大海的那幾格，水面順著往下斜進海裡，不會浮在沙灘上 */
 {
   const P = [], CL = [], PD = [], FL = [], S = 4, isW = (x, z) => T(x, z) === 3 || T(x, z) === 6;
-  const deep = new THREE.Color('#6998b1'), shal = new THREE.Color('#9acbc7'), cDeep = new THREE.Color('#8bb9c4'), cShal = new THREE.Color('#b0c8dd'), col = new THREE.Color();   // 青綠透亮的河水；小溪更淺更亮
-  const pDeep = new THREE.Color('#2f6f72'), pShal = new THREE.Color('#85b7a2');   // 池塘（v7.4）：池心深青綠、岸邊淺綠
+  const deep = new THREE.Color('#4d7570'), shal = new THREE.Color('#8fa992'), cDeep = new THREE.Color('#5f8a80'), cShal = new THREE.Color('#9fb29a'), col = new THREE.Color();   // 青綠透亮的河水；小溪更淺更亮；v9.15 半寫實：深青綠到帶砂色的淺綠，不再淡藍紫
+  const pDeep = new THREE.Color('#2d5a52'), pShal = new THREE.Color('#8ea88a');   // 池塘（v7.4）：池心深青綠、岸邊淺綠；v9.15 半寫實：池心暗、偏橄欖
   const cornerY = (cx, cz, y0) => { for (const [dx, dz] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const t = T(cx + dx, cz + dz); if (t === 0 || t === -1) return 0.3; } return y0; };
   for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
     if (!isW(x, z)) continue;

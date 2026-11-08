@@ -86,17 +86,17 @@ fringe(mat);
 }
 /* v7.6 夢幻風：一部分草叢開出小花（成片聚集、群間留草），遠看是參考圖那種撒滿粉白小花的草地。
    花頭自己一組（16 公尺一塊），用和野花同一套風吹與玩家推開；位置用座標雜湊，不動草叢的亂數與位置 */
-const BLOOM = { spring: ['#f4a8c8', '#f4a8c8', '#f7c6d9', '#fff3e6', '#fff3e6', '#c9b2ec'], summer: ['#ffffff', '#fff3e6', '#a9c8f0', '#c9b2ec', '#ffffff', '#cfe6f4'], autumn: ['#fbefdc', '#d48fae', '#c9b2ec', '#eec67a', '#fbefdc', '#d48fae'] };
+const BLOOM = { spring: ['#c99aab', '#e3c04a', '#efece4', '#efece4', '#e3c04a', '#a090bb'], summer: ['#d9cf9a', '#e3c04a', '#efece4', '#efece4', '#9686b6', '#efece4'], autumn: ['#b48d9e', '#d6ac3e', '#ebe5d6', '#ebe5d6', '#9a88b4', '#d6ac3e'] };   // v9.15 半寫實：中間兩格白、其次黃，粉紫只在兩端零星
 const blooms = [], BCH = 16;
 let bloomSeason = '';
 /** 一朵小花（直徑約 13 公分）：五片往上翹的花瓣圍成淺杯（從側面低角度、從上面看都是一朵），花心淡黃、一根細莖；共 11 個三角形。
    只有花瓣（aTint = 1）染上這一季的花色，花心與莖維持頂點色 */
 function bloomGeo() {
-  const P = [], Cc = [], Nn = [], A = [], w = new THREE.Color('#ffffff'), core = new THREE.Color('#ffd98a'), stem = new THREE.Color('#5d8a34'), H = 0.25, r = 0.064;
+  const P = [], Cc = [], Nn = [], A = [], w = new THREE.Color('#ffffff'), core = new THREE.Color('#d9a83a'), stem = new THREE.Color('#5d8a34'), H = 0.25, r = 0.042;   // v9.15 半寫實：花頭直徑約 8 公分（以前 13）
   const push = (x, y, z, c, t) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); Nn.push(0, 1, 0); A.push(t); };
   const at = (a, d) => [Math.cos(a) * d, H + d * 0.62, Math.sin(a) * d];   // 花瓣往外越高：淺杯
   for (let i = 0; i < 5; i++) {
-    const a = i * 1.2566, L = at(a - 0.36, r * 0.55), T = at(a, r), Rr = at(a + 0.36, r * 0.55);
+    const a = i * 1.2566, L = at(a - 0.5, r * 0.72), T = at(a, r), Rr = at(a + 0.5, r * 0.72);   // v9.15 半寫實：花瓣寬圓（雛菊、毛茛的淺杯，不是尖星）
     push(0, H, 0, core, 0); push(...L, w, 1); push(...T, w, 1);
     push(0, H, 0, core, 0); push(...T, w, 1); push(...Rr, w, 1);
   }
@@ -111,7 +111,7 @@ function bloomInit() {
   const h = (x, z, k) => Math.abs(Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453) % 1;
   spots.forEach(p => {
     const f = Math.sin(p.x * 0.37 + 1.3) * Math.sin(p.z * 0.29 - 0.7) * 0.6 + Math.sin((p.x - p.z) * 0.17 + 2.1) * 0.4;   // 一片片的花：雜訊高的地方七成五的草叢開花，其他地方兩成
-    const on = THREE.MathUtils.smoothstep(f, 0, 0.7); if (h(p.x, p.z, 1) > 0.06 + 0.72 * on) return;   // v8.7 花集中成一片一片：花海外面只剩零星幾朵（以前兩成的草叢都開花，整片草地撒得很平均）
+    const on = THREE.MathUtils.smoothstep(f, 0, 0.7); if (h(p.x, p.z, 1) > 0.11 + 0.72 * on) return;   // v9.15 半寫實：花頭小了，花海外零星小花多一點；v8.7 花集中成一片一片：花海外面只剩零星幾朵（以前兩成的草叢都開花，整片草地撒得很平均）
     const pc = Math.floor((Math.sin(p.x * 0.21 + 0.4) * Math.sin(p.z * 0.19 - 1.1) * 0.5 + 0.5) * 5.99);   // 同一片花海以一兩種顏色為主
     for (let j = 0, n = 1 + (h(p.x, p.z, 2) < 0.3 + on * 0.4) + (h(p.x, p.z, 13) < on * 0.4); j < n; j++) {   // 花海中間一叢兩三朵
       const a = h(p.x, p.z, 3 + j) * 6.28 + j * 2.1, d = (0.03 + h(p.x, p.z, 5 + j) * 0.12) * p.s, x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;

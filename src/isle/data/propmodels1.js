@@ -270,12 +270,12 @@
     navy:kit.mat('#A48C62',{roughness:.82},'stone'),
     gold:kit.mat('#E8C48B',{roughness:.4,metalness:0.7},'metal'),
     soil:kit.mat('#81796D',{roughness:1}),
-    leaf:kit.mat('#719B81',{roughness:.94},'sway'),
-    light:kit.mat('#A8C693',{roughness:.92},'sway'),
-    blue:kit.mat('#BAA1DE',{roughness:.85}),
-    white:kit.mat('#FFF8F1',{roughness:.9}),
-    yellow:kit.mat('#ED9EC3',{roughness:.86}),
-    pollen:kit.mat('#F3D99A',{roughness:.86})
+    leaf:kit.mat('#4F7A3C',{roughness:.94},'sway'),
+    light:kit.mat('#7FA058',{roughness:.92},'sway'),
+    blue:kit.mat('#8C78B4',{roughness:.85}),
+    white:kit.mat('#F0EDE4',{roughness:.9}),
+    yellow:kit.mat('#C4627C',{roughness:.86}),
+    pollen:kit.mat('#DDB03E',{roughness:.86})   // v9.15 半寫實：深綠葉、薰衣草紫／白／玫紅，花蕊金黃
   };
   for(const m of [mats.leaf,mats.light])m.userData.polishSurface='garden-leaves';
   for(const m of [mats.blue,mats.white,mats.yellow,mats.pollen])m.userData.polishSurface='flowers';
@@ -364,7 +364,7 @@
       [-.26,.65,.25,2,.068],[-.08,.76,.23,1,.067],[.18,.7,.27,0,.068],[.29,.67,.05,1,.062],[-.3,.73,-.04,1,.064],[-.13,.82,-.12,0,.071],[.08,.795,.04,0,.074],[.26,.77,-.19,0,.063],[.04,.84,-.25,1,.063],[-.22,.69,-.27,0,.056],[-.04,.565,.355,2,.057],[.3,.67,.27,2,.038],[-.32,.665,.18,2,.037],[-.23,.77,.06,2,.036],[.14,.735,-.3,2,.04],[.33,.695,-.13,2,.037],[.02,.74,.25,2,.04],[-.11,.735,-.32,2,.035],[.17,.695,.13,1,.05],[-.2,.69,.32,1,.049],[-.29,.67,-.18,2,.037],[.14,.84,-.13,2,.034],[-.04,.825,-.02,2,.035],[.26,.72,.13,0,.052],[-.05,.73,-.22,1,.051],[.33,.69,-.28,1,.045],[-.34,.68,.01,0,.047],[.05,.59,.36,1,.05],[-.25,.8,-.12,1,.044],[-.15,.7,.12,2,.041],[.1,.72,-.03,1,.052],[-.18,.76,-.28,2,.038],[.3,.73,.23,2,.035],[-.33,.73,-.25,1,.045]
     ];
     for(let i=0;i<heads.length;i++){
-      const [x,y,z,color,baseR]=heads[i],r=baseR*1.2,top=[x,y,z];stem([x*.78,.52,z*.78],top,.0047);
+      const [x,y,z,color,baseR]=heads[i],r=baseR*.8,top=[x,y,z];stem([x*.78,.52,z*.78],top,.0047);   // v9.15 半寫實：花頭小三分之一，葉叢露出來
       // Plane is tilted toward the front with the normal strongly upward.
       const U=new THREE.Vector3(1,0,0),V=new THREE.Vector3(0,.54,-.84),C=new THREE.Vector3(x,y,z),m=stage>=4?[mats.blue,mats.white,mats.yellow][color]:mats.leaf,name=['flowers-blue','flowers-white','flowers-yellow'][color];
       for(let k=0;k<5;k++){const a=k*Math.PI*2/5+i*.48,d=U.clone().multiplyScalar(Math.cos(a)).addScaledVector(V,Math.sin(a)),base=C.clone().addScaledVector(d,r*.09),tip=C.clone().addScaledVector(d,r);blade(base.toArray(),tip.toArray(),r*.46,.004,m,name,new THREE.Vector3(0,.84,.54));}
