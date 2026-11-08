@@ -924,6 +924,7 @@ function seasonGLSL(kind) {
         vec3 fc = ac * clamp(lum * 1.15, 0.85, 1.7);   // 秋葉亮一點，背光面也看得出金黃
         #ifdef TA_SHRUB
           fk *= 0.4;   // 灌木只帶一點秋色，大致保持綠色（和金黃的樹分出層次）
+          fc = vec3(0.4, 0.33, 0.15) * clamp(lum, 0.7, 1.15); fk *= 0.85;   // v9.16 半寫實：灌木的秋色是橄欖古銅（以前粉杏，混進綠葉成一團黃褐）
         #endif
         #ifdef TA_GOLD
           sunny = 0.62 + 0.38 * smoothstep(-0.6, 0.25, normalize(vWN).y); fk = min(1.0, uFall * 1.25); fc = vec3(0.95, 0.74, 0.38) * clamp(lum * 1.05, 0.45, 1.0); leafy = 1.0;   // v7.6：柔金（以前飽和的金黃）   // 廣場大樹：整棵飽滿的金黃（樹冠材質全是葉子；頂端偏黃的葉子也要算進去）

@@ -10,7 +10,7 @@ import { S } from './state.js';
 const isGlass = m => !Array.isArray(m) && nightMats.includes(m) && m.userData.kind === 'glass';   // kit.win() 的窗玻璃與燈籠
 import { loadModel } from './actors.js';
 import { MODEL_IDS } from './model-list.js';
-import { NATURE_IDS, natureModel, natureCrown } from './naturemodels.js';
+import { NATURE_IDS, natureModel, natureCrown, setNatureLeaves } from './naturemodels.js';
 import { ROCK_IDS, natureRockModel } from './naturerocks.js';
 
 const READY = new Set([...MODEL_IDS, ...NATURE_IDS, ...ROCK_IDS]);
@@ -282,6 +282,7 @@ export function dressAll() {
     if (id === 'prop_tree') assignTreeColors(gs);
     // Stable placement-derived variants do not consume props.js's island layout RNG.
     if (NATURE_IDS.has(id) || ROCK_IDS.has(id)) {
+      if (id === 'prop_shrub') loadLeaves().then(tx => tx && setNatureLeaves(tx[0]));   // v9.16：灌木的葉叢卡也用闊葉樹的葉叢圖集
       try {
         gs.forEach(g => {
           const v = Math.floor(hash2(g.position.x * 10, g.position.z * 10) * 120);

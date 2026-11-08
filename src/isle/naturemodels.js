@@ -174,25 +174,97 @@ function bamboo() {
   return root;
 }
 
+/* v9.16 半寫實：灌木的葉叢卡材質。卡片用 models/tex_leaves.js 的葉叢圖集（和闊葉樹同一張）只取 alpha 與每片葉子的深淺，顏色來自頂點色；
+   aNatureCore = 1 的內芯不挖洞。圖集載入前用畫布畫的簡單葉形（props3d 載入圖集後呼叫 setNatureLeaves 換上） */
+let SHRUB_LEAF = null, SHRUB_FALLBACK = null;
+function shrubFallbackTex() {
+  if (SHRUB_FALLBACK) return SHRUB_FALLBACK;
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S; const c = cv.getContext('2d'), rnd = natureRandom(4242);
+  for (let cell = 0; cell < 4; cell++) {
+    const ox = (cell % 2) * S / 2, oy = Math.floor(cell / 2) * S / 2;
+    for (let i = 0; i < 16; i++) { c.fillStyle = '#4d7a3a'; c.beginPath(); c.ellipse(ox + 22 + rnd() * 84, oy + 22 + rnd() * 84, 12, 5.5, rnd() * Math.PI, 0, Math.PI * 2); c.fill(); }
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return (SHRUB_FALLBACK = t);
+}
+function shrubLeafMaterial() {
+  if (SHRUB_LEAF) return SHRUB_LEAF;
+  const m = bend(new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, map: shrubFallbackTex(), alphaTest: .5, roughness: .94, metalness: 0, side: THREE.DoubleSide }), 'sway');
+  m.defines = { ...m.defines, TA_NATURE: '', TA_MODEL: '', TA_SHRUB: '' };
+  const compile = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, renderer) => {
+    compile(sh, renderer);
+    sh.vertexShader = 'attribute float aNatureCore;\nvarying float vNatureCore;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvNatureCore = aNatureCore;');
+    sh.fragmentShader = 'varying float vNatureCore;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
+      vec4 leafT = texture2D(map, vMapUv);
+      if (vNatureCore < 0.5) {
+        diffuseColor.a *= leafT.a;
+        #ifdef TA_SHRUBTEX
+          diffuseColor.rgb *= clamp(dot(leafT.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.139, 0.6, 1.5);
+        #endif
+      }`);
+  };
+  m.customProgramCacheKey = () => 'nature-shrub-v1' + (m.defines.TA_SHRUBTEX !== undefined ? '-tex' : '');
+  return (SHRUB_LEAF = m);
+}
+/** props3d 載入葉叢圖集後呼叫：灌木的葉叢卡換上 Blender 算的闊葉小枝 */
+export function setNatureLeaves(green) {
+  if (!green) return;
+  const m = shrubLeafMaterial(); m.map = green; m.defines = { ...m.defines, TA_SHRUBTEX: '' }; m.needsUpdate = true;
+}
+
+/* v9.16 半寫實：以前九顆不透明的扁球加小葉片（秋天轉成一團團的黃褐，像一盤麵包），
+   現在每一團是一顆暗綠、凹凸的內芯，外面一圈葉叢卡（和闊葉樹的樹冠同一套作法），輪廓是參差的葉緣、看得到葉子之間的空隙 */
 function shrub(variant) {
-  const root = new THREE.Group(), green = [], flowers = [], r = natureRandom(819 + variant * 97);
+  const root = new THREE.Group(), cores = [], cards = [], flowers = [], r = natureRandom(819 + variant * 97), rc = natureRandom(1907 + variant * 31), masses = [];
   for (let i = 0; i < 9; i++) {
     const a = i * 2.399, radial = i < 2 ? .1 : .22 + r() * .13;
     const center = new THREE.Vector3(Math.cos(a) * radial, .16 + r() * .12 + (i < 2 ? .12 : 0), Math.sin(a) * radial * (.7 + variant * .1));
-    const g = new THREE.IcosahedronGeometry(.19 + r() * .055, 1); g.scale(1, .85 + variant * .09, .92); g.translate(...center.toArray()); green.push(tint(g, i % 3 ? '#76925a' : '#8fa468'));   // v9.15 半寫實：灌木葉團是自然的綠（以前淡鼠尾草）
-    for (let k = 0; k < 9; k++) {
-      const phi = k * 2.399, y = .2 + (k / 9) * .8, d = new THREE.Vector3(Math.cos(phi) * Math.sqrt(1 - y * y), y, Math.sin(phi) * Math.sqrt(1 - y * y));
-      green.push(tint(orientLeaf(leaf(.035, .022, .006), center.clone().addScaledVector(d, .215), d), '#8fa468'));
+    masses.push([center, .19 + r() * .055, .85 + variant * .09]);
+  }
+  const bushC = masses.reduce((s, m) => s.add(m[0]), new THREE.Vector3()).divideScalar(masses.length);
+  const v = new THREE.Vector3(), q = new THREE.Vector3(), nOut = new THREE.Vector3(), nC = new THREE.Vector3(), cn = new THREE.Vector3();
+  masses.forEach(([center, rad, sy], i) => {
+    const sx = rad, syy = rad * sy, sz = rad * .92;
+    { // 內芯：比葉叢的外殼小一圈、暗一點（灌木裡面的陰影），只負責擋住後面
+      const core = new THREE.IcosahedronGeometry(1, 1), pp = core.attributes.position, pn = core.attributes.normal;
+      for (let k = 0; k < pp.count; k++) {
+        v.fromBufferAttribute(pp, k); const bump = 1 + .12 * Math.sin(v.x * 7 + i) * Math.cos(v.z * 6 - v.y * 5 + i * 1.3);
+        q.set(center.x + v.x * sx * .72 * bump, center.y + v.y * syy * .68 * bump, center.z + v.z * sz * .72 * bump); pp.setXYZ(k, q.x, q.y, q.z);
+        nC.copy(q).sub(bushC).normalize(); nOut.copy(v).normalize().multiplyScalar(.55).addScaledVector(nC, .45).normalize(); pn.setXYZ(k, nOut.x, nOut.y, nOut.z);
+      }
+      cores.push(tint(core, '#405b34', .05));
+    }
+    const n = 34 + Math.round(rc() * 14);   // 葉叢卡：每團 34–48 張，散在 0.6–1.05 倍半徑的外殼裡，偏上半部
+    for (let k = 0; k < n; k++) {
+      const yy = Math.min(1, (1 - 2 * (k + .5) / n) * .9 + .14), a = k * 2.399963 + i * 1.7 + (rc() - .5) * .5, rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+      const d = new THREE.Vector3(rr * Math.cos(a), yy, rr * Math.sin(a)), s = .6 + rc() * .45;
+      const pos = center.clone().add(new THREE.Vector3(d.x * sx, d.y * syy, d.z * sz).multiplyScalar(s));
+      if (pos.y < .04) continue;   // 埋進土裡的卡不要
+      nC.copy(pos).sub(bushC).normalize(); nOut.copy(d).multiplyScalar(.6).addScaledVector(nC, .4).normalize();
+      cn.set(nOut.x + (rc() - .5) * .9, nOut.y + (rc() - .5) * .9 + .15, nOut.z + (rc() - .5) * .9).normalize();
+      const tangent = new THREE.Vector3().crossVectors(cn, Math.abs(cn.y) > .95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize(), up = new THREE.Vector3().crossVectors(tangent, cn).normalize();
+      const roll = rc() * Math.PI * 2, right = tangent.clone().multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll)), vert = up.clone().multiplyScalar(Math.cos(roll)).addScaledVector(tangent, -Math.sin(roll));
+      const span = .13 + rc() * .07, cell = Math.floor(rc() * 4), u0 = (cell % 2) * .5, v0 = Math.floor(cell / 2) * .5, flip = rc() < .5;
+      const P = [], UV = [];
+      for (const [u, w] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        q.copy(pos).addScaledVector(right, u * span / 2).addScaledVector(vert, w * span / 2); P.push(q.x, Math.max(.005, q.y), q.z);
+        UV.push(u0 + ((flip ? -u : u) * .5 + .5) * .5, v0 + (w * .5 + .5) * .5);
+      }
+      const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); gg.setIndex([0, 1, 2, 0, 2, 3]);
+      const N = []; nOut.multiplyScalar(.75).addScaledVector(cn, .25).normalize(); for (let j = 0; j < 4; j++) N.push(nOut.x, nOut.y, nOut.z);
+      gg.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+      cards.push(tint(gg, k % 3 ? '#5c7f44' : '#6a8a4c', .06));   // 灌木的葉色比樹冠深一點
     }
     if (i % 2 === 0) for (let j = 0; j < 5; j++) {
-      const a0 = j * Math.PI * 2 / 5, petal = new THREE.IcosahedronGeometry(.024, 0);
-      petal.scale(1, .5, 1.2); petal.translate(center.x + Math.cos(a0) * .027, center.y + .19, center.z + Math.sin(a0) * .027);
-      flowers.push(tint(petal, i % 4 ? '#FFF0D4' : '#E4BDD3', 0));
+      const a0 = j * Math.PI * 2 / 5, petal = new THREE.IcosahedronGeometry(.02, 0);
+      petal.scale(1, .5, 1.2); petal.translate(center.x + Math.cos(a0) * .022, center.y + syy * .98, center.z + Math.sin(a0) * .022);
+      flowers.push(tint(petal, i % 4 ? '#f1ede3' : '#d3a7b5', 0));   // 小白花，偶爾一朵灰粉（以前奶油黃與粉紫）
     }
-  }
-  const mat = natureMaterial('#D0DBCB', 'sway', true); mat.defines.TA_SHRUB = '';
-  part(root, 'nine-asymmetric-leaf-masses', mergeNatureGeometry(green), mat);
-  part(root, 'cream-and-pink-flower-clusters', mergeNatureGeometry(flowers), natureMaterial('#ffffff', 'plain', true));
+  });
+  const nCore = cores.reduce((s, g) => s + g.attributes.position.count, 0), leaves = mergeNatureGeometry([...cores, ...cards]);
+  leaves.setAttribute('aNatureCore', new THREE.Float32BufferAttribute(new Float32Array(leaves.attributes.position.count).map((_, k) => k < nCore ? 1 : 0), 1));
+  part(root, 'nine-leaf-masses-with-cards', leaves, shrubLeafMaterial());
+  part(root, 'white-flower-clusters', mergeNatureGeometry(flowers), natureMaterial('#ffffff', 'plain', true));
   root.userData.natureSink = .015;   // Apply after fit() recentres the bounds, so the base really sits in the soil.
   return root;
 }
