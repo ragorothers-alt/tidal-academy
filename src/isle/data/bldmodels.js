@@ -15,7 +15,7 @@
   // Shared finishes: smooth cream plaster, actual limestone feet, honey timber and lilac slate.
   const plaster=mat('#f0e5d5',{roughness:.92},'plaster'),stone=mat('#e8decf',{roughness:.94},'stone');
   const wood=mat('#cda67e',{roughness:.8},'wood'),woodDark=mat('#947b7b',{roughness:.8},'wood');
-  const roof=mat('#ad9abd',{roughness:.78},'roof'),gold=mat('#e8c48b',{roughness:.4,metalness:0.6},'metal');
+  const roof=mat('#646872',{roughness:.78},'roof'),gold=mat('#e8c48b',{roughness:.4,metalness:0.6},'metal');
   const rose=mat('#e6b8bf',{roughness:.94}),cream=mat('#fff0d4',{roughness:.94}),foliage=mat('#9fb994',{roughness:.94}),glass=kit.win();
   const canopyRose=mat('#e6b8bf',{roughness:.94},'fabric'),canopyCream=mat('#fff0d4',{roughness:.94},'fabric'),potRose=mat('#e6b8bf',{roughness:.94},'ceramic');
   const M={stone,stone2:stone,mortar:stone,plaster,wood,woodLight:wood,woodDark,roof,roof2:roof,roof3:roof,gold,red:rose,cream,canopyRose,canopyCream,leaf:foliage,leaf2:foliage,fruitRed:rose,fruitGold:cream,blue:roof,pot:potRose,glow:glass,glass};
@@ -118,7 +118,7 @@
   const mat=(color,opts={},kind)=>{const key=JSON.stringify([color,opts,kind]);if(!cache.has(key))cache.set(key,kit.mat(color,opts,kind));return cache.get(key);};
   const plaster=mat('#f0e5d5',{roughness:.92},'plaster'),limestone=mat('#e8decf',{roughness:.94},'stone');
   const stone=[limestone,limestone,limestone,limestone],dark=limestone;
-  const slate=mat('#ad9abd',{roughness:.8},'roof'),navy=[slate,slate],roof=[slate,slate,slate];
+  const slate=mat('#646872',{roughness:.8},'roof'),navy=[slate,slate],roof=[slate,slate,slate];
   const gold=mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),goldShade=mat('#b9a184',{roughness:.4,metalness:0.6},'metal');
   const wood=mat('#cda67e',{roughness:.8},'wood'),woodDark=mat('#947b7b',{roughness:.8},'wood');
   const crystal=mat('#f4c994',{roughness:.3,emissive:'#ffd39d',emissiveIntensity:.28}),crystalLight=crystal;

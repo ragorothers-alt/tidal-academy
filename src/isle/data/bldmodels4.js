@@ -6,7 +6,7 @@
     const STAGE=8;
     const g=new THREE.Group();g.name='tidal-crescent-museum';g.userData.sign=[0,3.35,1.905];
     const stone=kit.mat('#f0e5d5',{roughness:.92},'plaster'),shade=kit.mat('#e8decf',{roughness:.94},'stone'),light=shade;
-    const blue=kit.mat('#ad9abd',{roughness:.8},'roof'),blueLight=blue,blueDark=kit.mat('#9186a8',{roughness:.84},'roof');
+    const blue=kit.mat('#646872',{roughness:.8},'roof'),blueLight=blue,blueDark=kit.mat('#404654',{roughness:.84},'roof');
     const gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),goldShade=gold;
     const wood=kit.mat('#cda67e',{roughness:.8},'wood'),woodDark=kit.mat('#947b7b',{roughness:.8},'wood'),navy=kit.mat('#777a98',{roughness:.88}),glass=kit.win();
     const groups={},batches=new Map(),tmp=new THREE.Matrix4(),q=new THREE.Quaternion(),v=new THREE.Vector3(),unit=new THREE.Vector3(1,1,1);
@@ -81,7 +81,7 @@
   I.BLDMODELS.telescope=function(THREE,kit){
     const g=new THREE.Group();g.name='telescope-observatory';
     const limestone=kit.mat('#e8decf',{roughness:.94},'stone'),gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),wood=kit.mat('#cda67e',{roughness:.8},'wood');
-    const M={stone:limestone,stone2:limestone,joint:kit.mat('#c8bdd1',{roughness:.95}),navy:kit.mat('#9186a8',{roughness:.78}),ivory:gold,gold,goldLight:gold,
+    const M={stone:limestone,stone2:limestone,joint:kit.mat('#BCB4A8',{roughness:.95}),navy:kit.mat('#404654',{roughness:.78}),ivory:gold,gold,goldLight:gold,
       darkGold:kit.mat('#b9a184',{roughness:.4,metalness:0.6},'metal'),wood,woodLight:wood,
       crystal:kit.mat('#cfbee8',{roughness:.32,emissive:'#cfbee8',emissiveIntensity:.18}),lens:kit.mat('#b7a8cd',{roughness:.2,metalness:.1,transparent:true,opacity:.78},'glass')};
     const parts=new Map();
@@ -217,8 +217,8 @@
       wood: kit.mat('#cda67e', {roughness:.8}, 'wood'),
       woodLight: kit.mat('#cda67e', {roughness:.8}, 'wood'),
       dark: kit.mat('#947b7b', {roughness:.8}, 'wood'),
-      roof: kit.mat('#ad9abd', {roughness:.8}, 'roof'),
-      roofLight: kit.mat('#ad9abd', {roughness:.8}, 'roof'),
+      roof: kit.mat('#646872', {roughness:.8}, 'roof'),
+      roofLight: kit.mat('#646872', {roughness:.8}, 'roof'),
       gold: kit.mat('#e8c48b', {roughness:.4, metalness:0.6},'metal'),
       paper: kit.mat('#fff0d4', {roughness:.94}, 'paper'),
       ink: kit.mat('#947b7b', {roughness:.94}, 'paper'),

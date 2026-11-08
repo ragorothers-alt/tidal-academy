@@ -484,7 +484,7 @@ async function buildBg() {
   });
 }
 let gloomK = 0;
-const bgCol = new THREE.Color(), BG_DAWN = new THREE.Color('#ffd6cc'), BG_GOLD = new THREE.Color('#f4a07a'), BG_NIGHT = new THREE.Color('#3e4e86'), camF = new THREE.Vector3();
+const bgCol = new THREE.Color(), BG_DAWN = new THREE.Color('#ffdcc4'), BG_GOLD = new THREE.Color('#f2a874'), BG_NIGHT = new THREE.Color('#34446c'), camF = new THREE.Vector3();
 /** 從鏡頭往 (x, z) 的方向，彎曲後的海面在畫面上最高的位置（NDC y）——只看海面，不取樣地形（便宜、連續） */
 function seaNdc(x, z) {
   const cx = camera.position.x, cz = camera.position.z, L = Math.hypot(x - cx, z - cz) || 1, dx = (x - cx) / L, dz = (z - cz) / L;

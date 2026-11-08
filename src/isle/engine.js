@@ -120,9 +120,9 @@ const NOISE = `
   vec3 taDream(vec3 c, vec3 wp, vec3 wn, float k){
     vec2 p = wp.xz + wp.y * vec2(0.71, -0.53);
     float w = smoothstep(0.3, 0.7, n_v(p * 0.4 + vec2(5.3, 1.7)) * 0.62 + n_v(p * 1.25 + vec2(1.3, 8.2)) * 0.38);
-    vec3 t = mix(vec3(0.95, 0.945, 1.07), vec3(1.06, 1.01, 0.92), w);
-    t *= mix(vec3(1.0), vec3(1.035, 1.015, 0.975), clamp(wn.y, 0.0, 1.0));
-    t *= mix(vec3(1.0), vec3(0.93, 0.92, 1.04), clamp(-wn.y, 0.0, 1.0));
+    vec3 t = mix(vec3(0.955, 0.955, 0.965), vec3(1.035, 1.02, 0.995), w);   // v9.13 半寫實：風化的深淺（以前在杏色與薰衣草之間漂）
+    t *= mix(vec3(1.0), vec3(1.03, 1.02, 1.0), clamp(wn.y, 0.0, 1.0));
+    t *= mix(vec3(1.0), vec3(0.92, 0.92, 0.93), clamp(-wn.y, 0.0, 1.0));
     return c * mix(vec3(1.0), t, k);
   }
 `;
@@ -148,9 +148,9 @@ const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nu
 /* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
-['grass', 'dirt', 'sand', 'rock', 'plaster', 'planks', 'tiles', 'bark', 'leaves', 'cobble', 'masonry'].forEach(n => { DET[n] = { d: { value: neutral(128, 128, 128) }, n: { value: neutral(128, 128, 255) } }; });
+['grass', 'dirt', 'sand', 'rock', 'plaster', 'planks', 'tiles', 'bark', 'leaves', 'cobble', 'masonry', 'metal'].forEach(n => { DET[n] = { d: { value: neutral(128, 128, 128) }, n: { value: neutral(128, 128, 255) } }; });
 /** 每種材質用哪幾張細節圖（uD0..uD2 / uN0..uN2） */
-const DETK = { terrain: ['grass', 'sand', 'rock'], wall: ['planks'], roof: ['plaster'], stone: ['rock'], bark: ['bark'], sway: ['leaves'], sakura: ['leaves'], pine: ['leaves'], wood: ['planks'], fabric: ['plaster'], ceramic: ['plaster'], metal: ['rock'], foliage: ['leaves'], paper: ['plaster'] };
+const DETK = { terrain: ['grass', 'sand', 'rock'], wall: ['planks'], roof: ['plaster'], stone: ['rock'], bark: ['bark'], sway: ['leaves'], sakura: ['leaves'], pine: ['leaves'], wood: ['planks'], fabric: ['plaster'], ceramic: ['plaster'], metal: ['metal'], foliage: ['leaves'], paper: ['plaster'] };   // v9.13：金屬有自己的拉絲細節（以前借用岩石）
 /** v7.6 室內與家具的材質種類（M(color, opts, kind) 的 kind）：木頭、布料、陶瓷、金屬、室內葉子、紙 */
 export const MATK = ['wood', 'fabric', 'ceramic', 'metal', 'foliage', 'paper'];
 const TRI = `
@@ -169,6 +169,16 @@ function loadPhotoDetail() {
     const sc = document.createElement('script'); sc.src = base + 'tex_photo.js'; sc.onload = () => res((window.TA && window.TA.TEX) || {}); sc.onerror = () => res({}); document.head.appendChild(sc);
   }).then(pack => { if (pack.env) loadEnv(pack.env); if (window.TA && window.TA.TEX) delete window.TA.TEX; });
 }
+/** v9.13 半寫實：Blender／程式烘焙的無縫細節貼圖（models/tex_detail.js，tools/detailpack.py 打包）：草地的土粒與短草、沙粒、岩面的顆粒與細縫、木紋、
+    灰泥的抹痕、樹皮、葉片、金屬拉絲。亮度平均 128（= 乘色 1），法線是 OpenGL 慣例。載入失敗時沿用下面程式畫的低對比微表面 */
+function loadBakedDetail() {
+  const base = window.__MODEL_BASE || 'src/isle/models/';
+  return new Promise(res => {
+    if (window.TA && window.TA.DETAIL) { res(window.TA.DETAIL); return; }
+    const sc = document.createElement('script'); sc.src = base + 'tex_detail.js'; sc.onload = () => res((window.TA && window.TA.DETAIL) || null); sc.onerror = () => res(null); document.head.appendChild(sc);
+  }).then(pk => { if (window.TA) delete window.TA.DETAIL; return pk || {}; }).catch(() => ({}));
+}
+const loadTex = url => new Promise((ok, no) => new THREE.TextureLoader().load(url, ok, undefined, no));
 /** 中性 0.5 是乘色的 1；最大偏差 ±3%，法線擾動低於 0.04。沒有照片與顆粒裂紋。 */
 function paintedDetail(kind, size) {
   const d = new Uint8Array(size * size * 4), n = new Uint8Array(d.length), wood = kind === 'planks' || kind === 'bark';
@@ -207,8 +217,14 @@ export async function initDetail(size) {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   loadCliff(aniso);
   loadPhotoDetail().catch(() => {});   // 倒影非必要資源，不阻擋微表面建立
+  const baked = await loadBakedDetail();
+  const prep = x => { x.wrapS = x.wrapT = THREE.RepeatWrapping; x.generateMipmaps = true; x.minFilter = THREE.LinearMipmapLinearFilter; x.magFilter = THREE.LinearFilter; x.anisotropy = aniso; x.colorSpace = THREE.NoColorSpace; x.needsUpdate = true; };
   for (const n of Object.keys(DET)) {
     await new Promise(r => setTimeout(r, 0));
+    if (baked[n]) {   // 烘焙的細節貼圖
+      try { const [d, nm] = await Promise.all([loadTex(baked[n].d), loadTex(baked[n].n)]); [d, nm].forEach(prep); DET[n].d.value = d; DET[n].n.value = nm; continue; }
+      catch (e) { console.warn('細節貼圖載入失敗，改用程式微表面：', n, e); }
+    }
     try {
       const t = paintedDetail(n, Math.min(size || 256, 256));
       [t.detail, t.normal].forEach(x => { x.wrapS = x.wrapT = THREE.RepeatWrapping; x.generateMipmaps = true; x.minFilter = THREE.LinearMipmapLinearFilter; x.magFilter = THREE.LinearFilter; x.anisotropy = aniso; x.colorSpace = THREE.NoColorSpace; x.needsUpdate = true; });
@@ -559,7 +575,7 @@ export function bend(mat, kind) {
         float wet = 1.0 - smoothstep(wetEdge - 0.12, wetEdge + 0.24, vWP.y);
         sd *= mix(vec3(1.0), vec3(0.86, 0.90, 0.96), wet * 0.55);
         float band = sin(vWP.y * 5.0 + n_v(p * 0.45) * 1.1);
-        vec3 cl = bc * mix(vec3(0.965, 0.955, 1.03), vec3(1.035, 1.0, 0.95), band * 0.5 + 0.5);   // v7.7 夢幻風：岩層是暖杏與薰衣草交替（以前只有明暗）
+        vec3 cl = bc * mix(vec3(0.965, 0.96, 0.955), vec3(1.035, 1.0, 0.95), band * 0.5 + 0.5);   // 岩層是灰與暖褐交替（v9.13：以前是暖杏與薰衣草）
         if (masonK > 0.0) {
           float hc = abs(wn.x) > abs(wn.z) ? vWP.z : vWP.x, row = floor(vWP.y / 0.38);
           vec2 bp = vec2(hc / 0.76 + mod(row, 2.0) * 0.5, vWP.y / 0.38), fb = fract(bp);
@@ -587,8 +603,8 @@ export function bend(mat, kind) {
         // 只留低權重程式微表面；砌石和原岩的結構不再共用照片裂紋。
         float wR = max(side, masonK), wG = green * (1.0 - wR), wS = max(0.0, 1.0 - wG - wR);
         vec3 q = vWP * 0.5, det = triD(uD0, q, gB) * wG + triD(uD1, q, gB) * wS + triD(uD2, q, gB) * wR;
-        diffuseColor.rgb *= mix(vec3(1.0), det * 2.0, 0.35);
-        gDetN = (triN(uN0, q, gB) * wG + triN(uN1, q, gB) * wS + triN(uN2, q, gB) * wR) * 0.1;
+        diffuseColor.rgb *= mix(vec3(1.0), det * 2.0, 0.42);   // v9.13：烘焙的土粒、沙粒與岩面顆粒（以前 0.35，配的是幾乎平的程式微表面）
+        gDetN = (triN(uN0, q, gB) * wG + triN(uN1, q, gB) * wS + triN(uN2, q, gB) * wR) * 0.15;
         // 焦散放在水底，窄而斷續；水面不再疊一層明亮的網。
         float uw = max(bed, smoothstep(0.32, 0.12, vWP.y) * up);
         if (uw > 0.0) {
@@ -632,7 +648,7 @@ export function bend(mat, kind) {
         #ifdef TA_MERGED
           dk = smoothstep(0.85, 0.3, vOP.y);   // 合併後的物件座標以建築的地面為原點：牆腳一段
         #endif
-        vec3 dirt = mix(vec3(1.0), vec3(0.9, 0.88, 0.97), dk);   // v7.7 夢幻風：牆腳是薰衣草色的陰影，不是灰色髒污
+        vec3 dirt = mix(vec3(1.0), vec3(0.86, 0.84, 0.8), dk);   // v9.13：牆腳是泥土與雨水的髒污   // v7.7 夢幻風：牆腳是薰衣草色的陰影，不是灰色髒污
         diffuseColor.rgb *= dirt * vec3(1.06, 1.0, 0.9) * mix(1.0, board * grain * (0.89 + lip * 0.11), vert);   // 木板帶一點暖色；每片板子明暗不同、板縫一條細細的陰影（以前算了沒用上）
         vec3 q = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, q, gB) * 2.0, 0.3);
         gDetN = triN(uN0, q, gB) * 0.12;
@@ -665,16 +681,19 @@ export function bend(mat, kind) {
         float aa = clamp(1.0 - length(fwidth(sp)) * 5.0, 0.0, 1.0);
         diffuseColor.rgb *= 0.92 + n_f(sp * 2.1 + 4.0) * 0.16;
         float br = n_v(vec2(sp.x * 1.4, sp.y * 5.0) + 3.0) * 0.6 + n_v(vec2(sp.x * 3.1, sp.y * 11.0) + 8.0) * 0.4 * aa;   // 一筆一筆的手繪筆觸
-        diffuseColor.rgb *= mix(vec3(0.95, 0.94, 1.0), vec3(1.04, 1.02, 0.97), smoothstep(0.25, 0.75, br));
+        diffuseColor.rgb *= mix(vec3(0.95, 0.95, 0.965), vec3(1.04, 1.025, 0.99), smoothstep(0.25, 0.75, br));
         float lk = smoothstep(0.3, 0.14, n_cell(sp * 1.9 + 9.0)) * smoothstep(0.46, 0.62, n_v(sp * 0.55 + 7.0)) * step(-0.3, wn.y) * aa;
-        vec3 lt = mix(vec3(0.86, 0.97, 0.9), vec3(1.05, 0.9, 0.95), step(0.5, n_v(sp * 0.8 + 2.0)));
+        vec3 lt = mix(vec3(0.84, 0.92, 0.78), vec3(1.03, 1.0, 0.86), step(0.5, n_v(sp * 0.8 + 2.0)));   // v9.13：苔綠與淡黃的地衣
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * lt, lk * 0.7);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.04, 1.03, 1.0) + 0.012, smoothstep(0.6, 0.95, wn.y) * 0.5);
         #ifdef TA_NATURE
           { float sb = sin(vWP.y * 13.0 + n_v(vWP.xz * 1.3) * 3.5) * 0.5 + 0.5;   // 圓岩與海岸礁石：一層層柔和的岩層，暖杏與薰衣草交替
-            diffuseColor.rgb *= mix(vec3(0.92, 0.91, 1.04), vec3(1.06, 1.02, 0.94), smoothstep(0.2, 0.8, sb)); }
+            diffuseColor.rgb *= mix(vec3(0.93, 0.93, 0.95), vec3(1.05, 1.02, 0.96), smoothstep(0.2, 0.8, sb)); }   // v9.13：岩層是灰與暖褐交替
         #endif
-        gDetN = triN(uN0, vWP * 0.45, gB) * 0.10;
+        #ifndef TA_MODEL
+          diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, vWP * 0.45, gB) * 2.0, 0.3);   // v9.13：石面的顆粒與細縫
+        #endif
+        gDetN = triN(uN0, vWP * 0.45, gB) * 0.12;
       }`);
     if (kind === 'plaster') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { // v7.6 夢幻風住宅的灰泥牆：大片柔和的冷暖斑駁（±2–3%）與很淡的細顆粒，不畫石塊（'stone' 會把奶油灰泥畫成灰色石塊）
@@ -683,7 +702,7 @@ export function bend(mat, kind) {
         float aa = clamp(1.0 - length(fwidth(sp)) * 22.0, 0.0, 1.0);
         float pn = n_f(sp * 0.55), tr = n_f(sp * 2.6 + 5.0), fine = n_v(sp * 16.0) * 0.6 + n_v(sp * 37.0 + 3.0) * 0.4;
         diffuseColor.rgb *= mix(vec3(1.025, 1.01, 0.965), vec3(1.045, 1.025, 0.975), pn);
-        diffuseColor.rgb *= mix(vec3(0.95, 0.945, 0.99), vec3(1.035, 1.02, 0.99), smoothstep(0.3, 0.7, tr));
+        diffuseColor.rgb *= mix(vec3(0.955, 0.95, 0.95), vec3(1.035, 1.02, 0.99), smoothstep(0.3, 0.7, tr));
         diffuseColor.rgb *= 1.0 + (fine - 0.5) * 0.07 * aa;
       }`);
     if (kind === 'bark') f = f.replace('#include <color_fragment>', `#include <color_fragment>
@@ -1224,8 +1243,8 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float wp = fbm(wq * 0.6 + 3.0), ci = fbm(wq + vec2(wp * 2.2, wp * 0.6));   // 被扭曲過的雲片：一片片斜斜的羽毛狀
         float fib = fbm(vec2(wq.x * 0.9 + wp * 1.5, wq.y * 9.0 + wp * 3.0));   // 順著雲片方向的細絲（橫向變化快、縱向變化慢）
         float field = smoothstep(0.42, 0.62, fbm(wq * 0.22 + 11.0));   // 只有幾片天空有卷雲，其他地方是乾淨的藍
-        float ca = smoothstep(0.5, 0.78, ci) * smoothstep(0.3, 0.72, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
-        ca *= mix(0.42, 0.62, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5) * (1.0 - min(gloom, 1.0));
+        float ca = smoothstep(0.5, 0.8, ci) * smoothstep(0.22, 0.8, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
+        ca *= mix(0.27, 0.46, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5) * (1.0 - min(gloom, 1.0));
         vec3 cc = mix(vec3(1.0, 1.0, 1.03), sunCol * vec3(1.12, 0.84, 0.82), clamp(glow * 1.7, 0.0, 0.92)) + sunCol * pow(s, 10.0) * 0.7;
         c = mix(c, cc, ca);
       }
@@ -1239,7 +1258,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float thr = mix(0.55, 0.44, cover);
         float m = smoothstep(thr, thr + 0.05, n + (fbm(p * 4.3) - 0.5) * 0.06) * smoothstep(0.1, 0.22, e) * (1.0 - smoothstep(0.7, 0.95, d.y)) * smoothstep(0.3, 0.6, cover);   // 晴天不畫高空的大片軟雲（大朵積雲由 cumulus.js 負責）   // 邊緣收清楚一點、帶細碎的捲邊
         float lit = clamp((n - n2) * 9.0 + 0.55, 0.0, 1.0) * (0.7 + 0.3 * smoothstep(thr, thr + 0.3, n));
-        vec3 shade = mix(vec3(0.66, 0.66, 0.86), mix(bot, top, 0.3), 0.3) * mix(0.9, 0.35, night);   // 雲的背光面是薰衣草紫的灰白
+        vec3 shade = mix(vec3(0.7, 0.74, 0.8), mix(bot, top, 0.3), 0.3) * mix(0.9, 0.35, night);   // 雲的背光面是天光的藍灰（v9.13：以前薰衣草紫）
         vec3 bright = mix(vec3(1.06, 1.05, 1.02), sunCol * 1.15, 0.25 + glow * 0.5) * mix(1.0, 0.3, night);
         { float gl = min(gloom, 1.0), st = 1.0 - max(gloom - 1.0, 0.0) * 0.8;   // gloom 超過 1 是暴風雨：雲再暗一截
           shade = mix(shade, vec3(0.22, 0.24, 0.29) * st * mix(0.9, 0.35, night), gl * 0.9); bright = mix(bright, vec3(0.44, 0.47, 0.54) * st * mix(1.0, 0.3, night), gl * 0.9); }   // v8.7 雨雲：灰藍的雲底、沒有被太陽照白的雲頂
@@ -1295,17 +1314,19 @@ export const SEA = { day: '#8bb9cf' };   // 白天海面的底色（受強烈日
    fn／ff：這個時段的線性霧距（公尺；雨天由 weather.js 再拉近） */
 /* v7.6 夢幻風（Codex 第三輪 consult3 §3、§5）：天頂粉藍／薰衣草、低空粉紫、地平線桃粉；主光奶油色、天光補光薰衣草、地面補光偏紫——
    影子是淡紫色而不是灰藍；黃金時段不再是一片橘金。夜晚是紫藍的天、不是深靛 */
-const NIGHT = { top: '#151d46', mid: '#28325f', bot: '#474f84', sea: '#16224c', sun: '#b6c4ff', si: 0.36, hs: '#7584b8', hg: '#2a2e4e', hi: 0.32, fog: '#2e3662', exp: 1.06, night: 1, fn: 75, ff: 200 };   // 夜色：深靛藍的天、月光是冷藍的主光（v8.0 燈光設計：環境光收暗、冷暖對比清楚，暖色的燈才是夜裡的主角；仍帶一點薰衣草）
+/* v9.13 半寫實：時段色票改回自然的天色——頭頂深藍、往地平線淡成帶一點水氣的灰白；陽光是暖白，天光補光是淺藍、地面反射是草地與泥土的暖綠褐；
+   霧是淡藍灰的水氣。晨昏的暖色只在地平線與陽光裡（橘、金），夜晚是深藍、不偏紫。亮度與霧距沿用 v7.6～v8.7 調好的值 */
+const NIGHT = { top: '#0e1834', mid: '#1b2950', bot: '#33456c', sea: '#121e3c', sun: '#aec2ee', si: 0.36, hs: '#5a6c96', hg: '#20262e', hi: 0.32, fog: '#24324f', exp: 1.06, night: 1, fn: 75, ff: 200 };   // 夜色：深藍的天、月光是冷藍的主光；環境光收暗，暖色的燈才是夜裡的主角
 const KEYS = [
   [0, NIGHT],
-  [4.8, { top: '#2a2866', mid: '#4a4486', bot: '#7a6a9e', sea: '#232a62', sun: '#bcb8ff', si: 0.46, hs: '#8a86c0', hg: '#3a3450', hi: 0.4, fog: '#4e4a80', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],
-  [6.1, { top: '#7a7cd0', mid: '#cfa6d6', bot: '#f8c0c4', sea: '#d6bcd2', sun: '#ffe2c8', si: 1.5, hs: '#c8bce4', hg: '#857890', hi: 0.88, fog: '#e2cce0', exp: 1.02, night: 0, fn: 50, ff: 160 }],   // 清晨：薰衣草的天、粉桃的地平線
-  [7.6, { top: '#6a86cc', mid: '#b8b8e2', bot: '#f0d0d8', sea: '#96c8ec', sun: '#ffe6cc', si: 2.0, hs: '#d4cce0', hg: '#948890', hi: 1.08, fog: '#d8d4ea', exp: 1.1, night: 0, fn: 60, ff: 178 }],
-  [9, { top: '#6488d4', mid: '#a8b2e6', bot: '#ecd2e0', sea: '#7cc8f2', sun: '#ffe4c6', si: 2.75, hs: '#d6cfe6', hg: '#968a94', hi: 1.42, fog: '#d2d4ec', exp: 1.1, night: 0, fn: 70, ff: 195 }],   // 白天：頭頂矢車菊藍 → 低空長春花紫 → 地平線粉白；空氣通透
-  [15.5, { top: '#6688d2', mid: '#aab2e4', bot: '#eed2de', sea: '#7cc6f0', sun: '#ffdfbe', si: 2.65, hs: '#d4cde4', hg: '#948892', hi: 1.38, fog: '#d4d2ea', exp: 1.08, night: 0, fn: 68, ff: 190 }],
-  [17, { top: '#6c80c8', mid: '#b8a4d8', bot: '#f2c0c4', sea: '#e4c0cc', sun: '#ffd8b8', si: 2.0, hs: '#b8b2e2', hg: '#7e7088', hi: 0.95, fog: '#dcc8dc', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、低空粉紫、地平線粉桃；奶油粉的逆光、薰衣草的陰影
-  [18.2, { top: '#4c4e9a', mid: '#b090c4', bot: '#f4ae9c', sea: '#e8a090', sun: '#ffb88e', si: 1.4, hs: '#a29cd2', hg: '#6a6278', hi: 0.72, fog: '#c8a8c4', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：粉橘只留在地平線，天是藍紫到粉紫
-  [19.5, { top: '#33306e', mid: '#6a5f9c', bot: '#c49ab8', sea: '#4c4a80', sun: '#c8b8ff', si: 0.6, hs: '#8f88c4', hg: '#3a3550', hi: 0.5, fog: '#6a6094', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],
+  [4.8, { top: '#1a2546', mid: '#33416a', bot: '#62647a', sea: '#1e2a48', sun: '#b4bedc', si: 0.46, hs: '#66749a', hg: '#2c2e34', hi: 0.4, fog: '#40485e', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],   // 天亮前：東邊的地平線開始泛灰
+  [6.1, { top: '#4b66a6', mid: '#9aa6c2', bot: '#f0c49a', sea: '#a4aeba', sun: '#ffc894', si: 1.5, hs: '#a6b2cc', hg: '#6c665a', hi: 0.88, fog: '#cfc4b8', exp: 1.02, night: 0, fn: 50, ff: 160 }],   // 清晨：灰藍的天、地平線一抹橘金，晨霧帶一點暖
+  [7.6, { top: '#4f7cc2', mid: '#93b4da', bot: '#e2dcd0', sea: '#86b4d6', sun: '#ffe0b8', si: 2.0, hs: '#b8c8de', hg: '#7e7a64', hi: 0.98, fog: '#d4d8da', exp: 1.06, night: 0, fn: 60, ff: 178 }],
+  [9, { top: '#3f76c6', mid: '#82acdc', bot: '#d2dee8', sea: '#6aa6cc', sun: '#fff0dc', si: 2.75, hs: '#b4cae6', hg: '#827e62', hi: 1.22, fog: '#c8d6e2', exp: 1.05, night: 0, fn: 70, ff: 195 }],   // 白天：頭頂深藍 → 低空淺藍 → 地平線水氣的灰白；空氣通透
+  [15.5, { top: '#4176c2', mid: '#86acd8', bot: '#d8dee4', sea: '#6ea6ca', sun: '#ffe8cc', si: 2.65, hs: '#b6c8e2', hg: '#847c60', hi: 1.2, fog: '#cdd6de', exp: 1.04, night: 0, fn: 68, ff: 190 }],
+  [17, { top: '#4a74b8', mid: '#9cb0cc', bot: '#f0d0a2', sea: '#a6b6c4', sun: '#ffcf96', si: 2.0, hs: '#a8bad4', hg: '#7a6a50', hi: 0.95, fog: '#dccab0', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、地平線金黃；逆光是暖橘，影子是天空的淺藍
+  [18.2, { top: '#344f8c', mid: '#8a90ac', bot: '#f0a062', sea: '#c08a68', sun: '#ffa060', si: 1.4, hs: '#8c98b8', hg: '#5a4c42', hi: 0.72, fog: '#b89c86', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：橘紅只在地平線，往上是灰藍到深藍
+  [19.5, { top: '#1c2a56', mid: '#3a4a78', bot: '#9c7a6c', sea: '#28365a', sun: '#a0aed8', si: 0.6, hs: '#5c6a94', hg: '#2a2c34', hi: 0.5, fog: '#464e6a', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],   // 藍調時刻：天轉深藍，地平線還留一點餘暉
   [21, NIGHT], [24, NIGHT]
 ];
 // 月亮：在北偏東的天上（從廣場往北看在右上方）。MOON_L 是月光的方向（夜裡的主光）；天幕上畫月亮的位置由 main.js 依畫面上的地平線算
@@ -1378,7 +1399,7 @@ export function applyTime(h) {
   lamps.forEach(l => { l.intensity = lit * (l.userData.k || 6); });
   refreshEnv(Math.round(h * 10), dir, night);   // k：個別燈的亮度（新島的燈籠路燈比較亮）
   if (water.sea) {
-    water.sea.color.copy(lerpC(SEA.day, '#7aa8d8', dawn * 0.6)).lerp(cb.set('#b6a9ca'), golden * sink * 0.6).lerp(cb.set('#1d4680'), THREE.MathUtils.smoothstep(night, 0.3, 0.8));
+    water.sea.color.copy(lerpC(SEA.day, '#7aa8d8', dawn * 0.6)).lerp(cb.set('#c8a68c'), golden * sink * 0.6).lerp(cb.set('#1d4680'), THREE.MathUtils.smoothstep(night, 0.3, 0.8));
     water.sea.emissive.copy(skyU.bot.value).multiplyScalar(dawn * 0.08);   // 晨昏的海面映著天色
   }
   return { dir, night, golden, dawn };

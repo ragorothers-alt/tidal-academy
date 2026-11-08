@@ -402,7 +402,7 @@
   I.BLDMODELS['diy']=function(THREE,kit){
     const STAGE=4,g=new THREE.Group();g.name='tidal-diy';
     const M={wood:kit.mat('#cda67e',{roughness:.8},'wood'),woodLight:kit.mat('#cda67e',{roughness:.8},'wood'),woodDark:kit.mat('#947b7b',{roughness:.8},'wood'),
-      navy:kit.mat('#ad9abd',{roughness:.94}),canopy:kit.mat('#ad9abd',{roughness:.94},'fabric'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),steel:kit.mat('#9194aa',{roughness:.4,metalness:0.6},'metal'),cream:kit.mat('#fff0d4',{roughness:.8},'wood')};
+      navy:kit.mat('#646872',{roughness:.94}),canopy:kit.mat('#646872',{roughness:.94},'fabric'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),steel:kit.mat('#9194aa',{roughness:.4,metalness:0.6},'metal'),cream:kit.mat('#fff0d4',{roughness:.8},'wood')};
     const parts=new Map();
     function put(part,geo,mat){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!geo.getAttribute('uv'))geo.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute('position').count*2),2));if(!parts.has(part))parts.set(part,[]);parts.get(part).push({geo:geo.index?geo.toNonIndexed():geo,mat});}
     function tr(geo,x,y,z,rx=0,ry=0,rz=0){return geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));}

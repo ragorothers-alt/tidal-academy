@@ -77,7 +77,7 @@
     const V=(x,y,z)=>new THREE.Vector3(x,y,z),m={},batches=new Map();
     function mat(id,c,opts,kind){m[id]=kit.mat(c,opts||{},kind);}
     mat('stone','#efe3d1',{roughness:.92},'stone');
-    mat('stoneShade','#c8bdd1',{roughness:.96},'stone');
+    mat('stoneShade','#BCB4A8',{roughness:.96},'stone');
     mat('plaster','#f0e5d5',{roughness:.94},'plaster');
     mat('mortar','#d3c8c2',{roughness:1},'plaster');
     mat('pebblePink','#e7d9d5',{roughness:.96},'stone');
@@ -91,8 +91,8 @@
     // Repeatedly immersed rims/buckets stay wet; the inner spokes and upper flume stay dry.
     for(const[id,c]of[['wood','#cda67e'],['woodLight','#d7b38c'],['woodDark','#947b7b']])
       mat(id+'Wet',new THREE.Color(c).multiplyScalar(.91),{roughness:.8},'wood');
-    mat('roof','#ad9abd',{roughness:.72},'roof');
-    mat('roofLight','#b7a4c7',{roughness:.67},'roof');
+    mat('roof','#646872',{roughness:.72},'roof');
+    mat('roofLight','#8E96A6',{roughness:.67},'roof');
     mat('gold','#e8c48b',{roughness:.4,metalness:0.6},'metal');
     mat('iron','#777a98',{roughness:.4,metalness:0.6},'metal');
     const flowOpts={transparent:true,side:THREE.DoubleSide,depthWrite:false,roughness:.20};

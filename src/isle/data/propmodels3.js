@@ -118,8 +118,8 @@
 
   I.PROPMODELS['flower_pots'] = function (THREE, kit) {
     const t=tools(THREE,kit,'flower-pots');
-    const M={wood:kit.mat('#BCA6CB',{roughness:.8},'wood'),terra:kit.mat('#DDAEAD',{roughness:.9},'ceramic'),ivory:kit.mat('#F1E4D1',{roughness:.64},'ceramic'),gold:kit.mat('#E8C48B',{roughness:.4,metalness:0.6},'metal'),leaf:kit.mat('#779D80',{roughness:.92},'sway'),blue:kit.mat('#B89CDE',{roughness:.8}),yellow:kit.mat('#F2D69A',{roughness:.82}),pink:kit.mat('#EE9FC5',{roughness:.83}),navy:kit.mat('#BCA6CB',{roughness:.65},'ceramic')};
-    const ivoryPetals=kit.mat('#F1E4D1',{roughness:.64});
+    const M={wood:kit.mat('#A48C62',{roughness:.8},'wood'),terra:kit.mat('#DDAEAD',{roughness:.9},'ceramic'),ivory:kit.mat('#E6DCCA',{roughness:.64},'ceramic'),gold:kit.mat('#E8C48B',{roughness:.4,metalness:0.6},'metal'),leaf:kit.mat('#779D80',{roughness:.92},'sway'),blue:kit.mat('#B89CDE',{roughness:.8}),yellow:kit.mat('#F2D69A',{roughness:.82}),pink:kit.mat('#EE9FC5',{roughness:.83}),navy:kit.mat('#A48C62',{roughness:.65},'ceramic')};
+    const ivoryPetals=kit.mat('#E6DCCA',{roughness:.64});
     M.leaf.userData.polishSurface='garden-leaves';
     const pots=[{x:0,z:-.075,h:.43,r:.205,mat:M.wood,type:0},{x:-.252,z:.11,h:.255,r:.15,mat:M.terra,type:1},{x:.252,z:.105,h:.275,r:.162,mat:M.ivory,type:2}];
     for(const p of pots){
@@ -150,7 +150,7 @@
 
   I.PROPMODELS['flower_bed'] = function (THREE, kit) {
     const t=tools(THREE,kit,'flower-bed');
-    const M={stone:kit.mat('#F1E4D1',{roughness:.88},'stone'),stoneShade:kit.mat('#C8BDD1',{roughness:.91},'stone'),navy:kit.mat('#BCA6CB',{roughness:.66}),soil:kit.mat('#81796D',{roughness:1}),leaf:kit.mat('#74997F',{roughness:.93},'sway'),leafLight:kit.mat('#ABC993',{roughness:.91},'sway'),blue:kit.mat('#ED9BC2',{roughness:.82}),white:kit.mat('#FFF7EF',{roughness:.84}),yellow:kit.mat('#F2D79D',{roughness:.83}),lavender:kit.mat('#B89DDD',{roughness:.84})};
+    const M={stone:kit.mat('#E6DCCA',{roughness:.88},'stone'),stoneShade:kit.mat('#BCB4A8',{roughness:.91},'stone'),navy:kit.mat('#A48C62',{roughness:.66}),soil:kit.mat('#81796D',{roughness:1}),leaf:kit.mat('#74997F',{roughness:.93},'sway'),leafLight:kit.mat('#ABC993',{roughness:.91},'sway'),blue:kit.mat('#ED9BC2',{roughness:.82}),white:kit.mat('#FFF7EF',{roughness:.84}),yellow:kit.mat('#F2D79D',{roughness:.83}),lavender:kit.mat('#B89DDD',{roughness:.84})};
     M.soil.userData.polishSurface='soil';
     for(const m of [M.leaf,M.leafLight])m.userData.polishSurface='garden-leaves';
     // Inlay is a continuous ring sandwiched between stone courses, with genuine depth.
@@ -194,8 +194,8 @@ I.PROPMODELS['hedge']=function(THREE,kit){
  const group=new THREE.Group();group.name='hedge';
  const HEDGE=true, edge=HEDGE?1:1.1, buckets=[], normalBuckets=[];
  const mats=[
- kit.mat('#F1E4D1',{roughness:.86},'stone'),
- kit.mat('#BCA6CB',{roughness:.71}),
+ kit.mat('#E6DCCA',{roughness:.86},'stone'),
+ kit.mat('#A48C62',{roughness:.71}),
  kit.mat('#CDA67E',{roughness:.4,metalness:0.65},'metal')
  ];
  if(HEDGE){mats.push(kit.mat('#6E977C',{roughness:.92},'sway'),kit.mat('#89AD89',{roughness:.86},'sway'),kit.mat('#9FBD91',{roughness:.82},'sway'),kit.mat('#FFF7F0',{roughness:.86}),kit.mat('#F0B4CF',{roughness:.86}));for(const m of mats.slice(3,6))m.userData.polishSurface='garden-leaves';}
@@ -322,8 +322,8 @@ I.PROPMODELS['fence']=function(THREE,kit){
  const group=new THREE.Group();group.name='fence';
  const HEDGE=false, edge=HEDGE?1:1.1, buckets=[];
  const mats=[
- kit.mat('#F1E4D1',{roughness:.86},'stone'),
- kit.mat('#BCA6CB',{roughness:.71}),
+ kit.mat('#E6DCCA',{roughness:.86},'stone'),
+ kit.mat('#A48C62',{roughness:.71}),
  kit.mat('#CDA67E',{roughness:.4,metalness:0.65},'metal')
  ];
  if(HEDGE){mats.push(kit.mat('#7F9E92',{roughness:.92},'sway'),kit.mat('#9FB994',{roughness:.86},'sway'),kit.mat('#BCD0A9',{roughness:.82},'sway'));}
@@ -449,9 +449,9 @@ I.PROPMODELS['tree_ring'] = function (THREE, kit) {
   const stageRank=7;
   const colored=stageRank>=3, detailed=stageRank>=2, sectors=12, TAU=Math.PI*2;
   const materials={
-    foundation:kit.mat(colored?'#C8BDD1':'#ddd5c6',{roughness:.9},'stone'),
-    seat:kit.mat(colored?'#F1E4D1':'#e6dfd1',{roughness:.84},'stone'),
-    panels:kit.mat(colored?'#BCA6CB':'#737a84',{roughness:.72}),
+    foundation:kit.mat(colored?'#BCB4A8':'#ddd5c6',{roughness:.9},'stone'),
+    seat:kit.mat(colored?'#E6DCCA':'#e6dfd1',{roughness:.84},'stone'),
+    panels:kit.mat(colored?'#A48C62':'#737a84',{roughness:.72}),
     ornament:kit.mat(colored?'#E8C48B':'#c1b6a0',{roughness:.4,metalness:0.6},'metal'),
     foliage:kit.mat('#ffffff',{roughness:.86}),
     blossoms:kit.mat('#ffffff',{roughness:.79}),

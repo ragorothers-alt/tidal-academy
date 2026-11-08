@@ -51,10 +51,10 @@
   I.PROPMODELS['crystal_lamp'] = function (THREE, kit) {
     const root = new THREE.Group();
     root.name = 'crystal_lamp';
-    const stone = kit.mat('#F1E4D1', { roughness: 0.84 }, 'stone');
+    const stone = kit.mat('#E6DCCA', { roughness: 0.84 }, 'stone');
     const blue = kit.mat('#CDA67E', { roughness:.8 }, 'wood');
     const gold = kit.mat('#E8C48B', { roughness: .4, metalness: 0.6 },'metal');
-    const crystal = kit.mat('#BCA6CB', { roughness: 0.32, metalness: 0.03, emissive: '#D5BEDD', emissiveIntensity: 0.24 });
+    const crystal = kit.mat('#A48C62', { roughness: 0.32, metalness: 0.03, emissive: '#D5BEDD', emissiveIntensity: 0.24 });
     const crystalLight = kit.mat('#F3BDD2', { roughness: 0.30, metalness: 0.02, emissive: '#FFD39D', emissiveIntensity: 0.18 });
     const buckets = new Map();
     function put(name, mat, geo, x, y, z, ry) {
@@ -135,9 +135,9 @@
     const wood = kit.mat('#B98E6B', { roughness:.8 }, 'wood');
     const frame = kit.mat('#CDA67E', { roughness:.8 }, 'wood');
     const darkWood = wood;
-    const iron = kit.mat('#9186A8', { roughness: .65, metalness: .22 });
+    const iron = kit.mat('#404654', { roughness: .65, metalness: .22 });
     const gold = kit.mat('#E8C48B', { roughness: .4, metalness: 0.6 },'metal');
-    const cloth = kit.mat('#F1E4D1', { roughness: 1 }, 'fabric');
+    const cloth = kit.mat('#E6DCCA', { roughness: 1 }, 'fabric');
     cloth.side = THREE.DoubleSide;
     const rope = frame;
     function merged(parts) {
@@ -309,8 +309,8 @@
   I.PROPMODELS['boat'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'boat';
     const mats = {
-      ivory: kit.mat('#F1E4D1', { roughness:.8 }, 'wood'),
-      blue: kit.mat('#BCA6CB', { roughness:.8 }, 'wood'),
+      ivory: kit.mat('#E6DCCA', { roughness:.8 }, 'wood'),
+      blue: kit.mat('#A48C62', { roughness:.8 }, 'wood'),
       wood: kit.mat('#B98E6B', { roughness:.8 }, 'wood'),
       woodlight: kit.mat('#CDA67E', { roughness:.8 }, 'wood'),
       gold: kit.mat('#E8C48B', { roughness: .4, metalness: 0.6 },'metal')

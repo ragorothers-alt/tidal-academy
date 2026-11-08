@@ -8,7 +8,7 @@
 I.BLDMODELS['exam']=function tidalExamHall(THREE,kit){
  const g=new THREE.Group();g.name='tidal-exam-hall';
  const stone=kit.mat('#f0e5d5',{roughness:.92},'plaster'),shadow=kit.mat('#e8decf',{roughness:.94},'stone');
- const roof=kit.mat('#ad9abd',{roughness:.8},'roof'),roofLight=roof,gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal');
+ const roof=kit.mat('#646872',{roughness:.8},'roof'),roofLight=roof,gold=kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal');
  const navy=kit.mat('#777a98',{roughness:.88}),wood=kit.mat('#cda67e',{roughness:.8},'wood'),dark=kit.mat('#947b7b',{roughness:.8},'wood'),pane=kit.win();
  const flower=kit.mat('#f3bdd2',{roughness:.94}),leaf=kit.mat('#9fb994',{roughness:.94});
  const batches=new Map(), groups=new Map();
@@ -199,7 +199,7 @@ I.BLDMODELS['library'] = function tidalLibrary(THREE, kit) {
   const cache = new Map(), batches = new Map();
   function mat(c, o = {}, k) { const key = c + JSON.stringify(o) + k; if (!cache.has(key)) cache.set(key, kit.mat(c, o, k)); return cache.get(key); }
   const ivory=mat('#f0e5d5',{roughness:.92},'plaster'),limestone=mat('#e8decf',{roughness:.94},'stone');
-  const slate=mat('#ad9abd',{roughness:.8},'roof'),blue=mat('#777a98',{roughness:.88});
+  const slate=mat('#646872',{roughness:.8},'roof'),blue=mat('#777a98',{roughness:.88});
   const oak=mat('#cda67e',{roughness:.8},'wood'),oakDark=mat('#947b7b',{roughness:.8},'wood');
   const M={ivory,light:ivory,shadow:limestone,mortar:limestone,slate,slateLight:slate,slateDark:slate,blue,cyan:blue,
     gold:mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),oak,oakLight:oak,oakDark,

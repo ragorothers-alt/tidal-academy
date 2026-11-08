@@ -264,12 +264,12 @@ export const terrain = (function build() {
   const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); WALL.push(inWall); SF.push(...surface); };
   const quad = (a, b, c, d, ca, cb, cc, cd) => { push(...a, ca); push(...b, cb); push(...c, cc); push(...a, ca); push(...c, cc); push(...d, cd); };
   const BED_SH = new THREE.Color('#c8d3b6'), BED_DP = new THREE.Color('#91afa6');   // 池底：淺岸的砂、池心的深青綠（Codex 第二輪 C6）
-  const grassC = (x, z, hi) => { const n = noise(x * 0.45, z * 0.45); return new THREE.Color(hi ? '#a7bfa0' : '#9fb994').lerp(new THREE.Color(hi ? '#c4d4b4' : '#b8cba5'), n * 0.48); };
-  const sandC = (x, z) => new THREE.Color('#f4e5ce').lerp(new THREE.Color('#e6ddce'), noise(x * 0.5, z * 0.5) * 0.7);   // 暖白的細沙
+  const grassC = (x, z, hi) => { const n = noise(x * 0.45, z * 0.45); return new THREE.Color(hi ? '#8ea676' : '#86a06c').lerp(new THREE.Color(hi ? '#a8bb88' : '#a2b682'), n * 0.48); };   // v9.13 半寫實：草地底色是真的草綠（以前是淡鼠尾草綠）
+  const sandC = (x, z) => new THREE.Color('#e8d8bc').lerp(new THREE.Color('#d9cdb8'), noise(x * 0.5, z * 0.5) * 0.7);   // 細沙（v9.13：暗一點的自然沙色，白天不再整片發白）
   const cornerC = (t, x, z, tx, tz) => t === 1 && sandBank(x, z) > 0 ? grassC(x, z, false).lerp(sandC(x, z), sandBank(x, z)) : t === 0 ? sandC(x, z) : t === 3 && isCreek(tx, tz) ? new THREE.Color('#c8d3b6').lerp(new THREE.Color('#b7c9b8'), noise(x * 0.9, z * 0.9)) : t === 3 || t === 6 ? (pondOf(tx, tz) ? BED_SH.clone().lerp(BED_DP, pondK(pondOf(tx, tz), x, z)) : new THREE.Color('#9fbdaf')) : grassC(x, z, t === 2 || t === 5);   // 小溪的溪底是淺色的細沙；池塘（v7.4）岸邊是淺色的砂底、往池心漸深
-  const lip = new THREE.Color('#9fb994'), cliffT = new THREE.Color('#d8c7b4'), cliffB = new THREE.Color('#b5a6b5'), sandW = new THREE.Color('#e9dfce'), sandWB = new THREE.Color('#c7cfd0'), bankB = new THREE.Color('#bdc9b6');
+  const lip = new THREE.Color('#86a06c'), cliffT = new THREE.Color('#d8c7b4'), cliffB = new THREE.Color('#a69d92'), sandW = new THREE.Color('#e9dfce'), sandWB = new THREE.Color('#c7cfd0'), bankB = new THREE.Color('#bdc9b6');
   const bankSl = (x, z) => 0.42 + noise(x * 0.7, z * 0.7) * 0.18;   // 草岸斜坡在這個角點的寬度
-  const rockG = new THREE.Color('#8d9d9a'), rockT = new THREE.Color('#d8c7b4'), rockB = new THREE.Color('#b5a6b5'), soil = new THREE.Color('#a89c96'), wc = new THREE.Color();
+  const rockG = new THREE.Color('#8d9d9a'), rockT = new THREE.Color('#d8c7b4'), rockB = new THREE.Color('#a69d92'), soil = new THREE.Color('#9c8f80'), wc = new THREE.Color();
   /* 崖壁：從 b 到 a 的一面牆（底 y0、兩端的頂 yb、ya），細分成 3 × n 格。中間的頂點用世界座標的向量場水平推移，
      相鄰的牆共用的頂點推到同一個位置，轉角也不會裂開；頂與底那一排不動，和崖頂的草邊、下面的地面接得起來 */
   const cliffWall = (a, b, y0, ya, yb, dx, dz) => {

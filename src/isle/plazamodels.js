@@ -6,9 +6,9 @@ import { bend } from './engine.js';
 const TAU = Math.PI * 2;
 const hash = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 const stoneMat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94 }), 'stone');   // v7.7：石面的水彩色塊、柔和明暗與零星地衣（以前是純色）
-const colors = ['#d8c6b6', '#d5c2b2', '#d3bdb9', '#c6b9c9', '#dbcabb', '#bfc0ad', '#dfccbc'].map(c => new THREE.Color(c));   // 暖米、粉米、薰衣草、鼠尾草的石塊（太接近白色的鋪面在白天會整片過曝）
+const colors = ['#c2b9aa', '#b8afa1', '#c9bfad', '#aea79a', '#c4b7a1', '#aba798', '#cdc3b1'].map(c => new THREE.Color(c));   // v9.13 半寫實：石灰岩、砂岩與一點花崗岩的灰褐石塊（太接近白色的鋪面在白天會整片過曝）
 const buffer = () => ({ p: [], c: [] });
-const RIM = [0.95, 0.935, 0.99];   // v7.7：石板邊緣暗一點、帶一點薰衣草
+const RIM = [0.92, 0.915, 0.91];   // 石板邊緣暗一點（磨圓的倒角積了一點灰）
 function tri(b, a, c, d, color, shade = 1, sc = shade, sd = shade) {
   b.p.push(...a, ...c, ...d);
   for (const s of [shade, sc, sd]) { const k = Array.isArray(s) ? s : [s, s, s]; b.c.push(color.r * k[0], color.g * k[1], color.b * k[2]); }
@@ -107,7 +107,7 @@ export function plazaModel(cx, cz, groundAt) {
   const y = (x, z) => groundAt(x, z) + 0.045;
   const polar = (r, a) => [cx + Math.cos(a) * r, cz + Math.sin(a) * r];
   // 灰紫砂漿在真縫底部，不在石面上畫第二套假接縫。
-  const grout = new THREE.Color('#b3a5ad');
+  const grout = new THREE.Color('#7f786e');   // v9.13：灰褐的砂漿
   for (let i = 0; i < 96; i++) {
     const a = polar(R, i / 96 * TAU), c = polar(R, (i + 1) / 96 * TAU);
     tri(b, [cx, groundAt(cx, cz) + 0.005, cz], [c[0], groundAt(...c) + 0.005, c[1]], [a[0], groundAt(...a) + 0.005, a[1]], grout);
@@ -138,10 +138,10 @@ export function plazaModel(cx, cz, groundAt) {
     g.rotateX(-Math.PI / 2); g.translate(cx, groundAt(cx, cz) + top - 0.049, cz);
     const m = new THREE.Mesh(g, bend(new THREE.MeshStandardMaterial({ color, roughness: 0.83 }))); m.name = name; m.receiveShadow = true; m.frustumCulled = false; group.add(m);
   };
-  addInlay(disk, '#e6d6c0', 0.045, 'w04-star-socket');
+  addInlay(disk, '#ddd3c1', 0.045, 'w04-star-socket');
   addInlay(star, '#d8bc84', 0.039, 'w04-star-inlay');
   // 紫心與砂漿共用頂點色材質，總共3材質。
-  const coreB = buffer(); for (let i = 0; i < 24; i++) { const a = polar(0.215, i / 24 * TAU), c = polar(0.215, (i + 1) / 24 * TAU); tri(coreB, [cx, y(cx, cz) - 0.014, cz], [c[0], y(...c) - 0.014, c[1]], [a[0], y(...a) - 0.014, a[1]], new THREE.Color('#9186a8')); }
+  const coreB = buffer(); for (let i = 0; i < 24; i++) { const a = polar(0.215, i / 24 * TAU), c = polar(0.215, (i + 1) / 24 * TAU); tri(coreB, [cx, y(cx, cz) - 0.014, cz], [c[0], y(...c) - 0.014, c[1]], [a[0], y(...a) - 0.014, a[1]], new THREE.Color('#4a5466')); }   // v9.13：星徽中心是深灰藍的石
   group.add(finish(coreB, 'w04-star-core'));
   group.userData.w04 = { radius: R, surfaceOffset: 0.045, stones, materials: 3 };
   return group;

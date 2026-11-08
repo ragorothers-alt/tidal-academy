@@ -218,7 +218,7 @@
     }
   }
   I.PROPMODELS.window_box = function(THREE, kit) {
-    const t = sculpt(THREE, kit, "window_box", { wood: "#CDA67E", navy: "#9186A8", leaf: "#9FB994", leafLight: "#9FB994", blue: "#E1C4E0", white: "#FFF0D4", yellow: "#FFF0D4", pink: "#E1C4E0" });
+    const t = sculpt(THREE, kit, "window_box", { wood: "#CDA67E", navy: "#404654", leaf: "#9FB994", leafLight: "#9FB994", blue: "#E1C4E0", white: "#FFF0D4", yellow: "#FFF0D4", pink: "#E1C4E0" });
     t.box("wood", 0, -0.118, 0.227, 0.96, 0.19, 0.038, 6e-3), t.box("wood", 0, -0.115, 0.018, 0.96, 0.19, 0.026, 4e-3);
     for (const side of [-1, 1]) t.box("wood", side * 0.469, -0.115, 0.132, 0.038, 0.19, 0.224, 5e-3);
     t.box("wood", 0, -0.202, 0.132, 0.94, 0.026, 0.2, 4e-3), t.box("wood", 0, -0.014, 0.236, 0.99, 0.028, 0.038, 5e-3), t.box("wood", 0, -0.014, 0.019, 0.99, 0.028, 0.036, 4e-3);
@@ -249,7 +249,7 @@
       plantedFlowers(t, THREE, x, y, 0.135, 0.105, 0.05, 0.055, 5, seed);
     return t.finish(0.94);
   }, I.PROPMODELS.hanging_basket = function(THREE, kit) {
-    const t = sculpt(THREE, kit, "hanging_basket", { wood: "#CDA67E", iron: "#9186A8", leaf: "#9FB994", leafLight: "#9FB994", blue: "#E1C4E0", white: "#FFF0D4", yellow: "#FFF0D4", pink: "#E1C4E0" });
+    const t = sculpt(THREE, kit, "hanging_basket", { wood: "#CDA67E", iron: "#404654", leaf: "#9FB994", leafLight: "#9FB994", blue: "#E1C4E0", white: "#FFF0D4", yellow: "#FFF0D4", pink: "#E1C4E0" });
     t.box("iron", 0, -0.062, 0.013001, 0.06, 0.224, 0.026, 7e-3), t.tube("iron", t.path([[0, 0.01, 0.025], [0, 0.014, 0.18], [0, 0.012, 0.35], [0, 6e-3, 0.435]]), 0.01, 9, 5, 0.85), t.tube("iron", t.path([[0, -0.15, 0.025], [0, -0.13, 0.08], [0, -0.04, 0.2], [0, 0.013, 0.36]]), 8e-3, 9, 4, 0.8), t.tube("iron", t.path([[0, -0.025, 0.08], [0, -0.015, 0.135], [0, -0.055, 0.17], [0, -0.085, 0.13], [0, -0.062, 0.11]]), 6e-3, 10, 4, 0.55);
     const eye = new THREE.Vector3(0, -0.024, 0.425), ring = new THREE.TorusGeometry(0.016, 35e-4, 3, 8);
     ring.translate(0, -0.025, 0.425), t.geometry("iron", ring);

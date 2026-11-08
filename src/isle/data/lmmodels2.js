@@ -112,8 +112,8 @@
     const color = (c) => stage >= 4 ? c : '#e5dbc7';
     const M = {
       stone: kit.mat(color('#efe3d1'), {roughness: .88}, 'stone'),
-      shade: kit.mat(color('#c8bdd1'), {roughness: .95}, 'stone'),
-      blue: kit.mat(color('#ad9abd'), {roughness: .69}),
+      shade: kit.mat(color('#BCB4A8'), {roughness: .95}, 'stone'),
+      blue: kit.mat(color('#646872'), {roughness: .69}),
       gold: kit.mat(color('#cda67c'), {roughness: .4, metalness:0.6},'metal'),
       goldLight: kit.mat(color('#e8c48b'), {roughness: .4, metalness:0.6},'metal'),
       crystal: kit.mat(color('#abd0ce'), {roughness: .40, metalness: .02,
@@ -239,8 +239,8 @@
   const piers = [-L, -pitch / 2, pitch / 2, L], bays = [-pitch, 0, pitch];
   const mats = {
     stone: kit.mat(STAGE < 3 ? '#e8e3d7' : '#efe3d1', { roughness: .86 }, 'stone'),
-    shade: kit.mat(STAGE < 3 ? '#ded7ca' : '#c8bdd1', { roughness: .9 }, 'stone'),
-    blue: kit.mat(STAGE < 3 ? '#e8e3d7' : '#a69ab7', { roughness: .72 }),
+    shade: kit.mat(STAGE < 3 ? '#ded7ca' : '#BCB4A8', { roughness: .9 }, 'stone'),
+    blue: kit.mat(STAGE < 3 ? '#e8e3d7' : '#6C7486', { roughness: .72 }),
     gold: kit.mat(STAGE < 3 ? '#ded7ca' : '#e8c48b', { roughness: .4, metalness:0.6 },'metal'),
     water: kit.mat(STAGE < 3 ? '#e8e3d7' : '#abd0ce', { roughness: .18, transparent: true, opacity: .8 }),
     ripple: kit.mat('#d8e6df', { roughness: .22, transparent: true, opacity: .56 })
@@ -354,7 +354,7 @@
     const stone = kit.mat('#efe3d1', { roughness: .88 }, 'stone');
     const bird = kit.mat('#f0e5d5', { roughness: .83 });
     const feather = kit.mat('#e8decf', { roughness: .85 });
-    const navy = kit.mat('#b7a4c7', { roughness: .78, metalness: .08 });
+    const navy = kit.mat('#8E96A6', { roughness: .78, metalness: .08 });
     const gold = kit.mat('#e8c48b', { roughness: .4, metalness:0.6 },'metal');
     const eye = kit.mat('#777a98', { roughness: .25, metalness: .1 });
     const V = (x,y,z) => new THREE.Vector3(x,y,z);
@@ -556,7 +556,7 @@
   // well — meters; origin at ground, entrance toward +Z.
   I.LMMODELS['well']=function(THREE,kit){ kit=finishKit(THREE,kit);
  const g=new THREE.Group(),STAGE=7,batches=new Map();
- const mats={stone:kit.mat('#efe3d1',{roughness:.88},'stone'),accent:kit.mat('#d8cfce',{roughness:.9},'stone'),wood:kit.mat('#cda67e',{roughness:.8},'wood'),roof:kit.mat('#ad9abd',{roughness:.63},'roof'),blue:kit.mat('#b7a4c7',{roughness:.64},'roof'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),rope:kit.mat('#e3d2b6',{roughness:.92}),inner:kit.mat('#777a98',{roughness:.93},'stone'),darkwood:kit.mat('#947b7b',{roughness:.8},'wood')};
+ const mats={stone:kit.mat('#efe3d1',{roughness:.88},'stone'),accent:kit.mat('#d8cfce',{roughness:.9},'stone'),wood:kit.mat('#cda67e',{roughness:.8},'wood'),roof:kit.mat('#646872',{roughness:.63},'roof'),blue:kit.mat('#8E96A6',{roughness:.64},'roof'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal'),rope:kit.mat('#e3d2b6',{roughness:.92}),inner:kit.mat('#777a98',{roughness:.93},'stone'),darkwood:kit.mat('#947b7b',{roughness:.8},'wood')};
  function add(geo,mat,name,p=[0,0,0],r=[0,0,0]){const m=new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)),new THREE.Vector3(1,1,1));geo.applyMatrix4(m);const k=name+'|'+mat;if(!batches.has(k))batches.set(k,{name,mat,geos:[]});batches.get(k).geos.push(geo);}
  function box(w,h,d,p,mat='wood',name='timber-frame',r=[0,0,0]){add(new THREE.BoxGeometry(w,h,d),mat,name,p,r);}
  function beam(a,b,w,d,mat='wood',name='timber-frame'){const v=new THREE.Vector3().fromArray(b).sub(new THREE.Vector3().fromArray(a)),geo=new THREE.BoxGeometry(w,v.length(),d);geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));geo.translate((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);add(geo,mat,name);}
@@ -614,7 +614,7 @@ for(const x of [-.48,.48]){const s=new THREE.Shape();s.moveTo(-.11,-.65);s.lineT
 
   // signpost — meters; origin at ground, entrance toward +Z.
   I.LMMODELS['signpost']=function(THREE,kit){ kit=finishKit(THREE,kit);
- const g=new THREE.Group(),STAGE=7,batches=new Map(),mats={stone:kit.mat('#efe3d1',{roughness:.87},'stone'),wood:kit.mat('#cda67e',{roughness:.8},'wood'),light:kit.mat('#d7b38c',{roughness:.8},'wood'),blue:kit.mat('#ad9abd',{roughness:.63},'roof'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal')};
+ const g=new THREE.Group(),STAGE=7,batches=new Map(),mats={stone:kit.mat('#efe3d1',{roughness:.87},'stone'),wood:kit.mat('#cda67e',{roughness:.8},'wood'),light:kit.mat('#d7b38c',{roughness:.8},'wood'),blue:kit.mat('#646872',{roughness:.63},'roof'),gold:kit.mat('#e8c48b',{roughness:.4,metalness:0.6},'metal')};
  function add(geo,mat,name,p=[0,0,0],r=[0,0,0]){geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...p),new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)),new THREE.Vector3(1,1,1)));const k=name+'|'+mat;if(!batches.has(k))batches.set(k,{name,mat,geos:[]});batches.get(k).geos.push(geo);}
  function cube(w,h,d,p,mat,name){if(STAGE<2){add(new THREE.BoxGeometry(w,h,d),mat,name,p);return;}const s=new THREE.Shape(),b=Math.min(.014,w*.08,h*.08,d*.2),x=w/2-b,y=h/2-b;s.moveTo(-x+b,-y);s.lineTo(x-b,-y);s.lineTo(x,-y+b);s.lineTo(x,y-b);s.lineTo(x-b,y);s.lineTo(-x+b,y);s.lineTo(-x,y-b);s.lineTo(-x,-y+b);s.closePath();const geo=new THREE.ExtrudeGeometry(s,{depth:d-2*b,bevelEnabled:true,bevelSegments:1,bevelSize:b,bevelThickness:b,steps:1});geo.translate(0,0,-d/2+b);add(geo,mat,name,p);}
  cube(.48,.17,.48,[0,.085,0],'stone','stone-base');cube(.37,.08,.37,[0,.21,0],'stone','stone-base');cube(.29,.26,.29,[0,.37,0],'stone','stone-base');cube(.34,.065,.34,[0,.52,0],'stone','stone-base');

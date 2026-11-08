@@ -5,6 +5,7 @@
 - 背景色取四個角落的中位數；每個像素的不透明度由「比背景綠多少」決定（綠色比紅、藍多越多越透明）。
 - 半透明的邊緣把背景的綠色反算掉（觀察到的顏色 = a·雲 + (1-a)·背景），再把殘留的綠色壓到紅藍的平均，邊緣不會有綠邊。
 - 裁到雲的範圍（留一點邊），縮到指定寬度，存成有透明度的 WebP，以 data URL 放進 window.TA.CLOUDS（離線雙擊也能載入）。
+- 已經是透明背景的 PNG（四個角 alpha = 0，例如 Blender 算的體積雲）不去背，直接裁切、縮小。
 """
 import base64, io, json, sys
 from pathlib import Path
@@ -13,7 +14,14 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 
 def key(path, width):
-    im = Image.open(path).convert('RGB'); w, h = im.size; px = im.load()
+    src = Image.open(path)
+    if src.mode == 'RGBA' and all(src.getpixel(p)[3] == 0 for p in [(0, 0), (src.width - 1, 0), (0, src.height - 1), (src.width - 1, src.height - 1)]):
+        out = src; x0, y0, x1, y1 = out.getbbox() or (0, 0, out.width, out.height)   # 已經是透明背景（Blender 算的雲）：不去背，直接裁切、縮小
+        pad = 12; out = out.crop((max(0, x0 - pad), max(0, y0 - pad), min(out.width, x1 + pad), min(out.height, y1 + pad)))
+        if out.width > width: out = out.resize((width, round(out.height * width / out.width)), Image.LANCZOS)
+        buf = io.BytesIO(); out.save(buf, 'WEBP', quality=88, method=6)
+        return out.size, 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode(), len(buf.getvalue())
+    im = src.convert('RGB'); w, h = im.size; px = im.load()
     corners = sorted([px[x, y] for x in (2, w - 3) for y in (2, h - 3)], key=lambda c: c[1])
     bg = corners[len(corners) // 2]
     out = Image.new('RGBA', (w, h)); op = out.load(); x0, y0, x1, y1 = w, h, 0, 0

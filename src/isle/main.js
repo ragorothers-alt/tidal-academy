@@ -2550,7 +2550,7 @@ function tick(fixed) {
     const h = hourOverride ?? nowHour(), d = simDate(), r = (Math.sin((d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate()) * 12.9898) * 43758.5453) % 1, r1 = Math.abs(r);
     const chance = [0.7, 0.65, 0.55, 0.5, 0.4, 0.35, 0.3, 0.3, 0.45, 0.65, 0.8, 0.75][d.getMonth()], amt = r1 < chance ? 0.6 + 0.4 * ((r1 * 7.13) % 1) : 0;
     const tk = THREE.MathUtils.smoothstep(h, 4.3, 5.8) * (1 - THREE.MathUtils.smoothstep(h, 7.2, 8.6)), wet = weather.raining() || weather.typhoon() ? 0 : 1;
-    U.uMist.value.x = 0.5 * amt * tk * wet * (room.inside ? 0 : 1);
+    U.uMist.value.x = 0.38 * amt * tk * wet * (room.inside ? 0 : 1);   // v9.13：0.5 → 0.38，晨霧看得到遠近層次，不是整片白幕
     U.uMistCol.value.copy(scene.fog.color).lerp(MIST_W, 0.4).lerp(sun.color, 0.12);   // 霧是帶一點晨光的白
   }
   { const c = U.uCloud.value, w = 0.06 * (0.7 + 0.3 * U.uWind.value) * dt; c.x = U.uShade.value * 0.5; c.y += w; c.z += w * 0.37; }   // v8.9.1 雲影：晴天的白天才有，風大時飄得快（約每秒 1.5 公尺）

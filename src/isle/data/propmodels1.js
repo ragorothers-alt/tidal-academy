@@ -50,7 +50,7 @@
   const buckets=new Map(),cache=new Map(),PI=Math.PI,TAU=PI*2;
   const material=(c,o={},kind)=>{const k=JSON.stringify([c,o,kind]);if(!cache.has(k))cache.set(k,kit.mat(c,o,kind));return cache.get(k);};
   const neutral=STAGE<3?material('#a8a292',{roughness:.84}):null;
-  const M={stone:neutral||material('#F1E4D1',{roughness:.88},'stone'),stoneShade:neutral||material('#C8BDD1',{roughness:.9},'stone'),navy:neutral||material('#9186A8',{roughness:.4,metalness:0.6},'metal'),roof:neutral||material('#AD9ABD',{roughness:.7},'roof'),gold:neutral||material('#E8C48B',{roughness:.4,metalness:0.72},'metal'),goldShade:neutral||material('#BCA6CB',{roughness:.4,metalness:0.62},'metal'),core:neutral||kit.win(),glass:neutral||material('#FFF0D4',{roughness:.35,transparent:true,opacity:.10,depthWrite:false,side:THREE.DoubleSide},'glass')};
+  const M={stone:neutral||material('#E6DCCA',{roughness:.88},'stone'),stoneShade:neutral||material('#BCB4A8',{roughness:.9},'stone'),navy:neutral||material('#404654',{roughness:.4,metalness:0.6},'metal'),roof:neutral||material('#646872',{roughness:.7},'roof'),gold:neutral||material('#E8C48B',{roughness:.4,metalness:0.72},'metal'),goldShade:neutral||material('#A48C62',{roughness:.4,metalness:0.62},'metal'),core:neutral||kit.win(),glass:neutral||material('#FFF0D4',{roughness:.35,transparent:true,opacity:.10,depthWrite:false,side:THREE.DoubleSide},'glass')};
   for(const m of [M.navy,M.gold,M.goldShade])m.userData.polishSurface='metal';
   if(!neutral){M.core.color.set('#FFD39D');M.core.emissive.set('#FFD39D');M.core.emissiveIntensity=.32;M.core.roughness=.3;M.glass.transparent=true;M.glass.opacity=.15;M.glass.depthWrite=false;M.glass.side=THREE.DoubleSide;}
   function add(geo,m,part){if(geo.index){const q=geo.toNonIndexed();geo.dispose();geo=q;}if(STAGE>=7)part=m===M.core?'crystal':m===M.glass?'glass':m===M.gold?'brass':m===M.goldShade?'brass-shade':m===M.navy?'navy':m===M.roof?'slate':m===M.stone?'ivory':'ivory-shade';const key=part+'|'+m.uuid;if(!buckets.has(key))buckets.set(key,{m,part,list:[]});buckets.get(key).list.push(geo);}
@@ -112,7 +112,7 @@
   const root=new THREE.Group();root.name='tidal-bench';
   const STAGE=7, buckets=new Map();
   const mat=(c,o={},k)=>kit.mat(STAGE<3?'#b4b0a6':c,o,k);
-  const M={stone:mat('#F1E4D1',{roughness:.88},'stone'),stoneShade:mat('#C8BDD1',{roughness:.93},'stone'),wood:mat('#CDA67E',{roughness:.8},'wood'),woodLight:mat('#DAB995',{roughness:.8},'wood'),iron:mat('#777A98',{roughness:.4,metalness:0.6},'metal'),blue:mat('#BCA6CB',{roughness:.86}),gold:mat('#E8C48B',{roughness:.4,metalness:0.7},'metal')};
+  const M={stone:mat('#E6DCCA',{roughness:.88},'stone'),stoneShade:mat('#BCB4A8',{roughness:.93},'stone'),wood:mat('#CDA67E',{roughness:.8},'wood'),woodLight:mat('#DAB995',{roughness:.8},'wood'),iron:mat('#777A98',{roughness:.4,metalness:0.6},'metal'),blue:mat('#A48C62',{roughness:.86}),gold:mat('#E8C48B',{roughness:.4,metalness:0.7},'metal')};
   function add(geo,m){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!buckets.has(m))buckets.set(m,[]);buckets.get(m).push(geo.index?geo.toNonIndexed():geo);}
   function at(geo,x,y,z,rx=0,ry=0,rz=0){geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));return geo;}
   function block(x,y,z,w,h,d,m,rx=0,ry=0,rz=0,r=.005){
@@ -162,7 +162,7 @@
   const root=new THREE.Group();root.name='tidal-mailbox';
   const STAGE=7, buckets=new Map();
   const mat=(c,o={},k)=>kit.mat(STAGE<3?'#b4b0a6':c,o,k);
-  const M={stone:mat('#F1E4D1',{roughness:.88},'stone'),stoneShade:mat('#C8BDD1',{roughness:.93},'stone'),wood:mat('#CDA67E',{roughness:.8},'wood'),iron:mat('#777A98',{roughness:.4,metalness:0.6},'metal'),blue:mat('#BCA6CB',{roughness:.86}),gold:mat('#E8C48B',{roughness:.4,metalness:0.7},'metal'),roof:mat('#B79CAB',{roughness:.68},'roof'),flag:mat('#F3BDD2',{roughness:.86})};
+  const M={stone:mat('#E6DCCA',{roughness:.88},'stone'),stoneShade:mat('#BCB4A8',{roughness:.93},'stone'),wood:mat('#CDA67E',{roughness:.8},'wood'),iron:mat('#777A98',{roughness:.4,metalness:0.6},'metal'),blue:mat('#A48C62',{roughness:.86}),gold:mat('#E8C48B',{roughness:.4,metalness:0.7},'metal'),roof:mat('#B79CAB',{roughness:.68},'roof'),flag:mat('#F3BDD2',{roughness:.86})};
   function add(geo,m){if(!geo.getAttribute('normal'))geo.computeVertexNormals();if(!buckets.has(m))buckets.set(m,[]);buckets.get(m).push(geo.index?geo.toNonIndexed():geo);}
   function at(geo,x,y,z,rx=0,ry=0,rz=0){geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),new THREE.Vector3(1,1,1)));return geo;}
   function block(x,y,z,w,h,d,m,rx=0,ry=0,rz=0,r=.005){
@@ -220,7 +220,7 @@
   const STAGE=7,root=new THREE.Group();root.name='tidal-banner';const PI=Math.PI,TAU=2*PI,buckets=new Map(),cache=new Map();
   const material=(c,o={},kind)=>{const k=JSON.stringify([c,o,kind]);if(!cache.has(k))cache.set(k,kit.mat(c,o,kind));return cache.get(k);};
   const neutral=STAGE<3?material('#a8a292',{roughness:.84}):null;
-  const M={stone:neutral||material('#F1E4D1',{roughness:.89},'stone'),stoneShade:neutral||material('#C8BDD1',{roughness:.92},'stone'),navy:neutral||material('#9186A8',{roughness:.4,metalness:0.6},'metal'),cloth:neutral||material('#BCA6CB',{roughness:.88},'cloth'),goldCloth:neutral||material('#E8C48B',{roughness:.38,metalness:.72},'cloth'),gold:neutral||material('#E8C48B',{roughness:.4,metalness:0.72},'metal'),goldShade:neutral||material('#BCA6CB',{roughness:.4,metalness:0.62},'metal')};
+  const M={stone:neutral||material('#E6DCCA',{roughness:.89},'stone'),stoneShade:neutral||material('#BCB4A8',{roughness:.92},'stone'),navy:neutral||material('#404654',{roughness:.4,metalness:0.6},'metal'),cloth:neutral||material('#A48C62',{roughness:.88},'cloth'),goldCloth:neutral||material('#E8C48B',{roughness:.38,metalness:.72},'cloth'),gold:neutral||material('#E8C48B',{roughness:.4,metalness:0.72},'metal'),goldShade:neutral||material('#A48C62',{roughness:.4,metalness:0.62},'metal')};
   function add(g,m,part){if(g.index){const a=g.toNonIndexed();g.dispose();g=a;}if(STAGE>=7)part=m===M.gold?'brass':m===M.goldShade?'brass-shade':m===M.navy?'navy':m===M.cloth?'fabric':m===M.stone?'ivory':'ivory-shade';const k=part+'|'+m.uuid;if(!buckets.has(k))buckets.set(k,{m,part,list:[]});buckets.get(k).list.push(g);}
   function put(g,m,part,pos=[0,0,0],rot=[0,0,0]){g.rotateX(rot[0]);g.rotateY(rot[1]);g.rotateZ(rot[2]);g.translate(...pos);add(g,m,part);}
   function cyl(rt,rb,h,y,m,part,n=16){put(new THREE.CylinderGeometry(rt,rb,h,n,1),m,part,[0,y,0]);}
@@ -228,7 +228,7 @@
   function poly(points,depth,m,part,pos=[0,0,0],flip=false){const s=new THREE.Shape();points.forEach((p,i)=>i?s.lineTo(...p):s.moveTo(...p));s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:false,curveSegments:20});if(part==='emblem'){g.translate(...pos);const at=g.attributes.position,side=pos[2]<0?-1:1;for(let i=0;i<at.count;i++)at.setZ(i,fold(at.getX(i),at.getY(i))+side*(.007+at.getZ(i)-pos[2]));if(side<0){const idx=[];for(let i=0;i<at.count;i+=3)idx.push(i,i+2,i+1);g.setIndex(idx);}g.computeVertexNormals();add(g,m,part);}else{if(flip)g.rotateY(PI);put(g,m,part,pos);}}
   const fold=(x,y)=>STAGE>=2?.022*Math.sin((x-.16)/.78*PI*3)*(.25+.75*(2.72-y)/1.5):0;
   // Thin closed cloth volume; pointed lower edge is a continuous mesh.
-  function sheet(part,m,th=.008){const nx=STAGE>=2?9:2,ny=STAGE>=7?9:STAGE>=2?18:2,p=[],ind=[];for(let side=0;side<2;side++)for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){const u=i/nx,v=j/ny,x=.16+.78*u,bottom=.91+.34*Math.abs(2*u-1),y=2.71+(bottom-2.71)*v;p.push(x,y,fold(x,y)+(side===0?th/2:-th/2));}const count=(nx+1)*(ny+1);for(let s=0;s<2;s++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const a=s*count+j*(nx+1)+i,b=a+1,c=a+nx+1,d=c+1;if(!s)ind.push(a,c,b,b,c,d);else ind.push(a,b,c,b,d,c);}const edge=[];for(let i=0;i<=nx;i++)edge.push(i);for(let j=1;j<=ny;j++)edge.push(j*(nx+1)+nx);for(let i=nx-1;i>=0;i--)edge.push(ny*(nx+1)+i);for(let j=ny-1;j>0;j--)edge.push(j*(nx+1));for(let k=0;k<edge.length;k++){const a=edge[k],b=edge[(k+1)%edge.length];ind.push(a,b,a+count,b,b+count,a+count);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setIndex(ind);const colors=[];for(let k=0;k<p.length;k+=3){const c=new THREE.Color(p[k]>.68?'#FFF0D4':'#BCA6CB');colors.push(c.r,c.g,c.b);}g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));m.color.set('#ffffff');m.vertexColors=true;g.computeVertexNormals();add(g,m,part);}
+  function sheet(part,m,th=.008){const nx=STAGE>=2?9:2,ny=STAGE>=7?9:STAGE>=2?18:2,p=[],ind=[];for(let side=0;side<2;side++)for(let j=0;j<=ny;j++)for(let i=0;i<=nx;i++){const u=i/nx,v=j/ny,x=.16+.78*u,bottom=.91+.34*Math.abs(2*u-1),y=2.71+(bottom-2.71)*v;p.push(x,y,fold(x,y)+(side===0?th/2:-th/2));}const count=(nx+1)*(ny+1);for(let s=0;s<2;s++)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const a=s*count+j*(nx+1)+i,b=a+1,c=a+nx+1,d=c+1;if(!s)ind.push(a,c,b,b,c,d);else ind.push(a,b,c,b,d,c);}const edge=[];for(let i=0;i<=nx;i++)edge.push(i);for(let j=1;j<=ny;j++)edge.push(j*(nx+1)+nx);for(let i=nx-1;i>=0;i--)edge.push(ny*(nx+1)+i);for(let j=ny-1;j>0;j--)edge.push(j*(nx+1));for(let k=0;k<edge.length;k++){const a=edge[k],b=edge[(k+1)%edge.length];ind.push(a,b,a+count,b,b+count,a+count);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setIndex(ind);const colors=[];for(let k=0;k<p.length;k+=3){const c=new THREE.Color(p[k]>.68?'#FFF0D4':'#A48C62');colors.push(c.r,c.g,c.b);}g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));m.color.set('#ffffff');m.vertexColors=true;g.computeVertexNormals();add(g,m,part);}
   cyl(.34,.34,.045,.0225,M.stoneShade,'base',24);cyl(.31,.34,.145,.1175,M.stone,'base',24);cyl(.285,.315,.05,.215,M.stone,'base',24);
   cyl(.102,.14,.09,.285,M.goldShade,'mast');cyl(.06,.10,.14,.385,M.gold,'mast');cyl(.049,.055,2.35,1.62,M.navy,'mast');cyl(.063,.059,.13,2.85,M.navy,'mast');
   rod([0,2.8,0],[1.01,2.8,0],.027,M.gold,'rod');sheet('cloth',M.cloth);
@@ -265,9 +265,9 @@
   const stage=8;
   const g=new THREE.Group();g.name='tidal-crescent-planter';
   const mats={
-    stone:kit.mat('#F1E4D1',{roughness:.9},'stone'),
-    shade:kit.mat('#C8BDD1',{roughness:.94},'stone'),
-    navy:kit.mat('#BCA6CB',{roughness:.82},'stone'),
+    stone:kit.mat('#E6DCCA',{roughness:.9},'stone'),
+    shade:kit.mat('#BCB4A8',{roughness:.94},'stone'),
+    navy:kit.mat('#A48C62',{roughness:.82},'stone'),
     gold:kit.mat('#E8C48B',{roughness:.4,metalness:0.7},'metal'),
     soil:kit.mat('#81796D',{roughness:1}),
     leaf:kit.mat('#719B81',{roughness:.94},'sway'),
