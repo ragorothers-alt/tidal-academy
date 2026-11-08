@@ -934,14 +934,14 @@ function seasonGLSL(kind) {
         diffuseColor.rgb = mix(bc, fc, leafy * fk * sunny);
         #ifdef TA_LEAFTEX
           { float upK = smoothstep(-0.7, 0.45, normalize(vWN).y);   // 畫好的葉叢貼圖：秋天換成金黃那張（明暗已經畫在圖上）
-            vec3 gc = goldC * mix(vec3(0.92, 0.64, 0.62), vec3(1.1, 1.04, 0.98), upK);   // v7.6 夢幻風：背光面是乾燥玫瑰色、受光面是奶油金（以前深琥珀／亮金）   // 背光面是深琥珀色、受光面是亮金（v7.0：以前背光面混綠葉，整棵變成橄欖色的泥）
+            vec3 gc = goldC * mix(vec3(0.74, 0.62, 0.5), vec3(1.06, 1.02, 0.96), upK);   // v9.14 半寫實：背光面是深一點的琥珀（以前乾燥玫瑰色）   // v7.6 夢幻風：背光面是乾燥玫瑰色、受光面是奶油金（以前深琥珀／亮金）   // 背光面是深琥珀色、受光面是亮金（v7.0：以前背光面混綠葉，整棵變成橄欖色的泥）
             #ifdef TA_TREEK
               gc *= tT;
             #endif
             #ifdef TA_GOLD
               gc *= vec3(1.04, 0.98, 1.45);   // 廣場大樹：柔金（不是鮮黃）
             #endif
-            gc = mix(gc, vec3(dot(gc, vec3(0.2126, 0.7152, 0.0722))), 0.12) * 1.12;   // v7.6 夢幻風：秋葉亮一點、粉一點（不是深琥珀）
+            gc = mix(gc, vec3(dot(gc, vec3(0.2126, 0.7152, 0.0722))), 0.04) * 1.04;   // v9.14：秋葉的飽和與亮度回到自然   // v7.6 夢幻風：秋葉亮一點、粉一點（不是深琥珀）
             diffuseColor.rgb = mix(bc, gc, fk * (0.82 + 0.18 * smoothstep(-1.4, 0.2, vOP.y))); }   // 樹冠最底下留一點點綠
         #endif
       }

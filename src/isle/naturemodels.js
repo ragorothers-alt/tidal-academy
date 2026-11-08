@@ -114,7 +114,7 @@ function broadleaf() {
     const b = [end[0] * .7, end[1] + .2, end[2] + .3]; wood.push(curvedWood([mid, [(mid[0] + b[0]) / 2, mid[1] + .26, b[2] - .06], b], [.045, .028, .009], 4, 7));
   }
   for (let i = 0; i < 5; i++) { const a = i * 2.399; wood.push(curvedWood([[Math.cos(a) * .36, .018, Math.sin(a) * .32], [Math.cos(a) * .19, .075, Math.sin(a) * .17], [.02, .25, -.01]], [.018, .063, .09], 4, 7)); }
-  part(root, 'branching-trunk', mergeNatureGeometry(wood.map(g => tint(g, '#BA9680', .025))), natureMaterial('#ffffff', 'bark', true));
+  part(root, 'branching-trunk', mergeNatureGeometry(wood.map(g => tint(g, '#8f7a68', .025))), natureMaterial('#ffffff', 'bark', true));   // v9.14：灰褐的樹皮（以前偏粉的淺褐）
   root.userData.natureCanopy = BROADLEAF_LOBES;
   root.userData.natureBounds = { min: [-1.14, 0, -1.16], max: [1.14, 2.75, .85] };
   return root;
@@ -211,50 +211,48 @@ export function natureModel(id, variant = 0) {
   return MODELS.get(key);
 }
 
-/** Crown geometry only; callers retain TA_GOLD/TA_TREEK/TA_LEAFTEX material hooks. */
+/** Crown geometry only; callers retain TA_GOLD/TA_TREEK/TA_LEAFTEX material hooks.
+    v9.14 半寫實：以前每一團樹冠是好幾顆不透明的扁球（遠看像一朵朵棉花），現在內芯縮成一顆暗一點、凹凸的小球（只負責擋住樹冠後面的天空），
+    外形交給幾百張葉叢卡：models/tex_leaves.js 的 2×2 葉叢圖集（Blender 算的闊葉小枝），每張卡挑一格、隨機翻轉，
+    法線混入整個樹冠與這一團的球面（受光面亮、背光面暗，看得出一團團的體積），輪廓是參差的葉緣、枝椏之間透得出天空 */
 export function natureCrown(model) {
   const lobes = model.userData.natureCanopy; if (!lobes) return null;
   model.updateMatrix();
   const cores = [], cards = [], origin = new THREE.Vector3(0, 1.96, -.08).applyMatrix4(model.matrix), rng = natureRandom(1707);
+  const crownC = lobes.reduce((a, l) => a.add(new THREE.Vector3(l[0], l[1], l[2])), new THREE.Vector3()).divideScalar(lobes.length);
+  const v = new THREE.Vector3(), q = new THREE.Vector3(), nOut = new THREE.Vector3(), nC = new THREE.Vector3(), cn = new THREE.Vector3();
   for (let j = 0; j < lobes.length; j++) {
     const [x, y, z, sx, sy, sz] = lobes[j], center = new THREE.Vector3(x, y, z);
-    // Each crown mass is a cloud of overlapping, flattened leaf cushions. No large ball core.
-    const count = j < 4 ? 5 : 3, cushions = [[0, 0, 0, .66, .6, .66]];
-    for (let k = 0; k < count; k++) {
-      const a = k / count * Math.PI * 2 + j * 1.9, radial = .51 + .035 * Math.sin(k * 3.7 + j);
-      cushions.push([Math.cos(a) * radial, Math.sin(k * 2.7 + j) * .16 - .015, Math.sin(a) * radial, .46, .48 + .04 * Math.sin(k * 2.1), .46]);
-    }
-    if (j < 4) cushions.push([-.08, .46, .08, .5, .45, .49], [.04, -.42, -.1, .46, .4, .46]);
-    for (let k = 0; k < cushions.length; k++) {
-      const [cx, cy, cz, rx, ry, rz] = cushions[k], core = new THREE.SphereGeometry(1, 10, 6), pp = core.attributes.position, pn = core.attributes.normal;
+    { // 內芯：凹凸的小球，比葉叢的外殼小一圈、顏色暗一點（樹冠裡面的陰影）
+      const core = new THREE.IcosahedronGeometry(1, 2), pp = core.attributes.position, pn = core.attributes.normal;
       for (let i = 0; i < pp.count; i++) {
-        const v = new THREE.Vector3().fromBufferAttribute(pp, i), ripple = 1 + .035 * Math.sin(v.x * 5 + j + k) * Math.cos(v.z * 4 - v.y * 3);
-        const q = new THREE.Vector3((cx + v.x * rx * ripple) * sx, (cy + v.y * ry * ripple) * sy, (cz + v.z * rz * ripple) * sz);
-        pp.setXYZ(i, q.x, q.y, q.z);
-        const n = new THREE.Vector3(v.x / (sx * rx), v.y / (sy * ry), v.z / (sz * rz)).normalize().multiplyScalar(.76).addScaledVector(q.clone().normalize(), .24).normalize();
-        pn.setXYZ(i, n.x, n.y, n.z);
+        v.fromBufferAttribute(pp, i); const bump = 1 + .1 * Math.sin(v.x * 7 + j) * Math.cos(v.z * 6 - v.y * 5 + j * 1.3);
+        q.set(x + v.x * sx * .7 * bump, y + v.y * sy * .66 * bump, z + v.z * sz * .7 * bump); pp.setXYZ(i, q.x, q.y, q.z);
+        nC.copy(q).sub(crownC).normalize(); nOut.copy(v).normalize().multiplyScalar(.6).addScaledVector(nC, .4).normalize(); pn.setXYZ(i, nOut.x, nOut.y, nOut.z);
       }
-      tint(core, '#91B480', .02); core.translate(x, y, z); core.applyMatrix4(model.matrix); core.translate(-origin.x, -origin.y, -origin.z); cores.push(core);
+      tint(core, '#56794a', .04); core.applyMatrix4(model.matrix); core.translate(-origin.x, -origin.y, -origin.z); cores.push(core);
     }
-    // Sparse single folded leaves blend into the core and soften its edge. No repeated multi-leaf stamps.
-    for (let k = 0; k < 32; k++) {
-      const yy = 1 - 2 * (k + .5) / 32, a = k * 2.399963 + j * 1.7 + (rng() - .5) * .45, rr = Math.sqrt(1 - yy * yy);
-      const d = new THREE.Vector3(rr * Math.cos(a), yy, rr * Math.sin(a));
-      const pos = center.clone().add(new THREE.Vector3(d.x * sx, d.y * sy, d.z * sz).multiplyScalar(.955 + rng() * .045));
-      const normal = new THREE.Vector3(d.x * .8, d.y * .7 + .3, d.z * .8).normalize();
-      const tangent = new THREE.Vector3().crossVectors(normal, new THREE.Vector3(0, 1, .13)).normalize(), up = new THREE.Vector3().crossVectors(tangent, normal).normalize();
-      const roll = rng() * Math.PI * 2, right = tangent.clone().multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll)), vertical = up.clone().multiplyScalar(Math.cos(roll)).addScaledVector(tangent, -Math.sin(roll));
-      const span = .055 + rng() * .028, gg = new THREE.BufferGeometry();
-      const points = [], UV = [0, 0, 1, 0, 1, 1, 0, 1, .5, .5];
-      for (const [u, v] of [[-1,-1],[1,-1],[1,1],[-1,1],[0,0]]) {
-        const q = pos.clone().addScaledVector(right, u * span * .32).addScaledVector(vertical, v * span / 2).addScaledVector(normal, u === 0 ? .008 : -.003);
-        q.applyMatrix4(model.matrix).sub(origin); points.push(q.x, q.y, q.z);
+    // 葉叢卡：數量跟這一團的體積成正比（大團約 150 張、小團約 60 張），散在 0.62–1.04 倍半徑的外殼裡，偏上半部
+    const n = Math.round(48 + 860 * sx * sy * sz);
+    for (let k = 0; k < n; k++) {
+      const yy = Math.min(1, (1 - 2 * (k + .5) / n) * .92 + .1), a = k * 2.399963 + j * 1.7 + (rng() - .5) * .5, rr = Math.sqrt(Math.max(0, 1 - yy * yy));
+      const d = new THREE.Vector3(rr * Math.cos(a), yy, rr * Math.sin(a)), r = .62 + rng() * .42;
+      const pos = center.clone().add(new THREE.Vector3(d.x * sx, d.y * sy, d.z * sz).multiplyScalar(r));
+      nC.copy(pos).sub(crownC).normalize(); nOut.copy(d).multiplyScalar(.65).addScaledVector(nC, .35).normalize();
+      cn.set(nOut.x + (rng() - .5) * .9, nOut.y + (rng() - .5) * .9 + .15, nOut.z + (rng() - .5) * .9).normalize();   // 卡片朝外、亂一點，看起來不像貼在球面上的鱗片
+      const tangent = new THREE.Vector3().crossVectors(cn, Math.abs(cn.y) > .95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize(), up = new THREE.Vector3().crossVectors(tangent, cn).normalize();
+      const roll = rng() * Math.PI * 2, right = tangent.clone().multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll)), vert = up.clone().multiplyScalar(Math.cos(roll)).addScaledVector(tangent, -Math.sin(roll));
+      const span = (.19 + rng() * .1) * (r > .9 ? 1 : .9), cell = Math.floor(rng() * 4), u0 = (cell % 2) * .5, v0 = Math.floor(cell / 2) * .5, flip = rng() < .5;
+      const P = [], UV = [];
+      for (const [u, w] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        q.copy(pos).addScaledVector(right, u * span / 2).addScaledVector(vert, w * span / 2).applyMatrix4(model.matrix).sub(origin); P.push(q.x, q.y, q.z);
+        UV.push(u0 + ((flip ? -u : u) * .5 + .5) * .5, v0 + (w * .5 + .5) * .5);
       }
-      gg.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));gg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2));gg.setIndex([0,1,4,1,2,4,2,3,4,3,0,4]);gg.computeVertexNormals();
-      // Broad crown volume + local lobe normals keep back faces readable without a flat card wall.
-      const normals = gg.attributes.normal, pp = gg.attributes.position;
-      for (let i = 0; i < pp.count; i++) { const nn = new THREE.Vector3().fromBufferAttribute(pp,i).normalize().multiplyScalar(.38).addScaledVector(normal,.62).normalize(); normals.setXYZ(i,nn.x,nn.y,nn.z); }
-      cards.push(tint(gg, '#91B480', .035));
+      const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); gg.setAttribute('uv', new THREE.Float32BufferAttribute(UV, 2)); gg.setIndex([0, 1, 2, 0, 2, 3]);
+      // 法線：這一團與整個樹冠的球面為主、一點卡片本身的方向——同一團的卡片明暗連成一片體積，不是每張各自亮暗
+      const N = []; nOut.multiplyScalar(.75).addScaledVector(cn, .25).normalize(); for (let i = 0; i < 4; i++) N.push(nOut.x, nOut.y, nOut.z);
+      gg.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+      cards.push(tint(gg, '#7ea25e', .05));   // v9.14：夏天的葉色深一點（以前淡鼠尾草綠）
     }
   }
   return { C0: origin, parts: [mergeNatureGeometry(cores), mergeNatureGeometry(cards)] };

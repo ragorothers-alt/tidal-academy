@@ -106,15 +106,20 @@ function buildCanopy(g, model, kind, H) {
       sh.fragmentShader = 'uniform sampler2D uGoldMap;\nvarying float vNatureCore;\nvarying vec3 vNatureAutumn;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
         // Shape comes from geometry. Map RGB never prints a leaf spray on the opaque cloud core.
         // Vertex albedo is shared by core / edge leaves; only alpha cuts the small leaf silhouettes.
-        float natureWash = 0.97 + 0.045 * n_v(vOP.xz * 4.7 + vOP.y * 2.3);
-        diffuseColor.rgb *= natureWash;
-        if (vNatureCore < 0.5) diffuseColor.a *= texture2D(map, vMapUv).a;
+        float natureWash = 0.94 + 0.09 * n_v(vOP.xz * 4.7 + vOP.y * 2.3);
+        vec4 leafT = texture2D(map, vMapUv); float leafVar = 1.0;
+        #ifdef TA_LEAFTEX
+          if (vNatureCore < 0.5) leafVar = clamp(dot(leafT.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.139, 0.55, 1.6);   // v9.14：葉叢圖集裡每片葉子的深淺（綠葉的平均亮度 0.139 = 1）
+        #endif
+        diffuseColor.rgb *= natureWash * leafVar;
+        if (vNatureCore < 0.5) diffuseColor.a *= leafT.a;
         #ifdef TA_LEAFTEX
           // Compensated material input for the unchanged seasonGLSL multipliers.
-          vec3 goldC = vNatureAutumn * natureWash;
+          vec3 goldC = vNatureAutumn * natureWash * leafVar;
+          if (vNatureCore < 0.5) goldC *= mix(vec3(1.0), clamp(texture2D(uGoldMap, vMapUv).rgb / vec3(0.58, 0.37, 0.05), vec3(0.7), vec3(1.4)), 0.3);   // 秋葉的色差：圖集裡有的偏橘、有的偏黃、少數還帶綠
         #endif`);
     };
-    card.customProgramCacheKey = () => `nature-crown-v2-${kind}`;
+    card.customProgramCacheKey = () => `nature-crown-v3-${kind}`;
     loadLeaves().then(tx => {
       if (!tx) return;
       useLeafTex(tx[0], tx[1]); card.map = tx[0]; card.color.set('#ffffff'); goldU.value = tx[1];
@@ -199,11 +204,11 @@ function treeK(m) {
 const hash2 = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s); };
 /** 七成跟著所在的 9 公尺區塊（相鄰兩三棵同色、成一群），三成自己抽：整體比例不變，但讀起來是一片片的色群，不是每棵隨機 */
 const treeHash = (x, z) => { const X = Math.round(x * 10), Z = Math.round(z * 10); return hash2(X, Z) < 0.7 ? hash2(Math.floor(x / 9) + 101, Math.floor(z / 9) + 7) : hash2(Z + 3, X + 11); };
-const AUTUMN_HEX = ['#D9B75F', '#DEA274', '#DA8F82', '#99A472'];
+const AUTUMN_HEX = ['#CDA23C', '#C9782F', '#A4532F', '#7F8C46'];   // v9.14 半寫實：金黃、橙、赭紅、還沒轉色的橄欖綠（以前是粉杏、柔金、珊瑚、鼠尾草）
 // Linear albedo, pre-divided by the existing engine tT and its 1.12 brightness gain.
 // A shared gold texture alone cannot undo four different channel multipliers.
 const AUTUMN_INPUT = AUTUMN_HEX.map((hex, i) => new THREE.Color(hex).toArray().map((v, j) => v / ([[1.12, .92, 1.6], [1.06, 1.06, 1.45], [1.02, .62, 1.7], [.45, .78, 1.5]][i][j] * 1.12)));
-const HERO_AUTUMN_INPUT = new THREE.Color('#E0BB63').toArray().map((v, j) => v / ([1.04, .98, 1.45][j] * 1.12));
+const HERO_AUTUMN_INPUT = new THREE.Color('#D8AA40').toArray().map((v, j) => v / ([1.04, .98, 1.45][j] * 1.12));
 const autumnInput = (k, kind) => kind === 'sakura' ? HERO_AUTUMN_INPUT : AUTUMN_INPUT[k < .4 ? 0 : k < .7 ? 1 : k < .9 ? 2 : 3];
 /** Rank coarse spatial groups: deterministic 35/30/20/15, keeping neighbouring trees together. */
 function assignTreeColors(groups) {

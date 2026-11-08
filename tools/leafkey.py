@@ -6,6 +6,7 @@
 - 半透明的邊緣把背景的洋紅反算掉（觀察到的顏色 = a·葉 + (1-a)·背景），殘留的洋紅再壓掉（藍不超過綠），邊緣不會有粉紅邊。
 - 透明處填上鄰近葉子的顏色（縮圖時邊緣才不會發黑），縮成正方形，存成有透明度的 WebP，
   以 data URL 放進 window.TA.LEAVES = { gold, green }（離線雙擊也能載入）。
+- 已經是透明背景的 PNG（四個角 alpha = 0，例如 Blender 算的 2×2 葉叢圖集）不去背，直接縮放。
 """
 import base64, io, json, sys
 from pathlib import Path
@@ -14,7 +15,12 @@ from PIL import Image, ImageFilter
 ROOT = Path(__file__).resolve().parent.parent
 
 def key(path, size):
-    im = Image.open(path).convert('RGB'); w, h = im.size; px = im.load()
+    src = Image.open(path)
+    if src.mode == 'RGBA' and all(src.getpixel(p)[3] == 0 for p in [(0, 0), (src.width - 1, 0), (0, src.height - 1), (src.width - 1, src.height - 1)]):
+        out = src.resize((size, size), Image.LANCZOS)   # 已經是透明背景、透明處也填好葉色（Blender 算的葉叢圖集）：不去背，直接縮放
+        buf = io.BytesIO(); out.save(buf, 'WEBP', quality=88, method=6)
+        return 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode(), len(buf.getvalue())
+    im = src.convert('RGB'); w, h = im.size; px = im.load()
     corners = [px[x, y] for x in (3, w - 4) for y in (3, h - 4)]
     bg = tuple(sorted(c[i] for c in corners)[len(corners) // 2] for i in range(3))
     bgs = min(bg[0], bg[2]) - bg[1]   # 背景的洋紅程度（約 255）
@@ -47,6 +53,6 @@ if __name__ == '__main__':
         url, n = key(f, size); pack[name] = url
         print(f'{name}: {Path(f).name} -> {size}x{size} webp {n:,} B')
     out = ROOT / 'src' / 'isle' / 'models' / 'tex_leaves.js'
-    out.write_text('/* 潮汐小島 · 廣場大樹的葉叢貼圖（Codex 繪製、tools/leafkey.py 去背，不要手動修改） */\n'
+    out.write_text('/* 潮汐小島 · 樹冠的葉叢貼圖（2×2 圖集，金／綠共用 alpha；tools/leafkey.py 打包，不要手動修改） */\n'
                    '(window.TA = window.TA || {}).LEAVES = ' + json.dumps(pack, separators=(',', ':')) + ';\n', encoding='utf-8')
     print(f'-> {out.relative_to(ROOT)} ({out.stat().st_size:,} bytes)')
