@@ -859,15 +859,15 @@ function paveTex(kind) {
   const gray = (v, a) => `rgba(${v | 0},${v | 0},${v | 0},${a == null ? 1 : a})`;
   let sd = kind.length * 977 + 13; const r = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
   if (kind === 'stone') {
-    c.fillStyle = '#c8c3b9'; c.fillRect(6, 0, S2 - 12, S2);
+    c.fillStyle = '#8d877d'; c.fillRect(6, 0, S2 - 12, S2);   // v9.16 半寫實：石板之間露出的是灰褐的砂縫（以前淺灰，石縫像一條條白線）
     h.fillStyle = gray(128); h.fillRect(0, 0, S2, S2);
   } else {
-    const base = kind === 'earth' ? '#d1bda5' : '#e2d0c0';   // v7.6：鋪面暗一點、帶粉（以前 #eee0c9 白天整片發白）
+    const base = kind === 'earth' ? '#ad9c84' : '#cdbda3';   // v9.16 半寫實：踩實的土路、細砂路（以前帶粉的奶油色）   // v7.6：鋪面暗一點、帶粉（以前 #eee0c9 白天整片發白）
     // 連續的四週期曲線取代8px橫條：邊緣0.2–0.4m碎草漸變，路心保持乾淨。
     for (let y = 0; y < S2; y++) {
       const a = y / S2 * Math.PI * 2, L = 7 + Math.sin(a * 3) * 3 + Math.cos(a * 7) * 2, R = S2 - 8 + Math.sin(a * 5 + 1) * 4;
       const g = c.createLinearGradient(L, 0, R, 0);
-      g.addColorStop(0, 'rgba(180,198,166,0)'); g.addColorStop(0.07, '#b4c6a6'); g.addColorStop(0.16, base); g.addColorStop(0.84, base); g.addColorStop(0.94, '#b4c6a6'); g.addColorStop(1, 'rgba(180,198,166,0)');
+      g.addColorStop(0, 'rgba(134,160,108,0)'); g.addColorStop(0.07, '#86a06c'); g.addColorStop(0.16, base); g.addColorStop(0.84, base); g.addColorStop(0.94, '#86a06c'); g.addColorStop(1, 'rgba(134,160,108,0)');
       c.fillStyle = g; c.fillRect(L, y, R - L, 1);
     }
     h.fillStyle = gray(128); h.fillRect(0, 0, S2, S2);
@@ -877,7 +877,7 @@ function paveTex(kind) {
     }
     // 三到五顆碎石聚群，不滿版撒芝麻。
     for (let g = 0; g < 3; g++) { const px = (g % 2 ? 0.85 : 0.15) * S2, py = r() * S2;
-      for (let j = 0, n = 3 + Math.floor(r() * 3); j < n; j++) { const x = px + (r() - 0.5) * 16, y = py + (r() - 0.5) * 20; c.fillStyle = '#d8cebc'; c.beginPath(); c.ellipse(x, y, 1 + r() * 1.5, 0.7 + r(), r(), 0, 7); c.fill(); }
+      for (let j = 0, n = 3 + Math.floor(r() * 3); j < n; j++) { const x = px + (r() - 0.5) * 16, y = py + (r() - 0.5) * 20; c.fillStyle = '#b3aa98'; c.beginPath(); c.ellipse(x, y, 1 + r() * 1.5, 0.7 + r(), r(), 0, 7); c.fill(); }
     }
   }
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;

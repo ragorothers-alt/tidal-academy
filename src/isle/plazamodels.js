@@ -6,9 +6,9 @@ import { bend } from './engine.js';
 const TAU = Math.PI * 2;
 const hash = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 const stoneMat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94 }), 'stone');   // v7.7：石面的水彩色塊、柔和明暗與零星地衣（以前是純色）
-const colors = ['#c2b9aa', '#b8afa1', '#c9bfad', '#aea79a', '#c4b7a1', '#aba798', '#cdc3b1'].map(c => new THREE.Color(c));   // v9.13 半寫實：石灰岩、砂岩與一點花崗岩的灰褐石塊（太接近白色的鋪面在白天會整片過曝）
+const colors = ['#aea596', '#a59c8f', '#b5ab99', '#9c958a', '#b0a48e', '#99958a', '#b9af9d'].map(c => new THREE.Color(c));   // v9.13 半寫實：石灰岩、砂岩與一點花崗岩的灰褐石塊（太接近白色的鋪面在白天會整片過曝）；v9.16 再暗一成
 const buffer = () => ({ p: [], c: [] });
-const RIM = [0.92, 0.915, 0.91];   // 石板邊緣暗一點（磨圓的倒角積了一點灰）
+const RIM = [0.95, 0.945, 0.94];   // 石板邊緣暗一點（磨圓的倒角積了一點灰）
 function tri(b, a, c, d, color, shade = 1, sc = shade, sd = shade) {
   b.p.push(...a, ...c, ...d);
   for (const s of [shade, sc, sd]) { const k = Array.isArray(s) ? s : [s, s, s]; b.c.push(color.r * k[0], color.g * k[1], color.b * k[2]); }
@@ -31,7 +31,7 @@ function slab(b, outline, surface, color, bevel = 0.018, depth = 0.07) {
   const center = [cx, surface(cx, cz), cz];
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    tri(b, center, top[j], top[i], color, 1.07, RIM, RIM);   // v7.7：石板中間亮、邊緣暗一點，像微微鼓起的枕頭
+    tri(b, center, top[j], top[i], color, 1.03, RIM, RIM);   // v7.7：石板中間亮、邊緣暗一點；v9.16 半寫實：差距小一點，是磨平的石板、不像鼓起的枕頭
     tri(b, top[i], top[j], rim[j], color, 0.97); tri(b, top[i], rim[j], rim[i], color, 0.97);
     tri(b, rim[i], rim[j], bot[j], color, 0.84); tri(b, rim[i], bot[j], bot[i], color, 0.84);
   }
@@ -81,7 +81,7 @@ export function roadPavers(rows, { groundAt, warp, plaza, clear, clearGrass, sce
       if (Math.max(...ys) - Math.min(...ys) > 0.13 || outline.some(p => clear(...p, 0.08, false))) continue;
       const key = Math.floor(x / 16) + ',' + Math.floor(z / 16);
       if (!chunks.has(key)) chunks.set(key, buffer());
-      slab(chunks.get(key), outline, (px, pz) => groundAt(px, pz) + lift, colors[Math.floor(hash(k + 81) * colors.length)]);
+      slab(chunks.get(key), outline, (px, pz) => groundAt(px, pz) + lift, colors[Math.floor(hash(k + 81) * colors.length)].clone().multiplyScalar(0.92 + hash(k + 57) * 0.14));   // v9.16：每塊石板深淺不一
       clearGrass(x, z, 0.34);
       count++;
     }
@@ -120,7 +120,7 @@ export function plazaModel(cx, cz, groundAt) {
       const inner = r0 + 0.012, outer = r1 - 0.012, am = (a0 + a1) / 2;
       const outline = [polar(inner, a0), polar(outer, a0), polar(outer, am), polar(outer, a1), polar(inner, a1), polar(inner, am)];
       // 弧形塊每塊30三角形；交錯的環起點避免徑向縫貫穿。
-      slab(b, outline, y, colors[Math.floor(hash(r * 81 + i) * colors.length)], 0.014, 0.08); stones++;
+      slab(b, outline, y, colors[Math.floor(hash(r * 81 + i) * colors.length)].clone().multiplyScalar(0.93 + hash(r * 57 + i) * 0.12), 0.014, 0.08); stones++;
     }
   }
   group.add(finish(b, 'w04-plaza-stones'));
