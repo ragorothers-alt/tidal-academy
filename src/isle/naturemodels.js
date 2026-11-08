@@ -135,18 +135,18 @@ function palm() {
     const spine = t => top.clone().add(new THREE.Vector3(Math.cos(a) * L * t, .5 * Math.sin(t * Math.PI) - .24 * t, Math.sin(a) * L * t));
     for (let j = 0; j < 6; j++) {
       const start = spine(j / 6), end = spine((j + 1) / 6);
-      leaves.push(tint(segment(start.toArray(), end.toArray(), .013, .007, 5), '#92B39C'));
+      leaves.push(tint(segment(start.toArray(), end.toArray(), .013, .007, 5), '#6f8a4c'));
     }
     for (let j = 1; j <= 10; j++) for (const side of [-1, 1]) {
       const t = j / 11, p = spine(t), direction = new THREE.Vector3(Math.cos(a) * .25 - Math.sin(a) * side, -.22 - t * .36, Math.sin(a) * .25 + Math.cos(a) * side);
       const g = orientLeaf(leaf((.28 + .2 * Math.sin(t * Math.PI)) * (1 - .4 * t), .115 * (1 - .4 * t), .035), p, direction);
-      leaves.push(tint(g, side > 0 ? '#BDD0A8' : '#92B39C', .025));
+      leaves.push(tint(g, side > 0 ? '#8fa65c' : '#6a8746', .025));   // v9.15 半寫實：羽葉受光面黃綠、背光面深綠
     }
   }
   for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3; const g = new THREE.IcosahedronGeometry(.13, 1); g.scale(.9, 1.15, .9); g.translate(top.x + Math.cos(a) * .19, top.y - .13, top.z + Math.sin(a) * .19); fruit.push(g); }
-  part(root, 'curved-eight-section-trunk', mergeNatureGeometry(wood), natureMaterial('#B59986', 'bark'));
+  part(root, 'curved-eight-section-trunk', mergeNatureGeometry(wood), natureMaterial('#8c7a68', 'bark'));
   part(root, 'eight-arched-fronds', mergeNatureGeometry(leaves), natureMaterial('#D0DBCB', 'pine', true));
-  part(root, 'three-coconuts', mergeNatureGeometry(fruit), natureMaterial('#AD887A', 'bark'));
+  part(root, 'three-coconuts', mergeNatureGeometry(fruit), natureMaterial('#6e5a40', 'bark'));
   return root;
 }
 
@@ -157,18 +157,18 @@ function bamboo() {
     const point = t => new THREE.Vector3(Math.cos(a) * radius + lean * t, t * H, Math.sin(a) * radius + Math.cos(a) * .09 * t);
     for (let j = 0; j < 7; j++) {
       const p = point(j / 7), q = point((j + 1) / 7), rad = .045 - j * .0028;
-      stems.push(tint(segment(p.toArray(), q.toArray(), rad, rad - .0025, 10), s % 2 ? '#A8C4A3' : '#7FA093'));
-      const ring = new THREE.TorusGeometry(rad + .0005, .0025, 3, 8); ring.rotateX(Math.PI / 2); ring.translate(...q.toArray()); stems.push(tint(ring, '#C4D3AB'));
+      stems.push(tint(segment(p.toArray(), q.toArray(), rad, rad - .0025, 10), s % 2 ? '#8fa55e' : '#6f8c4c'));   // v9.15 半寫實：竹稈是綠與黃綠（以前粉綠、灰青）
+      const ring = new THREE.TorusGeometry(rad + .0005, .0025, 3, 8); ring.rotateX(Math.PI / 2); ring.translate(...q.toArray()); stems.push(tint(ring, '#a9b47a'));
       if (j < 2) continue;
       const angle = a + j * 2.2, end = q.clone().add(new THREE.Vector3(Math.cos(angle) * .23, .055, Math.sin(angle) * .23));
-      stems.push(tint(segment(q.toArray(), end.toArray(), .011, .004, 5), '#A8C4A3'));
+      stems.push(tint(segment(q.toArray(), end.toArray(), .011, .004, 5), '#8fa55e'));
       for (let k = 0; k < 4; k++) {
         const p0 = q.clone().lerp(end, .3 + k * .2), angle0 = angle + (k % 2 ? -.75 : .75);
-        leaves.push(tint(orientLeaf(leaf(.2 + r() * .08, .047, .018), p0, new THREE.Vector3(Math.cos(angle0), .12 - k * .1, Math.sin(angle0))), k % 2 ? '#C4D3AB' : '#A8C4A3'));
+        leaves.push(tint(orientLeaf(leaf(.2 + r() * .08, .047, .018), p0, new THREE.Vector3(Math.cos(angle0), .12 - k * .1, Math.sin(angle0))), k % 2 ? '#7e9a50' : '#647f42'));
       }
     }
   }
-  for (let j = 0; j < 2; j++) {const g = new THREE.ConeGeometry(.07, .28, 7);g.translate(.3 - j * .6, .14, .2);stems.push(tint(g, '#7FA093'));}
+  for (let j = 0; j < 2; j++) {const g = new THREE.ConeGeometry(.07, .28, 7);g.translate(.3 - j * .6, .14, .2);stems.push(tint(g, '#8a7a56'));}   // 竹筍是褐色的筍殼
   part(root, 'six-culms-and-raised-nodes', mergeNatureGeometry(stems), natureMaterial('#ffffff', 'bark', true));
   part(root, 'folded-bamboo-leaves', mergeNatureGeometry(leaves), natureMaterial('#D0DBCB', 'pine', true));
   return root;
@@ -179,10 +179,10 @@ function shrub(variant) {
   for (let i = 0; i < 9; i++) {
     const a = i * 2.399, radial = i < 2 ? .1 : .22 + r() * .13;
     const center = new THREE.Vector3(Math.cos(a) * radial, .16 + r() * .12 + (i < 2 ? .12 : 0), Math.sin(a) * radial * (.7 + variant * .1));
-    const g = new THREE.IcosahedronGeometry(.19 + r() * .055, 1); g.scale(1, .85 + variant * .09, .92); g.translate(...center.toArray()); green.push(tint(g, i % 3 ? '#A5BE9A' : '#C1CDA2'));
+    const g = new THREE.IcosahedronGeometry(.19 + r() * .055, 1); g.scale(1, .85 + variant * .09, .92); g.translate(...center.toArray()); green.push(tint(g, i % 3 ? '#76925a' : '#8fa468'));   // v9.15 半寫實：灌木葉團是自然的綠（以前淡鼠尾草）
     for (let k = 0; k < 9; k++) {
       const phi = k * 2.399, y = .2 + (k / 9) * .8, d = new THREE.Vector3(Math.cos(phi) * Math.sqrt(1 - y * y), y, Math.sin(phi) * Math.sqrt(1 - y * y));
-      green.push(tint(orientLeaf(leaf(.035, .022, .006), center.clone().addScaledVector(d, .215), d), '#C1CDA2'));
+      green.push(tint(orientLeaf(leaf(.035, .022, .006), center.clone().addScaledVector(d, .215), d), '#8fa468'));
     }
     if (i % 2 === 0) for (let j = 0; j < 5; j++) {
       const a0 = j * Math.PI * 2 / 5, petal = new THREE.IcosahedronGeometry(.024, 0);
