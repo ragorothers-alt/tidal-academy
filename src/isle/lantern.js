@@ -8,6 +8,7 @@ import * as actors from './actors.js';
 import * as post from './post.js';
 import { PIER } from './props.js';
 import { rectPavers } from './plazamodels.js';
+import { tuftKit } from './grass.js';
 import { animate, chibi, gesture, lookAt, setExpr } from './chars.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
@@ -109,21 +110,46 @@ const HARBOR = '#2a6274';   // v9.15 半寫實：港內的海水是深一點的�
 const PAVED = [[-8.5, -21, 8.5, -8.4], [-2.9, -9, 2.9, 17.6], [-12, 2.3, 12.2, 4.9], [-9.6, 15, 9.6, 17.8], [7, -10.5, 15.5, -8]];   // 廟埕、老街、橫街、碼頭前、廟旁的小巷（x0, z0, x1, z1）
 const paved = (x, z) => PAVED.some(([x0, z0, x1, z1]) => x > x0 && x < x1 && z > z0 && z < z1);
 function ground() {
-  const X0 = -24, X1 = 24, Z0 = -26, Z1 = 22, G1 = new THREE.Color('#6d8c45'), G2 = new THREE.Color('#53723a'), STONE = new THREE.Color('#857c70'), STONE2 = new THREE.Color('#766e63'), SAND = new THREE.Color('#dccaa2'), BED = new THREE.Color('#8aa89a'), col = new THREE.Color();
+  const X0 = -24, X1 = 24, Z0 = -26, Z1 = 22, G1 = new THREE.Color('#6d8c45'), G2 = new THREE.Color('#53723a'), STONE = new THREE.Color('#857c70'), STONE2 = new THREE.Color('#766e63'), SAND = new THREE.Color('#dccaa2'), BED = new THREE.Color('#8aa89a'), DRY = new THREE.Color('#7f8550'), col = new THREE.Color();
   const nx = X1 - X0, nz = Z1 - Z0, P3 = [], C = [], idx = [];
   const edge = (x, z) => Math.max(Math.abs(x) - 21, z < 0 ? -z - 23 : z - 18.6, Math.hypot(Math.max(0, Math.abs(x) - 18), Math.max(0, -z - 20)) - 3);   // 離海岸的距離（> 0 在海裡）
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
     const x = X0 + i, z = Z0 + j, e = edge(x, z); let y = LAND;
     if (e > -1.2) { const u = Math.min(1, (e + 1.2) / 3.2); y = LAND - u * 1.3; col.copy(SAND).lerp(BED, Math.max(0, u - 0.35) / 0.65); }
     else if (paved(x, z)) col.copy(STONE).lerp(STONE2, 0.5 + 0.5 * Math.sin(x * 2.1 + z * 1.3) * Math.sin(x * 0.7 - z * 1.9));
-    else col.copy(G1).lerp(G2, 0.35 + 0.35 * Math.sin(x * 0.43 + z * 0.31) * Math.sin(x * 0.27 - z * 0.39));
+    else {
+      col.copy(G1).lerp(G2, 0.35 + 0.35 * Math.sin(x * 0.43 + z * 0.31) * Math.sin(x * 0.27 - z * 0.39));
+      const dry = Math.sin(x * 0.19 - z * 0.23 + 1.1) * Math.sin(x * 0.31 + z * 0.17 - 0.4) + 0.3 * Math.sin(x * 0.9 + z * 0.7);   // v9.18 一塊塊曬乾的橄欖色草皮，草地不再是一整片同樣的綠
+      col.lerp(DRY, THREE.MathUtils.smoothstep(dry, 0.05, 0.6) * 0.55);
+    }
     P3.push(x, y, z); C.push(col.r, col.g, col.b);
   }
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + nx + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(idx); g.computeVertexNormals();
   const m = new THREE.Mesh(g, TERRAIN); m.receiveShadow = true;
   m.add(rectPavers(PAVED, () => LAND + 0.025, (x, z) => edge(x, z) < -1.5, 7));   // v9.17 半寫實：老街與廟埕鋪上一塊塊錯縫的灰褐石板，石縫露出底下深色的砂（以前一整片平的米色，像水泥地）
+  const t = tufts(edge); if (t) m.add(t);   // v9.18 草地長出一叢叢的草（以前是一片平的綠）
   return m;
+}
+/** 草叢：和主島同一種草（tuftKit），只長在草地上；石板路、岸邊、大建築底下不長，靠近石板邊的地方稀疏一點，老街的輪廓才清楚 */
+function tufts(edge) {
+  const per = S().settings && S().settings.lowPerf ? 4 : 8, pts = []; let k = 77;
+  const r = () => { k = (k * 16807) % 2147483647; return (k - 1) / 2147483646; };
+  const solid = PLACE.filter(p => p[4] >= 2.5 && p[0] !== 'lp_archway' && p[0] !== 'lp_lamp').map(p => [p[1], p[2], p[4] * 0.42]);   // 建築與大擺設的底下（外框的大約半徑）
+  for (let z = -26; z < 22; z++) for (let x = -24; x < 24; x++) for (let n = 0; n < per; n++) {
+    const px = x + r(), pz = z + r();
+    if (edge(px, pz) > -1.6 || paved(px, pz)) continue;
+    const gap = Math.min(...PAVED.map(([x0, z0, x1, z1]) => Math.max(x0 - px, px - x1, z0 - pz, pz - z1)));   // 離最近的石板邊多遠
+    const clump = 0.5 + 0.5 * Math.sin(px * 0.61 + 1.3) * Math.sin(pz * 0.53 - 0.7);   // 成簇：有的地方是長草叢，有的地方是剪短的草皮
+    if (r() > (0.35 + clump * 0.6) * Math.min(1, 0.3 + gap * 0.7)) continue;
+    if (solid.some(([sx, sz, sr]) => Math.hypot(px - sx, pz - sz) < sr)) continue;
+    pts.push([px, pz, (0.55 + clump * 0.6 + r() * 0.3) * Math.min(1, 0.55 + gap * 0.5), r() * 6.28]);
+  }
+  if (!pts.length) return null;
+  const kit = tuftKit(), im = new THREE.InstancedMesh(kit.geo, kit.mat, pts.length), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), s3 = new THREE.Vector3(), col = new THREE.Color();
+  pts.forEach(([x, z, s, rot], i) => { m4.compose(v.set(x, LAND, z), q.setFromEuler(e.set(0, rot, 0)), s3.setScalar(s)); im.setMatrixAt(i, m4); im.setColorAt(i, col.setRGB(0.85 + r() * 0.25, 0.92 + r() * 0.16, 0.75 + r() * 0.2)); });
+  im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false; im.raycast = () => {}; im.name = 'lantern-grass';
+  return im;
 }
 /** 木棧碼頭：從岸邊往南伸進海裡 */
 function pier() {
