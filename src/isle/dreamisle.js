@@ -47,32 +47,33 @@ function removeObject(o) { if (o) { o.removeFromParent(); disposeObject(o); } }
 /* ---------- 物件模型（不加入主島的碰撞與佈置，純粹給夢境用） ---------- */
 const TREES = { round: '闊葉樹', pink: '櫻花樹', cedar: '杉樹', palm: '椰子樹', bamboo: '竹子', fruit: '果樹' };
 const OUTDOOR = { rock: '石頭', bench: '長椅', lamp: '路燈', fence: '木柵欄', stone: '石板路' };
-const FLOWERS = ['#ff7a9a', '#ffffff', '#ffd23f', '#b38bff', '#ff5a5a', '#7ec8ff'];
+const FLOWERS = ['#cf8597', '#eeebe3', '#d8bc56', '#9785b3', '#b84a42', '#8199c2'];   // v9.18 半寫實：玫瑰粉、白、芥黃、灰紫、磚紅、矢車菊藍
+const OLD_FLOWER = { '#ff7a9a': '#cf8597', '#ffffff': '#eeebe3', '#ffd23f': '#d8bc56', '#b38bff': '#9785b3', '#ff5a5a': '#b84a42', '#7ec8ff': '#8199c2' };   // 舊存檔裡的糖果色花叢，畫的時候換成對應的自然色
 /** 小路：[名稱, 底色]，花紋在 buildTerrain 裡依 id 畫 */
-const PAINTS = { stone: ['石板小路', '#e4d8bd'], brick: ['紅磚路', '#c96a4c'], plank: ['木棧道', '#c59866'], sand: ['沙地小路', '#f2e1b6'], dirt: ['泥土小徑', '#b48e66'], star: ['星砂小路', '#cfbff7'], meadow: ['花草地', '#78c658'] };
+const PAINTS = { stone: ['石板小路', '#e4d8bd'], brick: ['紅磚路', '#c96a4c'], plank: ['木棧道', '#c59866'], sand: ['沙地小路', '#f2e1b6'], dirt: ['泥土小徑', '#b48e66'], star: ['星砂小路', '#d9d6cc'], meadow: ['花草地', '#7f9a5c'] };
 const hs = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
 function treeModel(id, grow) {
   const g = new THREE.Group(), s = [0.45, 0.7, 1][grow ?? 2];
   if (id === 'palm') {
     let px = 0, py = 0;
     for (let i = 0; i < 6; i++) { const seg = mesh(ownGeo(new THREE.CylinderGeometry(0.12 * s, 0.15 * s, 0.5 * s, 7)), M('#a57a4f'), px, py + 0.25 * s, 0); seg.rotation.z = -0.08 * i; g.add(seg); px += 0.05 * i * s; py += 0.48 * s; }
-    for (let i = 0; i < 7; i++) { const lf = mesh(ownGeo(new THREE.SphereGeometry(0.5 * s, 8, 6)), M('#55b356', {}, 'pine'), px + Math.cos(i * 0.9) * 0.7 * s, py - 0.12 * s, Math.sin(i * 0.9) * 0.7 * s); lf.scale.set(1.6, 0.12, 0.38); lf.rotation.y = -i * 0.9; lf.rotation.z = -0.35; g.add(lf); }
+    for (let i = 0; i < 7; i++) { const lf = mesh(ownGeo(new THREE.SphereGeometry(0.5 * s, 8, 6)), M('#5b8a45', {}, 'pine'), px + Math.cos(i * 0.9) * 0.7 * s, py - 0.12 * s, Math.sin(i * 0.9) * 0.7 * s); lf.scale.set(1.6, 0.12, 0.38); lf.rotation.y = -i * 0.9; lf.rotation.z = -0.35; g.add(lf); }
   } else if (id === 'cedar') {
     g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.13 * s, 0.17 * s, 0.8 * s, 7)), M('#7a5238'), 0, 0.4 * s, 0));
-    [[1.0, 0.9], [0.8, 1.55], [0.55, 2.15], [0.3, 2.62]].forEach(([r, h]) => g.add(mesh(ownGeo(new THREE.ConeGeometry(r * s, 1.0 * s, 16)), M('#3f9a5e', {}, 'pine'), 0, h * s, 0)));
+    [[1.0, 0.9], [0.8, 1.55], [0.55, 2.15], [0.3, 2.62]].forEach(([r, h]) => g.add(mesh(ownGeo(new THREE.ConeGeometry(r * s, 1.0 * s, 16)), M('#3d6b4a', {}, 'pine'), 0, h * s, 0)));
   } else if (id === 'bamboo') {
-    for (let i = 0; i < 6; i++) { const a = i * 1.05, h = (2.2 + (i % 3) * 0.5) * s; g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.045 * s, 0.055 * s, h, 7)), M('#8fc65a', {}, 'pine'), Math.cos(a) * 0.22, h / 2, Math.sin(a) * 0.22)); const lf = mesh(ownGeo(new THREE.SphereGeometry(0.3 * s, 7, 5)), M('#6fb24a', {}, 'pine'), Math.cos(a) * 0.3, h - 0.1, Math.sin(a) * 0.3); lf.scale.set(1.3, 0.35, 0.8); g.add(lf); }
+    for (let i = 0; i < 6; i++) { const a = i * 1.05, h = (2.2 + (i % 3) * 0.5) * s; g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.045 * s, 0.055 * s, h, 7)), M('#8aa25a', {}, 'pine'), Math.cos(a) * 0.22, h / 2, Math.sin(a) * 0.22)); const lf = mesh(ownGeo(new THREE.SphereGeometry(0.3 * s, 7, 5)), M('#6a8f48', {}, 'pine'), Math.cos(a) * 0.3, h - 0.1, Math.sin(a) * 0.3); lf.scale.set(1.3, 0.35, 0.8); g.add(lf); }
   } else {
     g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.12 * s, 0.21 * s, 1.25 * s, 8)), M('#8a5a3b', {}, 'stone'), 0, 0.62 * s, 0));
-    const leaf = id === 'pink' ? M('#ffb3cf', {}, 'sway') : M('#58b34d', {}, 'sway');
-    [[0, 1.75, 0, 0.85], [0.45, 1.45, 0.2, 0.62], [-0.42, 1.5, -0.15, 0.6], [0.05, 2.25, -0.05, 0.55], [0.6, 1.95, -0.32, 0.42], [-0.52, 2.0, 0.34, 0.44]].forEach(([a, b, c, r], i) => { g.add(mesh(leafGeo(r * s * 0.7, i), leaf, a * s, b * s, c * s)); const cd = mesh(canopyCards(r * s, i), cardMat(id === 'pink' ? '#ffb3cf' : '#58b34d', 'sway'), a * s, b * s, c * s); cd.customDepthMaterial = CARD_DEPTH; g.add(cd); });
-    if (id === 'fruit' && grow === 2) for (let i = 0; i < 5; i++) { const a = i * 1.3; g.add(mesh(ownGeo(new THREE.SphereGeometry(0.11, 8, 6)), M('#ff8a3d'), Math.cos(a) * 0.72, 1.5 + (i % 2) * 0.3, Math.sin(a) * 0.72)); }
+    const leaf = id === 'pink' ? M('#ecc6cf', {}, 'sway') : M('#5b8a40', {}, 'sway');
+    [[0, 1.75, 0, 0.85], [0.45, 1.45, 0.2, 0.62], [-0.42, 1.5, -0.15, 0.6], [0.05, 2.25, -0.05, 0.55], [0.6, 1.95, -0.32, 0.42], [-0.52, 2.0, 0.34, 0.44]].forEach(([a, b, c, r], i) => { g.add(mesh(leafGeo(r * s * 0.7, i), leaf, a * s, b * s, c * s)); const cd = mesh(canopyCards(r * s, i), cardMat(id === 'pink' ? '#ecc6cf' : '#5b8a40', 'sway'), a * s, b * s, c * s); cd.customDepthMaterial = CARD_DEPTH; g.add(cd); });
+    if (id === 'fruit' && grow === 2) for (let i = 0; i < 5; i++) { const a = i * 1.3; g.add(mesh(ownGeo(new THREE.SphereGeometry(0.11, 8, 6)), M('#e8843a'), Math.cos(a) * 0.72, 1.5 + (i % 2) * 0.3, Math.sin(a) * 0.72)); }
   }
   return g;
 }
 function flowerModel(c) {
   const g = new THREE.Group();
-  for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.3, r = 0.12 + (i % 2) * 0.18; g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.012, 0.012, 0.28, 4)), M('#4f9a3a'), Math.cos(a) * r, 0.14, Math.sin(a) * r, { noCast: true }), mesh(ownGeo(new THREE.SphereGeometry(0.075, 8, 6)), M(c), Math.cos(a) * r, 0.3, Math.sin(a) * r, { noCast: true })); }
+  for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.3, r = 0.12 + (i % 2) * 0.18; g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.012, 0.012, 0.28, 4)), M('#4f9a3a'), Math.cos(a) * r, 0.14, Math.sin(a) * r, { noCast: true }), mesh(ownGeo(new THREE.SphereGeometry(0.075, 8, 6)), M(OLD_FLOWER[c] || c), Math.cos(a) * r, 0.3, Math.sin(a) * r, { noCast: true })); }
   return g;
 }
 function outdoorModel(id) {
@@ -81,7 +82,7 @@ function outdoorModel(id) {
   else if (id === 'bench') { g.add(mesh(ownGeo(new THREE.BoxGeometry(1.4, 0.08, 0.45)), M('#c48a54'), 0, 0.45, 0), mesh(ownGeo(new THREE.BoxGeometry(1.4, 0.4, 0.06)), M('#c48a54'), 0, 0.7, -0.2)); [-0.6, 0.6].forEach(bx => g.add(mesh(ownGeo(new THREE.BoxGeometry(0.06, 0.45, 0.4)), M('#5a5f6a'), bx, 0.22, 0))); }
   else if (id === 'lamp') { g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.06, 0.08, 2, 8)), M('#4a4f5c'), 0, 1, 0)); const head = mesh(ownGeo(new THREE.SphereGeometry(0.22, 12, 8)), M('#fff6d8', { emissive: new THREE.Color('#ffc870'), emissiveIntensity: 0.9 }), 0, 2.1, 0); g.add(head); g.userData.head = head; }
   else if (id === 'fence') { [-0.45, 0.45].forEach(dx => g.add(mesh(ownGeo(new THREE.BoxGeometry(0.1, 0.7, 0.1)), M('#c99a62'), dx, 0.35, 0))); [0.25, 0.52].forEach(y => g.add(mesh(ownGeo(new THREE.BoxGeometry(1.0, 0.08, 0.06)), M('#b98a55'), 0, y, 0))); }
-  else if (id === 'stone') { const m = mesh(ownGeo(new THREE.CylinderGeometry(0.42, 0.44, 0.06, 14)), M('#efe3c6', {}, 'stone'), 0, 0.03, 0, { noCast: true }); g.add(m); }
+  else if (id === 'stone') { const m = mesh(ownGeo(new THREE.CylinderGeometry(0.42, 0.44, 0.06, 14)), M('#cfc4ae', {}, 'stone'), 0, 0.03, 0, { noCast: true }); g.add(m); }
   return g;
 }
 function modelOf(it) {
@@ -131,24 +132,24 @@ const fallMat = new THREE.ShaderMaterial({
     float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
     void main(){ float x = (vW.x + vW.z) * 3.0, y = vUv.y; float st = n(vec2(x * 2.5, y * 3.0 + uTime * 2.2)) * 0.6 + n(vec2(x * 6.0, y * 7.0 + uTime * 3.4)) * 0.4;
-      vec3 c = mix(vec3(0.34, 0.74, 0.88), vec3(0.97, 0.99, 1.0), smoothstep(0.45, 0.85, st)); c = mix(c, vec3(1.0), smoothstep(0.85, 1.0, y) * 0.7 + smoothstep(0.2, 0.0, y) * 0.8);
+      vec3 c = mix(vec3(0.36, 0.6, 0.64), vec3(0.94, 0.97, 0.97), smoothstep(0.45, 0.85, st)); c = mix(c, vec3(1.0), smoothstep(0.85, 1.0, y) * 0.7 + smoothstep(0.2, 0.0, y) * 0.8);
       gl_FragColor = vec4(c, 0.78 + st * 0.2); }`
 });
 let terMesh = null, waterMesh = null, falls = null, waterCells = [], fallCount = 0;
 /* 夢境島的地形材質：和主島一樣的草地斑駁與懸崖岩層；雙面，崖壁不論朝哪個方向都看得到 */
 const terMat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide }), 'terrain');
-const waterMat = bend(new THREE.MeshStandardMaterial({ color: '#6fe0e6', transparent: true, opacity: 0.75, roughness: 0.1 }), 'water');
+const waterMat = bend(new THREE.MeshStandardMaterial({ color: '#3f97a0', transparent: true, opacity: 0.75, roughness: 0.1 }), 'water');
 function buildTerrain() {
   if (terMesh) { sc.remove(terMesh); terMesh.geometry.dispose(); } if (waterMesh) { sc.remove(waterMesh); waterMesh.geometry.dispose(); } if (falls) { sc.remove(falls); falls.geometry.dispose(); }
   const R = SIZES[D.size].R, E = Math.ceil(R + 2.5), P2 = [], C2 = [], WP = [], FP = [], FU = [];
   const col = new THREE.Color(), push = (x, y, z, c) => { P2.push(x, y, z); C2.push(c.r, c.g, c.b); };
   const quad = (a, b, c, d, ca, cb, cc, cd) => { push(...a, ca); push(...b, cb); push(...c, cc); push(...a, ca); push(...c, cc); push(...d, cd); };
-  const grassC = (x, z, lv) => col.set(['#86b03a', '#8cb540', '#92ba46', '#98bf4c'][lv]).lerp(pc.set('#64962c'), 0.35 + 0.35 * Math.sin(x * 0.43 + z * 0.31) * Math.sin(x * 0.27 - z * 0.39)).offsetHSL(0, 0, ((Math.sin(x * 1.7 + z * 2.3) + Math.sin(x * 0.6 - z * 0.9)) * 0.5) * 0.025).clone();   // 和主島一樣陽光下的黃綠，大片深淺交錯
-  const SAND = new THREE.Color('#f6e7c0'), BED = new THREE.Color('#9fd8c8'), RAMP = new THREE.Color('#c9a87a'), CLT = new THREE.Color('#b48a5c'), CLB = new THREE.Color('#946c45'), LIP = new THREE.Color('#5f8f30'), SANDW = new THREE.Color('#d9c08a'), SKIRT = new THREE.Color('#56702c');
+  const grassC = (x, z, lv) => col.set(['#7f9a5c', '#849f60', '#89a464', '#8ea968'][lv]).lerp(pc.set('#66824c'), 0.35 + 0.35 * Math.sin(x * 0.43 + z * 0.31) * Math.sin(x * 0.27 - z * 0.39)).offsetHSL(0, 0, ((Math.sin(x * 1.7 + z * 2.3) + Math.sin(x * 0.6 - z * 0.9)) * 0.5) * 0.025).clone();   // 和主島一樣的鼠尾草綠（v9.18 半寫實；以前是陽光下的黃綠），大片深淺交錯
+  const SAND = new THREE.Color('#e6d6b8'), BED = new THREE.Color('#a3b398'), RAMP = new THREE.Color('#c9a87a'), CLT = new THREE.Color('#b48a5c'), CLB = new THREE.Color('#946c45'), LIP = new THREE.Color('#5d7a42'), SANDW = new THREE.Color('#c9b893'), SKIRT = new THREE.Color('#55693c');
   // v8.7 草皮外緣往外、往下多一圈裙邊（約 0.07–0.13m，沿邊緣有點起伏）：崖頂不再是一刀切的直角薄片，像圓圓的土堆。只是顯示用的網格，格子與碰撞不變
   const jit = (px, pz) => 0.07 + hs(Math.round(px * 6), Math.round(pz * 6)) * 0.06, SK = 0.15;
   /* 小路：一格切成 6×6 小塊畫花紋；和不同小路相鄰的外圈混一點草色，邊緣比較柔和 */
-  const pc = new THREE.Color(), FLW = ['#ff9ab8', '#ffffff', '#ffe066', '#c9a6ff'];
+  const pc = new THREE.Color(), FLW = ['#d29aa8', '#eeebe3', '#dcc46a', '#a596c4'];
   const paintTop = (x, z, c, pid, grass) => {
     const y = LV[c.lv], base = new THREE.Color(PAINTS[pid][1]), X = x - 0.5, Z = z - 0.5, n = 6;
     const same = (nx, nz) => { const o = cellAt(nx, nz); return o.t === 'g' && o.lv === c.lv && D.paint[nx + ',' + nz] === pid; };
@@ -281,7 +282,7 @@ function buildAmbient(R) {
   sc.add(clouds);
   // 蝴蝶（白天、花叢旁）
   butterflies = [];
-  ['#ffd23f', '#ffffff', '#ff9ac0', '#9ad0ff', '#ffb35a', '#c9a6ff'].forEach((c, i) => {
+  ['#d8bc56', '#eeebe3', '#d29aa8', '#8fb0d0', '#d9955a', '#a596c4'].forEach((c, i) => {
     const g = new THREE.Group(), wm = ownMat(new THREE.MeshStandardMaterial({ color: c, side: THREE.DoubleSide, roughness: 0.6 })), wg = ownGeo(new THREE.CircleGeometry(0.11, 10));
     const w1 = new THREE.Mesh(wg, wm), w2 = new THREE.Mesh(wg, wm); w1.position.x = 0.1; w2.position.x = -0.1; w1.rotation.x = w2.rotation.x = -Math.PI / 2;
     const l = new THREE.Group(), r = new THREE.Group(); l.add(w1); r.add(w2); g.add(l, r, new THREE.Mesh(ownGeo(new THREE.CylinderGeometry(0.015, 0.015, 0.16, 5)), M('#3a2a20')));
@@ -368,9 +369,9 @@ function build() {
     vertexShader: 'varying float vY; void main() { vY = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: 'uniform vec3 top; uniform vec3 bot; varying float vY; void main() { gl_FragColor = vec4(mix(bot, top, smoothstep(-0.02, 0.5, vY)), 1.0);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' })));
   dome.renderOrder = -10; dome.frustumCulled = false; sc.add(dome);
-  hemi = new THREE.HemisphereLight('#e8f0ff', '#8ab868', 1.15); sc.add(hemi);
+  hemi = new THREE.HemisphereLight('#e8f0ff', '#7d9566', 1.15); sc.add(hemi);
   sun = new THREE.DirectionalLight('#fff4e0', 2.2); sun.position.set(8, 16, 6); sun.castShadow = true; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -R - 4, right: R + 4, top: R + 4, bottom: -R - 4 }); sc.add(sun, sun.target);
-  sea = new THREE.Mesh(ownGeo(new THREE.CircleGeometry(R + 80, 64)), bend(ownMat(new THREE.MeshStandardMaterial({ color: '#7fd8e8', roughness: 0.15, transparent: true, opacity: 0.85 })), 'water')); sea.rotation.x = -Math.PI / 2; sea.position.y = -0.05; sc.add(sea);
+  sea = new THREE.Mesh(ownGeo(new THREE.CircleGeometry(R + 80, 64)), bend(ownMat(new THREE.MeshStandardMaterial({ color: '#3a8e9c', roughness: 0.15, transparent: true, opacity: 0.85 })), 'water')); sea.rotation.x = -Math.PI / 2; sea.position.y = -0.05; sc.add(sea);
   terMesh = waterMesh = falls = null; buildTerrain();
   // 夢境的氣氛：慢慢飄動的柔和光點
   const N = 160, pos = new Float32Array(N * 3); for (let i = 0; i < N; i++) { const a = Math.random() * 6.28, d = Math.random() * (R + 6); pos.set([Math.cos(a) * d, 0.5 + Math.random() * 5, Math.sin(a) * d], i * 3); }
@@ -782,7 +783,7 @@ function lighting(h) {
   sun.color.copy(ca.set(A[2]).lerp(cb.set(B[2]), k)); sun.intensity = A[3] + (B[3] - A[3]) * k; hemi.intensity = A[4] + (B[4] - A[4]) * k;
   const t = Math.max(0, Math.min(1, (h - 6) / 13)), night = h < 6 || h > 19.5;
   sun.position.set(Math.cos(t * Math.PI) * 14, Math.sin(t * Math.PI) * 14 + 3, 8); sun.target.position.set(0, 0, 0);
-  sea.material.color.set(night ? '#2e5f8a' : '#7fd8e8');
+  sea.material.color.set(night ? '#1f3f58' : '#3a8e9c');
   objs.children.forEach(o => { if (o.userData.head) o.userData.head.material.emissiveIntensity = night ? 1.6 : 0.2; });
   return night;
 }
