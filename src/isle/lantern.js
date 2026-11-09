@@ -7,6 +7,7 @@ import { camera, M, mesh, U, CURVE, bend, TERRAIN, skyU, scene as mainScene } fr
 import * as actors from './actors.js';
 import * as post from './post.js';
 import { PIER } from './props.js';
+import { rectPavers } from './plazamodels.js';
 import { animate, chibi, gesture, lookAt, setExpr } from './chars.js';
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
@@ -105,9 +106,10 @@ function collide(g, kind) {
 }
 const HARBOR = '#2a6274';   // v9.15 半寫實：港內的海水是深一點的藍綠（以前亮青色 #4fb6d6）
 /** 地面：草地、石板（老街、廟埕、碼頭前）、沙灘，邊緣斜進海裡 */
-const paved = (x, z) => (Math.abs(x) < 2.9 && z > -9 && z < 17.6) || (Math.abs(x) < 8.5 && z > -21 && z < -8.4) || (z > 2.3 && z < 4.9 && x > -12 && x < 12.2) || (Math.abs(x) < 9.6 && z > 15 && z < 17.8) || (x > 7 && x < 15.5 && z > -10.5 && z < -8);
+const PAVED = [[-8.5, -21, 8.5, -8.4], [-2.9, -9, 2.9, 17.6], [-12, 2.3, 12.2, 4.9], [-9.6, 15, 9.6, 17.8], [7, -10.5, 15.5, -8]];   // 廟埕、老街、橫街、碼頭前、廟旁的小巷（x0, z0, x1, z1）
+const paved = (x, z) => PAVED.some(([x0, z0, x1, z1]) => x > x0 && x < x1 && z > z0 && z < z1);
 function ground() {
-  const X0 = -24, X1 = 24, Z0 = -26, Z1 = 22, G1 = new THREE.Color('#6d8c45'), G2 = new THREE.Color('#53723a'), STONE = new THREE.Color('#c4b8a6'), STONE2 = new THREE.Color('#ab9d8a'), SAND = new THREE.Color('#dccaa2'), BED = new THREE.Color('#8aa89a'), col = new THREE.Color();
+  const X0 = -24, X1 = 24, Z0 = -26, Z1 = 22, G1 = new THREE.Color('#6d8c45'), G2 = new THREE.Color('#53723a'), STONE = new THREE.Color('#857c70'), STONE2 = new THREE.Color('#766e63'), SAND = new THREE.Color('#dccaa2'), BED = new THREE.Color('#8aa89a'), col = new THREE.Color();
   const nx = X1 - X0, nz = Z1 - Z0, P3 = [], C = [], idx = [];
   const edge = (x, z) => Math.max(Math.abs(x) - 21, z < 0 ? -z - 23 : z - 18.6, Math.hypot(Math.max(0, Math.abs(x) - 18), Math.max(0, -z - 20)) - 3);   // 離海岸的距離（> 0 在海裡）
   for (let j = 0; j <= nz; j++) for (let i = 0; i <= nx; i++) {
@@ -119,7 +121,9 @@ function ground() {
   }
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i, b = a + nx + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P3, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(idx); g.computeVertexNormals();
-  const m = new THREE.Mesh(g, TERRAIN); m.receiveShadow = true; return m;
+  const m = new THREE.Mesh(g, TERRAIN); m.receiveShadow = true;
+  m.add(rectPavers(PAVED, () => LAND + 0.025, (x, z) => edge(x, z) < -1.5, 7));   // v9.17 半寫實：老街與廟埕鋪上一塊塊錯縫的灰褐石板，石縫露出底下深色的砂（以前一整片平的米色，像水泥地）
+  return m;
 }
 /** 木棧碼頭：從岸邊往南伸進海裡 */
 function pier() {

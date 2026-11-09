@@ -102,6 +102,29 @@ export function roadPavers(rows, { groundAt, warp, plaza, clear, clearGrass, sce
   return group;
 }
 
+/** v9.17 燈籠小鎮的老街、廟埕與碼頭前：在幾個軸對齊的長方形 [x0, z0, x1, z1] 裡一排排錯縫鋪石板（每排 0.56–0.72m、每塊 0.6–1m 長、四角磨圓），
+    和前面長方形重疊的石板跳過或切齊邊界，不會疊兩層；surface(x, z) 給石板頂面高度、ok(x, z) 為假的地方不鋪（岸邊斜坡） */
+export function rectPavers(rects, surface, ok = () => true, seed = 1) {
+  const b = buffer(); let k = seed * 1009, count = 0;
+  const over = (q, xa, za, xb, zb) => xa < q[2] && xb > q[0] && za < q[3] && zb > q[1];
+  rects.forEach((r, ri) => {
+    const [x0, z0, x1, z1] = r, prev = rects.slice(0, ri);
+    for (let z = z0 + 0.02; z < z1 - 0.2;) {
+      const h = Math.min(z1 - 0.02 - z, 0.56 + hash(k++) * 0.16);
+      for (let x = x0 + 0.02 - hash(k++) * 0.45; x < x1 - 0.15;) {   // 每一排起點錯開：錯縫
+        const w = 0.6 + hash(k++) * 0.4; let xa = Math.max(x, x0 + 0.02), xb = Math.min(x + w, x1 - 0.02); const za = z, zb = z + h; x += w;
+        for (const q of prev) if (over(q, xa, za, xb, zb)) { if ((xa + xb) / 2 > q[0] && (xa + xb) / 2 < q[2] && (za + zb) / 2 > q[1] && (za + zb) / 2 < q[3]) { xb = xa; break; } if ((xa + xb) / 2 < (q[0] + q[2]) / 2) xb = Math.min(xb, q[0] - 0.02); else xa = Math.max(xa, q[2] + 0.02); }
+        if (xb - xa < 0.18 || !ok(xa, za) || !ok(xb, zb) || !ok(xa, zb) || !ok(xb, za)) continue;
+        const g = 0.012, c = 0.03 + hash(k++) * 0.035, A = xa + g, B = xb - g, C = za + g, D = zb - g;   // 石縫半寬、磨角
+        slab(b, [[A + c, C], [B - c, C], [B, C + c], [B, D - c], [B - c, D], [A + c, D], [A, D - c], [A, C + c]], surface, colors[Math.floor(hash(k++) * colors.length)].clone().multiplyScalar(0.9 + hash(k++) * 0.16), 0.016, 0.06);
+        count++;
+      }
+      z += h;
+    }
+  });
+  const m = finish(b, 'lantern-pavers'); m.userData.w04 = { stones: count }; return m;
+}
+
 export function plazaModel(cx, cz, groundAt) {
   const R = 6.6, group = new THREE.Group(), b = buffer(); group.name = 'w04-plaza';
   const y = (x, z) => groundAt(x, z) + 0.045;
