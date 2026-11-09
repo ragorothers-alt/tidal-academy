@@ -17,11 +17,11 @@ import * as fieldnote from './fieldnote.js';
 import { MATS } from './diy.js';
 
 export const THEMES = [
-  { id: 'fish', name: '魚群島', sid: 'english', sea: '#3fb8d8', node: 'fish', desc: '海面滿是魚影，答對英文單字就能釣起稀有的魚。' },
-  { id: 'bug', name: '花海島', sid: 'chinese', sea: '#56d2e0', node: 'flower', desc: '花叢裡停著許多昆蟲，答對國文題就能抓到稀有的蟲。' },
-  { id: 'rock', name: '礦石島', sid: 'earth', sea: '#4aa8c8', node: 'rock', desc: '島上到處是奇特的岩石，答對地科題就能敲出礦石。' },
-  { id: 'fruit', name: '果樹島', sid: 'biology', sea: '#56d2e0', node: 'tree', desc: '結實纍纍的果樹島，答對生物題就能搖下大量水果與樹枝。' },
-  { id: 'star', name: '星砂島', sid: 'physics', sea: '#5a7ad8', node: 'star', desc: '傳說流星落下的沙灘，答對物理題就能撿到星之碎片。' }
+  { id: 'fish', name: '魚群島', sid: 'english', sea: '#2d8296', node: 'fish', desc: '海面滿是魚影，答對英文單字就能釣起稀有的魚。' },
+  { id: 'bug', name: '花海島', sid: 'chinese', sea: '#358e9a', node: 'flower', desc: '花叢裡停著許多昆蟲，答對國文題就能抓到稀有的蟲。' },
+  { id: 'rock', name: '礦石島', sid: 'earth', sea: '#2c7086', node: 'rock', desc: '島上到處是奇特的岩石，答對地科題就能敲出礦石。' },
+  { id: 'fruit', name: '果樹島', sid: 'biology', sea: '#358e9a', node: 'tree', desc: '結實纍纍的果樹島，答對生物題就能搖下大量水果與樹枝。' },
+  { id: 'star', name: '星砂島', sid: 'physics', sea: '#2b5a80', node: 'star', desc: '傳說流星落下的沙灘，答對物理題就能撿到星之碎片。' }
 ];
 const R = 8.5, SEA = {}, DEEP = {}, NIGHT_SUN = new THREE.Color('#9fb4ff'), NIGHT_SKY = new THREE.Color('#8aa3d6'), NIGHT_GND = new THREE.Color('#414c46');   // 海面與深水的材質依主題快取（水面材質會登記到全域的環境反射清單）
 export let inside = false;
@@ -89,7 +89,7 @@ async function depart() {
 function rnd(seed) { return () => ((seed = (seed * 16807) % 2147483647) / 2147483647); }
 function build() {
   const sky = new THREE.Color('#cfe8ff'); const sc = new THREE.Scene(); sc.background = sky; sc.fog = new THREE.Fog(sky, 32, 80);
-  const hemi = new THREE.HemisphereLight('#e8f2ff', '#8ab868', 1.1); sc.add(hemi);
+  const hemi = new THREE.HemisphereLight('#e8f2ff', '#7d9566', 1.1); sc.add(hemi);
   const sun = new THREE.DirectionalLight('#fff4e0', 2.3);
   // 夜空的星星（晚上才出現）
   const SN = 420, sp = new Float32Array(SN * 3); for (let i = 0; i < SN; i++) { const a = Math.random() * 6.283, e = 0.15 + Math.random() * 1.2, d = 70; sp.set([Math.cos(a) * Math.cos(e) * d, Math.sin(e) * d, Math.sin(a) * Math.cos(e) * d], i * 3); }
@@ -121,7 +121,7 @@ const edge = (a, k) => Math.sin(a * 3 + k) * 0.28 + Math.sin(a * 5 - k * 2) * 0.
 function ground() {
   const SEG = 96, RING = [0, 0.3, 0.55, 0.75, 0.88, 0.94, 1.0, 1.04, 1.1, 1.17, 1.26, 1.36], k = (theme.id.charCodeAt(0) % 7) * 0.9;
   const rock = theme.id === 'rock', star = theme.id === 'star';
-  const G1 = new THREE.Color(rock ? '#9aa56e' : '#86b03a'), G2 = new THREE.Color(rock ? '#7e8a5a' : '#64962c'), SAND = new THREE.Color(star ? '#ece4ff' : '#f6e7c0'), SANDW = new THREE.Color(star ? '#c8bce8' : '#d9c08a'), BED = new THREE.Color('#9fd8c8'), DEEP = new THREE.Color(theme.sea).multiplyScalar(0.72);
+  const G1 = new THREE.Color(rock ? '#959a72' : '#87a362'), G2 = new THREE.Color(rock ? '#7a7f5c' : '#6c8a51'), SAND = new THREE.Color(star ? '#e9e6df' : '#e6d6b8'), SANDW = new THREE.Color(star ? '#c4c1b8' : '#c9b893'), BED = new THREE.Color('#a3b398'), DEEP = new THREE.Color(theme.sea).multiplyScalar(0.72);
   const P = [], C = [], col = new THREE.Color();
   // 每一圈：半徑（相對於草地邊緣 Rg）、高度、顏色
   const ring = (a, j) => {
@@ -183,12 +183,12 @@ function node(kind, r) {
   if (kind === 'fish') { const m = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16), new THREE.MeshBasicMaterial({ color: '#06283c', transparent: true, opacity: 0.62, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.scale.set(0.6, 1, 1); g.add(m); }
   else if (kind === 'flower') {   // 一叢主島的野花（放大一點，看得出是資源點）
     const F = flowerGeos();
-    ['#ff7a9a', '#ffd23f', '#ffffff', '#b9a2ff', '#ff9a4a', '#ffffff', '#ff8fb1'].forEach((c, i) => {
+    ['#c58c9b', '#d8bc56', '#eeebe3', '#9785b3', '#d9955a', '#eeebe3', '#c98a9e'].forEach((c, i) => {
       const a = i * 0.9 + r() * 0.4, d = i ? 0.2 + (i % 3) * 0.12 : 0, s = 2.3 + r() * 0.6, f = new THREE.Group(); f.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); f.rotation.set((r() - 0.5) * 0.3, r() * 6.28, (r() - 0.5) * 0.3); f.scale.setScalar(s);
       f.add(mesh(F.stemG, FMAT.stem, 0, 0, 0, { noCast: true }), mesh(F.headG, FMAT.head(c), 0, 0, 0), mesh(F.coreG, FMAT.core, 0, 0, 0, { noCast: true })); f.children.forEach(o => { o.userData.shared = true; }); g.add(f);
     }); const bfly = mesh(new THREE.BoxGeometry(0.22, 0.02, 0.12), M('#ff9a3a'), 0, 0.75, 0); g.add(bfly); g.userData.fly = bfly; }
-  else if (kind === 'rock') { const m = mesh(new THREE.IcosahedronGeometry(0.55, 0), M(pick(['#bdb6aa', '#a8a0b8', '#c8b8a0']), { flatShading: true }), 0, 0.3, 0); m.scale.set(1.2, 0.8, 1); m.rotation.set(r(), r() * 6, r()); g.add(m); g.add(mesh(new THREE.OctahedronGeometry(0.12, 0), M('#b9e0ff', { emissive: new THREE.Color('#7fd0ff'), emissiveIntensity: 0.6 }), 0.25, 0.6, 0.2)); }
-  else if (kind === 'tree') { g.add(mesh(new THREE.CylinderGeometry(0.15, 0.22, 1.3, 7), M('#8a5a3b'), 0, 0.65, 0)); [[0, 1.85, 0, 0.9], [0.45, 1.55, 0.2, 0.62], [-0.42, 1.6, -0.15, 0.6]].forEach(([a, b, c, rr]) => g.add(mesh(new THREE.IcosahedronGeometry(rr, 1), M('#58b34d'), a, b, c))); for (let i = 0; i < 5; i++) { const a = i * 1.3; g.add(mesh(new THREE.SphereGeometry(0.12, 8, 6), M('#ff8a3d'), Math.cos(a) * 0.75, 1.5 + (i % 2) * 0.3, Math.sin(a) * 0.75)); } }
+  else if (kind === 'rock') { const m = mesh(new THREE.IcosahedronGeometry(0.55, 0), M(pick(['#b3ada2', '#a19d95', '#bfb29f']), { flatShading: true }), 0, 0.3, 0); m.scale.set(1.2, 0.8, 1); m.rotation.set(r(), r() * 6, r()); g.add(m); g.add(mesh(new THREE.OctahedronGeometry(0.12, 0), M('#b9e0ff', { emissive: new THREE.Color('#7fd0ff'), emissiveIntensity: 0.6 }), 0.25, 0.6, 0.2)); }
+  else if (kind === 'tree') { g.add(mesh(new THREE.CylinderGeometry(0.15, 0.22, 1.3, 7), M('#8a5a3b'), 0, 0.65, 0)); [[0, 1.85, 0, 0.9], [0.45, 1.55, 0.2, 0.62], [-0.42, 1.6, -0.15, 0.6]].forEach(([a, b, c, rr]) => g.add(mesh(new THREE.IcosahedronGeometry(rr, 1), M('#5b8a40'), a, b, c))); for (let i = 0; i < 5; i++) { const a = i * 1.3; g.add(mesh(new THREE.SphereGeometry(0.12, 8, 6), M('#ff8a3d'), Math.cos(a) * 0.75, 1.5 + (i % 2) * 0.3, Math.sin(a) * 0.75)); } }
   else { const m = mesh(new THREE.OctahedronGeometry(0.2, 0), M('#ffe14a', { emissive: new THREE.Color('#ffd84a'), emissiveIntensity: 1.2 }), 0, 0.35, 0); g.add(m); const l = new THREE.PointLight('#ffe08a', 1.2, 3); l.position.y = 0.5; g.add(l); }
   g.traverse(o => { o.frustumCulled = false; });
   if (kind === 'tree' || kind === 'rock') upgrade(g, kind, r);
@@ -241,7 +241,7 @@ export function tick(dt, t, ix, iz, len, moving, run, locked) {
   // 時間跟著主島走：天空與霧用主島地平線的顏色，晚上主光變成淡藍的月光、星星出來
   const n = skyU.night.value, amb = tripScene.userData.amb;
   tripScene.background.copy(skyU.bot.value); tripScene.fog.color.copy(skyU.bot.value);
-  amb.hemi.intensity = 1.1 * (1 - n * 0.45); amb.hemi.color.set('#e8f2ff').lerp(NIGHT_SKY, n); amb.hemi.groundColor.set('#8ab868').lerp(NIGHT_GND, n); amb.sun.intensity = 2.3 * (1 - n * 0.72);   // 夜裡的環境光偏藍、不要暗到看不清楚島上
+  amb.hemi.intensity = 1.1 * (1 - n * 0.45); amb.hemi.color.set('#e8f2ff').lerp(NIGHT_SKY, n); amb.hemi.groundColor.set('#7d9566').lerp(NIGHT_GND, n); amb.sun.intensity = 2.3 * (1 - n * 0.72);   // 夜裡的環境光偏藍、不要暗到看不清楚島上
   amb.sun.color.set('#fff4e0').lerp(NIGHT_SUN, n); amb.stars.material.opacity = Math.max(0, n * 1.2 - 0.2); tripScene.userData.deep.material.color.copy(tripScene.userData.deep.userData.base).multiplyScalar(1 - n * 0.6);   // 深水面不受光，晚上自己變暗
   SEA[theme.id].color.set(theme.sea).multiplyScalar(1 - n * 0.55);   // 海面晚上也暗下來（島上的環境光為了看得清楚調得比較亮，海不跟著亮）
   // 和夢境島一樣走後製（泛光、調色、環境光遮蔽、對焦在角色身上的淡景深）
