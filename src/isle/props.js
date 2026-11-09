@@ -534,7 +534,7 @@ function stepGeo(seed) {
 }
 export const STEP_STONES = [];   // 踏石的位置與半徑（草叢避開石面，石頭邊緣乾淨）
 function stones(path) {
-  const geos = [0, 1, 2, 3].map(stepGeo), mats = ['#ddcdbd', '#d3c4b9', '#e4d4c4'].map(c => M(c, {}, 'stone')), sg = new THREE.Group();   // 一條小路的踏石合併成幾個網格
+  const geos = [0, 1, 2, 3].map(stepGeo), mats = ['#aba496', '#a0998d', '#b4ab9b'].map(c => M(c, {}, 'stone')), sg = new THREE.Group();   // 一條小路的踏石合併成幾個網格
   for (let i = 0; i < path.length - 1; i++) {
     const [a, b] = [path[i], path[i + 1]], d = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.floor(d / 0.85);
     for (let k = 0; k < n; k++) { const t = k / n, x = a[0] + (b[0] - a[0]) * t + (rnd() - 0.5) * 0.2, z = a[1] + (b[1] - a[1]) * t + (rnd() - 0.5) * 0.2; const tt = tileAt(x, z); if (tt === 3 || tt < 0 || tt === 4) continue; const m = mesh(geos[Math.floor(rnd() * 4)], mats[Math.floor(rnd() * 3)], x, groundAt(x, z) - 0.02, z, { noCast: true }); m.scale.set(1.1 + rnd() * 0.45, 1.3, 1.05 + rnd() * 0.4); m.rotation.set((rnd() - 0.5) * 0.06, rnd() * 6.28, (rnd() - 0.5) * 0.06); sg.add(m); STEP_STONES.push({ x, z, r: 0.33 * Math.max(m.scale.x, m.scale.z) }); }   // 大塊扁平的踏石，一半埋進土裡、微微傾斜
@@ -1033,12 +1033,12 @@ function rimStones() {
 }
 /** 小溪上的踏石：規劃的踏石路經過水面的地方，鋪一排半泡在水裡的大塊踏石 */
 function fordStones() {
-  const geos = [0, 1, 2].map(k => stepGeo(k + 7)), mat = M('#d8cdb4', {}, 'stone');
+  const geos = [0, 1, 2].map(k => stepGeo(k + 7)), mat = M('#948e82', {}, 'stone');   // v9.17 半寫實：踏石是灰褐的河石，泡在水裡的顏色深一點（以前偏粉的奶油白，像一顆顆白色鵝卵）
   PLAN.roads.filter(r => r.kind === 'stepping-stones').forEach(r => {
     const a = r.path[0], b = r.path[r.path.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.round(L / 0.72);
     for (let k = 0; k < n; k++) {
       const t = (k + 0.5) / n, px = a[0] + (b[0] - a[0]) * t + Math.sin(t * 5.3) * 0.25, pz = a[1] + (b[1] - a[1]) * t, [x, z] = warp(px, pz);
-      const tt = tileAt(x, z); if (tt !== 3) { if (tt >= 0 && Math.hypot(x - SITES.plaza.x, z - SITES.plaza.z) > 6.9) { const m = mesh(stepGeo(k), M('#e8dcc0', {}, 'stone'), x, groundAt(x, z) - 0.02, z, { noCast: true }); m.scale.set(1.3, 1.3, 1.2); m.rotation.y = rnd() * 6.28; scene.add(m); STEP_STONES.push({ x, z, r: 0.42 }); } continue; }
+      const tt = tileAt(x, z); if (tt !== 3) { if (tt >= 0 && Math.hypot(x - SITES.plaza.x, z - SITES.plaza.z) > 6.9) { const m = mesh(stepGeo(k), M('#aea696', {}, 'stone'), x, groundAt(x, z) - 0.02, z, { noCast: true }); m.scale.set(1.3, 1.3, 1.2); m.rotation.y = rnd() * 6.28; scene.add(m); STEP_STONES.push({ x, z, r: 0.42 }); } continue; }
       const m = mesh(geos[k % 3], mat, x, FORD_Y - 0.1, z); m.scale.set(1.35 + rnd() * 0.2, 1.6, 1.15 + rnd() * 0.2); m.rotation.y = rnd() * 6.28; scene.add(m);
     }
   });
