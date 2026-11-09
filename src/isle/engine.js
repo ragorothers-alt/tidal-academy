@@ -953,9 +953,9 @@ function seasonGLSL(kind) {
         // 春天：櫻花樹與一部分闊葉樹開滿櫻花（粉紅花團帶白色細點）
         float lum = dot(bc, vec3(0.3, 0.59, 0.11)) / 0.28;
         float sp = n_v(vOP.xy * 18.0 + vOP.z * 7.0);
-        vec3 pk = mix(vec3(0.86, 0.36, 0.5), vec3(0.93, 0.52, 0.62), smoothstep(0.3, 0.6, sp));   // v7.6 夢幻風：主團暖粉 #EFA1BA／#F5BED0（參考圖的櫻花是粉，不是薰衣草）
-        pk = mix(pk, vec3(0.96, 0.78, 0.85), smoothstep(0.72, 0.86, sp));   // 亮團 #FBE5EE
-        pk = mix(vec3(0.55, 0.27, 0.42), pk, 0.55 + 0.45 * smoothstep(-0.6, 0.4, normalize(vWN).y)) * clamp(lum, 0.55, 1.35);   // 冠內與背光是玫瑰灰紫 #C28DAC
+        vec3 pk = mix(vec3(0.86, 0.5, 0.58), vec3(0.92, 0.66, 0.72), smoothstep(0.3, 0.6, sp));   // v9.17 半寫實：染井吉野的淡粉 #F0BAC7／#F5D4DC   // v7.6 夢幻風：主團暖粉 #EFA1BA／#F5BED0（參考圖的櫻花是粉，不是薰衣草）
+        pk = mix(pk, vec3(0.95, 0.8, 0.84), smoothstep(0.72, 0.86, sp));   // 亮團 #FAE7EC
+        pk = mix(vec3(0.55, 0.32, 0.36), pk, 0.55 + 0.45 * smoothstep(-0.6, 0.4, normalize(vWN).y)) * clamp(lum, 0.55, 1.35);   // v9.17：冠內與背光是灰玫瑰 #C49AA2（以前玫瑰灰紫 #C28DAC）
         diffuseColor.rgb = mix(diffuseColor.rgb, pk, leafy * uBloom);
       }` : kind === 'terrain' ? `
       float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.2, l0 * 1.17, l0 * 0.78), leafy * uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // v6.93：秋草是柔和的橄欖金，金色留給大樹與花（v7.6：再柔一點）
