@@ -51,7 +51,7 @@ const K = { snow: 0, fall: 0, bloom: 0 }, fallK = { v: 0 }, auroraK = { v: 0 };
 export const debug = { aurora: null };   // 測試用：強制顯示／隱藏極光
 const dayHash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0) / 4294967296; };
 let first = true;
-const C = { seaW: new THREE.Color('#2f6c9e'), riverW: new THREE.Color('#3b5960'), riverBase: null, topW: new THREE.Color('#a9bfe2'), botW: new THREE.Color('#eef2fa'), fogW: new THREE.Color('#dfe6f2'), hgW: new THREE.Color('#c9d2e6'), sunW: new THREE.Color('#fff6ee'),
+const C = { seaW: new THREE.Color('#2c5a6c'), riverW: new THREE.Color('#3b5960'), riverBase: null, topW: new THREE.Color('#9fb4c6'), botW: new THREE.Color('#e6eaec'), fogW: new THREE.Color('#d8dde0'), hgW: new THREE.Color('#c3c9cd'), sunW: new THREE.Color('#fff4ea'),   // v9.17 半寫實：冬天的天是淡淡的灰藍、海是深灰青（以前粉藍的天、寶藍的海、陰影帶藍紫）
   pink: new THREE.Color('#ffc4d8'), leaf: new THREE.Color('#e8913a'), white: new THREE.Color('#ffffff') };
 /**
  * 每幀（在天氣更新之後）：

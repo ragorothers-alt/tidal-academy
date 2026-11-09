@@ -910,8 +910,8 @@ function seasonGLSL(kind) {
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), uBloom * 0.4);
       diffuseColor.rgb *= vec3(0.99, 1.03, 0.95);   // v7.6 夢幻風：鮮一點的嫩綠，粉白的花襯在上面才跳得出來
     }` : '';
-  const cover = kind === 'terrain' ? 'smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.0, 0.12, n - (0.42 - (dep + 0.1) * 1.4)) * smoothstep(0.55, 0.75, vWP.y)'   // 河床、海床不積雪
-    : kind === 'sway' || kind === 'pine' || kind === 'sakura' ? 'smoothstep(-0.05, 0.45, up)'
+  const cover = kind === 'terrain' ? 'smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.0, 0.07, n + (n_f(vWP.xz * 2.3 + 11.0) - 0.47) * 0.18 + (n2 - 0.5) * 0.1 - (0.42 - (dep + 0.1) * 1.4)) * smoothstep(0.55, 0.75, vWP.y)'   // 河床、海床不積雪；v9.17 半寫實：雪塊邊緣是碎的（以前一塊塊邊緣很軟的白色色塊）
+    : kind === 'sway' || kind === 'pine' || kind === 'sakura' ? 'smoothstep(0.24, 0.66, up) * smoothstep(0.26, 0.6, n_v(vWP.xz * 5.5 + vWP.y * 2.3) + dep * 0.8) * 0.93'   // v9.17 半寫實：雪一團一團積在朝上的枝面，底下和側面露出深綠（以前整棵白得像羽毛）
     : kind === 'wall' ? 'smoothstep(0.62, 0.85, up)'
     : kind === 'stone' ? 'smoothstep(0.5, 0.78, up) * smoothstep(0.25, 0.6, n + 0.15)'
     : 'smoothstep(0.42, 0.72, up)';
@@ -974,14 +974,17 @@ function seasonGLSL(kind) {
         if (leafy > 0.5) discard;   // 廣場大樹：模型的葉子換成葉片卡樹冠，這裡只留樹幹枝椏
       #endif${fall}
       if (uSnow > 0.0) {
-        vec3 wn = normalize(vWN);
+        vec3 wn = normalize(vWN);${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `
+        { vec3 fn = normalize(cross(dFdx(vWP), dFdy(vWP))); fn *= sign(dot(fn, cameraPosition - vWP) + 1e-4); wn = normalize(mix(wn, fn, 0.8)); }   // 葉卡的法線是外向受光場，不是葉面的朝向；改用看得到的那一面實際朝哪裡` : ''}
         float n = n_f(vWP.xz * 0.55 + 3.0), n2 = n_v(vWP.xz * 4.0 + vWP.y);
         // uSnow 同時是積雪深度：薄雪時只有朝上、雜訊高的地方有雪（看得到草地斑塊），越下越厚就連斜面也蓋滿
         float dep = uSnow - 0.8;
         float up = wn.y + (n - 0.5) * 0.45 + (n2 - 0.5) * 0.12 + dep * 0.9;
         float cov = ${cover} * smoothstep(0.0, 0.5, uSnow);${kind === 'terrain' ? `
         { float lw = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lw * 1.25, lw * 1.12, lw * 0.62), leafy * smoothstep(0.0, 0.5, uSnow) * 0.6); }   // 雪下露出的草是枯黃的冬草` : ''}
-        vec3 snow = vec3(0.9, 0.92, 0.96) * (0.92 + n * 0.1 + (n2 - 0.5) * 0.04);
+${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `        { float lw = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)), wk = smoothstep(0.0, 0.5, uSnow); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lw * 0.9, lw * 1.05, lw * 0.92), 0.35 * wk) * (1.0 - 0.14 * wk); }   // 冬天的葉子暗一點、灰一點（不是夏天的鮮綠）
+` : ''}        vec3 snow = vec3(0.9, 0.92, 0.96) * (0.92 + n * 0.1 + (n2 - 0.5) * 0.04);${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `
+        snow *= 0.8 + 0.2 * smoothstep(0.02, 0.14, dot(bc, vec3(0.3, 0.59, 0.11)));   // 葉上的雪留一點針葉的明暗，不是一片平塗的白` : ''}
         diffuseColor.rgb = mix(diffuseColor.rgb, snow, cov);
         roughnessFactor = mix(roughnessFactor, 0.62, cov);
         float gl = step(0.9965, n_h(floor(vWP.xz * 46.0 + vWP.y * 13.0)));
