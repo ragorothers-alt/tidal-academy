@@ -354,6 +354,34 @@ function nightWindows(model, lo) {
     } catch (e) { console.warn('窗戶遮罩做不出來（貼圖讀不到）：', e); }
   });
 }
+/** v9.17 半寫實：寫實模型的貼圖裡，屋瓦、圓頂、噴泉的邊是同一種薰衣草紫灰；載入後把這些像素換成自然的材質色（保留貼圖原本的明暗）。
+    色相從藍紫、紫到偏紅的灰紫褐（藍比綠多）、飽和度低到中等的才換（窗玻璃是偏青的藍、木頭與米色石牆是橙黃、粉紅的花與紅布太飽和，都不動）；夜裡亮窗的遮罩先用原本的貼圖做好 */
+const VERDIGRIS = [0.55, 0.68, 0.63, 1.5], SLATE = [0.93, 0.98, 1.04, 0.92], GREYSTONE = [1.03, 1.0, 0.95, 1.12];   // 色調與亮度倍數：銅綠的圓頂、石板灰的屋瓦、暖灰的石頭
+const DEPURPLE = new Map([['rf_bld_museum', VERDIGRIS], ['rf_lm_shrine', VERDIGRIS], ['rf_bld_exam', SLATE], ['rf_bld_telescope', SLATE], ['rf_bld_board', SLATE], ['rf_bld_shop', SLATE], ['rf_bld_camp', SLATE], ['rf_lm_fountain', GREYSTONE], ['rf_lm_statue', GREYSTONE], ['rf_lm_gate', GREYSTONE]]);
+const DEP_DONE = new WeakSet();
+export function depurplePixels(p, tint) {
+  const [tr, tg, tb, gain] = tint, tl = 0.2126 * tr + 0.7152 * tg + 0.0722 * tb, cl = v => Math.min(1, Math.max(0, v));
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i], g = p[i + 1], b = p[i + 2], mx = Math.max(r, g, b), c = mx - Math.min(r, g, b); if (c < 8 || mx === g) continue;
+    let hue = mx === r ? ((g - b) / c) % 6 : (r - g) / c + 4; hue *= 60; if (hue > 180) hue -= 360;
+    const s = c / mx, k = cl((hue + 122) / 12) * cl((6 - hue) / 6) * cl((s - 0.05) / 0.04) * cl((0.34 - s) / 0.08); if (k <= 0) continue;
+    const L = (0.2126 * r + 0.7152 * g + 0.0722 * b) * gain / tl;
+    p[i] = Math.round(r + (Math.min(255, L * tr) - r) * k); p[i + 1] = Math.round(g + (Math.min(255, L * tg) - g) * k); p[i + 2] = Math.round(b + (Math.min(255, L * tb) - b) * k);
+  }
+  return p;
+}
+function depurple(model, tint) {
+  model.traverse(o => {
+    const m = o.isMesh && o.material; if (!m || !m.map || !m.map.image || DEP_DONE.has(m)) return; DEP_DONE.add(m);
+    try {
+      const src = m.map, img = src.image, cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+      const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0); const d = cx.getImageData(0, 0, cv.width, cv.height);
+      depurplePixels(d.data, tint); cx.putImageData(d, 0, 0);
+      const t = new THREE.CanvasTexture(cv); Object.assign(t, { flipY: src.flipY, colorSpace: src.colorSpace, wrapS: src.wrapS, wrapT: src.wrapT, anisotropy: src.anisotropy, channel: src.channel }); t.needsUpdate = true;
+      m.map = t; m.needsUpdate = true;
+    } catch (e) { console.warn('貼圖的紫灰換不了（貼圖讀不到）：', e); }
+  });
+}
 export function realize(g, table, key, keep = []) {
   const id = realId(table, key); if (!RF[table] || !realOn() || !READY.has(id)) return false;
   g.userData.real = id;
@@ -368,6 +396,7 @@ export function realize(g, table, key, keep = []) {
     const k = Math.min(rfS.x / ms.x, rfS.z / ms.z);
     model.scale.setScalar(k); model.position.set(rfC.x - mc.x * k, rfB.min.y - rfT.min.y * k, rfC.z - mc.z * k);
     model.name = 'real:' + id; if (WIN_BLD.has(id)) nightWindows(model, WIN_BLD.get(id));
+    if (DEPURPLE.has(id)) depurple(model, DEPURPLE.get(id));
     old.forEach(c => cont.remove(c)); cont.add(model);   // 原本的幾何不釋放：modelClone 的零件和原型共用
     if (ent) {   // 剔除用的包圍體與投影清單照新模型重算
       g.updateMatrixWorld(true); cBox.setFromObject(g); cBox.getSize(cSize); cBox.getCenter(cCtr);
