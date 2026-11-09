@@ -5,7 +5,7 @@
   I.INTERIORS = I.INTERIORS || {};
   I.INTERIORS['english'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = 'Lexi・故事書字母屋';
-    const C = { cream:'#fff4ee', wood:'#b07a4a', honey:'#d6a363', dark:'#654835', rose:'#d98aa0', blue:'#8cc8ef', pink:'#edb0c9', lilac:'#a695cf', leaf:'#6f8e62', gold:'#d9ad59', chalk:'#30474c', paper:'#fff9df' };
+    const C = { cream:'#fff4ee', wood:'#b07a4a', honey:'#d6a363', dark:'#654835', rose:'#b38288', blue:'#91b1c6', pink:'#c9a6ac', lilac:'#919aaf', leaf:'#6f8e62', gold:'#d9ad59', chalk:'#30474c', paper:'#fff9df' };
     // 同色依用途共用材質；只在色票建立一次，不增加幾何或改動動線。
     const finish = { wood:{roughness:.72}, fabric:{roughness:1}, ceramic:{roughness:.28}, metal:{metalness:.82,roughness:.36}, foliage:{roughness:.88}, paper:{roughness:.92}, plaster:{roughness:.9}, stone:{roughness:.94} };
     const kinds = { cream:'plaster', wood:'wood', honey:'wood', dark:'wood', rose:'fabric', blue:'wood', pink:'fabric', lilac:'fabric', leaf:'foliage', gold:'metal', chalk:'stone', paper:'paper' };

@@ -5,7 +5,7 @@
   I.INTERIORS = I.INTERIORS || {};
   I.INTERIORS['museum'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = '潮汐博物館・發現的圓頂';
-    const C = { cream:'#fff3db', stone:'#f5e8cd', floor:'#fff4df', honey:'#d9ad70', dark:'#ac774a', brass:'#f4bf55', dome:'#c8b4e2', ink:'#a496bf', water:'#36c8ef', tide:'#9be6df', leaf:'#8fa995', fern:'#557c73', lilac:'#d9c4e9', print:'#777a98', bone:'#e8d8b6', paper:'#fffaf0', joint:'#e8dac2', wing:'#ffe6bd', ceiling:'#ffe8c5' };
+    const C = { cream:'#fff3db', stone:'#f5e8cd', floor:'#fff4df', honey:'#d9ad70', dark:'#ac774a', brass:'#f4bf55', dome:'#aeb5c4', ink:'#8892a9', water:'#4a93a8', tide:'#9ac4c0', leaf:'#8fa995', fern:'#557c73', lilac:'#a3a7b0', print:'#636e88', bone:'#e8d8b6', paper:'#fffaf0', joint:'#e8dac2', wing:'#ffe6bd', ceiling:'#ffe8c5' };
     const kinds = {cream:'plaster',stone:'stone',floor:'stone',honey:'wood',dark:'wood',brass:'metal',dome:'plaster',ink:'fabric',water:'ceramic',tide:'ceramic',leaf:'foliage',fern:'foliage',lilac:'fabric',print:'paper',bone:'stone',paper:'paper',joint:'stone',wing:'plaster',ceiling:'plaster'};
     const M = {}; Object.keys(C).forEach(k => { const kind=kinds[k]; M[k]=kit.mat(C[k],{roughness:kind==='metal'?.28:kind==='wood'?.68:kind==='ceramic'?.38:k==='floor'?.38:.86,metalness:kind==='metal'?.38:0,side:THREE.DoubleSide},kind); });
     const view=kit.view(), glass=kit.glass(), lamp=kit.lamp('#ffc690'), warm=kit.lamp('#ffcf9c'), shade=kit.shade(C.floor);

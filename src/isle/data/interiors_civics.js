@@ -5,7 +5,7 @@
   I.INTERIORS = I.INTERIORS || {};
   I.INTERIORS['civics'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = '衡的迎賓議事屋';
-    const C = { plaster: '#fbf3e4', wood: '#98704d', honey: '#bd9561', dark: '#554631', roof: '#e0b25a', cream: '#eee0bd', brass: '#d1a654', pink: '#e9a8b6', lavender: '#b3a0d0', leaf: '#70834f', sea: '#a5c6c6', stone: '#c8bea7', coral: '#e6735c' };
+    const C = { plaster: '#fbf3e4', wood: '#98704d', honey: '#bd9561', dark: '#554631', roof: '#e0b25a', cream: '#eee0bd', brass: '#d1a654', pink: '#c59ea1', lavender: '#98a0b4', leaf: '#70834f', sea: '#a5c6c6', stone: '#c8bea7', coral: '#c6725d' };
     // 同色按實際表面共用色票；只拆紙、布、釉陶與木作，不新增物件。
     const kinds = { plaster:'plaster', wood:'wood', honey:'wood', dark:'wood', roof:'roof', cream:'wood', brass:'metal', pink:'foliage', lavender:'fabric', leaf:'foliage', sea:'wood', stone:'stone', coral:'fabric' };
     const M = {}; Object.keys(C).forEach(k => { M[k] = kit.mat(C[k], k === 'brass' ? { metalness:.8, roughness:.38 } : {}, kinds[k]); });

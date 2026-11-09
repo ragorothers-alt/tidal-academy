@@ -20,7 +20,7 @@ export const paper = (kind, id) => ((kind === 'wall' ? I.WALLPAPER : I.FLOORING)
 /* ---------- 光源 ---------- */
 /* v7.8 真實的室內光：不再整片均勻打亮——白天的光從窗戶來（窗外一盞往屋裡斜照的柔邊聚光燈，離窗越遠越暗），
    天花板的燈與家具燈照度隨距離平方衰減（燈下一圈亮、牆角暗下來）；只留一點點四處反彈的光，背光面是薰衣草色 */
-const hemi = new THREE.HemisphereLight('#fff1e2', '#9d8bb0', 0.45); scene.add(hemi);
+const hemi = new THREE.HemisphereLight('#fff1e2', '#988b7e', 0.45); scene.add(hemi);
 const keyL = new THREE.DirectionalLight('#fff0d8', 1.5); keyL.position.set(2.5, 10, -3.5); keyL.castShadow = true; keyL.shadow.mapSize.set(1024, 1024);   // 主光從窗戶那一側的高處照下來（和窗光同一側），家具的影子朝房間前方、正面仍受光
 Object.assign(keyL.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6, near: 1, far: 30 }); keyL.shadow.bias = -0.0005; scene.add(keyL, keyL.target);
 const ceil = new THREE.PointLight('#ffe2b0', 6, 0, 2); ceil.position.set(0, 2.8, 0); scene.add(ceil);

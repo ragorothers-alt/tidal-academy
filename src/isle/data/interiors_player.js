@@ -13,12 +13,12 @@
       roof: kit.mat('#9c4a3a', {}, 'ceramic'), red: kit.mat('#9c4a3a', {}, 'fabric'),
       stone: kit.mat('#ded0ba', {}, 'stone'), stoneShade: kit.mat('#b8aa96', {}, 'stone'), soot: kit.mat('#4b342d', {}, 'stone'),
       dark: kit.mat('#4b342d', { metalness: .8, roughness: .36 }, 'metal'), gold: kit.mat('#d4aa59', { metalness: .8, roughness: .36 }, 'metal'),
-      lilac: kit.mat('#ac88c5', {}, 'fabric'), pink: kit.mat('#e3a0b9', {}, 'fabric'), ink: kit.mat('#59697d', {}, 'fabric'),
+      lilac: kit.mat('#848ea6', {}, 'fabric'), pink: kit.mat('#bf969c', {}, 'fabric'), ink: kit.mat('#59697d', {}, 'fabric'),
       linen: kit.mat('#fff0cf', {}, 'fabric'), paleWood: kit.mat('#f4e6d0', {}, 'wood'),
-      ceramic: kit.mat('#fff0cf', {}, 'ceramic'), tea: kit.mat('#4b342d', {}, 'ceramic'), lilacGlaze: kit.mat('#ac88c5', {}, 'ceramic'),
-      leaf: kit.mat('#8c9d61', {}, 'foliage'), petal: kit.mat('#ac88c5', {}, 'foliage'), pinkPetal: kit.mat('#e3a0b9', {}, 'foliage'), whitePetal: kit.mat('#fff0cf', {}, 'foliage'), pollen: kit.mat('#d4aa59', {}, 'foliage'),
-      paper: kit.mat('#fff0cf', {}, 'paper'), blue: kit.mat('#8dafbd', {}, 'paper'), artLilac: kit.mat('#ac88c5', {}, 'paper'), artPink: kit.mat('#e3a0b9', {}, 'paper'),
-      shade: kit.shade('#fff0da'), lilacMetal: kit.mat('#ac88c5', { roughness:.8 }, 'metal'),
+      ceramic: kit.mat('#fff0cf', {}, 'ceramic'), tea: kit.mat('#4b342d', {}, 'ceramic'), lilacGlaze: kit.mat('#848ea6', {}, 'ceramic'),
+      leaf: kit.mat('#8c9d61', {}, 'foliage'), petal: kit.mat('#8d79b0', {}, 'foliage'), pinkPetal: kit.mat('#d292aa', {}, 'foliage'), whitePetal: kit.mat('#fff0cf', {}, 'foliage'), pollen: kit.mat('#d4aa59', {}, 'foliage'),
+      paper: kit.mat('#fff0cf', {}, 'paper'), blue: kit.mat('#8dafbd', {}, 'paper'), artLilac: kit.mat('#848ea6', {}, 'paper'), artPink: kit.mat('#bf969c', {}, 'paper'),
+      shade: kit.shade('#fff0da'), lilacMetal: kit.mat('#848ea6', { roughness:.8 }, 'metal'),
       glow: kit.lamp('#ffd8ad'), fire: kit.lamp('#ff9a4a').clone(), fireCore: kit.lamp('#ffd15b').clone(), fireInner: kit.lamp('#ffe7a0').clone()
     };
     // Flame-only copies keep their colour at night instead of inheriting the lantern brightness boost.

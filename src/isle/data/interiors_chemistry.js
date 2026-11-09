@@ -7,24 +7,24 @@
     const g=new THREE.Group();g.name='chemistry-mint-orangerie-interior';
     const M={
       wall:kit.mat('#f6f1e4',{},'plaster'),wood:kit.mat('#a77648',{},'wood'),dark:kit.mat('#68482f',{metalness:.7,roughness:.4},'metal'),
-      roof:kit.mat('#4f8f7a',{},'roof'),mint:kit.mat('#62c9a0',{metalness:.7,roughness:.4},'metal'),stone:kit.mat('#d8c8ac',{},'stone'),
-      cream:kit.mat('#fff2ce',{},'ceramic'),pink:kit.mat('#ff9ec4',{},'fabric'),amber:kit.mat('#ffc66b',{},'foliage'),aqua:kit.mat('#8fe3c8',{},'wood'),
-      leaf:kit.mat('#5d874e',{},'foliage'),lime:kit.mat('#93b55f',{},'foliage'),lavender:kit.mat('#b8a0dc',{},'foliage'),
-      copper:kit.mat('#b8763d',{metalness:.65,roughness:.3},'metal'),cloth:kit.mat('#f1d5d8',{},'fabric'),lamp:kit.lamp('#ffd8ad')
+      roof:kit.mat('#4f8f7a',{},'roof'),mint:kit.mat('#64a48a',{metalness:.7,roughness:.4},'metal'),stone:kit.mat('#d8c8ac',{},'stone'),
+      cream:kit.mat('#fff2ce',{},'ceramic'),pink:kit.mat('#cca4aa',{},'fabric'),amber:kit.mat('#ffc66b',{},'foliage'),aqua:kit.mat('#90beaf',{},'wood'),
+      leaf:kit.mat('#5d874e',{},'foliage'),lime:kit.mat('#93b55f',{},'foliage'),lavender:kit.mat('#a697c2',{},'foliage'),
+      copper:kit.mat('#b8763d',{metalness:.65,roughness:.3},'metal'),cloth:kit.mat('#d1b3b4',{},'fabric'),lamp:kit.lamp('#ffd8ad')
     };
     // 同色的釉陶、軟布、紙張和塗漆木作各共用一份，不在單件物件內建材質。
     const S={
       paper:kit.mat('#fff2ce',{},'paper'),linen:kit.mat('#fff2ce',{},'fabric'),paleWood:kit.mat('#fff2ce',{},'wood'),petal:kit.mat('#fff2ce',{},'foliage'),grout:kit.mat('#fff2ce',{},'stone'),
-      pinkPetal:kit.mat('#ff9ec4',{},'foliage'),pinkCeramic:kit.mat('#ff9ec4',{},'ceramic'),amberCeramic:kit.mat('#ffc66b',{},'ceramic'),aquaCeramic:kit.mat('#8fe3c8',{},'ceramic'),
-      aquaFabric:kit.mat('#8fe3c8',{},'fabric'),mintWood:kit.mat('#62c9a0',{},'wood'),mintFabric:kit.mat('#62c9a0',{},'fabric'),
-      amberCover:kit.mat('#ffc66b',{},'fabric'),violetCover:kit.mat('#b8a0dc',{},'fabric'),
+      pinkPetal:kit.mat('#daa4b9',{},'foliage'),pinkCeramic:kit.mat('#cca4aa',{},'ceramic'),amberCeramic:kit.mat('#ffc66b',{},'ceramic'),aquaCeramic:kit.mat('#90beaf',{},'ceramic'),
+      aquaFabric:kit.mat('#90beaf',{},'fabric'),mintWood:kit.mat('#64a48a',{},'wood'),mintFabric:kit.mat('#64a48a',{},'fabric'),
+      amberCover:kit.mat('#ffc66b',{},'fabric'),violetCover:kit.mat('#9fa7b9',{},'fabric'),
       terracotta:kit.mat('#a77648',{},'ceramic'),darkWood:kit.mat('#68482f',{},'wood'),ink:kit.mat('#68482f',{},'paper'),woodInk:kit.mat('#a77648',{},'paper'),
-      pinkPaper:kit.mat('#ff9ec4',{},'paper'),aquaPaper:kit.mat('#8fe3c8',{},'paper'),mintPaper:kit.mat('#62c9a0',{},'paper'),greenThread:kit.mat('#5d874e',{},'fabric'),
+      pinkPaper:kit.mat('#cca4aa',{},'paper'),aquaPaper:kit.mat('#90beaf',{},'paper'),mintPaper:kit.mat('#64a48a',{},'paper'),greenThread:kit.mat('#5d874e',{},'fabric'),
       paleMetal:kit.mat('#fff2ce',{metalness:.7,roughness:.4},'metal'),shade:kit.shade('#fff0da')
     };
     const covers=new Map([[M.cream,S.paper],[M.mint,S.mintFabric],[M.amber,S.amberCover],[M.aqua,S.aquaFabric],[M.lavender,S.violetCover]]);
     const bottleCeramics=new Map([[M.pink,S.pinkCeramic],[M.amber,S.amberCeramic],[M.aqua,S.aquaCeramic]]);
-    const bottleGlass=new Map([[M.pink,kit.shade('#ff9ec4')],[M.amber,kit.shade('#ffc66b')],[M.aqua,kit.shade('#8fe3c8')]]);
+    const bottleGlass=new Map([[M.pink,kit.shade('#cca4aa')],[M.amber,kit.shade('#ffc66b')],[M.aqua,kit.shade('#90beaf')]]);
     const cols=[];
     function add(q,m,x=0,y=0,z=0,ud){const o=new THREE.Mesh(q,m);o.position.set(x,y,z);if(ud)Object.assign(o.userData,ud);g.add(o);return o;}
     function box(x,y,z,w,h,d,m,solid=false){return add(new THREE.BoxGeometry(w,h,d),m,x,y,z,solid?{solid:true}:null);}

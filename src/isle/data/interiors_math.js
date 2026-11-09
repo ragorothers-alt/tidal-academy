@@ -6,7 +6,7 @@
   I.INTERIORS['math'] = function (THREE, kit) {
     const g=new THREE.Group();g.name='弦・八角音樂盒塔屋';
     const A=7,Y=4.2,H=8.6,W=2*A*Math.tan(Math.PI/8),a0=Math.PI/8,a1=5*Math.PI/8;
-    const palette={wall:'#f1ecf7',wood:'#ac815c',honey:'#d6b17a',ink:'#2b2d42',ivory:'#fbfbf6',gold:'#d9ad59',violet:'#7f86c9',soft:'#bcb5df',plum:'#a695cf',leaf:'#748962',pink:'#edb0c9',paper:'#fff5db'};
+    const palette={wall:'#eceae8',wood:'#ac815c',honey:'#d6b17a',ink:'#2b2d42',ivory:'#fbfbf6',gold:'#d9ad59',violet:'#818ba4',soft:'#adb4c3',plum:'#919aaf',leaf:'#748962',pink:'#c9a6ac',paper:'#fff5db'};
     // 同色依用途共用材質；只在色票建立一次，不增加幾何或改動動線。
     const finish = { wood:{roughness:.72}, fabric:{roughness:1}, ceramic:{roughness:.28}, metal:{metalness:.82,roughness:.36}, foliage:{roughness:.88}, paper:{roughness:.92}, plaster:{roughness:.9}, stone:{roughness:.94} };
     const kinds = { wall:'plaster', wood:'wood', honey:'wood', ink:'metal', ivory:'wood', gold:'metal', violet:'wood', soft:'fabric', plum:'fabric', leaf:'foliage', pink:'fabric', paper:'paper' };
@@ -273,9 +273,9 @@
     Object.assign(g.userData,{
       // 琴譜是焦點，桌燈服務書寫，短底光保留深紫暗部。
       glow:[
-        {kind:'cove',a:[-6.88,3.5,-2.05],b:[-6.88,3.5,-1.25],n:[1,0],c:'#bcb5df'},
+        {kind:'cove',a:[-6.88,3.5,-2.05],b:[-6.88,3.5,-1.25],n:[1,0],c:'#f2e4cf'},
         {kind:'under',a:face(5*Math.PI/4,-2.4,2.78,6.45),b:face(5*Math.PI/4,-1.5,2.78,6.45)},
-        {kind:'wash',a:[-1.95,7.75,-6.8],b:[-1.3,7.75,-6.8],n:[0,1],c:'#bcb5df'},
+        {kind:'wash',a:[-1.95,7.75,-6.8],b:[-1.3,7.75,-6.8],n:[0,1],c:'#f2e4cf'},
         {kind:'under',a:face(5*Math.PI/4,-2.4,6.98,6.45),b:face(5*Math.PI/4,-1.5,6.98,6.45)},
         {kind:'kick',a:[-4.7,4.3,-1.4],b:[-4.1,4.3,-1.4],n:[0,1]},
         {kind:'kick',a:[4.05,.1,3.6],b:[4.65,.1,3.6],n:[0,1]},

@@ -9,16 +9,16 @@
       plaster: kit.mat('#f0e6d8', {}, 'plaster'), oak: kit.mat('#9a663f', {}, 'wood'),
       honey: kit.mat('#be8950', {}, 'wood'), dark: kit.mat('#5b4031', { metalness:.7, roughness:.4 }, 'metal'), stone: kit.mat('#d8c8ac', {}, 'stone'),
       floor: kit.mat('#b8ab93', {}, 'wood'), floorShade: kit.mat('#c3b7a0', {}, 'wood'), roof: kit.mat('#c8733f', {}, 'roof'), copper: kit.mat('#b8763d', { metalness:.75, roughness:.4 }, 'metal'),
-      brass: kit.mat('#d5ad56', { metalness:.8, roughness:.36 }, 'metal'), cyan: kit.lamp('#5ee7f0').clone(),
-      pink: kit.mat('#ecb5c8', {}, 'fabric'), lavender: kit.mat('#b79acb', {}, 'fabric'), leaf: kit.mat('#819565', {}, 'foliage'), cream: kit.mat('#fff0d5', {}, 'fabric'),
+      brass: kit.mat('#d5ad56', { metalness:.8, roughness:.36 }, 'metal'), cyan: kit.lamp('#7aadb1').clone(),
+      pink: kit.mat('#cba8ad', {}, 'fabric'), lavender: kit.mat('#929bb0', {}, 'fabric'), leaf: kit.mat('#819565', {}, 'foliage'), cream: kit.mat('#fff0d5', {}, 'fabric'),
       rug: kit.mat('#ce845d', {}, 'fabric'), board: kit.mat('#456563', {}, 'paper'), lamp: kit.lamp('#ffdaa0')
     };
     M.cyan.emissiveIntensity = .22;   // 儀表維持原本固定的低亮度，不跟吊燈一起增亮。
     // 紙頁、杯盤與奶油色木作分開共用；保持原本的色碼、尺寸與位置。
     const S = {
       paper:kit.mat('#fff0d5',{},'paper'), ceramic:kit.mat('#fff0d5',{},'ceramic'), paleWood:kit.mat('#fff0d5',{},'wood'),
-      violetPetal:kit.mat('#b79acb',{},'foliage'), honeyThread:kit.mat('#be8950',{},'fabric'),
-      floorTile:kit.mat('#b8ab93',{},'stone'), cyanCover:kit.mat('#5ee7f0',{},'fabric'), tea:kit.mat('#5b4031',{},'ceramic'),
+      violetPetal:kit.mat('#9a88b9',{},'foliage'), honeyThread:kit.mat('#be8950',{},'fabric'),
+      floorTile:kit.mat('#b8ab93',{},'stone'), cyanCover:kit.mat('#7aadb1',{},'fabric'), tea:kit.mat('#5b4031',{},'ceramic'),
       diff:kit.lamp('#ffd8ad'), hood:kit.mat('#b8763d',{metalness:.65,roughness:.48,side:THREE.DoubleSide},'metal'),
       brassDome:kit.mat('#d5ad56',{metalness:.8,roughness:.36,side:THREE.DoubleSide},'metal')
     };

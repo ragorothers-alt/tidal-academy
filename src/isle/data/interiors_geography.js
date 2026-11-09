@@ -5,7 +5,7 @@
   I.INTERIORS = I.INTERIORS || {};
   I.INTERIORS['geography'] = function (THREE, kit) {
     const g = new THREE.Group(); g.name = '嵐的旅人瞭望屋';
-    const C = { plaster: '#f2e8d6', wood: '#8b6a45', honey: '#bd9561', dark: '#554631', roof: '#6f9a5e', cream: '#eee0bd', brass: '#d1a654', pink: '#e9a8b6', lavender: '#b3a0d0', leaf: '#70834f', sea: '#a5c6c6', stone: '#c8bea7', coral: '#de8651' };
+    const C = { plaster: '#f2e8d6', wood: '#8b6a45', honey: '#bd9561', dark: '#554631', roof: '#6f9a5e', cream: '#eee0bd', brass: '#d1a654', pink: '#c59ea1', lavender: '#98a0b4', leaf: '#70834f', sea: '#a5c6c6', stone: '#c8bea7', coral: '#de8651' };
     const kinds = { plaster:'plaster', wood:'wood', honey:'wood', dark:'wood', roof:'fabric', cream:'paper', brass:'metal', pink:'foliage', lavender:'fabric', leaf:'foliage', sea:'ceramic', stone:'stone', coral:'fabric' };
     const M = {}; Object.keys(C).forEach(k => { M[k] = kit.mat(C[k], k === 'brass' ? { metalness:.8, roughness:.36 } : {}, kinds[k]); });
     Object.assign(M, {
