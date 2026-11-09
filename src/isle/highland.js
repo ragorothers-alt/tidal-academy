@@ -175,7 +175,7 @@ export function build(player) {
     else if ((t === 1 || t === 2) && rnd() < 0.03) bush(x, z);
   }
   // 野花草原：山頂與高地上的大片小花
-  const pal = ['#ffffff', '#ffd23f', '#b38bff', '#ff8fb1', '#7ec8ff'];
+  const pal = ['#eeebe3', '#d8bc56', '#9785b3', '#c58c9b', '#8199c2'];   // v9.17 半寫實：白、芥黃、灰紫、灰粉、矢車菊藍（以前純白、鮮黃、亮紫、亮粉、天藍）
   for (let k = 0; k < 900; k++) {
     const x = -48 + rnd() * 30, z = -40 + rnd() * 80, t = tileAt(x, z);
     if (!inWest(x, z) || (t !== 1 && t !== 2 && t !== 5) || blocked(x, z, 0.5)) continue;

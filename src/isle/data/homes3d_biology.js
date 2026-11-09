@@ -18,6 +18,7 @@
       leaf: kit.mat('#526f43', { roughness: .96 }),
       pink: kit.mat('#edc9d2', { roughness: .90 }, 'sakura'),
       rose: kit.mat('#dba3b4', { roughness: .90 }, 'sakura'),
+      core: kit.mat('#bf9aa1', { roughness: .94 }, 'sakura'),   // v9.17 櫻花樹冠裡面的陰影
       cream: kit.mat('#efe3c6', { roughness: .88 }),
       brass: kit.mat('#d6ac60', { roughness: 0.39, metalness: 0.65 }, 'metal'),
       lavender: kit.mat('#8f87ac', { roughness: .92 }),
@@ -37,7 +38,8 @@
     function rounded(x,y,z,w,h,d,m,r=.025,ry=0){r=Math.min(r,w/5,h/5,d/5);slab([[-w/2+r,-h/2],[w/2-r,-h/2],[w/2,-h/2+r],[w/2,h/2-r],[w/2-r,h/2],[-w/2+r,h/2],[-w/2,h/2-r],[-w/2,-h/2+r]],d-2*r,x,y,z-d/2+r,m,ry,r);}
     function beam(a,b,r,m,r2=r,n=7){const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),v=B.clone().sub(A),q=new THREE.CylinderGeometry(r2,r,v.length(),n,1);q.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));add(q,m,...A.add(B).multiplyScalar(.5).toArray());}
     function ball(x,y,z,r,m,sx=1,sy=1,sz=1,n=7){const q=new THREE.SphereGeometry(r,n,n<=6?3:4);q.scale(sx,sy,sz);add(q,m,x,y,z);}
-    function crown(x,y,z,r,m,sx=1,sy=1,sz=1){const q=new THREE.IcosahedronGeometry(r,1);q.scale(sx,sy,sz);q.computeVertexNormals();add(q,m,x,y,z);}
+    const lobes=[];   // v9.17 半寫實：每一團樹冠只留一顆暗一點的圓內芯，外形交給後面的櫻花簇卡片（以前一顆顆多面體的粉紅球）
+    function crown(x,y,z,r,m,sx=1,sy=1,sz=1){lobes.push([x,y,z,r*sx,r*sy,r*sz]);const q=new THREE.SphereGeometry(r*.6,14,10);q.scale(sx,sy,sz);add(q,M.core,x,y,z);}
     function sweep(pts,r0,r1,m,n=9,steps=14){const c=new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),frames=c.computeFrenetFrames(steps,false),P=[],idx=[];
       for(let i=0;i<=steps;i++){const t=i/steps,p=c.getPoint(t),r=r0+(r1-r0)*t;for(let j=0;j<n;j++){const a=j/n*Math.PI*2,rr=r*(1+.055*Math.sin(j*2.3+i*.8));P.push(...p.clone().addScaledVector(frames.normals[i],Math.cos(a)*rr).addScaledVector(frames.binormals[i],Math.sin(a)*rr).toArray());}}
       for(let i=0;i<steps;i++)for(let j=0;j<n;j++){const a=i*n+j,b=i*n+(j+1)%n;idx.push(a,b,a+n,b,b+n,a+n);}
@@ -205,7 +207,6 @@
     for(const [x,z] of [[-1.55,1.12],[-1.58,1.55],[-2.23,1.5],[1.46,1.64],[1.68,1.28],[2.06,-1.29],[-1.18,-1.63],[.15,-1.63],[1.38,-1.61]]){
       for(let j=0;j<4;j++){const xx=x+.11*Math.sin(j*2),zz=z+.12*Math.cos(j*2.5),yy=.18+(j%2)*.13;beam([xx,.02,zz],[xx,yy,zz],.012,M.leaf,.01,5);ball(xx,.13,zz,.10,M.leaf,1,.65,1);rosette(xx,yy,zz,.78,j%3?M.rose:M.lavender,true);}
     }
-    masses.forEach((p,i)=>{if(i%2===0)rosette(p[0],p[1]-.08,p[2]+p[3]*.80,1.2,i%4?M.rose:M.cream);});
     // PASS 4 — material/lookdev: same 16-color kit palette across the whole asset.
     // Warm glazing is shared by windows and five framed lantern cores; the game owns lighting.
     part='lanterns';
@@ -219,15 +220,6 @@
     }
     const lightCenters=[[-.99,2.40,1.53],[1.62,2.04,1.43],[-2.16,.71,1.77],[1.98,.75,1.55],[1.72,2.26,-1.57]];
     lightCenters.forEach((p,i)=>lantern(...p,i===2||i===3,i===4));
-    part='flowers';
-    // Seat canopy blossoms on the actual faceted surface, including the hidden back side.
-    const canopyProbe=new THREE.Group();
-    for(const b of batches.values())if(b.part==='canopy')for(const q of b.geos)canopyProbe.add(new THREE.Mesh(q,M.pink));
-    canopyProbe.updateMatrixWorld(true);const ray=new THREE.Raycaster();
-    for(const side of [-1,1])for(const i of [0,2,4,5,7,9,11,12]){
-      const p=masses[i];ray.set(new THREE.Vector3(p[0]+p[3]*.12,p[1]+p[3]*.19,side*10),new THREE.Vector3(0,0,-side));
-      const hit=ray.intersectObject(canopyProbe,true)[0];if(hit)rosette(hit.point.x,hit.point.y,hit.point.z+side*.018,1.28,M.cream,false,side<0?Math.PI:0);
-    }
     // Small safe refinements: back cross-brace, sill brackets and contrasting wooden feet.
     part='timber';beam([-.98,.47,-1.43],[-.95,.75,-1.43],.045,M.honey);beam([.12,.47,-1.43],[.12,2.58,-1.43],.065,M.wood);
     // FORM
@@ -247,6 +239,42 @@
       const q=new THREE.BufferGeometry();q.setAttribute('position',new THREE.BufferAttribute(P,3));q.setAttribute('normal',new THREE.BufferAttribute(N,3));q.setAttribute('uv',new THREE.BufferAttribute(U,2));const pivot=pivots.get(b.part);q.translate(-pivot.x,-pivot.y,-pivot.z);q.computeBoundingSphere();
       if(!assemblies.has(b.part)){const a=new THREE.Group();a.name='biology-'+b.part;a.position.copy(pivot);a.userData.componentId=b.part;assemblies.set(b.part,a);g.add(a);}
       const mesh=new THREE.Mesh(q,b.mat);mesh.name='biology-'+b.part+'-'+Object.keys(M).find(k=>M[k]===b.mat);mesh.castShadow=true;mesh.receiveShadow=true;mesh.userData.componentId=b.part;assemblies.get(b.part).add(mesh);
+    }
+    // v9.17 半寫實：櫻花簇卡片——每團樹冠的外殼散一圈雙面卡，貼畫布畫的櫻花簇（2×2 格，每格約三十朵五瓣小花與幾片古銅綠的嫩葉），頂點色在白與淡粉之間
+    {
+      const S=512,h=S/2,cv=document.createElement('canvas');cv.width=cv.height=S;const c=cv.getContext('2d');let sd=5309;const rr=()=>((sd=sd*16807%2147483647)-1)/2147483646;
+      for(let cell=0;cell<4;cell++){const ox=(cell%2)*h,oy=Math.floor(cell/2)*h;
+        for(let i=0;i<6;i++){c.save();c.translate(ox+h*(.22+rr()*.56),oy+h*(.22+rr()*.56));c.rotate(rr()*6.28);c.fillStyle=rr()<.5?'#6d6a3e':'#7a5a40';c.beginPath();c.ellipse(0,0,h*.075,h*.03,0,0,6.28);c.fill();c.restore();}
+        for(let i=0;i<30;i++){
+          const a0=rr()*6.28,d=Math.sqrt(rr())*h*.37,x=ox+h/2+Math.cos(a0)*d,y=oy+h/2+Math.sin(a0)*d*.82,s=h*(.042+rr()*.022),rot=rr()*6.28,deep=rr()<.45;
+          for(let k=0;k<5;k++){const a=rot+k*1.2566;c.save();c.translate(x+Math.cos(a)*s*.6,y+Math.sin(a)*s*.6);c.rotate(a);
+            const gr=c.createRadialGradient(-s*.45,0,0,-s*.2,0,s*.75);gr.addColorStop(0,deep?'#e2a9b8':'#ebbfca');gr.addColorStop(1,deep?'#f6e6ea':'#fbf4f4');
+            c.fillStyle=gr;c.beginPath();c.ellipse(0,0,s*.58,s*.45,0,0,6.28);c.fill();c.restore();}
+          c.fillStyle='#b8596c';c.beginPath();c.arc(x,y,s*.2,0,6.28);c.fill();
+          c.fillStyle='#d8b25c';for(let k=0;k<6;k++){const a=rot+k*1.05;c.beginPath();c.arc(x+Math.cos(a)*s*.26,y+Math.sin(a)*s*.26,s*.05,0,6.28);c.fill();}
+        }
+      }
+      const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=4;
+      const mat=kit.card('#ffffff',tex,'sakura');mat.defines=Object.assign({},mat.defines,{TA_MODEL:''});   // 卡片自己有花的明暗，不疊程式畫的葉團花紋
+      const P=[],Nn=[],C=[],UV=[],IX=[],col=new THREE.Color(),tints=['#f4e6e9','#eed5db','#e6c3cc'];let sr=811;const rc=()=>((sr=sr*16807%2147483647)-1)/2147483646;
+      const cc=lobes.reduce((s,l)=>s.add(new THREE.Vector3(l[0],l[1],l[2])),new THREE.Vector3()).divideScalar(lobes.length),v=new THREE.Vector3(),nO=new THREE.Vector3(),cn=new THREE.Vector3();
+      lobes.forEach(([x,y,z,sx,sy,sz],j)=>{
+        const n=Math.round(40+340*sx*sy*sz);   // 卡片數跟這一團的體積成正比
+        for(let k=0;k<n;k++){
+          const yy=Math.min(1,(1-2*(k+.5)/n)*.92+.1),a=k*2.399963+j*1.7+(rc()-.5)*.5,ro=Math.sqrt(Math.max(0,1-yy*yy)),r=.6+rc()*.44;
+          const d=new THREE.Vector3(ro*Math.cos(a),yy,ro*Math.sin(a)),pos=new THREE.Vector3(x+d.x*sx*r,y+d.y*sy*r,z+d.z*sz*r);
+          nO.copy(d).multiplyScalar(.65).addScaledVector(v.copy(pos).sub(cc).normalize(),.35).normalize();
+          cn.set(nO.x+(rc()-.5)*.9,nO.y+(rc()-.5)*.9+.15,nO.z+(rc()-.5)*.9).normalize();
+          const t=new THREE.Vector3().crossVectors(cn,Math.abs(cn.y)>.95?new THREE.Vector3(1,0,0):new THREE.Vector3(0,1,0)).normalize(),up=new THREE.Vector3().crossVectors(t,cn).normalize();
+          const roll=rc()*6.28,right=t.clone().multiplyScalar(Math.cos(roll)).addScaledVector(up,Math.sin(roll)),vert=up.clone().multiplyScalar(Math.cos(roll)).addScaledVector(t,-Math.sin(roll));
+          const span=.26+rc()*.12,cell=Math.floor(rc()*4),u0=(cell%2)*.5,v0=Math.floor(cell/2)*.5,base=P.length/3;col.set(tints[Math.floor(rc()*3)]);
+          nO.multiplyScalar(.75).addScaledVector(cn,.25).normalize();
+          for(const [u,w] of [[-1,-1],[1,-1],[1,1],[-1,1]]){const p=pos.clone().addScaledVector(right,u*span/2).addScaledVector(vert,w*span/2);P.push(p.x,p.y,p.z);Nn.push(nO.x,nO.y,nO.z);C.push(col.r,col.g,col.b);UV.push(u0+(u*.5+.5)*.5,v0+(w*.5+.5)*.5);}
+          IX.push(base,base+1,base+2,base,base+2,base+3,base,base+2,base+1,base,base+3,base+2);   // 雙面
+        }
+      });
+      const q=new THREE.BufferGeometry();q.setAttribute('position',new THREE.Float32BufferAttribute(P,3));q.setAttribute('normal',new THREE.Float32BufferAttribute(Nn,3));q.setAttribute('color',new THREE.Float32BufferAttribute(C,3));q.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));q.setIndex(IX);q.computeBoundingSphere();
+      const bm=new THREE.Mesh(q,mat);bm.name='biology-canopy-blossom-cards';bm.castShadow=bm.receiveShadow=true;bm.customDepthMaterial=kit.cardDepth(tex,'sakura');g.add(bm);
     }
     g.userData.door=[-.35,2.49];g.userData.cols=[[-1.27,-1.48,1.88,1.38],[-2.12,-1.25,-1.15,-.16],[1.79,-1.18,2.50,.87],[-2.44,.69,-1.70,1.38],[-2.46,.19,-1.79,.55]];
     g.userData.mailbox=[.90,2.26];g.userData.lights=lightCenters;
