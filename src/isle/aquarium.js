@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import * as ui from './ui.js';
 import { S, list, icon, stars, fmtHours, fmtMonths, whereName, photoOnly } from './state.js';
-import { model, fishGeo, HAB } from './dive.js';
+import { model, fishGeo, fishMat, HAB } from './dive.js';
 import { realMove } from './real.js';
 
 const DECO = {
@@ -13,7 +13,7 @@ const DECO = {
   seagrass: [['seagrass_patch', 4], ['rock_b', 1]],
   deep: [['rock_a', 1], ['rock_b', 1]]
 };
-const FISH = { reef: ['#ff9a3a', '#4aa0ff'], shallow: ['#ffd84a'], seagrass: ['#c8e070'], deep: ['#c0d8f0'] };
+const FISH = { reef: ['#e0904a', '#5b88b8'], shallow: ['#c9b37a'], seagrass: ['#a9b47e'], deep: ['#c0d8f0'] };   // v9.18 和潛水看到的魚同一套自然魚色
 let root = null, tanks = [], dwellers = [], schools = [], placed = new Set();
 /** 館藏（海洋館裡有幾種） */
 export const count = () => Object.keys(S().museum.marine || {}).length;
@@ -45,7 +45,7 @@ function setup(ud) {
       }
     });
     (FISH[tk.where] || []).forEach(color => {
-      const n = tk.where === 'reef' ? 12 : 8, im = new THREE.InstancedMesh(fishGeo(), new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.15, flatShading: true, side: THREE.DoubleSide }), n);
+      const n = tk.where === 'reef' ? 12 : 8, im = new THREE.InstancedMesh(fishGeo(), fishMat(color), n);
       im.frustumCulled = false; root.add(im);
       schools.push({ im, n, tk, c: inTank(tk, false, 0.6), r: Math.min(0.9, span * 0.3), w: (rnd() < 0.5 ? -1 : 1) * (0.4 + rnd() * 0.3), off: Array.from({ length: n }, () => [rnd() * 0.3, (rnd() - 0.5) * 0.4, rnd() * 6.28]) });
     });

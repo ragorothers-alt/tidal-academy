@@ -24,10 +24,10 @@ export let inside = false;
 const DIVE = { name: '海底', color: '#2f86b8', voice: 520 };
 const AIR = 90, R = 14;   // 氧氣（秒）、可以游的範圍（公尺）
 export const HAB = {
-  shallow: { name: '淺灘', sand: '#e8d8a8', grass: 0, water: '#62cadb', depth: 4.6, fog: 0.05, deco: [['rock_b', 5], ['rock_a', 1], ['sea_urchins', 3], ['seagrass_patch', 3], ['anemone_bed', 3], ['coral_round', 1]], fish: ['#ffd84a', '#7fd0ff'] },
-  seagrass: { name: '海草床', sand: '#d2c690', grass: 1, water: '#4cb9a6', depth: 5.2, fog: 0.055, deco: [['seagrass_patch', 14], ['rock_b', 3], ['anemone_bed', 1], ['sea_urchins', 1]], fish: ['#c8e070', '#f0f0e0'] },
-  reef: { name: '珊瑚礁', sand: '#ecdfbc', grass: 0, water: '#33aad6', depth: 6.6, fog: 0.045, deco: [['coral_table', 3], ['coral_branch', 6], ['coral_round', 4], ['rock_a', 3], ['anemone_bed', 3], ['sea_urchins', 2]], fish: ['#ff9a3a', '#4aa0ff'] },
-  deep: { name: '外海深處', sand: '#7f8189', grass: 0, water: '#17568e', depth: 10, fog: 0.075, deco: [['rock_a', 5], ['rock_b', 4], ['coral_round', 1], ['sea_urchins', 2]], fish: ['#c0d8f0', '#8090a8'] }
+  shallow: { name: '淺灘', sand: '#d9cba6', grass: 0, water: '#4aa3aa', depth: 4.6, fog: 0.05, deco: [['rock_b', 5], ['rock_a', 1], ['sea_urchins', 3], ['seagrass_patch', 3], ['anemone_bed', 3], ['coral_round', 1]], fish: ['#c9b37a', '#9fb4bf'] },
+  seagrass: { name: '海草床', sand: '#c9bd8f', grass: 1, water: '#3f9a88', depth: 5.2, fog: 0.055, deco: [['seagrass_patch', 14], ['rock_b', 3], ['anemone_bed', 1], ['sea_urchins', 1]], fish: ['#a9b47e', '#d8dbd2'] },
+  reef: { name: '珊瑚礁', sand: '#dcd0b4', grass: 0, water: '#2d8fb0', depth: 6.6, fog: 0.045, deco: [['coral_table', 3], ['coral_branch', 6], ['coral_round', 4], ['rock_a', 3], ['anemone_bed', 3], ['sea_urchins', 2]], fish: ['#e0904a', '#5b88b8'] },
+  deep: { name: '外海深處', sand: '#7f8189', grass: 0, water: '#173f63', depth: 10, fog: 0.075, deco: [['rock_a', 5], ['rock_b', 4], ['coral_round', 1], ['sea_urchins', 2]], fish: ['#c0d8f0', '#8090a8'] }
 };
 let P = null, ctx = null, SP = null, H = null, sc = null, savedCurve = CURVE, hud = null;
 let air = AIR, kick = 0, pace = 0, lean = 0, warned = false, found = 0, bubT = 1, t0 = 0;
@@ -51,11 +51,18 @@ const CELL = `vec2 h2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(
     for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 g = vec2(float(x), float(y)), o = h2(i + g); o = 0.5 + 0.45 * sin(t + 6.2831 * o); float d = length(g + o - f); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
     return d2 - d1; }`;
 const WV = 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
-const CAUS_F = `uniform float uTime; uniform float uK; uniform vec3 uCol; uniform vec3 uCam; uniform float uFog; varying vec3 vW; ${CELL}
-  void main(){ vec2 p = vW.xz * 0.8; p += 0.35 * sin(p.yx * 1.7 + uTime * 0.6);   // 扭曲：光紋彎彎曲曲
-    float a = cell(p, uTime * 0.8), b = cell(p * 1.3 + 7.1, uTime * 1.05);
-    float c = pow(1.0 - smoothstep(0.0, 0.08, a), 2.0) * pow(1.0 - smoothstep(0.0, 0.3, b), 1.5) * 1.6 + pow(1.0 - smoothstep(0.0, 0.06, b), 2.0) * 0.25;
-    c *= 0.35 + 0.65 * smoothstep(0.25, 0.75, sin(vW.x * 0.21 + uTime * 0.05) * sin(vW.z * 0.17 - uTime * 0.04) * 0.5 + 0.5);   // 一片亮、一片暗
+/* v9.18 焦散：水面是幾道不同方向的正弦波疊起來的，光穿過起伏的水面會折射；海底某一點收到的光 = 1 / |折射對應的雅可比行列式|。
+   行列式接近 0 的地方就是光聚在一起的亮線——彎彎曲曲、粗細亮度不一、會慢慢流動（以前是格狀的 Voronoi 邊線，看起來像龜裂的磁磚） */
+const CAUS_F = `uniform float uTime; uniform float uK; uniform vec3 uCol; uniform vec3 uCam; uniform float uFog; varying vec3 vW;
+  float caus(vec2 p, float t){ float hxx = 0.0, hyy = 0.0, hxy = 0.0;
+    for (int i = 0; i < 6; i++) { float fi = float(i), a = fi * 2.39996 + 0.4, f = 1.5 + fi * 0.33; vec2 d = vec2(cos(a), sin(a));
+      float s = sin(dot(d, p) * f + t * (0.8 + fi * 0.17) + fi * 1.7) * (0.8 + 0.2 * sin(fi * 3.1));   // 這道波在這裡的曲率（波高乘上頻率平方，各道差不多）
+      hxx -= s * d.x * d.x; hyy -= s * d.y * d.y; hxy -= s * d.x * d.y; }
+    float k = 0.85, det = (1.0 + k * hxx) * (1.0 + k * hyy) - k * k * hxy * hxy;
+    return 1.0 / max(abs(det), 0.04); }
+  void main(){ vec2 p = vW.xz * 2.7;
+    float I = caus(p, uTime), c = smoothstep(2.2, 11.0, I) * 0.85 + smoothstep(0.8, 2.6, I) * 0.06;   // 亮線之外還有一點點散開的光
+    c *= 0.3 + 0.7 * smoothstep(0.2, 0.8, sin(vW.x * 0.41 + uTime * 0.06) * sin(vW.z * 0.37 - uTime * 0.05) * 0.5 + 0.5);   // 一片亮、一片暗
     float d = length(vW - uCam) * uFog; gl_FragColor = vec4(uCol * c * uK * exp(-d * d), 1.0); }`;
 const SURF_F = `uniform float uTime; uniform vec3 uCol; uniform vec3 uHi; uniform vec3 uCam; uniform vec3 uFar; varying vec3 vW; ${CELL}
   void main(){ vec2 p = vW.xz * 0.32 + vec2(uTime * 0.05, uTime * 0.03); float c = cell(p, uTime * 0.6), l = 1.0 - smoothstep(0.0, 0.2, c);
@@ -94,7 +101,7 @@ function fallback(sp) { const g = new THREE.Group(); const m = new THREE.Mesh(O(
 function build() {
   sc = new THREE.Scene(); own.length = 0; creatures.length = decos.length = rays.length = bubbles.length = schools.length = 0;
   const night = ctx.night(), dark = 1 - night * 0.82, W = new THREE.Color(H.water).multiplyScalar(dark);
-  const FOG = W.clone().lerp(new THREE.Color('#1d5f9a').multiplyScalar(dark), 0.35);
+  const FOG = W.clone().lerp(new THREE.Color('#1d4f6e').multiplyScalar(dark), 0.35);
   sc.background = FOG.clone().multiplyScalar(0.8); sc.fog = new THREE.FogExp2(FOG, H.fog * 1.25 * (1 + night * 0.6));
   // 背景：往上亮、往下暗的水色
   const DU = { top: { value: W.clone().lerp(new THREE.Color('#e8fbff'), 0.35 * dark) }, bot: { value: W.clone().multiplyScalar(0.35) } };
@@ -153,17 +160,28 @@ function decorate() {
 }
 /** 小魚群：繞著一個點游的一群小魚（每隻是同一個網格的複本） */
 let fishG = null;
-/** 小魚的網格（菱形身體＋三角尾鰭；潛水與海洋館共用，不釋放） */
+/** 小魚的網格（潛水與海洋館共用，不釋放）。v9.18：側扁的紡錘形魚身（八邊形斷面、圓鼻、細尾柄）＋分岔的尾鰭與背鰭，
+    頂點色做反蔭蔽（背深、腹白）；乘上材質色就是這種魚的顏色（以前是菱形加三角形，像摺紙魚） */
+export const fishMat = color => new THREE.MeshStandardMaterial({ color, vertexColors: true, roughness: 0.42, metalness: 0.28, side: THREE.DoubleSide });
 export function fishGeo() {
   if (fishG) return fishG;
-  const v = [0, 0, 0.16, 0, 0.05, 0, 0, -0.05, 0, 0, 0, -0.09, -0.03, 0, 0.02, 0.03, 0, 0.02, 0, 0, -0.07, 0, 0.06, -0.17, 0, -0.06, -0.17];
-  fishG = new THREE.BufferGeometry(); fishG.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
-  fishG.setIndex([0, 1, 4, 0, 4, 2, 0, 2, 5, 0, 5, 1, 3, 4, 1, 3, 2, 4, 3, 5, 2, 3, 1, 5, 6, 7, 8]); fishG.computeVertexNormals(); return fishG;
+  const P = [], C = [], idx = [], SEG = 8, PROF = [[0.06, 0.022], [0.18, 0.04], [0.36, 0.05], [0.56, 0.045], [0.76, 0.03], [0.92, 0.016], [1, 0.011]];   // [從鼻尖到尾柄的比例, 半高]
+  const zAt = t => 0.16 - t * 0.25, shade = c => (c > 0 ? 1 - 0.5 * c : 1 + 0.4 * -c);   // 斷面上的高度 → 背深、腹亮
+  const v = (x, y, z, k) => { P.push(x, y, z); C.push(k, k, k); return P.length / 3 - 1; };
+  const nose = v(0, 0, 0.16, 0.9), rings = PROF.map(([t, h]) => Array.from({ length: SEG }, (_, s) => { const a = s / SEG * Math.PI * 2; return v(Math.sin(a) * h * 0.55, Math.cos(a) * h, zAt(t), shade(Math.cos(a))); }));
+  const tail = v(0, 0, zAt(1) - 0.004, 0.8);
+  for (let s = 0; s < SEG; s++) { const s1 = (s + 1) % SEG; idx.push(nose, rings[0][s1], rings[0][s], tail, rings[6][s], rings[6][s1]); for (let j = 0; j < 6; j++) idx.push(rings[j][s], rings[j][s1], rings[j + 1][s], rings[j][s1], rings[j + 1][s1], rings[j + 1][s]); }
+  const zt = zAt(1), a = v(0, 0.009, zt + 0.004, 0.75), b = v(0, 0.062, zt - 0.085, 0.7), n = v(0, 0, zt - 0.05, 0.8), c = v(0, -0.062, zt - 0.085, 0.85), d = v(0, -0.009, zt + 0.004, 0.8);   // 分岔的尾鰭
+  idx.push(a, b, n, a, n, d, d, n, c);
+  const e = v(0, 0.048, 0.05, 0.55), f = v(0, 0.074, 0.0, 0.5), g = v(0, 0.044, -0.03, 0.55); idx.push(e, f, g);   // 背鰭
+  fishG = new THREE.BufferGeometry(); fishG.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); fishG.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); fishG.setIndex(idx); fishG.computeVertexNormals();
+  const nr = fishG.attributes.normal; if (nr.getY(rings[3][0]) < 0) { for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; } fishG.setIndex(idx); fishG.computeVertexNormals(); }   // 面朝外（法線朝外才受光正確）
+  return fishG;
 }
 function fishSchools() {
   const geo = fishGeo();
   H.fish.forEach((color, k) => {
-    const mat = O(new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.15, flatShading: true, side: THREE.DoubleSide }));
+    const mat = O(fishMat(color));
     const n = 14, im = new THREE.InstancedMesh(geo, mat, n); im.frustumCulled = false;
     const a = Math.random() * 6.28, d = 4 + Math.random() * 6;
     schools.push({ im, n, cx: Math.cos(a) * d, cz: Math.sin(a) * d, cy: bedY(Math.cos(a) * d, Math.sin(a) * d) + 1.4 + k * 0.9, r: 1.6 + Math.random(), w: (k ? -1 : 1) * (0.35 + Math.random() * 0.2), off: Array.from({ length: n }, () => [Math.random() * 0.8, (Math.random() - 0.5) * 0.6, Math.random() * 6.28]) });
