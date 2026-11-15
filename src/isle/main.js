@@ -2578,7 +2578,7 @@ function tick(fixed) {
   U.uSkyRef.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.35);   // v9.22.6 濕地面映出的天光：低空的天色（陰雨天已經轉灰）
   U.uTrans.value = fxClear * (1 - night) * (0.55 + golden * 0.75);   // 葉片透光：晴天有，黃金時段的逆光最明顯
   motes.update(dt, t, look, golden, night, fxClear);
-  waves.update(dt, player, { night, rain: rainVis, inAir: jump.air, fish: life.fishShadows && life.fishShadows() });
+  waves.update(dt, player, { night, rain: rainVis, road: onRoad, inAir: jump.air, fish: life.fishShadows && life.fishShadows() });
   spinProps(dt);   // 溪邊的水車
   U.uPlayer.value.copy(player.position);
   skyU.cover.value = weather.now.startsWith('cloud') || rk > 0.2 ? 0.9 : 0.22;   // 晴天：高空的薄雲少一點（大朵積雲由 cumulus.js 負責）

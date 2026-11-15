@@ -1,7 +1,7 @@
 /* 潮汐小島 · 水岸效果：沙灘浪花（一層層白浪推上岸再退去，留下濕沙）、沙灘腳印、水面漣漪（落水、魚影、下雨）。
    v8.9.1 藍眼淚的夜晚（bluetears.js 設 uBlue）：碎浪與浪花前緣一點一點發出藍光，海邊濕沙上的腳印也亮一下。 */
 import * as THREE from 'three';
-import { scene, U, TERRAIN } from './engine.js';
+import { scene, U, TERRAIN, renderer } from './engine.js';
 import { N, C, T, tileAt, groundAt, seaMesh, waterAt, waterY, warp } from './terrain.js';
 
 /* 自訂著色器也要跟著滾筒地平線彎曲 */
@@ -193,8 +193,46 @@ function pool(tex, n, glow) {
     }
   };
 }
-let feet = null, snowFeet = null, rings = null, glowFeet = null, stepAcc = 0, stepSide = 1, lastX = null, lastZ = null, rainAcc = 0, fishAcc = 0;
-export function init() { buildShore(); feet = pool(footTex, 60); snowFeet = pool(snowFootTex, 90); rings = pool(ringTex, 48); glowFeet = pool(footTex, 24, true); }
+/* ---------- v9.22.7 雨打在地上：鏡頭附近的地面不停濺起小小的水花（幾顆往兩旁彈起又落下的水珠，0.3 秒），石板路上多一圈小漣漪 ---------- */
+const SPL_N = 180, splPos = new Float32Array(SPL_N * 3), splAge = new Float32Array(SPL_N).fill(1), splSize = new Float32Array(SPL_N);
+const splGeo = new THREE.BufferGeometry();
+splGeo.setAttribute('position', new THREE.BufferAttribute(splPos, 3)); splGeo.setAttribute('aAge', new THREE.BufferAttribute(splAge, 1)); splGeo.setAttribute('aSize', new THREE.BufferAttribute(splSize, 1));
+const splU = { uCurve: U.uCurve, uBendF: U.uBendF, uH: { value: 500 }, uCol: { value: new THREE.Color('#dde6f0') } };
+const splash = new THREE.Points(splGeo, new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, uniforms: splU,
+  vertexShader: `uniform float uCurve; uniform float uBendF; uniform float uH; attribute float aAge; attribute float aSize; varying float vAge;
+    void main(){ vAge = aAge; vec4 mv = modelViewMatrix * vec4(position, 1.0); float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve;
+      gl_Position = projectionMatrix * mv; gl_PointSize = aAge >= 1.0 ? 0.0 : aSize * projectionMatrix[1][1] * uH / max(-mv.z, 0.1); }`,
+  fragmentShader: `uniform vec3 uCol; varying float vAge;
+    void main(){ vec2 p = vec2(gl_PointCoord.x - 0.5, 1.0 - gl_PointCoord.y);   // 原點在底部中央、y 往上
+      float a = 0.0, t = vAge;
+      for (int i = 0; i < 5; i++) { float f = float(i) * 0.5 - 1.0, vy = 0.8 - 0.4 * f * f + 0.12 * sin(f * 7.3);   // 往兩旁、高低不一彈開的水珠，沿著拋物線落下
+        vec2 c = vec2(f * 0.4 * t, vy * (2.4 * t - 2.6 * t * t) + 0.05);
+        a = max(a, smoothstep(0.055, 0.02, length(p - c))); }
+      vec2 q = vec2(p.x / (0.08 + t * 0.35), (p.y - 0.05) / (0.025 + t * 0.07));
+      a = max(a, smoothstep(0.35, 0.0, abs(length(q) - 1.0)) * (1.0 - t) * 0.7);   // 落地點的一圈水光，往外擴散
+      a *= 1.0 - t * t; if (a < 0.01) discard; gl_FragColor = vec4(uCol, a); }`
+}));
+splash.frustumCulled = false; splash.renderOrder = 4; splash.visible = false; scene.add(splash);
+let splNext = 0, splAcc = 0;
+function rainSplashes(dt, p, rain, road, night) {
+  splash.visible = rain > 0.05;
+  if (!splash.visible) return;
+  splAcc += dt * 130 * rain;
+  while (splAcc > 1) {
+    splAcc--;
+    const r = Math.sqrt(Math.random()) * 7.5, a = Math.random() * Math.PI * 2, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r * 0.8;
+    if (waterAt(x, z) || tileAt(x, z) < 0) continue;   // 水面交給漣漪
+    const y = groundAt(x, z), i = splNext, sz = 0.24 + Math.random() * 0.16; splNext = (splNext + 1) % SPL_N;
+    splPos[i * 3] = x; splPos[i * 3 + 1] = y + sz * 0.5 + 0.02; splPos[i * 3 + 2] = z; splAge[i] = 0; splSize[i] = sz;   // 點精靈以中心定位：抬高半個大小，水花的底部才落在地面上（不被地面擋掉下半）
+    if (road && road(x, z) && Math.random() < 0.5 && drops) drops.add(x, y + 0.02, z, 0, 0.1 + Math.random() * 0.1, 0.55, 2.2);   // 石板路上：一圈小漣漪
+  }
+  for (let i = 0; i < SPL_N; i++) if (splAge[i] < 1) splAge[i] = Math.min(1, splAge[i] + dt / 0.3);
+  splU.uH.value = renderer.domElement.height / 2; splU.uCol.value.setRGB(0.86, 0.9, 0.95).multiplyScalar(night > 0.5 ? 0.35 : 1);
+  splGeo.attributes.position.needsUpdate = true; splGeo.attributes.aAge.needsUpdate = true; splGeo.attributes.aSize.needsUpdate = true;
+}
+let feet = null, snowFeet = null, rings = null, glowFeet = null, drops = null, stepAcc = 0, stepSide = 1, lastX = null, lastZ = null, rainAcc = 0, fishAcc = 0;
+export function init() { buildShore(); feet = pool(footTex, 60); snowFeet = pool(snowFootTex, 90); rings = pool(ringTex, 48); glowFeet = pool(footTex, 24, true); drops = pool(ringTex, 64); }
 /** v8.9.1 藍眼淚的亮度（0–1，bluetears.js 每格設定） */
 export function setBlue(k) { waveU.uBlue.value = k; }
 /** 離海很近的濕沙（浪打得到的地方） */
@@ -228,7 +266,8 @@ export function update(dt, player, opt) {
     rainAcc += dt * 40 * opt.rain;
     while (rainAcc > 1) { rainAcc--; const x = p.x + (Math.random() - 0.5) * 22, z = p.z + (Math.random() - 0.5) * 16; if (waterAt(x, z)) ripple(x, z, 0.25 + Math.random() * 0.2); }
   }
+  rainSplashes(dt, p, opt.rain > 0.2 ? opt.rain : 0, opt.road, opt.night || 0);   // v9.22.7 雨打在地上的水花（冬天的 rain 已經是 0）
   // 魚影：偶爾在魚的位置冒一圈
   if (opt.fish && opt.fish.length) { fishAcc += dt; if (fishAcc > 1.2) { fishAcc = 0; const f = opt.fish[Math.floor(Math.random() * opt.fish.length)]; if (f && f.m && f.m.visible) ripple(f.m.position.x, f.m.position.z, 0.35); } }
-  feet.update(dt); snowFeet.update(dt); rings.update(dt); glowFeet.update(dt);
+  feet.update(dt); snowFeet.update(dt); rings.update(dt); glowFeet.update(dt); drops.update(dt);
 }
