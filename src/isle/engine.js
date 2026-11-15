@@ -1133,12 +1133,15 @@ export function screenOf(obj, dy) {
 
 /* ---------- 天空 ---------- */
 export const skyU = { glow: { value: 0 }, top: { value: new THREE.Color('#5ec2ff') }, mid: { value: new THREE.Color('#9ad4ff') }, bot: { value: new THREE.Color('#d8f3ff') }, moonDir: { value: new THREE.Vector3(0.4, 0.75, -0.55).normalize() }, dawn: { value: 0 }, span: { value: 0.4 }, sunSky: { value: new THREE.Vector3(0, 1, 0) }, sea: { value: new THREE.Color('#7ad3f6') }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color('#fff4d6') }, night: { value: 0 },
-  lift: { value: 0.36 }, time: U.uTime, cover: { value: 0.3 }, aurora: { value: 0 }, hz: { value: 0 }, gloom: { value: 0 } };   // hz：畫面上地平線在天幕的高度
+  lift: { value: 0.36 }, time: U.uTime, cover: { value: 0.3 }, aurora: { value: 0 }, hz: { value: 0 }, gloom: { value: 0 },
+  glowC: { value: new THREE.Color('#fff4e0') }, discC: { value: new THREE.Color('#fff4e0') } };   // hz：畫面上地平線在天幕的高度；glowC：晨昏地平線暖光與雲的受光色（跟著太陽的真實仰角變色）；discC：日輪本身的顏色
+/** v9.22.1 天上看得到的太陽方向（含真實仰角，日出約 5:35、日落約 18:30 會沉到海平線下）；光的方向另外算，日落後慢慢轉成月光 */
+export const sunDisc = new THREE.Vector3(0, 1, 0);
 /* 天空：滾筒地平線讓鏡頭下傾時也看得到天空，所以天空用「抬高」後的方向計算漸層、太陽與雲（lift） */
 export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; varying vec3 vD;
+  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; uniform vec3 glowC; uniform vec3 discC; varying vec3 vD;
     float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,45.164))) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1153,10 +1156,18 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       vec3 d = normalize(vec3(vD.x, vD.y + lift, vD.z));
       float e = d.y - hz;   // 相對於畫面上地平線的高度
       float y = clamp(e / max(span, 0.07), 0.0, 1.0);   // 以畫面上的地平線為準、鋪到畫面上緣（span）：一般鏡頭與第一人稱，畫面上緣都是頭頂的深藍
-      vec3 c = y < 0.32 ? mix(bot, mid, smoothstep(0.0, 0.32, y)) : mix(mid, top, smoothstep(0.32, 0.88, y));   // v7.6 夢幻風：粉紫的低空佔到三成、往上才轉成粉藍（以前 0.16／0.75）。三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
+      vec2 ha = normalize(d.xz + 1e-4), sa = normalize(sunSky.xz + 1e-4); float tw0 = dot(ha, sa);   // 方位：這個方向和太陽（看得到的日輪）差多少
+      vec3 bo = mix(bot, mid * vec3(0.93, 0.96, 1.0), smoothstep(0.35, -0.65, tw0) * clamp(glow * 2.5, 0.0, 1.0) * 0.6);   // v9.22.1 晨昏只有太陽那一側的地平線是橘金，背對太陽的地平線淡成帶點暖意的灰藍（以前整圈都是橘色）
+      vec3 c = y < 0.32 ? mix(bo, mid, smoothstep(0.0, 0.32, y)) : mix(mid, top, smoothstep(0.32, 0.88, y));
+      { // v9.22.1 晨昏太陽那一半的低空：橘轉藍之間經過淡金白（線性空間直接混橘與藍，中間會變成灰粉、薰衣草色）
+        float yb = smoothstep(0.0, 0.08, y) * smoothstep(0.62, 0.2, y) * clamp(glow * 2.2, 0.0, 1.0) * mix(0.35, 1.0, smoothstep(-0.5, 0.6, tw0));
+        c = mix(c, vec3(1.0, 0.93, 0.76) * dot(c, vec3(0.2126, 0.7152, 0.0722)) * 1.08, yb * 0.75); }   // v7.6 夢幻風：粉紫的低空佔到三成、往上才轉成粉藍（以前 0.16／0.75）。三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
       c += vec3(0.1, 0.1, 0.08) * exp(-abs(e) * 18.0) * (1.0 - night) * (1.0 - min(gloom, 1.0) * 0.7);   // 地平線的亮帶
       float s = max(dot(d, sunSky), 0.0) * step(night, 0.6);   // 夜裡的「太陽方向」是月光，不畫（太陽本體在卷雲之後才畫，見下方）
-      vec2 ha = normalize(d.xz + 1e-4), sa = normalize(sunDir.xz + 1e-4); c += sunCol * vec3(1.0, 0.82, 0.55) * pow(max(dot(ha, sa), 0.0), 4.0) * smoothstep(0.42, -0.02, e) * glow * 1.5;
+      { // 太陽那一側地平線的暖光（日落後留在太陽沉下去的地方，慢慢轉暗）：貼著海平線是橘紅、往上轉成淡金，再融進天空的藍。
+        // v9.22.1 用混色而不是疊加——以前橘光直接疊在藍天上，太陽附近的天空變成一片粉紫
+        float gk = clamp(pow(max(tw0, 0.0), 4.0) * glow * smoothstep(0.42, -0.02, e) * 1.5, 0.0, 0.9), gm = max(glowC.r, max(glowC.g, glowC.b));
+        c = mix(c, mix(glowC * vec3(1.0, 0.82, 0.55) * 1.3, vec3(1.0, 0.84, 0.56) * gm, smoothstep(0.0, 0.18, e)), gk); }
       float band = 0.0;
       if (night > 0.0) {
         // 銀河：斜跨天空的一條淡淡光帶，帶一點雲狀的明暗
@@ -1180,12 +1191,12 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         }
       }
       // 積雲堆：沿著地平線堆起的大朵積雲（在遠山後面）。雲頂由一顆顆圓團疊成花椰菜的輪廓，每一團各自受光——
-      // 向陽的上緣暖白帶金邊、背光的下緣是薰衣草紫；越往下越融進地平線的空氣裡。邊緣寬度跟著像素大小，輪廓清楚
+      // 向陽的上緣暖白帶金邊、背光的下緣是天光的灰藍；越往下越融進地平線的空氣裡。邊緣寬度跟著像素大小，輪廓清楚
       {
         float az = atan(d.x, -d.z);
         float tw = fbm(vec2(az * 1.2, 2.7)), tw2 = fbm(vec2(az * 3.6, 9.1));
         float H = (0.004 + max(tw - 0.42, 0.0) * 0.38 + max(tw2 - 0.55, 0.0) * 0.15) * mix(0.75, 1.25, cover);   // 每個方位的雲頂高度：幾座高聳的積雲塔
-        float sAz = atan(sunDir.x, -sunDir.z), toward = cos(az - sAz), side = sin(az - sAz);
+        float sAz = atan(sunSky.x, -sunSky.z), toward = cos(az - sAz), side = sin(az - sAz);
         // 兩種尺度的雲團：大團決定輪廓，小團讓邊緣更碎
         vec2 q1 = vec2(az * 11.0, e * 11.0) + vec2(time * 0.003, 0.0), q2 = q1 * 2.3 + 5.3;
         vec3 P1 = puffs(q1), P2 = puffs(q2);
@@ -1199,13 +1210,13 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
           float lit = clamp((dot(normalize(P1.yz + vec2(0.0, 0.2)), sunScr) * 0.7 + dot(normalize(P2.yz + 1e-3), sunScr) * 0.3) * 0.65 + 0.45, 0.0, 1.0);   // 大團決定明暗，小團加細節
           float hk = clamp(e / max(H, 0.02), 0.0, 1.0);   // 雲內的高度：底部陰暗、頂部明亮
           float core = smoothstep(0.0, 0.5, max(P1.x, P2.x));   // 團與團之間的縫比較暗
-          vec3 litC = mix(vec3(1.02, 1.0, 1.01), sunCol * vec3(1.03, 0.9, 0.94), min(0.75, 0.18 + glow * 1.2));   // 晨昏：受光面染成太陽的粉桃（v7.6 夢幻風：少一點橘）
-          vec3 shdC = mix(mix(vec3(0.6, 0.56, 0.8), mix(bot, top, 0.35), 0.2), vec3(0.34, 0.24, 0.46), min(1.0, glow * 1.4));   // v7.6：背光面是粉紫   // 薰衣草紫的背光面；晨昏偏深紫
+          vec3 litC = mix(vec3(1.02, 1.0, 1.0), glowC * vec3(1.04, 0.92, 0.84), min(0.75, 0.18 + glow * 1.2));   // 晨昏：受光面染成太陽的橘金（v9.22.1：以前偏粉桃）
+          vec3 shdC = mix(mix(vec3(0.62, 0.67, 0.76), mix(bo, top, 0.35), 0.2), vec3(0.33, 0.34, 0.42), min(1.0, glow * 1.4));   // v9.22.1 背光面是天光的灰藍、晨昏轉成暗灰藍（以前薰衣草紫、深紫）
           vec3 cc = mix(shdC, litC, clamp(lit * 0.75 + hk * 0.25 + toward * 0.08 - (1.0 - core) * 0.3 - 0.1, 0.0, 1.0));
-          cc += sunCol * smoothstep(edgeW * 6.0, 0.0, body + bump) * (0.1 + 0.25 * max(toward, 0.0)) * lit * (1.0 - night);   // 雲頂受光的金邊
-          cc = mix(cc, mix(bot, top, 0.1) * 1.05, smoothstep(0.05, -0.01, e) * 0.55);   // 雲腳融進地平線的空氣裡
+          cc += glowC * smoothstep(edgeW * 6.0, 0.0, body + bump) * (0.1 + 0.25 * max(toward, 0.0)) * lit * (1.0 - night);   // 雲頂受光的金邊
+          cc = mix(cc, mix(bo, top, 0.1) * 1.05, smoothstep(0.05, -0.01, e) * 0.55);   // 雲腳融進地平線的空氣裡
           float rimN = smoothstep(edgeW * 9.0, 0.0, body + bump);   // 夜晚：月光只照亮雲頂的邊緣
-          vec3 ncc = mix(vec3(0.022, 0.03, 0.088), vec3(0.32, 0.34, 0.52), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v7.6：夜裡的雲是紫藍的雲體、淡紫的雲緣（v8.0 收暗、偏冷一點）
+          vec3 ncc = mix(vec3(0.026, 0.038, 0.075), vec3(0.28, 0.32, 0.42), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v9.22.1 夜裡的雲是暗藍灰的雲體、月光照到的銀灰雲緣（以前紫藍、淡紫）
           c = mix(c, mix(cc, ncc, night), cm * 0.98);   // 夜晚的雲是深藍的雲體、銀白的雲緣
         }
       }
@@ -1213,22 +1224,24 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       // 海面是半透明的，天幕在地平線下的部分會透出來，不能畫任何剪影
       {
         float az = atan(d.x, -d.z);
-        vec3 airC = mix(bot, mid, 0.25);
+        vec3 airC = mix(bo, mid, 0.25);
         if (e < 0.0) {
           float g = smoothstep(0.0, -0.12, e);   // 越往下越不是掠射角：倒影淡一點、看得到一點水色
-          vec3 fs = mix(bot, mid, g * 0.5) * 0.88 + sunCol * vec3(1.0, 0.82, 0.55) * pow(max(dot(ha, sa), 0.0), 4.0) * glow * 1.5 * 0.88;
+          vec3 fs = mix(bo, mid, g * 0.5) * 0.88;
+          fs = mix(fs, glowC * vec3(1.0, 0.82, 0.55) * 1.15, clamp(pow(max(tw0, 0.0), 4.0) * glow * 1.3, 0.0, 0.8));   // 太陽那一側的海面映著地平線的暖光（混色，不疊成粉紫）
           fs = mix(fs, sea * 0.45, g * 0.3);
           { float sunSide = pow(max(dot(ha, sa), 0.0), 14.0), gk = clamp(glow * 2.0, 0.0, 1.0) * (1.0 - night);   // 晨昏的遠海也偏深青藍（和海面的倒影同一個公式）
             fs = mix(fs, (vec3(0.012, 0.085, 0.19) + fs * 0.12) * 0.88, gk * (1.0 - sunSide * 0.8) * 0.9); }
-          float low = 1.0 - smoothstep(0.05, 0.55, sunSky.y - hz);
-          float pw = pow(max(dot(ha, sa), 0.0), mix(3000.0, 500.0, g) * mix(1.0, 0.45, night)), spk = smoothstep(0.45, 0.95, vn(vec2(atan(d.x, -d.z) * 340.0, e * 1600.0 + time * 2.2)));
-          fs += sunCol * pw * (0.3 + spk * 2.6) * (0.3 + low * 0.9) * (1.0 + night * 1.5);   // 太陽或月亮正下方的反光帶（細碎的閃光）
+          float mk = smoothstep(0.5, 0.9, night), low = 1.0 - smoothstep(0.05, 0.55, mix(sunSky.y, moonDir.y, mk) - hz);   // 夜裡換成月亮的高度
+          float glit = mix(smoothstep(-0.02, 0.01, sunSky.y - hz), 1.0, mk);   // v9.22.1 太陽沉下去以後就沒有閃光帶，等月亮出來
+          float pw = pow(max(dot(ha, normalize(sunDir.xz + 1e-4)), 0.0), mix(3000.0, 500.0, g) * mix(1.0, 0.45, night)), spk = smoothstep(0.45, 0.95, vn(vec2(atan(d.x, -d.z) * 340.0, e * 1600.0 + time * 2.2)));
+          fs += sunCol * pw * (0.3 + spk * 2.6) * (0.3 + low * 0.9) * (1.0 + night * 1.5) * glit;   // 太陽或月亮正下方的反光帶（細碎的閃光）
           c = mix(c, fs, smoothstep(0.0, -0.004, e));
         }
         // 最遠的一層：連綿起伏的低矮島影（很淡）
         float r1 = max(fbm(vec2(az * 3.2, 3.1)) - 0.5, 0.0) * 0.16 + (vn(vec2(az * 40.0, 2.0)) - 0.5) * 0.003;
         if (e > -0.002 && e < r1) {
-          vec3 mc = mix(vec3(0.21, 0.42, 0.78), vec3(0.008, 0.022, 0.08), night);
+          vec3 mc = mix(vec3(0.26, 0.38, 0.56), vec3(0.008, 0.022, 0.08), night);   // v9.22.1 遠島是灰藍（以前飽和的藍，晨昏混進暖色的空氣變成粉紫）
           c = mix(c, mix(mc, airC, 0.78 - night * 0.3), smoothstep(-0.002, 0.002, e));
         }
         // 近一點：零星的小島與尖尖的海蝕岩（輪廓不規則）
@@ -1236,7 +1249,7 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float rock = keep * (0.012 + h2(vec2(cell, 11.0)) * 0.03) * pow(max(0.0, 1.0 - abs(fx - (h2(vec2(cell, 5.0)) - 0.5) * 0.4) * (3.0 + h2(vec2(cell, 3.0)) * 4.0)), 1.6) * (0.8 + 0.4 * vn(vec2(az * 90.0, 1.0)));
         float r2 = max(fbm(vec2(az * 6.0, 8.7)) - 0.56, 0.0) * 0.12 + rock;
         if (e > -0.002 && e < r2) {
-          vec3 ic = mix(vec3(0.17, 0.36, 0.64), vec3(0.006, 0.02, 0.07), night);
+          vec3 ic = mix(vec3(0.21, 0.32, 0.46), vec3(0.006, 0.02, 0.07), night);
           ic = mix(ic, vec3(0.16, 0.3, 0.26) * mix(1.0, 0.15, night), smoothstep(r2 - 0.01, r2 - 0.002, e) * 0.35);   // 頂上一點綠意
           c = mix(c, mix(ic, airC, 0.6 - night * 0.3), smoothstep(-0.002, 0.002, e));
         }
@@ -1252,12 +1265,13 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float field = smoothstep(0.42, 0.62, fbm(wq * 0.22 + 11.0));   // 只有幾片天空有卷雲，其他地方是乾淨的藍
         float ca = smoothstep(0.5, 0.8, ci) * smoothstep(0.22, 0.8, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
         ca *= mix(0.27, 0.46, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5) * (1.0 - min(gloom, 1.0));
-        vec3 cc = mix(vec3(1.0, 1.0, 1.03), sunCol * vec3(1.12, 0.84, 0.82), clamp(glow * 1.7, 0.0, 0.92)) + sunCol * pow(s, 10.0) * 0.7;
+        vec3 cc = mix(vec3(1.0, 1.0, 1.03), glowC * vec3(1.1, 0.88, 0.74), clamp(glow * 1.7, 0.0, 0.92)) + glowC * pow(s, 10.0) * 0.7;   // v9.22.1 晨昏的卷雲是金橘（以前偏粉）
         c = mix(c, cc, ca);
       }
-      // 太陽：熱的亮核（給泛光）＋柔和的日暈（米氏散射）；夜裡不畫
+      // 太陽：熱的亮核（給泛光）＋柔和的日暈（米氏散射）；夜裡不畫。v9.22.1 日輪貼近海平線時轉成橘紅、被海平線切掉一截；沉下去以後只剩天上的暈光
       { float sv = step(night, 0.6) * (1.0 - night) * (1.0 - min(gloom, 1.0) * 0.94);   // v8.7 陰雨天看不到太陽（以前雨裡仍有亮亮的日輪）
-        c += sunCol * (smoothstep(0.99982, 0.99994, s) * 9.0 + pow(s, 260.0) * 0.5 + pow(s, 32.0) * 0.12 + pow(s, 6.0) * 0.05) * sv; }
+        c += discC * (smoothstep(0.99982, 0.99994, s) * 9.0 + pow(s, 260.0) * 0.5) * sv * smoothstep(-0.0015, 0.0015, e)
+           + (glowC * pow(s, 32.0) * 0.12 + vec3(1.0, 0.88, 0.64) * max(glowC.r, max(glowC.g, glowC.b)) * pow(s, 6.0) * 0.05) * sv * smoothstep(-0.02, 0.01, e); }   // 寬的日暈偏淡金（橘色直接疊在藍天上會變成粉紫）
       // 積雲：在天幕上投影的分形雜訊，上緣受光、下緣帶天空色的陰影，慢慢飄動
       if (d.y > -0.08) {
         vec2 p = d.xz / (d.y + 0.32) * 0.95 + vec2(time * 0.006, time * 0.002);
@@ -1326,14 +1340,15 @@ export const SEA = { day: '#8bb9cf' };   // 白天海面的底色（受強烈日
 const NIGHT = { top: '#0e1834', mid: '#1b2950', bot: '#33456c', sea: '#121e3c', sun: '#aec2ee', si: 0.36, hs: '#5a6c96', hg: '#20262e', hi: 0.32, fog: '#24324f', exp: 1.06, night: 1, fn: 75, ff: 200 };   // 夜色：深藍的天、月光是冷藍的主光；環境光收暗，暖色的燈才是夜裡的主角
 const KEYS = [
   [0, NIGHT],
-  [4.8, { top: '#1a2546', mid: '#33416a', bot: '#62647a', sea: '#1e2a48', sun: '#b4bedc', si: 0.46, hs: '#66749a', hg: '#2c2e34', hi: 0.4, fog: '#40485e', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],   // 天亮前：東邊的地平線開始泛灰
-  [6.1, { top: '#4b66a6', mid: '#9aa6c2', bot: '#f0c49a', sea: '#a4aeba', sun: '#ffc894', si: 1.5, hs: '#a6b2cc', hg: '#6c665a', hi: 0.88, fog: '#cfc4b8', exp: 1.02, night: 0, fn: 50, ff: 160 }],   // 清晨：灰藍的天、地平線一抹橘金，晨霧帶一點暖
+  [4.8, { top: '#182648', mid: '#2e4268', bot: '#56647a', sea: '#1e2a48', sun: '#b4bedc', si: 0.46, hs: '#62769a', hg: '#2c2e34', hi: 0.4, fog: '#3e4a5e', exp: 1.05, night: 0.85, fn: 55, ff: 160 }],   // 天亮前：東邊的地平線開始泛灰（v9.22.1 色票去掉偏紫的灰）
+  [6.1, { top: '#4468a8', mid: '#9cb2ca', bot: '#f0c49a', sea: '#a4aeba', sun: '#ffc894', si: 1.5, hs: '#a2b4cc', hg: '#6c665a', hi: 0.88, fog: '#cfc4b8', exp: 1.02, night: 0, fn: 50, ff: 160 }],   // 清晨：淡藍的天、地平線一抹橘金，晨霧帶一點暖
   [7.6, { top: '#4f7cc2', mid: '#93b4da', bot: '#e2dcd0', sea: '#86b4d6', sun: '#ffe0b8', si: 2.0, hs: '#b8c8de', hg: '#7e7a64', hi: 0.98, fog: '#d4d8da', exp: 1.06, night: 0, fn: 60, ff: 178 }],
   [9, { top: '#3f76c6', mid: '#82acdc', bot: '#d2dee8', sea: '#6aa6cc', sun: '#fff0dc', si: 2.75, hs: '#b4cae6', hg: '#827e62', hi: 1.22, fog: '#c8d6e2', exp: 1.05, night: 0, fn: 70, ff: 195 }],   // 白天：頭頂深藍 → 低空淺藍 → 地平線水氣的灰白；空氣通透
   [15.5, { top: '#4176c2', mid: '#86acd8', bot: '#d8dee4', sea: '#6ea6ca', sun: '#ffe8cc', si: 2.65, hs: '#b6c8e2', hg: '#847c60', hi: 1.2, fog: '#cdd6de', exp: 1.04, night: 0, fn: 68, ff: 190 }],
   [17, { top: '#4a74b8', mid: '#9cb0cc', bot: '#f0d0a2', sea: '#a6b6c4', sun: '#ffcf96', si: 2.0, hs: '#a8bad4', hg: '#7a6a50', hi: 0.95, fog: '#dccab0', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、地平線金黃；逆光是暖橘，影子是天空的淺藍
-  [18.2, { top: '#344f8c', mid: '#8a90ac', bot: '#f0a062', sea: '#c08a68', sun: '#ffa060', si: 1.4, hs: '#8c98b8', hg: '#5a4c42', hi: 0.72, fog: '#b89c86', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：橘紅只在地平線，往上是灰藍到深藍
-  [19.5, { top: '#1c2a56', mid: '#3a4a78', bot: '#9c7a6c', sea: '#28365a', sun: '#a0aed8', si: 0.6, hs: '#5c6a94', hg: '#2a2c34', hi: 0.5, fog: '#464e6a', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],   // 藍調時刻：天轉深藍，地平線還留一點餘暉
+  [18.2, { top: '#2f5090', mid: '#a6b4c2', bot: '#f0a062', sea: '#c08a68', sun: '#ffa060', si: 1.4, hs: '#869ab6', hg: '#5a4c42', hi: 0.72, fog: '#b89c86', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：橘紅只在地平線，往上淡成灰白、淺藍到深藍（v9.22.1 低空不再是薰衣草灰）
+  [18.85, { top: '#22386e', mid: '#5c7294', bot: '#d88c58', sea: '#5c6474', sun: '#c8b49a', si: 0.75, hs: '#6a7ea2', hg: '#3e3a36', hi: 0.62, fog: '#8a8c8c', exp: 1.03, night: 0.3, fn: 52, ff: 156 }],   // v9.22.1 剛日落：地平線的橘紅餘暉、往上是鋼藍；光是柔和的暖灰（橘光直接過渡到月光的藍，中間會變成粉紫）
+  [19.5, { top: '#1c2a56', mid: '#30497a', bot: '#9c7a6c', sea: '#28365a', sun: '#9cb0d8', si: 0.6, hs: '#566a92', hg: '#2a2c34', hi: 0.5, fog: '#424e66', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],   // 藍調時刻：天轉深藍，地平線還留一點餘暉
   [21, NIGHT], [24, NIGHT]
 ];
 // 月亮：在北偏東的天上（從廣場往北看在右上方）。MOON_L 是月光的方向（夜裡的主光）；天幕上畫月亮的位置由 main.js 依畫面上的地平線算
@@ -1385,20 +1400,32 @@ export function applyTime(h) {
   scene.fog.color.copy(lerpC(A.fog, B.fog, k));
   renderer.toneMappingExposure = A.exp + (B.exp - A.exp) * k;
   const night = nightK; skyU.night.value = night;
-  const day = h >= 6 && h <= 19, t = day ? (h - 6) / 13 : ((h + 24 - 19) % 24) / 11;
+  const ss = THREE.MathUtils.smoothstep, t = THREE.MathUtils.clamp((h - 6) / 13, 0, 1);
   // 白天是側光：早上太陽在東邊的正側面（略偏後），物體邊緣有亮邊、影子斜斜拉長；中午從左前上方（西南、仰角約 50°）照過來——
   // 像參考插畫的主光：建築的正面與左側受光、右側在陰影裡，影子斜斜地往右後方拉長
   const sk = Math.sin(t * Math.PI);
-  const dir = day ? new THREE.Vector3(Math.cos(t * Math.PI) * 0.85 - sk * 0.55, sk * 0.42 + 0.22, -0.18 + sk * 0.45) : MOON_L.clone();   // v7.0：中午的太陽更偏左側，影子斜斜往右後方拉長、看得出體積（以前幾乎是順光）   // 夜裡的主光是月光（海面上的銀色反光帶對著月亮）
-  // 黃金時段：太陽轉到鏡頭前方、壓低高度 → 逆光、長長的影子朝向鏡頭
-  const golden = THREE.MathUtils.smoothstep(h, 15.3, 16.8) * (1 - THREE.MathUtils.smoothstep(h, 18.4, 19.3));
-  const sink = THREE.MathUtils.smoothstep(h, 17.0, 18.3);   // 夕陽慢慢沉到海平線
-  if (day) { dir.z = THREE.MathUtils.lerp(dir.z, -0.9, golden); dir.y = THREE.MathUtils.lerp(dir.y, 0.32 - sink * 0.22, golden); dir.x = THREE.MathUtils.lerp(dir.x, 0.16, golden); }
+  const dir = new THREE.Vector3(Math.cos(t * Math.PI) * 0.85 - sk * 0.55, sk * 0.42 + 0.22, -0.18 + sk * 0.45);   // v7.0：中午的太陽更偏左側，影子斜斜往右後方拉長、看得出體積（以前幾乎是順光）
+  // 黃金時段：太陽轉到鏡頭前方、壓低高度 → 逆光、長長的影子朝向鏡頭。v9.22.1 轉過去以後就留在那裡落下（以前黃金時段一過，太陽又轉回西邊、升高）
+  const golden = ss(h, 15.3, 16.8) * (1 - ss(h, 18.4, 19.3)), gDir = ss(h, 15.3, 16.8);
+  const sink = ss(h, 17.0, 18.3);   // 夕陽慢慢沉到海平線
+  dir.z = THREE.MathUtils.lerp(dir.z, -0.9, gDir); dir.y = THREE.MathUtils.lerp(dir.y, 0.32 - sink * 0.22, gDir); dir.x = THREE.MathUtils.lerp(dir.x, 0.16, gDir);
   dir.normalize();
+  { // v9.22.1 看得到的日輪：比光的方向再低一些——清晨 5:35 左右從海平線升起、傍晚 18:30 左右沉下去，之後暮色越來越深
+    const az = Math.atan2(dir.x, -dir.z), el = Math.max(-1.2, Math.asin(dir.y) - (h < 12 ? Math.max(0, 6.4 - h) * 0.3 : Math.max(0, h - 18.1) * 0.27));
+    sunDisc.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)); }
+  // 光的方向：白天是太陽；日落後（18:36～19:30）慢慢轉成月光、清晨（5:00～6:00）從月光轉成朝陽（以前在 19:00、6:00 突然跳過去，影子一下子換方向）
+  const toMoon = h >= 12 ? ss(h, 18.6, 19.5) : 1 - ss(h, 5.0, 6.0);   // 夜裡的主光是月光（海面上的銀色反光帶對著月亮）
+  dir.lerp(MOON_L, toMoon).normalize();
+  const se = sunDisc.y;
+  sun.intensity *= 1 - (1 - toMoon) * (1 - ss(se, -0.06, 0.03)) * 0.45;   // 太陽沉下去以後沒有直射的陽光：光先弱下來，再由月光接手
   scene.fog.near = (A.fn + (B.fn - A.fn) * k) * FOG.near / 60; scene.fog.far = (A.ff + (B.ff - A.ff) * k) * FOG.far / 150;   // 每個時段自己的霧距（FOG 是整體倍率；雨天由 weather.js 再拉近）
   const dawn = THREE.MathUtils.smoothstep(h, 4.8, 5.9) * (1 - THREE.MathUtils.smoothstep(h, 7.0, 8.4));   // 清晨：粉金的晨光
-  skyU.glow.value = Math.max(golden * 0.5, dawn * 0.32); skyU.dawn.value = dawn;
-  skyU.sunDir.value.copy(dir); skyU.sunCol.value.copy(sun.color).multiplyScalar(day ? 1 : 0.4);
+  skyU.glow.value = Math.max(golden * 0.5, dawn * 0.42); skyU.dawn.value = dawn;   // v9.22.1 清晨的曙光亮一點（0.32 → 0.42）
+  skyU.sunDir.value.copy(dir);
+  // v9.22.1 天上的陽光色（地平線的暖光、雲的受光面）：高掛時就是陽光，貼近海平線轉成橘、沉下去後是漸暗的橘紅——日落後的餘暉、日出前的曙光；日輪本身貼近海平線時是橘紅、不再亮成白色
+  skyU.glowC.value.copy(sun.color).lerp(cb.set('#ffa04e'), 1 - ss(se, 0.04, 0.3)).lerp(cb.set('#ff6c3c'), 1 - ss(se, -0.08, 0.03)).multiplyScalar(ss(se, -0.25, 0.0));
+  skyU.discC.value.set('#fff6e8').lerp(cb.set('#ffa050').multiplyScalar(0.4), 1 - ss(se, 0.03, 0.25)).lerp(cb.set('#ff6a30').multiplyScalar(0.3), 1 - ss(se, -0.03, 0.04));
+  skyU.sunCol.value.copy(skyU.glowC.value).lerp(ca.copy(sun.color).multiplyScalar(0.4), toMoon);   // 夜裡是月光（海面的反光帶、雲）
   const lit = Math.max(night, h > 12 ? THREE.MathUtils.smoothstep(h, 17.3, 18.6) : 1 - THREE.MathUtils.smoothstep(h, 5.4, 6.5));   // v8.7 燈比天黑早一點亮：日落前後二十分鐘逐漸亮起、清晨天亮後才熄（以前直接乘夜晚程度，17:36 全暗、18:30 還很暗）
   lampK.value = lit;
   nightMats.forEach(m => { const gl = m.userData.kind === 'glass'; m.emissiveIntensity = (gl ? lit + (1 - lit) * 0.09 : lit) * (m.userData.glowK ?? (gl ? 0.95 : 1.25)); });   // v7.6 夢幻風：白天的窗也透出一點暖光（屋裡亮著燈的感覺）   // 窗戶是溫暖的琥珀色燈光（參考圖的夜景：家家戶戶的窗都亮著），不會亮成一片白（v6.93 再收：看得到燈框與窗格）

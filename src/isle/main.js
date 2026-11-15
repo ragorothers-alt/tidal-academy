@@ -1,6 +1,6 @@
 /* 潮汐小島 · 主程式：島民、對話選單、博物館、商店、口袋、手機、輸入與主迴圈。 */
 import * as THREE from 'three';
-import { scene, camera, renderer, U, sun, sky, applyTime, screenOf, skyU, bend, CURVE, HZ, cullable, dropTinyShadows } from './engine.js';
+import { scene, camera, renderer, U, sun, sky, applyTime, screenOf, skyU, sunDisc, bend, CURVE, HZ, cullable, dropTinyShadows } from './engine.js';
 import { N, C, T, terrain, groundAt, tileAt, isBridge, isFord, foamMat, seaMesh, waterY as fwY, GRID_SHIFT, tileOf, waterAt, warp } from './terrain.js';
 import { colliders, blocked, penetration, PLAZA, SITES, homes, onPier, PIER, seats, nudgeHome, flowerSpots, onRoad, spin as spinProps } from './props.js';
 import * as mind from './mind.js';
@@ -2068,7 +2068,7 @@ $('lv').onclick = () => { if (!ui.dialogOpen()) openProfile(); };
 /* ---------- 主迴圈 ---------- */
 const clock = new THREE.Clock();
 const headPos = new THREE.Vector3(), headPos2 = new THREE.Vector3();
-const sunTmp = { f: new THREE.Vector3(), v: new THREE.Vector3(), g: new THREE.Vector3(), p: new THREE.Vector3() };
+const sunTmp = { f: new THREE.Vector3(), v: new THREE.Vector3(), g: new THREE.Vector3(), p: new THREE.Vector3(), c: new THREE.Color() };
 const MIST_W = new THREE.Color('#ffffff');   // v8.9.1 晨霧的顏色往白拉
 const camOff = new THREE.Vector3(0, 6.6, 14.8), camPos = new THREE.Vector3(), look = new THREE.Vector3(); let camY = null, talkK = 0, talkFor = null, talkYaw = 0, talkNear = 0, talkSpeakT = 0; const talkMid = new THREE.Vector3(), talkHead = new THREE.Vector3(), talkDepth = new THREE.Vector3(), talkDir = new THREE.Vector3();
 let zoom = 1, puffT = 0, saveT = 0, hudT = 0, camFocus = null;   // camFocus：[x, z]，比賽時鏡頭看著場地中央而不是玩家（v9.4.1 運動會）
@@ -2545,7 +2545,7 @@ function tick(fixed) {
     const r = hzTmp.r.set(0, best, 0.5).unproject(camera).sub(camera.position).normalize(), L0 = skyU.lift.value;
     skyU.hz.value = (r.y + L0) / Math.hypot(r.x, r.y + L0, r.z);
     { const rt = hzTmp.r.set(0, 1, 0.5).unproject(camera).sub(camera.position).normalize(); skyU.span.value = (rt.y + L0) / Math.hypot(rt.x, rt.y + L0, rt.z) - skyU.hz.value; }   // 畫面上緣在天幕上的高度：天空漸層從地平線鋪到這裡
-    { const sd = skyU.sunDir.value, hy = skyU.hz.value + sd.y * 0.95, hr = Math.sqrt(Math.max(0, 1 - hy * hy)) / (Math.hypot(sd.x, sd.z) || 1); skyU.sunSky.value.set(sd.x * hr, hy, sd.z * hr); }   // 太陽畫在畫面地平線上方「真實仰角」的位置（一般鏡頭與第一人稱一致）
+    { const sd = sunDisc, hy = Math.max(-0.99, skyU.hz.value + sd.y * 0.95), hr = Math.sqrt(Math.max(0, 1 - hy * hy)) / (Math.hypot(sd.x, sd.z) || 1); skyU.sunSky.value.set(sd.x * hr, hy, sd.z * hr); }   // 太陽畫在畫面地平線上方「真實仰角」的位置（一般鏡頭與第一人稱一致）；v9.22.1 日落後在地平線下
     { const md = MOON_AZ, hy = Math.min(0.95, skyU.hz.value + 0.48), hr = Math.sqrt(1 - hy * hy); skyU.moonDir.value.set(Math.sin(md) * hr, hy, -Math.cos(md) * hr); }   // 月亮：北偏東、地平線上方約 30°
     fantasy.update(dt, t, night, !room.inside && !elsewhere());
     glow.update(dt, player.position, !room.inside && !elsewhere());   // 窗戶、路燈、燈籠的光：真燈分給玩家附近的光源
@@ -2562,8 +2562,8 @@ function tick(fixed) {
   // 天空用抬高後的方向畫（skyU.lift），反推太陽在天幕上的實際方向再投影
   const L = skyU.lift.value, sS = skyU.sunSky.value, A = sS.y * L + Math.sqrt(Math.max(0, sS.y * sS.y * L * L - L * L + 1));   // 用天幕上畫太陽的方向（以畫面地平線為準）反推畫面位置
   const fxSp = sunTmp.p.set(sS.x * A, sS.y * A - L, sS.z * A).multiplyScalar(200).add(camera.position).project(camera);
-  post.fx.golden = golden * (1 - night); post.fx.haze.copy(scene.fog.color).lerp(skyU.bot.value, 0.5); post.fx.sunW.copy(dir); post.fx.clear = fxClear; post.fx.night = night; post.fx.sunCol.copy(sun.color);
-  post.fx.sunVis = fxSp.z < 1 ? fxFront : 0; post.fx.sun.set(THREE.MathUtils.clamp((fxSp.x + 1) / 2, -0.1, 1.1), THREE.MathUtils.clamp((fxSp.y + 1) / 2, 0.55, 1.08));   // 太陽在畫面外時，把光源拉到畫面邊緣附近
+  post.fx.golden = golden * (1 - night); post.fx.haze.copy(scene.fog.color).lerp(skyU.bot.value, 0.5); post.fx.sunW.copy(dir); post.fx.clear = fxClear; post.fx.night = night; { const g = skyU.glowC.value, gm = Math.max(g.r, g.g, g.b); post.fx.sunCol.copy(g).lerp(sunTmp.c.setRGB(gm, gm * 0.88, gm * 0.62), 0.45); }   // v9.22.1 光暈與霧裡的散射用天上的陽光色，再偏淡金（日落後是漸暗的暖光，不是轉藍的光；太橘的光暈疊在藍天上會變成粉紫）
+  post.fx.sunVis = fxSp.z < 1 ? fxFront * THREE.MathUtils.smoothstep(sunDisc.y, -0.05, 0.03) : 0; post.fx.sun.set(THREE.MathUtils.clamp((fxSp.x + 1) / 2, -0.1, 1.1), THREE.MathUtils.clamp((fxSp.y + 1) / 2, 0.55, 1.08));   // 太陽在畫面外時，把光源拉到畫面邊緣附近
   U.uSunV.value.copy(dir).transformDirection(camera.matrixWorldInverse); U.uRimCol.value.copy(sun.color);
   U.uRim.value = (0.28 + golden * 0.4) * fxClear * (1 - night);   // 白天也有側逆光的亮邊
   U.uShade.value = fxClear * (1 - night) * (1 - golden * 0.6);
