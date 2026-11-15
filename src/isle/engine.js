@@ -786,9 +786,11 @@ export function bend(mat, kind) {
           float foK = TA_CREEK ? smoothstep(0.35, 0.65, n_v(p * 0.8 + t * 0.05)) * 0.6 + 0.15 : vPond > 0.0 ? 0.12 : 1.0;   // 池塘的岸邊只有零星一點白沫   // 小溪岸邊的白沫斷斷續續，不是一整圈白線
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95, 0.98, 1.0), fo * 0.48 * foK); diffuseColor.a = max(diffuseColor.a, fo * 0.54 * foK);
           if (vFlow.z > 0.01) {   // v8.9.1 白浪：瀑布下、踏石之間、小溪匯進大河——一團團碎泡跟著水流往下游衝，越急越密
-            float rp = vFlow.z, w1 = mix(n_v(pA * 4.2), n_v(pB * 4.2 + 2.3), fl), w2 = mix(n_v(pA * 9.5 + 4.1), n_v(pB * 9.5 + 1.9), fl);
-            float th = 0.79 - rp * 0.22;   // 越急，碎泡越多（最急的地方約四分之一的水面）
-            gWW = smoothstep(th, th + 0.06, w1 * 0.5 + w2 * 0.5 + sin(t * 3.0 + p.x * 2.0) * 0.02) * (0.25 + rp * 0.7);   // 一小團一小團、邊緣俐落的泡
+            vec2 fd = length(fv) > 0.001 ? normalize(fv) : vec2(1.0, 0.0), fn = vec2(-fd.y, fd.x);   // v9.22.11 順著水流拉長的座標：白浪是一條條往下游拖的泡沫，不是一塊塊乳牛斑
+            vec2 qA = vec2(dot(pA, fd) * 0.38, dot(pA, fn)), qB = vec2(dot(pB, fd) * 0.38, dot(pB, fn));
+            float rp = vFlow.z, w1 = mix(n_v(qA * 4.2), n_v(qB * 4.2 + 2.3), fl), w2 = mix(n_v(qA * 9.5 + 4.1), n_v(qB * 9.5 + 1.9), fl);
+            float th = 0.8 - rp * 0.2, bub = mix(n_v(qA * vec2(14.0, 30.0) + 5.3), n_v(qB * vec2(14.0, 30.0) + 8.1), fl);   // 越急，碎泡越多；bub：泡沫裡細碎的氣泡紋
+            gWW = smoothstep(th - 0.05, th + 0.12, w1 * 0.55 + w2 * 0.45 + sin(t * 3.0 + p.x * 2.0) * 0.02) * mix(0.5, 1.0, smoothstep(0.25, 0.7, bub)) * (0.22 + rp * 0.6);   // 邊緣軟、中間有疏有密
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.94, 0.97, 1.0), gWW * 0.85); diffuseColor.a = max(diffuseColor.a, gWW * 0.9);
           }
         }
@@ -1288,8 +1290,8 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         float field = smoothstep(0.42, 0.62, fbm(wq * 0.22 + 11.0));   // 只有幾片天空有卷雲，其他地方是乾淨的藍
         float ca = smoothstep(0.5, 0.8, ci) * smoothstep(0.22, 0.8, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
         ca *= mix(0.27, 0.46, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5) * (1.0 - min(gloom, 1.0));
-        vec3 cc = mix(vec3(1.0, 1.0, 1.03), glowC * vec3(1.1, 0.88, 0.74), clamp(glow * 1.7, 0.0, 0.92)) + glowC * pow(s, 10.0) * 0.7;   // v9.22.1 晨昏的卷雲是金橘（以前偏粉）
-        c = mix(c, cc, ca);
+        vec3 cc = mix(vec3(1.0, 1.0, 1.03), glowC * vec3(1.06, 0.95, 0.76), clamp(glow * 1.7, 0.0, 0.92) * mix(0.5, 1.0, smoothstep(0.14, 0.0, sunSky.y))) + glowC * pow(s, 10.0) * 0.7;   // v9.22.1 晨昏的卷雲是金橘（以前偏粉）；v9.22.11 太陽還高時是白裡帶一點淡金，貼近海平線才染金橘
+        vec3 cm = mix(c, cc, ca); cm.g += max(0.0, min(cm.r, cm.b) - cm.g) * min(1.0, ca * 3.0); c = cm;   // v9.22.11 半透明的暖色疊在藍天上會變成粉紫：把多出來的洋紅拿掉
       }
       // 太陽：熱的亮核（給泛光）＋柔和的日暈（米氏散射）；夜裡不畫。v9.22.1 日輪貼近海平線時轉成橘紅、被海平線切掉一截；沉下去以後只剩天上的暈光
       { float sv = step(night, 0.6) * (1.0 - night) * (1.0 - min(gloom, 1.0) * 0.94);   // v8.7 陰雨天看不到太陽（以前雨裡仍有亮亮的日輪）
