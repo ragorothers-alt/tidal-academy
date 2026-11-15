@@ -42,24 +42,28 @@ const lines = new THREE.LineSegments(geo, mat); lines.frustumCulled = false; lin
 /* ---------- 彩虹：天空裡背對太陽、仰角 42° 的弧（v8.7）----------
    以前是蓋在整個畫面上的 HTML 光環：進室內、低頭看地面、轉身都在畫面同一個位置。現在放在島上的場景裡，
    跟著觀看者移動、方位固定在太陽的反方向；被建築擋住、室內看不到都是自然的結果。 */
-const BOW_D = 230, BOW_R = BOW_D * Math.tan(42 * Math.PI / 180);
+const BOW_D = 230, BOW_R = BOW_D * Math.tan(42 * Math.PI / 180), rAt = deg => BOW_D * Math.tan(deg * Math.PI / 180);
+/* v9.22.5 自然的彩虹：主虹 40.5°–42.5°（內紫外紅），外面 50°–53.6° 還有一道淡一些、寬一些、顏色反過來的副虹；
+   主虹內側的天空亮一點，兩道虹之間（亞歷山大暗帶）暗一點。以前是單一道粉彩光譜的弧 */
 const bowMat = new THREE.ShaderMaterial({
   uniforms: { uK: { value: 0 } }, transparent: true, depthWrite: false, fog: false,
   vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform float uK; varying vec2 vP;
+    vec3 hue(float h){ vec3 p = abs(fract(vec3(h) + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0); return clamp(p - 1.0, 0.0, 1.0); }
     void main(){
-      float t = (length(vP) / ${BOW_R.toFixed(1)} - 0.93) / 0.07;   // 0：內側（紫）→ 1：外側（紅）
-      vec3 c = t < 0.2 ? mix(vec3(0.64, 0.52, 0.95), vec3(0.45, 0.66, 1.0), t / 0.2)
-        : t < 0.45 ? mix(vec3(0.45, 0.66, 1.0), vec3(0.52, 0.88, 0.58), (t - 0.2) / 0.25)
-        : t < 0.65 ? mix(vec3(0.52, 0.88, 0.58), vec3(1.0, 0.89, 0.5), (t - 0.45) / 0.2)
-        : t < 0.82 ? mix(vec3(1.0, 0.89, 0.5), vec3(1.0, 0.7, 0.45), (t - 0.65) / 0.17)
-        : mix(vec3(1.0, 0.7, 0.45), vec3(1.0, 0.5, 0.55), (t - 0.82) / 0.18);   // 夢幻風的粉彩光譜
-      float a = sin(clamp(t, 0.0, 1.0) * 3.14159) * smoothstep(0.0, 0.3, vP.y / ${BOW_R.toFixed(1)});   // 邊緣柔、兩端沒入地平線的霧裡
+      float th = degrees(atan(length(vP) / ${BOW_D.toFixed(1)}));   // 與反日點的夾角（度）
+      float t1 = (th - 40.5) / 2.0, t2 = (th - 50.0) / 3.6;
+      vec3 c = vec3(1.0); float a = 0.0;
+      if (t1 > 0.0 && t1 < 1.0) { c = mix(vec3(1.0), hue(mix(0.76, 0.0, t1)), 0.8); a = sin(t1 * 3.14159) * 0.9; }   // 主虹：內側紫、外側紅
+      else if (t2 > 0.0 && t2 < 1.0) { c = mix(vec3(1.0), hue(mix(0.0, 0.76, t2)), 0.72); a = sin(t2 * 3.14159) * 0.36; }   // 副虹：顏色反過來、淡一些
+      else if (th <= 40.5) { a = smoothstep(32.0, 40.5, th) * 0.12; }   // 主虹內側的天空亮一點
+      else if (th < 50.0) { c = vec3(0.0); a = 0.07 * smoothstep(42.5, 43.6, th) * smoothstep(50.0, 48.9, th); }   // 亞歷山大暗帶
+      a *= smoothstep(0.0, 0.3, vP.y / ${BOW_R.toFixed(1)});   // 兩端沒入地平線的霧裡
       gl_FragColor = vec4(c, a * uK);
       #include <colorspace_fragment>
     }`
 });
-const bow = new THREE.Mesh(new THREE.RingGeometry(BOW_R * 0.93, BOW_R, 128, 1, 0, Math.PI), bowMat);
+const bow = new THREE.Mesh(new THREE.RingGeometry(rAt(31), rAt(55), 160, 1, 0, Math.PI), bowMat);
 bow.frustumCulled = false; bow.renderOrder = -1; bow.visible = false; scene.add(bow);
 const bowDir = new THREE.Vector3();
 
