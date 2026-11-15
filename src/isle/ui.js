@@ -269,8 +269,8 @@ let cardChain = Promise.resolve();
 export function card(o) { const p = cardChain.then(() => showCard(o)); cardChain = p.catch(() => {}); return p; }
 function showCard(o) {
   const c = $('card'); c.hidden = false; cardPocket = !!o.pocket;
-  c.innerHTML = `<div class="card-in${o.rare ? ' rare' : ''}"><div class="card-icon">${o.icon ? `<img src="${o.icon}" alt="">` : ''}</div><b>${esc(o.title)}</b>${o.sub ? `<p>${rich(keys(o.sub))}</p>` : ''}${o.extra ? `<div class="card-extra">${o.extra}</div>` : ''}<small>${COARSE.matches ? '點一下繼續' : '按 E 繼續'}</small></div>`;
-  Audio.sfx(o.rare ? 'rare' : 'catch'); if (o.rare) shake.haptic('rare');   // 稀有（四、五星）：金色旋轉光芒與閃亮的音效
+  c.innerHTML = `<div class="card-in${o.rare ? ' rare' : ''}${o.cls ? ' ' + o.cls : ''}"><div class="card-icon">${o.icon ? `<img src="${o.icon}" alt="">` : ''}</div><b>${esc(o.title)}</b>${o.sub ? `<p>${rich(keys(o.sub))}</p>` : ''}${o.extra ? `<div class="card-extra">${o.extra}</div>` : ''}<small>${COARSE.matches ? '點一下繼續' : '按 E 繼續'}</small></div>`;
+  Audio.sfx(o.sfx || (o.rare ? 'rare' : 'catch')); if (o.rare) shake.haptic('rare');   // 稀有（四、五星）：金色旋轉光芒與閃亮的音效；v9.19 cls 卡片的樣式、sfx 換音效（練習成果卡用輕一點的聲音）
   return new Promise(res => { cardRes = res; cardAt = performance.now(); });
 }
 export const cardOpen = () => !!cardRes;

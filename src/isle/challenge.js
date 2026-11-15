@@ -14,6 +14,8 @@ import * as Audio from './audio.js';
 import * as cooking from './cooking.js';
 import * as memo from './memo.js';
 import { pickQ, pickQU, record, pick, vocabQ, askQ, readSec, quickQ, confPlan, confNote, askWhy } from './quiz.js';
+import * as progress from './progress.js';
+import { showProgress } from './drill.js';
 import { openNotes } from './library.js';
 import { I, S, save, icon } from './state.js';
 import { MATS } from './diy.js';
@@ -121,6 +123,7 @@ export async function practice(v) {
   const cf = confPlan(SET);   // v8.4 一組 5 題裡有 2 題先問把握
   const rv = L.reviewNext(2, id => L.Q[id].subject === v.sid);   // v7.1：今天的複習清單裡這一科的題目先出（和圖書館、手機同一份）
   const pair = contrastFor(v.sid, rv);   // v8.4 偶爾最後兩題是一組易混題：表面很像、方法不同
+  const tr = progress.tracker(TA, v.sid);   // v9.19 練習成果卡：這組實際寫進紀錄的變化
   await ui.say(sp, (R.pIntro ? pick(v.ask || ['我們來練幾題！']) : '我們一起練 5 題：不限時間，難度會照你的狀況調整。答對一題就拿一題的鈴錢，答錯也不會收回，看完解析就換下一題。') + (rv.length ? `先從今天的複習裡挑 ${rv.length} 題你之前做過的。` : ''));
   R.pIntro = 1;
   for (k = 1; k <= SET; k++) {
@@ -129,7 +132,7 @@ export async function practice(v) {
     const q = (pq && L.view(pq)) || (rv[k - 1] && L.view(L.Q[rv[k - 1]])) || pickQ(v.sid, d, { minD: d, skip: seen, any: true }) || pickQ(v.sid, 3, { skip: seen, any: true }); if (!q) break;
     seen.add(q.id);
     const qd = q.d || d, { ok, ans, conf } = await askQ(sp, q, `【一起練習 第 ${k}/${SET} 題・${rv[k - 1] ? '複習' : DN[qd]}】<br>`, { conf: cf.has(k - 1) });
-    record(q, ok, { conf }); const lead = confNote(ok, conf);
+    tr.pre(q); record(q, ok, { conf }); tr.post(ok, conf); const lead = confNote(ok, conf);
     if (ok) {
       got++; run++; const b = Math.round(100 * qd * cooking.bellsMul()); bells += b; s.bells += b;
       if ((s.frDay[v.sid] || 0) < 3) { const before = s.fr[v.sid] || 0; s.frDay[v.sid] = (s.frDay[v.sid] || 0) + 1; s.fr[v.sid] = Math.min(20, before + 1); friend = `（好感度 ${H.hearts(s.fr[v.sid])}）`; if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid; if (before >= 20 && bond.overflow(v)) friend = '（多了一段共同回憶，寫進回憶錄了）'; }
@@ -146,6 +149,7 @@ export async function practice(v) {
   }
   const n = Math.min(SET, k - 1);
   await ui.say(sp, n ? `這組 ${n} 題答對 ${got} 題，拿到 ${bells} 鈴錢。${got === n ? '全對！下次可以挑戰難一點的。' : got ? '答錯的題目記下來了，過幾天會再考你。' : '沒關係，錯的題目過幾天會再出現，到時候就會了。'}${H.tail(v)}${friend}` : '題目都被你答完了！');
+  await showProgress(tr);
   if (R.gift === v.sid) { R.gift = null; save(); await H.gift(v); }
   return got;
 }

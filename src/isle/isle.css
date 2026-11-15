@@ -1746,3 +1746,19 @@ body.picking .act-btn { opacity: 0; transform: scale(.85); pointer-events: none;
 .sm-phases span.done { color: rgba(255, 255, 255, .8); background: rgba(160, 230, 190, .28); text-decoration: line-through; }
 .sm-say { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); width: 86%; margin: 0; text-align: center; font: 700 13.5px/1.5 var(--font); color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, .6); opacity: 0; transition: opacity .6s; pointer-events: none; }
 .sm-say.on { opacity: 1; }
+/* v9.19 練習成果卡：這一組實際前進了什麼（每題一個圓點，一行一種變化，最多四行） */
+.card-in.prog { gap: 10px; }
+.card-in.prog > b { font-size: 22px; }
+.card-in.prog .card-extra { justify-items: stretch; gap: 10px; width: 100%; }
+.pg-dots { display: flex; justify-content: center; gap: 7px; }
+.pg-dots i { width: 14px; height: 14px; border-radius: 50%; background: #d9826f; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .14); }
+.pg-dots i.ok { background: #6fae6b; }
+.pg-list { display: grid; gap: 6px; text-align: left; }
+.pg-list > div { display: grid; grid-template-columns: 24px 1fr; gap: 9px; align-items: start; font-weight: 700; line-height: 1.55; color: var(--ink); }
+.pg-list b { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; font-size: 13px; font-weight: 800; color: #fff; background: #8a94a6; }
+.pg-fixed b, .pg-mend b { background: #4f9a5c; }
+.pg-master b { background: #d9a531; }
+.pg-up b { background: #5d8fb8; }
+.pg-wrong b { background: #d0735f; }
+.pg-guess b { background: #b28a5a; }
+.pg-sub { justify-self: center; padding: 4px 14px; border-radius: 999px; background: rgba(107, 79, 58, .08); font-weight: 800; font-size: 14px; color: var(--ink-2); }

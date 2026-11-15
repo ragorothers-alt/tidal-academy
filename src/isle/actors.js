@@ -24,12 +24,13 @@ const base = () => window.__MODEL_BASE || 'src/isle/models/';
 function loadScript(id) {
   return new Promise((res, rej) => {
     if (window.TA && window.TA.MODELS && window.TA.MODELS[id]) { res(); return; }
-    const s = document.createElement('script'); s.src = base() + id + '.js'; s.onload = () => res(); s.onerror = rej; document.head.appendChild(s);
+    const s = document.createElement('script'); s.src = base() + id + '.js'; s.onload = () => res(); s.onerror = e => { s.remove(); rej(e); }; document.head.appendChild(s);   // v9.19 失敗的 <script> 拿掉，下次重新載入
   });
 }
 export function loadModel(id, kind) {
   if (cache[id]) return Promise.resolve(cache[id]);
-  return loading[id] || (loading[id] = loadScript(id).then(() => new Promise((res, rej) => {
+  if (loading[id]) return loading[id];
+  const p = loading[id] = loadScript(id).then(() => new Promise((res, rej) => {
     const b64 = window.TA.MODELS[id], bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     new GLTFLoader().parse(bin.buffer, '', g => {
       g.scene.traverse(o => {
@@ -41,7 +42,9 @@ export function loadModel(id, kind) {
       });
       cache[id] = g; delete window.TA.MODELS[id]; res(g);
     }, rej);
-  })));
+  }));
+  p.catch(() => { if (loading[id] === p) delete loading[id]; });   // v9.19 載入或解析失敗：不留著失敗的 Promise，下次呼叫會重新載入（以前同一頁面裡永遠拿到同一個失敗）
+  return p;
 }
 /** 已經載好的模型（沒有就 null）：可以當場用，不必等 Promise */
 export const cachedModel = id => cache[id] || null;
@@ -144,7 +147,8 @@ function bindPose(root) {   // 原始場景（快取裡沒播過動作的那份�
   return out;
 }
 function shareClips(id) {
-  return shared[id] || (shared[id] = Promise.all([loadModel(PACK, 'none'), loadModel(id)]).then(([src, tgt]) => {
+  if (shared[id]) return shared[id];
+  const p = shared[id] = Promise.all([loadModel(PACK, 'none'), loadModel(id)]).then(([src, tgt]) => {
     const sRoot = src.scene, tRoot = tgt.scene, sBind = bindPose(sRoot), tBind = bindPose(tRoot), sBy = {}, tBy = {}, tBones = [];
     sRoot.traverse(o => { sBy[o.name.replace(/^mixamorig:?/, '')] = o; });
     tRoot.traverse(o => { if (o.isBone) { tBy[o.name.replace(/^mixamorig:?/, '')] = o; tBones.push(o); } });   // 由上而下：父骨頭先
@@ -174,7 +178,9 @@ function shareClips(id) {
       out[name] = new THREE.AnimationClip(name, clip.duration, tracks);
     }
     return out;
-  }));
+  });
+  p.catch(() => { if (shared[id] === p) delete shared[id]; });   // v9.19 動作包載入失敗也不留著，下次換裝時再試
+  return p;
 }
 /* ---------- 疊加姿勢：在骨架動作之上，以角色自己的座標軸旋轉骨頭（v7.0） ----------
    角色座標：+Z 前、+Y 上、+X 左。flex：繞 X 軸往前抬（手臂、大腿）；負值往後。 */

@@ -3,7 +3,7 @@ import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { I, S, save } from './state.js';
 import { pick } from './quiz.js';
-import { drill, picker } from './drill.js';
+import { drill, picker, showProgress } from './drill.js';
 import * as words from './words.js';
 import { openMistakes, reviewLine, reviewEmpty } from './hall.js';
 import * as figs from './figs.js';
@@ -38,16 +38,16 @@ export async function act(k) {
   if (k === 'rv') {
     const ids = L.reviewNext(6); if (!ids.length) { await ui.say(s, reviewEmpty() + '。可以翻翻單元筆記，或去讀新單元。'); return true; }
     await ui.say(s, pick(ids.some(L.isMistake) ? b.mistakes : b.due));
-    const before = L.mistakes().length, r = await drill(s, picker({ mode: 'ids', ids }), ids.length, { praise: b.praise, stop: true });
+    const before = L.mistakes().length, r = await drill(s, picker({ mode: 'ids', ids }), ids.length, { praise: b.praise, stop: true, card: true });
     if (r.stopped && !r.n) return true;
-    await result(s, r, before - L.mistakes().length);
+    await result(s, r, before - L.mistakes().length); await showProgress(r.tr);   // v9.19 練習成果卡
     await ui.say(s, reviewLine() + '。');
   }
   if (k === 'voc') {
     await ui.say(s, pick(b.vocab));
-    const r = await drill(s, picker({ mode: 'vocab' }), 10, { praise: b.praise, stop: true });   // v8.6 十題可以中途先到這裡
+    const r = await drill(s, picker({ mode: 'vocab' }), 10, { praise: b.praise, stop: true, card: true });   // v8.6 十題可以中途先到這裡
     if (r.stopped && !r.n) return true;
-    await result(s, r);
+    await result(s, r); await showProgress(r.tr);
   }
   return true;
 }

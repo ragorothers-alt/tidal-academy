@@ -88,3 +88,28 @@ process.stdout.write(JSON.stringify(bad));`;
   const bad = JSON.parse(r.stdout).map(s => path.relative(ROOT, s));
   assert.deepEqual(bad, [], '這些檔案有語法錯誤：\n' + bad.join('\n'));
 });
+
+test('v9.19 模型載入失敗後可以重試：失敗的 Promise 不留著，同時呼叫只載一次', async () => {
+  const vm = require('vm'), src = fs.readFileSync(path.join(ROOT, 'src/isle/actors.js'), 'utf8');
+  const seg = src.slice(src.indexOf('const cache ='), src.indexOf('/** 已經載好的模型')).replace('export function loadModel', 'function loadModel');
+  let scripts = 0, fail = true, removed = 0;
+  const ctx = { window: { TA: { MODELS: {} } }, Uint8Array, atob, cullable: () => true, bend() {}, queueMicrotask,
+    document: { createElement: () => ({ remove() { removed++; } }), head: { appendChild(s) { scripts++; queueMicrotask(() => (fail ? s.onerror(new Error('mock')) : (ctx.window.TA.MODELS.m = 'AA==', s.onload()))); } } },
+    GLTFLoader: class { parse(b, p, ok) { ok({ scene: { traverse() {} }, animations: [] }); } } };
+  vm.createContext(ctx); vm.runInContext(seg + ';globalThis.loadModel = loadModel;', ctx);
+  const p1 = ctx.loadModel('m'), p1b = ctx.loadModel('m'); assert.equal(p1, p1b, '同時呼叫共用一個 Promise');
+  await p1.catch(() => {}); assert.equal(removed, 1, '失敗的 <script> 拿掉');
+  fail = false; const g = await ctx.loadModel('m');
+  assert.equal(scripts, 2, '失敗後再呼叫會重新載入'); assert.ok(g && g.scene);
+  assert.equal(await ctx.loadModel('m'), g, '成功之後用快取'); assert.equal(scripts, 2);
+});
+
+test('v9.19 奔跑的煙塵：共用一顆球，消失時釋放自己的材質', () => {
+  const vm = require('vm'), main = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8').split(/\r?\n/);
+  const decl = main.find(l => l.startsWith('const puffs = [')), puff = main.find(l => l.startsWith('function puff(')), cleanup = main.find(l => l.includes('for (let i = puffs.length - 1;'));
+  let geoms = 0, mats = 0, disposed = 0;
+  const c = { THREE: { SphereGeometry: class { constructor() { geoms++; } dispose() { disposed++; } }, MeshBasicMaterial: class { constructor(o) { Object.assign(this, o); mats++; } dispose() { disposed++; } },
+    Mesh: class { constructor(g, m) { this.geometry = g; this.material = m; this.userData = {}; this.position = { set() {}, y: 0 }; this.scale = { setScalar() {} }; } } }, scene: { add() {}, remove() {} }, Math };
+  vm.createContext(c); vm.runInContext(decl + '\n' + puff + '\nfor (let k = 0; k < 100; k++) puff(0, 0, 0);\nconst dt = 1;\n' + cleanup + '\nglobalThis.left = puffs.length;', c);
+  assert.equal(c.left, 0); assert.equal(geoms, 1, '只建一顆共用的球'); assert.equal(mats, 100); assert.equal(disposed, 100, '每顆的材質都釋放');
+});

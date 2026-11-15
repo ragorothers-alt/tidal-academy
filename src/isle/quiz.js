@@ -63,7 +63,7 @@ export const readSec = q => Math.round((ui.plain(q.q).length + (q.o || []).reduc
 /** 小遊戲的限時：一般長度的題目維持原本的秒數，比較長的題目照多出來的閱讀量加時間 */
 export const fairSec = (base, q) => base + Math.max(0, readSec(q) - 12);
 /** 記錄作答（寫入同一份學習進度） */
-export function record(q, ok, opt) { if (q.vocab) L.recordVocab(q.vocab.w, ok); else L.record(q, ok, { silent: false, combo: opt && opt.combo, conf: opt && opt.conf }); if (ok) miles.add('quiz'); else miles.check(); }
+export function record(q, ok, opt) { if (q.vocab) L.recordVocab(q.vocab.w, ok, opt && opt.conf); else L.record(q, ok, { silent: false, combo: opt && opt.combo, conf: opt && opt.conf }); if (ok) miles.add('quiz'); else miles.check(); }
 
 /** 單字題：英文 → 中文 */
 export function vocabQ(opt) {

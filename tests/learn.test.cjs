@@ -681,3 +681,72 @@ test('今天的複習：錯題與到期題一份清單，只排要考的考科�
   TA.S.days[TA.U.dayKey()].rv = 19; assert.equal(L.reviewToday().left, 1, '今天的份：20 題'); TA.S.days[TA.U.dayKey()].rv = 20;
   assert.equal(JSON.stringify(L.reviewToday()), JSON.stringify({ done: 20, left: 0, more: 1, goal: 20 }), '做完今天的份，剩下的可以明天再來');
 });
+
+test('v9.19 練習成果卡：照真正寫進紀錄的變化分類（第一次見、往後排、錯題前進、修好、熟練、猜對、還沒到期）', async () => {
+  const P = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/progress.js')).href);
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L;
+  const sid = 'math', ids = L.BY_SUBJECT[sid].filter(id => !L.Q[id].pid).slice(0, 4), Q = id => L.Q[id];
+  let tr = null;
+  const ans = (id, ok, conf) => { tr.pre(Q(id)); L.record(Q(id), ok, { silent: true, conf }); tr.post(ok, conf); };
+  // 第一天：兩題第一次答對、一題答錯、一題猜對
+  tr = P.tracker(TA, sid); ans(ids[0], true); ans(ids[1], true); ans(ids[2], false); ans(ids[3], true, 'guess');
+  let s = tr.summary();
+  assert.equal(s.n, 4); assert.equal(s.ok, 3); assert.equal(s.first, 4); assert.deepEqual(s.dots, [true, true, false, true]);
+  assert.deepEqual(s.lines.map(l => l.k), ['up', 'wrong', 'guess']);
+  assert.match(s.lines[0].text, /^2 題往後排，2 天後再複習/);
+  // 同一天答錯的題又答對：照記，但要隔天再答對才往後排
+  tr = P.tracker(TA, sid); ans(ids[2], true);
+  assert.equal(tr.rows[0].sameday, true); assert.equal(tr.rows[0].up, false);
+  // 隔天：錯題在不同天答對，往前一格（還在錯題本）；還沒到期的題答對，不往後排
+  setNow(t0 + day + 2 * 3600e3);
+  tr = P.tracker(TA, sid); ans(ids[2], true); ans(ids[0], true);
+  assert.equal(tr.rows[0].mend, true); assert.equal(tr.rows[0].fixed, false); assert.ok(L.isMistake(ids[2]), '還在錯題本');
+  assert.equal(tr.rows[1].early, true); assert.equal(tr.rows[1].up, false);
+  // 再隔兩次到期都答對：第三格離開錯題本（修好了）；再到期答對升到第四格（熟練）
+  setNow(t0 + 2 * day + 2 * 3600e3); tr = P.tracker(TA, sid); ans(ids[2], true); assert.equal(tr.rows[0].mend, true);
+  setNow(t0 + 4 * day + 2 * 3600e3); tr = P.tracker(TA, sid); ans(ids[2], true);
+  assert.equal(tr.rows[0].fixed, true); assert.ok(!L.isMistake(ids[2]), '離開錯題本');
+  setNow(t0 + 8 * day + 2 * 3600e3); tr = P.tracker(TA, sid); ans(ids[2], true);
+  assert.equal(tr.rows[0].mastered, true);
+  s = tr.summary(); assert.equal(s.subj.after - s.subj.before, 1, '這科的熟練題數 +1');
+  assert.deepEqual(s.lines.map(l => l.k), ['master'], '達到熟練的題不重複算進「往後排」：每題只出現在一行');
+  const parts = P.cardParts(s);
+  assert.match(parts.extra, /數學已熟練 \d+ 題（\+1）/); assert.equal((parts.extra.match(/<i class=/g) || []).length, 1);
+  // 一組最多四行，依重要性排
+  const many = P.summarize([{ ok: true, fixed: true, up: true }, { ok: true, mastered: true, up: true, days: 8 }, { ok: true, mend: true, up: true }, { ok: true, up: true, days: 2 }, { ok: false }, { ok: true, guess: true }], null);
+  assert.deepEqual(many.lines.map(l => l.k), ['fixed', 'master', 'mend', 'up']);
+});
+
+test('v9.19 猜對一律明天再確認：到期題與單字都一樣，當天冷卻完再答對也不會靠剛看過的解析升格', () => {
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L, t = () => TA.U.dayNum();
+  const id = L.BY_SUBJECT.math.filter(x => !L.Q[x].pid)[0], q = L.Q[id];
+  L.record(q, true, { silent: true });   // 第一次答對：第 2 格，兩天後到期
+  setNow(t0 + 2 * day); assert.ok(L.isDue(id));
+  L.record(q, true, { silent: true, conf: 'guess' });
+  assert.equal(L.rec(id).s, 2, '猜對不升格'); assert.equal(L.rec(id).due, t() + 1, '明天再確認');
+  setNow(t0 + 2 * day + 30 * 60e3); assert.ok(!L.isDue(id), '冷卻完也不在今天的複習裡');
+  L.record(q, true, { silent: true, conf: 'sure' }); assert.equal(L.rec(id).s, 2, '當天再答對不升格');
+  setNow(t0 + 3 * day); L.record(q, true, { silent: true }); assert.equal(L.rec(id).s, 3, '隔天答對才往後排');
+  const env = boot(null, t0), L2 = env.TA.L, V = env.TA.S.voc, t2 = () => env.TA.U.dayNum(), [a, b] = L2.VOCAB.slice(0, 2).map(v => v.w);
+  L2.recordVocab(a, true, 'guess'); assert.equal(V[a].s, 1); assert.equal(V[a].due, t2() + 1, '第一次見到：和有把握一樣排到明天');
+  L2.recordVocab(b, true);
+  env.setNow(t0 + day);
+  L2.recordVocab(a, true, 'guess'); assert.equal(V[a].s, 1, '單字猜對不升格'); assert.equal(V[a].due, t2() + 1);
+  L2.recordVocab(b, true, 'sure'); assert.equal(V[b].s, 2); assert.equal(V[b].due, t2() + 2);
+});
+
+test('v9.19 練習成果卡：整組是單字時說「個單字」，單字答錯留在今天的複習、不是進錯題本', async () => {
+  const P = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/progress.js')).href);
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L;
+  const W = L.VOCAB.slice(0, 3), vq = v => ({ id: 'voc:' + v.w, vocab: v });
+  W.forEach(v => L.recordVocab(v.w, true));
+  setNow(t0 + day);
+  const tr = P.tracker(TA, null), ans = (v, ok, conf) => { tr.pre(vq(v)); L.recordVocab(v.w, ok, conf); tr.post(ok, conf); };
+  ans(W[0], true); ans(W[1], true, 'guess'); ans(W[2], false);
+  const s = tr.summary(), parts = P.cardParts(s);
+  assert.equal(s.voc, true);
+  assert.deepEqual(s.lines.map(l => l.text), ['1 個單字往後排，2 天後再複習', '1 個單字答錯，留在今天的複習：隔天再答對才往後排', '1 個單字是猜對的：明天再確認一次']);
+  assert.equal(parts.sub, '3 個單字答對 2 個');
+  const mixed = P.summarize([{ ok: false }, { ok: false, vocab: true }, { ok: true, up: true, days: 2 }], null);   // 題目與單字混在一組：用「題」，兩種答錯分開說
+  assert.deepEqual(mixed.lines.map(l => l.text), ['1 題往後排，2 天後再複習', '1 題答錯，記進錯題本：隔天再答對才算數', '1 個單字答錯，留在今天的複習：隔天再答對才往後排']);
+});

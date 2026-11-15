@@ -2139,8 +2139,8 @@ function viewOffset(out) {
   return out.set(0, Math.sin(pitch) * dist, Math.cos(pitch) * dist);
 }
 camPos.copy(player.position).add(camOff);
-const puffs = [];
-function puff(x, y, z) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: '#fffaf0', transparent: true, opacity: 0.8 })); m.position.set(x + (Math.random() - 0.5) * 0.2, y + 0.05, z + (Math.random() - 0.5) * 0.2); m.userData.t = 0; scene.add(m); puffs.push(m); }
+const puffs = [], PUFF_GEO = new THREE.SphereGeometry(0.1, 8, 6);   // v9.19 煙塵共用一顆球；每顆自己的材質（各自變淡）消失時釋放
+function puff(x, y, z) { const m = new THREE.Mesh(PUFF_GEO, new THREE.MeshBasicMaterial({ color: '#fffaf0', transparent: true, opacity: 0.8 })); m.position.set(x + (Math.random() - 0.5) * 0.2, y + 0.05, z + (Math.random() - 0.5) * 0.2); m.userData.t = 0; scene.add(m); puffs.push(m); }
 const awayFrom = S().day || '';   // 上次登島的日期：下一行的 newDay 會覆寫它，回島小結要先記下來
 newDay(() => { social.newDay(); gardenMsg = garden.newDay(); }); memo.anniversary(); if (!S().reqs) social.newDay(); life.layoutSpots(); events.refresh(); events.gifts(social.sendLetter, villagers); report.weekly(social.sendLetter);
 setInterval(() => { if (catalog.checkRewards(social.sendLetter)) paintHud(); }, 30000);   // 捐贈、收集之後：收集獎勵
@@ -2417,7 +2417,7 @@ function tick(fixed) {
   life.update(dt, t, run && moving);
   tide.update(dt, t, simDate()); spirit.update(dt, t); balloon.update(dt, t, !weather.raining() && !weather.now.startsWith('cloud') && (hourOverride ?? nowHour()) >= 8 && (hourOverride ?? nowHour()) < 18); env.luck = cooking.lucky();
   design.update();
-  for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.userData.t += dt; p.scale.setScalar(1 + p.userData.t * 4); p.material.opacity = 0.8 * (1 - p.userData.t / 0.5); p.position.y += dt * 0.5; if (p.userData.t > 0.5) { scene.remove(p); puffs.splice(i, 1); } }
+  for (let i = puffs.length - 1; i >= 0; i--) { const p = puffs[i]; p.userData.t += dt; p.scale.setScalar(1 + p.userData.t * 4); p.material.opacity = 0.8 * (1 - p.userData.t / 0.5); p.position.y += dt * 0.5; if (p.userData.t > 0.5) { scene.remove(p); p.material.dispose(); puffs.splice(i, 1); } }
   // 光照與鏡頭
   const { dir, night, golden } = applyTime(hourOverride ?? nowHour());
   nightFill.position.set(player.position.x + 1.2, player.position.y + 2.8, player.position.z + 2.2); nightFill.intensity = night * 2.6;   // 夜裡角色身邊一圈柔和的暖光（像動森，晚上也看得清楚自己）

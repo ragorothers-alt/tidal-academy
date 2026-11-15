@@ -2,8 +2,15 @@
 import * as ui from './ui.js';
 import * as Audio from './audio.js';
 import { record, pick, vocabQ, askQ, confPlan, confNote, askWhy } from './quiz.js';
+import * as progress from './progress.js';
 
 const TA = window.TA, L = TA.L;
+/** v9.19 練習成果卡：一組做完（至少 3 題）照實際寫進紀錄的變化說這一輪前進了什麼；按 E 或點一下就關 */
+export async function showProgress(tr) {
+  if (!tr || tr.rows.length < 3) return;
+  const sum = tr.summary(), p = progress.cardParts(sum);
+  await ui.card({ title: '這一組的收穫', sub: p.sub, extra: p.extra, cls: 'prog', sfx: 'open' });
+}
 
 /** 依模式挑題。focus: {mode: 'multi'|'group'|'mixed'|'hard'|'vocab'|'subject'|'ids', subject, ids} */
 export function picker(focus) {
@@ -30,23 +37,26 @@ export function picker(focus) {
   };
 }
 
-/** 做 n 題。回傳 {ok, n} */
+/** 做 n 題。回傳 {ok, n, tr}。opt.card：追蹤這組的實際進展（tr），呼叫端說完結果再 showProgress(tr)；opt.sid 是這組的科目，卡片附上這科的熟練題數 */
 export async function drill(sp, next, n, opt) {
   opt = opt || {};
   let ok = 0, done = 0, why = false;
   const cf = confPlan(n, opt);   // v8.4 一組裡有 2 題先問把握
+  const tr = opt.card ? progress.tracker(TA, opt.sid || null) : null;
   for (let k = 0; k < n; k++) {
     const q0 = next(k); if (!q0) break;
     const q = L.view(q0);   // 選項順序打亂（解析代號跟著換）
     const sub = q.subject ? TA.subject(q.subject).name : q.vocab ? '單字' : '';
     const head = `第 ${k + 1} / ${n} 題${sub ? '（' + sub + '）' : ''}：`;   // 多選題的提示由 askQ 加上
     const { ok: good, conf, stop } = await askQ(sp, q, head, { timer: opt.timer, conf: cf.has(k), stop: !!opt.stop && n >= 4 && q.type !== 'fill' });
-    if (stop) { ui.passage(null); ui.toast(done ? `先到這裡：做了 ${done} 題，有記錄下來` : '先到這裡'); return { ok, n: done, stopped: true }; }   // v8.6 中途離開：做過的照常記錄
+    if (stop) { ui.passage(null); ui.toast(done ? `先到這裡：做了 ${done} 題，有記錄下來` : '先到這裡'); return { ok, n: done, stopped: true, tr }; }   // v8.6 中途離開：做過的照常記錄
+    if (tr) tr.pre(q);
     record(q, good, { conf }); done++; Audio.sfx(good ? 'ok' : 'bad');
+    if (tr) tr.post(good, conf);
     const lead = confNote(good, conf);
     if (good) { ok++; if (opt.praise) await ui.praise(sp, pick(opt.praise), q); }
     else { await ui.explain(sp, q, lead); if (!why && !opt.timer) { why = true; await askWhy(sp, q); } }
   }
   ui.passage(null);
-  return { ok, n: done };
+  return { ok, n: done, tr };   // tr：opt.card 的成果追蹤，呼叫端說完結果再 showProgress(tr)
 }

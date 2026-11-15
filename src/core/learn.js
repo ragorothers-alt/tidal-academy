@@ -202,7 +202,7 @@
       const early = !firstTime && !canAdvance(r, t, now);
       if (opts.conf === 'guess') {   // v8.4 自己說是猜的：答對也不往後排，明天再確認一次（第一次見到的題目只排到第 1 格）
         r.gs = (r.gs || 0) + 1;
-        if (firstTime) { r.s = 1; r.due = t + INT[1]; } else r.due = Math.min(r.due, t + 1);
+        if (firstTime) { r.s = 1; r.due = t + INT[1]; } else r.due = t + 1;   // v9.19 到期題猜對也排到明天：以前留在今天，冷卻二十分鐘後當天再答對就往後排，等於靠剛看過的解析升格
       } else if (!early) { r.s = Math.min(6, firstTime ? 2 : r.s + 1); r.due = t + INT[r.s]; verified = wasReview; }
     } else {
       r.wr++; r.s = 0; r.due = t; r.lastWrong = now;
@@ -224,12 +224,13 @@
     return out;
   };
 
-  L.recordVocab = function (w, known) {
+  L.recordVocab = function (w, known, conf) {
     const S = TA.S, t = today(), now = Date.now(); markHour();
     const r = S.voc[w] = S.voc[w] || { n: 0, c: 0, s: 0, due: t };
-    const advance = r.n === 0 || canAdvance(r, t, now);
+    const first = r.n === 0, advance = first || canAdvance(r, t, now);
     r.n++; r.last = now;
     if (known === 'soft') { r.due = t + 1; }
+    else if (known && conf === 'guess' && !first) { r.c++; r.due = t + 1; }   // v9.19 單字也一樣：自己說是猜的，答對不往後排，明天再確認一次（和題目一致；第一次見到本來就只排到明天）
     else if (known) { r.c++; if (advance) { r.s = Math.min(6, r.s + 1); r.due = t + INT[r.s]; } }
     else { r.s = Math.max(0, r.s - 2); r.due = t; r.lastWrong = now; }
     dayRec().voc++;
