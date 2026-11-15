@@ -96,7 +96,7 @@ function backdropGrade(m, kind) {
     previous.call(m, sh, r);
     sh.uniforms.uHaze = BG_HAZE; sh.uniforms.uHazeK = { value: k };
     sh.fragmentShader = 'uniform vec3 uHaze; uniform float uHazeK;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
-      { vec3 c = diffuseColor.rgb; c.g += max(0.0, min(c.r, c.b) - c.g); diffuseColor.rgb = mix(c, uHaze, uHazeK); }`);
+      { vec3 c = mix(diffuseColor.rgb, uHaze, uHazeK); c.g += max(0.0, min(c.r, c.b) - c.g); diffuseColor.rgb = c; }`);   // v9.22.19 先混空氣色、最後才去洋紅（暖色的天光混進偏藍的遠山也會變成灰紫）
   };
   m.customProgramCacheKey = () => 'far-sprite-depth-v2-haze'; return m;
 }
