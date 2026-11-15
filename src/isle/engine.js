@@ -1157,16 +1157,17 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       float e = d.y - hz;   // 相對於畫面上地平線的高度
       float y = clamp(e / max(span, 0.07), 0.0, 1.0);   // 以畫面上的地平線為準、鋪到畫面上緣（span）：一般鏡頭與第一人稱，畫面上緣都是頭頂的深藍
       vec2 ha = normalize(d.xz + 1e-4), sa = normalize(sunSky.xz + 1e-4); float tw0 = dot(ha, sa);   // 方位：這個方向和太陽（看得到的日輪）差多少
-      vec3 bo = mix(bot, mid * vec3(0.93, 0.96, 1.0), smoothstep(0.35, -0.65, tw0) * clamp(glow * 2.5, 0.0, 1.0) * 0.6);   // v9.22.1 晨昏只有太陽那一側的地平線是橘金，背對太陽的地平線淡成帶點暖意的灰藍（以前整圈都是橘色）
+      float lowK = 1.0 - smoothstep(0.1, 0.38, sunSky.y - hz) * (1.0 - step(0.6, night));   // v9.22.4 太陽有多低：越貼近海平線，天邊越暖、越霧（午後四點半太陽還高，天空不該先泛白）
+      vec3 bo = mix(bot, mid * vec3(0.93, 0.96, 1.0), smoothstep(0.35, -0.65, tw0) * clamp(glow * 2.5, 0.0, 1.0) * 0.6 * lowK);   // v9.22.1 晨昏只有太陽那一側的地平線是橘金，背對太陽的地平線淡成帶點暖意的灰藍（以前整圈都是橘色）
       vec3 c = y < 0.32 ? mix(bo, mid, smoothstep(0.0, 0.32, y)) : mix(mid, top, smoothstep(0.32, 0.88, y));
       { // v9.22.1 晨昏太陽那一半的低空：橘轉藍之間經過淡金白（線性空間直接混橘與藍，中間會變成灰粉、薰衣草色）
-        float yb = smoothstep(0.0, 0.08, y) * smoothstep(0.62, 0.2, y) * clamp(glow * 2.2, 0.0, 1.0) * mix(0.35, 1.0, smoothstep(-0.5, 0.6, tw0));
+        float yb = smoothstep(0.0, 0.08, y) * smoothstep(0.62, 0.2, y) * clamp(glow * 2.2, 0.0, 1.0) * mix(0.35, 1.0, smoothstep(-0.5, 0.6, tw0)) * lowK;
         c = mix(c, vec3(1.0, 0.93, 0.76) * dot(c, vec3(0.2126, 0.7152, 0.0722)) * 1.08, yb * 0.75); }   // v7.6 夢幻風：粉紫的低空佔到三成、往上才轉成粉藍（以前 0.16／0.75）。三段漸層：地平線的霧白 → 低空的淺青 → 頭頂的深藍（概念圖：畫面上半部都是飽和的藍，接近地平線才變淡）
       c += vec3(0.1, 0.1, 0.08) * exp(-abs(e) * 18.0) * (1.0 - night) * (1.0 - min(gloom, 1.0) * 0.7);   // 地平線的亮帶
       float s = max(dot(d, sunSky), 0.0) * step(night, 0.6);   // 夜裡的「太陽方向」是月光，不畫（太陽本體在卷雲之後才畫，見下方）
       { // 太陽那一側地平線的暖光（日落後留在太陽沉下去的地方，慢慢轉暗）：貼著海平線是橘紅、往上轉成淡金，再融進天空的藍。
         // v9.22.1 用混色而不是疊加——以前橘光直接疊在藍天上，太陽附近的天空變成一片粉紫
-        float gk = clamp(pow(max(tw0, 0.0), 4.0) * glow * smoothstep(0.42, -0.02, e) * 1.5, 0.0, 0.9), gm = max(glowC.r, max(glowC.g, glowC.b));
+        float gk = clamp(pow(max(tw0, 0.0), 4.0) * glow * smoothstep(0.42, -0.02, e) * 1.5 * (0.35 + 0.65 * lowK), 0.0, 0.9), gm = max(glowC.r, max(glowC.g, glowC.b));
         c = mix(c, mix(glowC * vec3(1.0, 0.82, 0.55) * 1.3, vec3(1.0, 0.84, 0.56) * gm, smoothstep(0.0, 0.18, e)), gk); }
       float band = 0.0;
       if (night > 0.0) {

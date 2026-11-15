@@ -134,7 +134,7 @@ const COMP = new THREE.ShaderMaterial({
         float Lf = max(L - 12.0, 0.0);   // 霧從 12 公尺外開始：近處清楚
         float b = fogP.y, dy = rd.y * Lf, od = fogP.x * exp(-b * (co.y + rd.y * 12.0 - fogP.z)) * (abs(b * dy) > 0.01 ? (1.0 - exp(-b * dy)) / (b * dy) : 1.0) * Lf;
         float mu = dot(rd, sunW), hg = 0.0398 * (1.0 - 0.49) / pow(1.49 - 1.4 * mu, 1.5);   // Henyey–Greenstein（g = 0.7）
-        vec3 fcol = fogC * (1.0 + (0.6 + g * 1.4) * (1.0 - night) * hg * 6.0) + sunCol * hg * 0.9 * (1.0 - night) * clear;
+        vec3 fcol = fogC * (1.0 + (0.6 + g * 0.8) * (1.0 - night) * hg * 6.0) + sunCol * hg * 0.9 * (1.0 - night) * clear;   // v9.22.4 黃金時段朝太陽的霧亮度收一點（1.4 → 0.8）
         float fa = min(1.0 - exp(-od), fogP.w) * atmo;
         float ar = (1.0 - exp(-max(Lv - 20.0, 0.0) * airK)) * 0.5 * atmo * smoothstep(150.0, 110.0, Lv);   // 浮空島、城堡（110 公尺外）自己有大氣透視，這裡不再疊
         c = mix(c, hazeC * (1.0 + hg * 1.5 * (1.0 - night)), ar);
@@ -146,7 +146,7 @@ const COMP = new THREE.ShaderMaterial({
       c += texture2D(rays, vUv).rgb * sunCol * (0.22 + g * 0.3) * vis * clear;   // v7.6：0.45 → 0.3，清出城堡尖塔與拱橋   // v7.4：黃金時段的光束收一點（0.85 → 0.45）：只讀得到兩三道大方向，城堡不被光幕洗白
       // 太陽光暈：大片暖色霧光＋亮核＋鏡頭光斑
       vec2 d = vUv - sun; d.x *= aspect; float r = length(d);
-      float haze = exp(-r * 3.2) * (0.04 + g * 0.04) + exp(-r * 11.0) * (0.14 + g * 0.08);   // v7.6：再收一點   // v7.4：黃金時段的光暈收斂（0.15／0.3 → 0.06／0.12），亮核留著；以前城堡塔群融成一片金白
+      float haze = exp(-r * 3.2) * (0.03 + g * 0.02) + exp(-r * 11.0) * (0.11 + g * 0.05);   // v9.22.4 黃金時段的光暈再收一點：逆光的城堡、塔群不被洗白   // v7.6：再收一點   // v7.4：黃金時段的光暈收斂（0.15／0.3 → 0.06／0.12），亮核留著；以前城堡塔群融成一片金白
       c += sunCol * haze * vis * clear;
       vec2 fl = vec2(0.5) - (sun - vec2(0.5)); vec2 e = vUv - mix(sun, fl, 0.55); e.x *= aspect; vec2 e2 = vUv - mix(sun, fl, 0.85); e2.x *= aspect;
       c += sunCol * (smoothstep(0.07, 0.0, length(e)) * 0.06 + smoothstep(0.035, 0.0, length(e2)) * 0.05) * vis * g * clear;
