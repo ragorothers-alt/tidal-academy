@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { scene, camera, skyU, hourNow, sunDisc } from './engine.js';
 import { ULTRA } from './perf.js';
-import { gloom } from './weather.js';
+import { gloom, overcast } from './weather.js';
 
 let seed = 7;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
@@ -133,13 +133,14 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
     TRI.uCMix.value = (0.6 + 0.3 * nk) * (1 - gl * 0.8); }   // v9.15：夜裡多用三色、少用貼圖本身的白亮高光——月光下的雲是暗的剪影   // 陰雨天不染粉紫
   col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.4).lerp(sunsetC, sunset).lerp(afterC, after).lerp(duskC, dusk).lerp(nightC, nk);   // 清晨粉桃、黃昏橘粉；天一暗雲就跟著暗下來，夜裡是月光下的深藍
   { const gl = gloom() * (1 - night * 0.6), st = Math.max(0, skyU.gloom.value - 1); col.lerp(rainC, gl * 0.85).multiplyScalar((1 - gl * 0.5) * (1 - st * 0.7)); }   // v8.7 再暗一點，暴風雨更暗   // 陰雨天：雲是灰藍色、不再被陽光照得雪白
+  const fade = 1 - THREE.MathUtils.smoothstep(overcast(), 0.3, 0.9) * 0.88;   // v9.22.2 下雨時整片雨層雲蓋住天空：一朵朵的積雲塔隱進灰色的雲層裡（多雲時還在）
   sprites.forEach(o => {
     const { cl } = o, x = camera.position.x + Math.sin(cl.az) * cl.d, z = camera.position.z - Math.cos(cl.az) * cl.d;
     if (inCone && !inCone(x, z, cl.w)) { o.s.visible = false; cl.bump = null; return; }   // 畫面外：不取樣地平線；轉回來時直接對齊（v7.3）
     const all = horizonNdc(x, z, HZ), bump = Math.max(0, all - HZ.sea);   // bump：地形（台地、懸崖）把地平線墊高的部分——只有這段是取樣出來、會跳的
     if (cl.bump == null) { cl.bump = bump; cl.nv = 0; } else { cl.nv += ((bump - cl.bump) * W * W - 2 * W * cl.nv) * h; cl.bump += cl.nv * h; }
     o.s.position.set(x, yForNdc(x, z, HZ.sea + cl.bump + cl.up), z);
-    o.m.color.copy(col);
+    o.m.color.copy(col); o.m.opacity = fade;
     // 貼圖的光從左上來：太陽在這朵雲的左邊就不翻轉，在右邊就左右翻轉（方位角順時針增加，看過去越大越靠右）
     const rel = Math.atan2(Math.sin(sAz - cl.az), Math.cos(sAz - cl.az)), fl = rel > 0 ? -1 : 1;
     o.s.scale.x = cl.w * fl; o.s.scale.y = cl.w * (cl.aspect || 0.625);

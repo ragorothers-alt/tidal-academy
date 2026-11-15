@@ -501,7 +501,7 @@ function updateBg(night, gold) {
   camera.getWorldDirection(camF);
   bgs.forEach(o => {
     const c = o.c, sx = Math.sin(c.az), sz = -Math.cos(c.az);
-    o.m.color.copy(bgCol);
+    o.m.color.copy(bgCol); o.m.opacity = 1 - THREE.MathUtils.smoothstep(skyU.wx.value.x, 0.35, 0.9) * 0.8;   // v9.22.2 下雨時遠山隱進雨霧
     o.s.visible = sx * camF.x + sz * camF.z > -0.35; if (!o.s.visible) return;   // 在鏡頭背後：藏起來、不用重算位置（還沒定位過的看板停在原點，不能露出來）
     const x = camera.position.x + sx * c.d, z = camera.position.z + sz * c.d;
     o.s.position.set(x, yForNdc(x, z, seaNdc(x, z) + c.up), z);
@@ -731,7 +731,8 @@ export function update(dt, t, night, show) {
   if (!show) { updateLinks(false, t); return; }
   hazeU.uFarNight.value = night;
   gloomK = gloom() * (1 - night * 0.5);
-  hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + skyU.dawn.value * 0.06 - Math.min(1, skyU.glow.value * 2) * 0.03 + gloomK * 0.22;   // 清晨空氣多一點；陰雨天遠方淡進灰色的空氣。v7.4：黃金時段反而少一點（0.5 → 0.35）——太陽就在城堡後面，霧色是發亮的天色，以前塔群融成一片金白
+  hazeU.uHaze.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.4); hazeU.uHazeMax.value = 0.38 + skyU.dawn.value * 0.06 - Math.min(1, skyU.glow.value * 2) * 0.03 + gloomK * 0.42 + skyU.wx.value.y * 0.1;   // v9.22.2 雨裡遠方的城堡淡進雨霧（0.22 → 0.42），暴風雨再淡一點
+  hazeU.uDens.value = 0.0024 * (1 + skyU.wx.value.x * 2.2 * (1 - night * 0.5) + skyU.wx.value.y * 0.8);   // 雨越大，空氣越濃（城堡、浮空島在兩百公尺外，以前霧太薄、淡不下來）   // 清晨空氣多一點；陰雨天遠方淡進灰色的空氣。v7.4：黃金時段反而少一點（0.5 → 0.35）——太陽就在城堡後面，霧色是發亮的天色，以前塔群融成一片金白
   const gold = Math.min(1, skyU.glow.value * 2);
   fillCol.setRGB(1, 1, 1).lerp(GOLD, gold * 0.45).lerp(MOONLIT, night).lerp(RAINY, gloomK * 0.6);   // v6.93：黃昏的金色收一點（城堡不會融成一團黃白光）
   fills.forEach(m => { m.emissive.copy(fillCol); m.emissiveIntensity = m.userData.fill * 0.19 * (1 + night * 0.6); });   // v7.0：底光收一點，城堡、浮空島看得出受光面與背光面   // 一點均勻的底光，主要的亮度交給正面補光
