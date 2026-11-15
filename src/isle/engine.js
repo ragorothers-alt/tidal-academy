@@ -1171,9 +1171,13 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
       float band = 0.0;
       if (night > 0.0) {
         // 銀河：斜跨天空的一條淡淡光帶，帶一點雲狀的明暗
-        vec3 gN = normalize(vec3(0.55, 0.35, 0.76)); float gd = dot(d, gN);
-        band = exp(-gd * gd / 0.022) * (0.45 + 0.75 * fbm(vec2(atan(d.x, -d.z) * 4.0, d.y * 6.0 + gd * 9.0))) * smoothstep(0.02, 0.3, d.y);
-        c += vec3(0.022, 0.03, 0.055) * band * night;
+        // v9.22.3 雲狀的明暗加上細碎的顆粒，中間一道暗的塵埃帶；核心偏一點暖白，外圍是冷的藍白
+        // 雜訊用沿著銀河的座標（gl 沿著光帶、gd 橫跨光帶）：雲團與塵埃帶順著光帶拉長，不會斜斜地刷成一道道條紋；天全黑了才看得到
+        vec3 gN = normalize(vec3(0.55, 0.35, 0.76)), gU = normalize(cross(gN, vec3(0.0, 1.0, 0.0))), gV = cross(gN, gU); float gd = dot(d, gN), gl = atan(dot(d, gV), dot(d, gU));
+        float gCore = exp(-gd * gd / 0.03), gCl = fbm(vec2(gl * 3.0, gd * 10.0)), gFine = fbm(vec2(gl * 16.0, gd * 44.0) + 5.0);
+        float dust = smoothstep(0.46, 0.7, fbm(vec2(gl * 7.0 + 3.0, gd * 26.0))) * exp(-gd * gd / 0.004);
+        band = gCore * (0.35 + 0.65 * gCl) * (0.6 + 0.8 * gFine) * (1.0 - dust * 0.75) * smoothstep(0.02, 0.3, d.y) * (1.0 - min(gloom, 1.0)) * smoothstep(0.75, 1.0, night);
+        c += mix(vec3(0.026, 0.034, 0.06), vec3(0.05, 0.05, 0.05), smoothstep(0.4, 0.9, gCore * gCl)) * band * night * 1.15;
         // 月亮：亮白的圓盤（表面有淡淡的斑紋）與一圈柔和的光暈
         float md = dot(d, moonDir);
         vec3 mU = normalize(cross(moonDir, vec3(0.0, 1.0, 0.0))), mV = cross(mU, moonDir); vec2 mp = vec2(dot(d, mU), dot(d, mV)) / 0.032;
@@ -1181,13 +1185,25 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         c = mix(c, vec3(1.0, 0.98, 0.92) * (1.05 - smoothstep(0.45, 0.75, maria) * 0.22), disc * night);
         c += vec3(0.55, 0.62, 0.8) * (pow(max(md, 0.0), 2200.0) * 0.5 + pow(max(md, 0.0), 160.0) * 0.12 + pow(max(md, 0.0), 18.0) * 0.03) * night * (1.0 - disc);
       }
-      { // 星星：每格最多一顆，位置在格子裡隨機、大小亮度不一的圓點，慢慢閃爍；少數幾顆大的帶一點藍或暖色（以前是一格一格的方塊）
-        vec3 sp = d * 160.0, q = floor(sp), fq = fract(sp) - 0.5; float hh = h(q);
-        if (hh > 0.99 - band * 0.006 && night > 0.0) {   // 銀河裡星星多一點
-          vec3 o = vec3(h(q + 1.7), h(q + 3.1), h(q + 5.3)) - 0.5; float big = smoothstep(0.9985, 1.0, hh);
-          float r = 0.07 + big * 0.09, dd = length(fq - o * 0.6);
-          float st = smoothstep(r, r * 0.25, dd) * (0.55 + 0.45 * sin(time * (1.3 + h(q + 9.0) * 2.0) + hh * 60.0)) * (0.9 + big * 1.6);
-          c += mix(vec3(1.0), h(q + 7.0) > 0.5 ? vec3(0.75, 0.85, 1.0) : vec3(1.0, 0.9, 0.75), big) * st * night * smoothstep(0.05, 0.4, d.y);
+      { // 星星（v9.22.3）：兩層——很多暗淡的小星＋少數亮星。大小以像素計（至少一個像素，以前小於一個像素、大多畫不出來），
+        // 亮度大多暗、少數亮；銀河裡比較密、月亮附近被月光蓋掉一些、越靠近海平線越暗（大氣消光）；慢慢閃爍，亮星帶一點藍或暖色
+        float nv = smoothstep(0.45, 1.0, night) * (1.0 - min(gloom, 1.0)), faint = smoothstep(0.75, 1.0, night), mdS = dot(d, moonDir), pxd = length(fwidth(d));   // 天暗下來先出現亮星、全黑了才看得到暗星；pxd：一個像素在天幕上多大（導數要在分支外面算）
+        if (nv > 0.0 && e > -0.01) {
+          vec3 stc = vec3(0.0);
+          for (int L = 0; L < 2; L++) {
+            float sc = L == 0 ? 230.0 : 95.0, dens = L == 0 ? 0.965 - band * 0.05 : 0.986;
+            vec3 sp = d * sc, q = floor(sp), fq = fract(sp) - 0.5; float hh = h(q + float(L) * 31.0);
+            if (hh > dens) {
+              vec3 o = (vec3(h(q + 1.7), h(q + 3.1), h(q + 5.3)) - 0.5) * 0.7;
+              float px = max(pxd * sc * 0.55, 0.02), dd = length(fq - o);
+              float mag = pow((hh - dens) / (1.0 - dens), 3.0);
+              float br = L == 0 ? (0.3 + mag * 1.1) * faint : 0.7 + mag * 3.2;
+              float tw = 0.72 + 0.28 * sin(time * (1.5 + h(q + 9.0) * 3.0) + hh * 80.0);
+              vec3 tint = mix(vec3(1.0), h(q + 7.0) > 0.5 ? vec3(0.78, 0.86, 1.0) : vec3(1.0, 0.88, 0.74), L == 0 ? 0.25 : 0.6);
+              stc += tint * exp(-dd * dd / (px * px * (L == 0 ? 0.9 : 1.5))) * br * tw;
+            }
+          }
+          c += stc * nv * 0.55 * smoothstep(-0.005, 0.22, e) * (1.0 - smoothstep(0.82, 0.995, mdS) * 0.85) * step(mdS, 0.9993);
         }
       }
       // 積雲堆：沿著地平線堆起的大朵積雲（在遠山後面）。雲頂由一顆顆圓團疊成花椰菜的輪廓，每一團各自受光——
