@@ -93,7 +93,7 @@ export function dropTinyShadows(root) {
 }
 export const U = { uCurve: { value: CURVE }, uBendF: { value: 15 }, uTime: { value: 0 }, uWind: { value: 1 }, uSunV: { value: new THREE.Vector3(0, 1, 0) }, uRimCol: { value: new THREE.Color('#ffc870') }, uRim: { value: 0 },
   uOccP: { value: new THREE.Vector2(-9999, -9999) }, uOccR: { value: 0 }, uOccD: { value: 0 }, uOccY: { value: 0 }, uPlayer: { value: new THREE.Vector3(0, -99, 0) },
-  uSnow: { value: 0 }, uWet: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 }, uCloud: { value: new THREE.Vector3(0, 0, 0) }, uMist: { value: new THREE.Vector3(0, 0.3, 1.3) }, uMistCol: { value: new THREE.Color('#eef2f2') }, uSkyRef: { value: new THREE.Color('#8fa0b4') },   // uCloud：雲影的深淺、雲飄到哪裡（main.js 每格更新）；uSkyRef：濕地面映出的天光（低空的天色）
+  uSnow: { value: 0 }, uWet: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 }, uCloud: { value: new THREE.Vector4(0, 0, 0, 0) }, uMist: { value: new THREE.Vector3(0, 0.3, 1.3) }, uMistCol: { value: new THREE.Color('#eef2f2') }, uSkyRef: { value: new THREE.Color('#8fa0b4') },   // uCloud：雲影的深淺、雲飄到哪裡、雲量（main.js 每格更新）；uSkyRef：濕地面映出的天光（低空的天色）
   uWindDir: { value: new THREE.Vector2(0.97, 0.24).normalize() }, uTrans: { value: 0 }, uInside: { value: 0 } };   // uInside：v7.8 正在畫住宅的室內（house.js 畫的時候設 1）   // v7.0：風向（世界座標 xz，陣風順著它推過去）、逆光時葉片透光的強度（main.js 每幀設定）   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
 const BEND = `#include <project_vertex>
   { float bz = max(-mvPosition.z - uBendF, 0.0); mvPosition.y -= bz * bz * uCurve; }
@@ -144,7 +144,7 @@ const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;
     float g = wn_(vec2(a * 0.04 - t * 0.2, c * 0.03)) * 0.65 + wn_(vec2(a * 0.11 - t * 0.62, c * 0.09 + 3.7)) * 0.35;
     return smoothstep(0.34, 0.86, g); }
 `;
-const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uWet;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform vec3 uCloud;\nuniform vec3 uMist;\nuniform vec3 uMistCol;\nuniform vec3 uSkyRef;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
+const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uWet;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform vec4 uCloud;\nuniform vec3 uMist;\nuniform vec3 uMistCol;\nuniform vec3 uSkyRef;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
 /* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
@@ -234,10 +234,12 @@ export async function initDetail(size) {
 }
 const WN = 'vWN = normalize(mat3(modelMatrix) * objectNormal);';
 /* v8.9.1 雲影：一大片一大片（約 25 公尺）的影子跟著風飄過整座島——地面、房子、樹、島民和海面都一樣，只遮太陽直射的光（CASCADES 裡乘上去）。
-   uCloud.x 是深淺（晴天的白天才有），yz 是雲飄到哪裡 */
+   uCloud.x 是深淺（白天才有），yz 是雲飄到哪裡，w 是雲量（v9.22.10：0 晴天、1 多雲） */
 const CLOUD_FN = `
   #define TA_CLOUD
-  float taCloud(){ return 1.0 - smoothstep(0.47, 0.61, n_f(vWP.xz * 0.04 + uCloud.yz)) * uCloud.x; }   // 雲影約 25 公尺一片，平均蓋住三成多的地面
+  float taCloudM(){ float t = mix(0.50, 0.39, uCloud.w); return smoothstep(t, t + 0.13, n_f(vWP.xz * 0.04 + uCloud.yz)); }   // 雲影約 25 公尺一片：晴天零星蓋住兩成地面，多雲時一半以上，陽光一塊一塊掃過
+  float taCloud(){ return 1.0 - taCloudM() * uCloud.x; }
+  float taSunK(){ return 1.0 - taCloudM() * min(1.0, uCloud.x * 2.5); }   // 陽光沒被雲遮住的程度：雲影裡水面不閃、水底沒有焦散、沙不發亮
 `;
 /* v8.9.1 水面的兩個小函式：光網（淺水把陽光折成一條條亮線）、細波（兩組交錯的波）。河水用兩組往下游位移的座標各算一次再交替混合 */
 const WATER_FN = `
@@ -612,7 +614,7 @@ export function bend(mat, kind) {
           float c1 = n_cell(cp + vec2(uTime * 0.09, uTime * 0.05)), c2 = n_cell(cp * 1.37 + 3.1 - vec2(uTime * 0.06, -uTime * 0.08));
           float caus = smoothstep(0.58, 0.72, c1) * smoothstep(0.58, 0.72, c2);
           diffuseColor.rgb *= mix(vec3(1.0), vec3(0.88, 0.97, 1.0), uw * 0.3 * (1.0 - uSplit));
-          diffuseColor.rgb += vec3(0.70, 0.77, 0.84) * caus * uw * (0.025 + 0.11 * uShade);
+          diffuseColor.rgb += vec3(0.70, 0.77, 0.84) * caus * uw * (0.025 + 0.11 * uShade * taSunK());
         }
       }
 `);
@@ -763,7 +765,7 @@ export function bend(mat, kind) {
           float l2 = smoothstep(0.017, 0.0, abs(n_v(p * 2.8 - vec2(t * 0.08, -t * 0.1) + 3.0) - 0.5)) * gap * 0.55;
         #endif
         float sp = smoothstep(0.955, 1.0, n_v(p * 6.0 + vec2(t * 0.6, -t * 0.4))) + smoothstep(0.97, 1.0, n_v(p * 13.0 - vec2(t * 0.9, t * 0.5) + 7.0)) * 0.8;   // 陽光在水面上一閃一閃的細碎亮點
-        float solarK = 0.2 + 0.8 * uShade; sp *= solarK;   // 水面的陽光閃點、亮線與焦散跟著日照：晚上淡到兩成，不和燈光搶
+        float solarK = 0.2 + 0.8 * uShade * taSunK(); sp *= solarK;   // 水面的陽光閃點、亮線與焦散跟著日照：晚上淡到兩成，不和燈光搶
         diffuseColor.rgb += vec3(0.15, 0.18, 0.22) * (l1 * 0.6 + l2 * 0.4) * solarK + vec3(0.57) * sp;
         float gNet = 0.0;
         #ifdef USE_COLOR_ALPHA
@@ -843,7 +845,7 @@ export function bend(mat, kind) {
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.13, 0.96) + vec3(0.012, 0.016, 0.0), clamp(vGust, 0.0, 1.0) * 0.5);   // 陣風壓過去的草露出較亮的葉背
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
-    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade;');   // 晴天才閃
+    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade * taSunK();');   // 晴天才閃（雲影裡不閃）
     if (kind === 'roof') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  { float rh = n_h(floor(vec2((vWP.x - vWP.z) * 2.2, vWP.y * 3.6))); roughnessFactor = rh < 0.9 ? 0.68 + rh * 0.13 : 0.6; }');   // 霧面釉的屋瓦：陽光下一片片柔和的反光（v6.93：不像上了亮光漆的塑膠）；v7.5：大多 0.68–0.8，一成是釉面 0.6
     const RGH = { wood: 'mix(0.66 + n_v(vWP.xz * 2.3 + vWP.y) * 0.1, 0.36 + n_v(vWP.xz * 1.7) * 0.12, uInside * step(0.7, normalize(vWN).y))', fabric: '1.0', ceramic: '0.3 + n_v(vWP.xz * 4.0 + vWP.y * 3.0) * 0.08', metal: 'roughnessFactor * (0.85 + n_v(vWP.xz * 6.0 + vWP.y * 5.0) * 0.3)', foliage: '0.78', paper: '0.95' }[kind];
     // v7.8：屋裡的木地板上了清漆（uInside），窗光與燈在地上映出柔和的反光；戶外的木板照舊

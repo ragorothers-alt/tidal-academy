@@ -28,6 +28,8 @@ export const setOverride = w => { override = w; };
 export const gloom = () => Math.max(cloudK * 0.55, rainK);
 /** v9.22.2 雨層雲蓋住天空的程度 0–1（多雲只蓋一點；下雨整片灰）：積雲、遠景照這個淡掉 */
 export const overcast = () => Math.max(rainK, cloudK * 0.32);
+/** v9.22.10 多雲（沒下雨）的程度 0–1：雲影變多變深、雲縫間的陽光照舊明亮 */
+export const broken = () => cloudK * (1 - rainK);
 /** 地面有多濕 0–1：下雨時慢慢變濕，雨停後大約兩分鐘才乾（seasons.js 交給地面材質） */
 export const wetness = () => wetK;
 
@@ -84,7 +86,7 @@ export function update(dt, hour, night, focus, onChange) {
   if (stormK > 0.6 && (boltIn -= dt) <= 0) { flash = 1; boltIn = 7 + Math.random() * 10; thunderIn = 0.6 + Math.random() * 1.6; if (Math.random() < 0.4) setTimeout(() => { flash = Math.max(flash, 0.7); }, 140); }
   if (thunderIn >= 0 && (thunderIn -= dt) < 0) sfx('thunder');
   // 光線
-  const dim = cloudK * 0.38 + rainK * 0.47 + stormK * 0.08;   // v9.22.2 下雨幾乎沒有直射光（影子淡到看不出來），光來自整片灰白的天空（v6.93：雨天的影子再淡一點）
+  const dim = cloudK * (0.22 + rainK * 0.16) + rainK * 0.47 + stormK * 0.08;   // v9.22.10 多雲時陽光只淡一點，暗的是一片片雲影（以前整片均勻變暗 0.38）；v9.22.2 下雨幾乎沒有直射光（影子淡到看不出來），光來自整片灰白的天空（v6.93：雨天的影子再淡一點）
   sun.intensity *= 1 - dim; hemi.intensity *= (1 + rainK * 0.12 - stormK * 0.3) + flash * 1.6; renderer.toneMappingExposure *= (1 - rainK * 0.08 - stormK * 0.1) * (1 + flash * 0.2);
   hemi.color.lerp(skyGrey, (cloudK * 0.3 + rainK * 0.5) * (1 - night * 0.7));   // 天光補光也是灰的（以前雨天的背光面還是晴天的藍）
   { const gk = (cloudK * 0.5 + rainK * 0.45) * (1 - night * 0.6); skyU.top.value.lerp(greyTop, gk); skyU.mid.value.lerp(grey, gk * 0.9); skyU.bot.value.lerp(grey, gk * 0.85);

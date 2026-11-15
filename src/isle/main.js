@@ -2556,7 +2556,7 @@ function tick(fixed) {
   }
   foamMat.opacity = 0.45 + Math.sin(t * 1.6) * 0.2;
   // 光影：逆光輪廓、後製的太陽位置與天氣、空氣微塵
-  const fxClear = Math.max(0, 1 - rk * 1.1) * (weather.now.startsWith('cloud') ? 0.45 : 1);
+  const sunClear = Math.max(0, 1 - rk * 1.1), fxClear = sunClear * (weather.now.startsWith('cloud') ? 0.45 : 1), bk = weather.broken();   // v9.22.10 sunClear：只有下雨才整片遮住陽光；多雲交給一片片的雲影
   const fxFwd = camera.getWorldDirection(sunTmp.f), fxSv = sunTmp.v.copy(dir).setY(0).normalize(), fxFv = sunTmp.g.set(fxFwd.x, 0, fxFwd.z).normalize();
   const fxFront = THREE.MathUtils.smoothstep(fxSv.dot(fxFv), 0.05, 0.75) * (1 - night);
   // 天空用抬高後的方向畫（skyU.lift），反推太陽在天幕上的實際方向再投影
@@ -2566,7 +2566,7 @@ function tick(fixed) {
   post.fx.sunVis = fxSp.z < 1 ? fxFront * THREE.MathUtils.smoothstep(sunDisc.y, -0.05, 0.03) : 0; post.fx.sun.set(THREE.MathUtils.clamp((fxSp.x + 1) / 2, -0.1, 1.1), THREE.MathUtils.clamp((fxSp.y + 1) / 2, 0.55, 1.08));   // 太陽在畫面外時，把光源拉到畫面邊緣附近
   U.uSunV.value.copy(dir).transformDirection(camera.matrixWorldInverse); U.uRimCol.value.copy(sun.color);
   U.uRim.value = (0.28 + golden * 0.4) * fxClear * (1 - night);   // 白天也有側逆光的亮邊
-  U.uShade.value = fxClear * (1 - night) * (1 - golden * 0.6);
+  U.uShade.value = sunClear * (1 - night) * (1 - golden * 0.6);   // 雲縫裡的陽光一樣亮（雲影在著色器裡一塊塊遮）
   {   // v8.9.1 晨霧：秋冬春的清晨比較常有（每天固定，同一天重新整理也一樣），4:30 起漸濃、6 點最濃、8:30 前散去；下雨、颱風天沒有
     const h = hourOverride ?? nowHour(), d = simDate(), r = (Math.sin((d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate()) * 12.9898) * 43758.5453) % 1, r1 = Math.abs(r);
     const chance = [0.7, 0.65, 0.55, 0.5, 0.4, 0.35, 0.3, 0.3, 0.45, 0.65, 0.8, 0.75][d.getMonth()], amt = r1 < chance ? 0.6 + 0.4 * ((r1 * 7.13) % 1) : 0;
@@ -2574,7 +2574,7 @@ function tick(fixed) {
     U.uMist.value.x = 0.38 * amt * tk * wet * (room.inside ? 0 : 1);   // v9.13：0.5 → 0.38，晨霧看得到遠近層次，不是整片白幕
     U.uMistCol.value.copy(scene.fog.color).lerp(MIST_W, 0.4).lerp(sun.color, 0.12);   // 霧是帶一點晨光的白
   }
-  { const c = U.uCloud.value, w = 0.06 * (0.7 + 0.3 * U.uWind.value) * dt; c.x = U.uShade.value * 0.5; c.y += w; c.z += w * 0.37; }   // v8.9.1 雲影：晴天的白天才有，風大時飄得快（約每秒 1.5 公尺）
+  { const c = U.uCloud.value, w = 0.06 * (0.7 + 0.3 * U.uWind.value) * dt, wd = U.uWindDir.value; c.x = U.uShade.value * (0.5 + bk * 0.22); c.w = bk; c.y -= w * wd.x; c.z -= w * wd.y; }   // v8.9.1 雲影：白天才有，風大時飄得快（約每秒 1.5 公尺）；v9.22.10 多雲時又多又深，順著風向飄（以前逆風飄）
   U.uSkyRef.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.35);   // v9.22.6 濕地面映出的天光：低空的天色（陰雨天已經轉灰）
   U.uTrans.value = fxClear * (1 - night) * (0.55 + golden * 0.75);   // 葉片透光：晴天有，黃金時段的逆光最明顯
   motes.update(dt, t, look, golden, night, fxClear);
