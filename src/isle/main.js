@@ -402,6 +402,7 @@ async function villagerTalk(v) {
   await town.playBond(v, sp(v));
   for (;;) {
     const opts = [['practice', `一起練習（${challenge.SET} 題、不限時）`], ['quiz', '連續挑戰（獎金越疊越多）'], ['tip', '讀書秘訣'], ['chat', '聊聊天']];   // 穩定練習是預設；想拚紀錄再選連續挑戰
+    if (challenge.spotIds(v.sid).length) { const left = challenge.spotLeft(); opts.splice(1, 0, ['fn', `幫我檢查解法（${left ? `今天還有 ${left} 份` : '今天的看完了'}）`, () => ledger.run('spot', () => challenge.spot(v))]); }   // v9.20 導師找碴：找出解法裡第一個錯的步驟
     const unk = s.pockets.filter(x => x && x.k === 'unk').length;
     const don = s.pockets.filter(x => x && KINDS[x.k] && !s.museum[x.k][x.id]).length;
     if (v.sid === 'history') { if (unk) opts.unshift(['appraise', `鑑定化石（${unk}）`]); if (don) opts.unshift(['donate', `捐贈給博物館（${don}）`]); opts.push(['specimen', '標本研究（現在看不到的生物）'], ['museum', '看看博物館展品']); }

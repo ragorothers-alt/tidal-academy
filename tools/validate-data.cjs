@@ -29,6 +29,7 @@ TA.mergeExtra().forEach(uid => errors.push(`addQuestions 找不到單元 ${uid}`
 const ALLOWED_TAGS = /<\/?(u|b|i|sup|sub|br)\s*\/?>/g;
 const num = s => { const t = String(s == null ? '' : s).replace(/\s+/g, '').replace(/[−–—－]/g, '-'); const m = /^([+-]?(?:\d+\.?\d*|\.\d+))(?:\/([+-]?(?:\d+\.?\d*|\.\d+)))?$/.exec(t); if (!m) return NaN; const b = m[2] != null ? parseFloat(m[2]) : 1; return b === 0 ? NaN : parseFloat(m[1]) / b; };
 const BROKEN = /\?{3,}/;   // 中文被非 UTF-8 的方式寫壞時會變成一串問號
+const SPOT_O = ['第 ① 步', '第 ② 步', '第 ③ 步', '以上三步都正確'];   // 找碴題的固定選項（「以上」讓學習引擎不打亂順序）
 const checkMarkup = (where, s) => {
   if (typeof s !== 'string' || !s.trim()) { errors.push(`${where}: 空字串`); return; }
   if (BROKEN.test(s)) errors.push(`${where}: 疑似編碼損毀（出現 ???）→ ${s.slice(0, 40)}`);
@@ -80,6 +81,14 @@ for (const s of TA.SUBJECTS) {
         if (q.o.length < 3 || q.o.length > 5) errors.push(`${QW}: 單選題需 3–5 個選項`);
         if (!Number.isInteger(q.a) || q.a < 0 || q.a >= q.o.length) errors.push(`${QW}: 答案索引超出範圍`);
         else pos[q.a]++;
+      }
+      if (q.spot) {   // v9.20 找碴題：題幹是三步驟的解法，選第一個不成立的步驟；選項固定、不打亂
+        if (q.type && q.type !== 'single') errors.push(`${QW}: 找碴題只能是單選題`);
+        if (q.o.join('｜') !== SPOT_O.join('｜')) errors.push(`${QW}: 找碴題的選項必須依序是 ${SPOT_O.join('／')}`);
+        const st = String(q.q), at = ['①', '②', '③'].map(c => st.indexOf(c));
+        if (at.some(i => i < 0) || !(at[0] < at[1] && at[1] < at[2])) errors.push(`${QW}: 找碴題的題幹要依序列出 ①②③ 三個步驟`);
+        if (q.a < 3 && !String(q.e).startsWith(`第 ${'①②③'[q.a]} 步錯`)) errors.push(`${QW}: 找碴題的解析要以「第 ${'①②③'[q.a]} 步錯」開頭`);
+        if (q.a === 3 && /^第 [①②③] 步錯/.test(String(q.e))) errors.push(`${QW}: 答案是三步都正確，解析卻說有一步錯`);
       }
       n++;
     });

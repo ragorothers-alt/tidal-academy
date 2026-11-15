@@ -64,6 +64,6 @@ export function cardParts(sum) {
   const u = sum.voc ? '個' : '題', sub = `${sum.n} ${sum.voc ? '個單字' : '題'}答對 ${sum.ok} ${u}${sum.first ? `，其中 ${sum.first} ${u}第一次見` : ''}`;
   const dots = `<div class="pg-dots">${sum.dots.map(o => `<i class="${o ? 'ok' : 'no'}"></i>`).join('')}</div>`;
   const list = sum.lines.length ? `<div class="pg-list">${sum.lines.map(l => `<div class="pg-${l.k}"><b>${l.icon}</b><span>${esc(l.text)}</span></div>`).join('')}</div>` : '';
-  const s = sum.subj, foot = s && s.name ? `<div class="pg-sub">${esc(s.name)}已熟練 ${s.after} 題${s.after > s.before ? `（+${s.after - s.before}）` : ''}</div>` : '';
+  const s = sum.subj, foot = s && s.name && s.after > 0 ? `<div class="pg-sub">${esc(s.name)}已熟練 ${s.after} 題${s.after > s.before ? `（+${s.after - s.before}）` : ''}</div>` : '';
   return { sub, extra: dots + list + foot };
 }

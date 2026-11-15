@@ -750,3 +750,30 @@ test('v9.19 練習成果卡：整組是單字時說「個單字」，單字答�
   const mixed = P.summarize([{ ok: false }, { ok: false, vocab: true }, { ok: true, up: true, days: 2 }], null);   // 題目與單字混在一組：用「題」，兩種答錯分開說
   assert.deepEqual(mixed.lines.map(l => l.text), ['1 題往後排，2 天後再複習', '1 題答錯，記進錯題本：隔天再答對才算數', '1 個單字答錯，留在今天的複習：隔天再答對才往後排']);
 });
+
+test('v9.20 導師找碴：找碴題格式一致、選項不打亂；挑題先挑錯題與到期、再挑沒看過的，冷卻中不挑；每天的份數換日歸零', async () => {
+  const SP = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/spot.js')).href);
+  const t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L, ids = SP.ids(L, 'math');
+  const O = ['第 ① 步', '第 ② 步', '第 ③ 步', '以上三步都正確'];
+  assert.ok(ids.length >= 6, '數學至少 6 份找碴題');
+  ids.forEach(id => { const q = L.Q[id]; assert.deepEqual([...q.o], O, id); assert.equal(L.shuffles(q), false, id + '：選項順序固定'); assert.equal(L.view(q), q); });
+  assert.deepEqual([0, 1, 2, 3].map(a => ids.some(id => L.Q[id].a === a)), [true, true, true, true], '答案有 ①②③ 也有三步都正確');
+  assert.equal(new Set(ids.map(id => L.Q[id].unit)).size, ids.length, '一個單元一份');
+  assert.equal(SP.ids(L, 'history').length, 0, '其他科還沒有');
+  assert.equal(SP.next(L, 'math', null, () => 0).id, ids[0], '都沒做過：挑沒看過的');
+  L.record(L.Q[ids[0]], false, { silent: true });
+  assert.equal(SP.next(L, 'math', new Set(ids.slice(1)), () => 0), null, '剛答錯的在冷卻：不挑');
+  assert.notEqual(SP.next(L, 'math', null, () => 0).id, ids[0], '冷卻中改挑別份');
+  setNow(t0 + 30 * 60e3);
+  assert.equal(SP.next(L, 'math', null, () => 0.99).id, ids[0], '冷卻過後：錯題先挑');
+  const isle = {}; SP.log(isle, '2026-10-26').n = 2;
+  assert.equal(SP.log(isle, '2026-10-26').n, 2); assert.equal(SP.log(isle, '2026-10-27').n, 0, '換日歸零');
+  isle.spot = { d: '2026-10-27', n: 'x' }; assert.equal(SP.log(isle, '2026-10-27').n, 0, '存檔裡的資料不對：從 0 開始');
+});
+
+test('v9.20 練習成果卡：這一科還沒有熟練的題目時，不顯示「已熟練 0 題」', async () => {
+  const P = await import(require('url').pathToFileURL(path.join(ROOT, 'src/isle/progress.js')).href);
+  const rows = [{ ok: true, up: true, first: true, days: 2 }, { ok: true, up: true, first: true, days: 2 }, { ok: false, first: true }];
+  assert.ok(!P.cardParts(P.summarize(rows, { name: '數學', before: 0, after: 0 })).extra.includes('pg-sub'));
+  assert.match(P.cardParts(P.summarize(rows, { name: '數學', before: 3, after: 3 })).extra, /數學已熟練 3 題</);
+});

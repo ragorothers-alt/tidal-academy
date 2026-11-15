@@ -1,5 +1,6 @@
 /* 潮汐小島 · 連續挑戰與島民主動出題
    一起練習（導師的預設練習，v7.1）：一組 5 題、不限時、難度照表現調整，答對的鈴錢不收回。
+   幫我檢查解法（v9.20 導師找碴）：一份三步驟的解法，找出第一個錯的那一步；每天最多 3 份，題目是題庫裡標了 spot 的題。
    連續挑戰：答對一題就把獎金放進彩池，可以選「繼續（下一題更難）」或「見好就收」領走全部；答錯只能領回一半。
    連對越多難度越高：前 2 題簡單、第 3–5 題中等、第 6 題起困難、連對 10 題起每題限時（越來越短，但題目長、有閱讀材料或多選時會多給時間）；
    題庫裡的題組（附閱讀材料）與多選題也會出，長題目用大題目面板作答；
@@ -15,6 +16,7 @@ import * as cooking from './cooking.js';
 import * as memo from './memo.js';
 import { pickQ, pickQU, record, pick, vocabQ, askQ, readSec, quickQ, confPlan, confNote, askWhy } from './quiz.js';
 import * as progress from './progress.js';
+import * as spots from './spot.js';
 import { showProgress } from './drill.js';
 import { openNotes } from './library.js';
 import { I, S, save, icon } from './state.js';
@@ -149,6 +151,54 @@ export async function practice(v) {
   }
   const n = Math.min(SET, k - 1);
   await ui.say(sp, n ? `這組 ${n} 題答對 ${got} 題，拿到 ${bells} 鈴錢。${got === n ? '全對！下次可以挑戰難一點的。' : got ? '答錯的題目記下來了，過幾天會再考你。' : '沒關係，錯的題目過幾天會再出現，到時候就會了。'}${H.tail(v)}${friend}` : '題目都被你答完了！');
+  await showProgress(tr);
+  if (R.gift === v.sid) { R.gift = null; save(); await H.gift(v); }
+  return got;
+}
+
+/** 答對一題的好感度（每位島民每天最多 3 次，和一起練習同一個上限）：回傳附在最後一句的好感度文字，今天加滿了回傳空字串 */
+function befriend(v, R) {
+  const s = S(), today = s.frDay[v.sid] || 0; if (today >= 3) return '';
+  const before = s.fr[v.sid] || 0; s.frDay[v.sid] = today + 1; s.fr[v.sid] = Math.min(20, before + 1);
+  if (s.fr[v.sid] > before && s.fr[v.sid] % 5 === 0) R.gift = v.sid;
+  return before >= 20 && bond.overflow(v) ? '（多了一段共同回憶，寫進回憶錄了）' : `（好感度 ${H.hearts(s.fr[v.sid])}）`;   // 好感度滿了：改存共同回憶
+}
+
+/* ---------- v9.20 導師找碴：題庫裡標了 spot 的題目是一份三步驟的解法，找出第一個不成立的步驟（先做數學）。
+   每天最多檢查 3 份；先挑到期與錯題、再挑沒看過的，剛答過的（冷卻中）不挑。答對的鈴錢、好感度和一起練習一樣；
+   不論對錯都把修正說一遍。照常寫進學習紀錄：找碴題是獨立的題目，不會算成原本的計算題答對。 ---------- */
+export const SPOT_DAY = spots.DAY;
+/** 這一科的找碴題 */
+export const spotIds = sid => spots.ids(L, sid);
+const spotLog = () => spots.log(S(), TA.U.dayKey());
+/** 今天還能檢查幾份 */
+export const spotLeft = () => Math.max(0, SPOT_DAY - spotLog().n);
+/** 幫導師檢查解法：回傳找對幾份 */
+export async function spot(v) {
+  const s = S(), sp = H.sp(v), R = rec(), log = spotLog();
+  if (!spotIds(v.sid).length) { await ui.say(sp, '我手邊還沒有要檢查的解法。'); return 0; }
+  if (log.n >= SPOT_DAY) { await ui.say(sp, `今天已經幫我檢查 ${SPOT_DAY} 份了，謝謝你！明天我再拿新的作業來。`); return 0; }
+  const n = SPOT_DAY - log.n, seen = new Set(), tr = progress.tracker(TA, v.sid), okL = ['找到了！', '沒錯，就是這一步。', '眼睛真利！'], badL = v.bad || ['可惜！', '差一點！'];
+  let got = 0, bells = 0, done = 0, friend = '';
+  await ui.say(sp, s.spotIntro ? pick(['又有幾份作業要改，幫我看看？', '這幾份解法你幫我檢查一下。']) : `我在改作業，這幾份解法裡可能藏著錯。每份都有三個步驟，幫我找出「第一個錯的那一步」；三步都對的話，就選「以上三步都正確」。一天最多 ${SPOT_DAY} 份。`);
+  s.spotIntro = 1; save();
+  for (let k = 1; k <= n; k++) {
+    const q0 = spots.next(L, v.sid, seen);
+    if (!q0) { if (!done) await ui.say(sp, '這幾份你剛看過，過一會兒再來幫我檢查吧。'); break; }
+    seen.add(q0.id);
+    const q = L.view(q0), { ok } = await askQ(sp, q, `【檢查解法 第 ${k}/${n} 份】<br>`);   // 選項是「第 ① 步…以上三步都正確」，順序固定不打亂
+    tr.pre(q); record(q, ok); tr.post(ok); log.n++; done++;
+    if (ok) {
+      got++; const b = Math.round(100 * (q.d || 1) * cooking.bellsMul()); bells += b; s.bells += b; friend = befriend(v, R) || friend;
+      save(); Audio.sfx('ok'); ui.emote(v.mesh, '♪', '#ff7b9c'); ui.floatText(H.player, `+${b} 鈴錢`, '#e0a020');
+      await ui.say(sp, pick(okL) + q.e, { html: true });   // 答對也把怎麼改說一遍
+    } else {
+      save(); Audio.sfx('bad'); ui.emote(v.mesh, '💧', '#5fa8ff');
+      await ui.explain(sp, q, pick(badL));
+    }
+    ui.passage(null);
+  }
+  if (done) await ui.say(sp, `這 ${done} 份找出 ${got} 份的問題，拿到 ${bells} 鈴錢。${got === done ? '一份都沒漏掉！' : '看漏的那份記下來了，過幾天會再請你看一次。'}${H.tail(v)}${friend}`);
   await showProgress(tr);
   if (R.gift === v.sid) { R.gift = null; save(); await H.gift(v); }
   return got;

@@ -113,3 +113,9 @@ test('v9.19 奔跑的煙塵：共用一顆球，消失時釋放自己的材質',
   vm.createContext(c); vm.runInContext(decl + '\n' + puff + '\nfor (let k = 0; k < 100; k++) puff(0, 0, 0);\nconst dt = 1;\n' + cleanup + '\nglobalThis.left = puffs.length;', c);
   assert.equal(c.left, 0); assert.equal(geoms, 1, '只建一顆共用的球'); assert.equal(mats, 100); assert.equal(disposed, 100, '每顆的材質都釋放');
 });
+
+test('v9.20 isle.html 載入 src/data 裡的每一個題庫檔（新增題庫檔時不會漏掉）', () => {
+  const html = fs.readFileSync(path.join(ROOT, 'isle.html'), 'utf8');
+  const missing = fs.readdirSync(path.join(ROOT, 'src/data')).filter(f => f.endsWith('.js') && !html.includes(`src="src/data/${f}"`));
+  assert.deepEqual(missing, []);
+});

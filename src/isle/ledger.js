@@ -2,7 +2,7 @@
    做法：state.js 把 S().bells 換成存取器，每次增減都交給 note()；金額記在當下的來源標籤（begin(tag) 開始、回傳的函式結束）。
    沒有標籤時記成「其他」。S().ledger = { 'YYYY-MM-DD': { 來源: [收入, 支出] } }，只留最近 14 天。 */
 const TA = window.TA, dayKey = () => TA.U.dayKey();   // 不 import state.js（state.js 會用到這裡的 watch）
-export const NAMES = { practice: '一起練習', streak: '連續挑戰', popquiz: '島民出題', sell: '賣東西', shop: '買東西', request: '委託', research: '研究經費', plan: '讀書計畫', cram: '考前衝刺', exchange: '潮晶兌換', trip: '神秘島', order: '訂購', other: '其他' };
+export const NAMES = { practice: '一起練習', spot: '檢查解法', streak: '連續挑戰', popquiz: '島民出題', sell: '賣東西', shop: '買東西', request: '委託', research: '研究經費', plan: '讀書計畫', cram: '考前衝刺', exchange: '潮晶兌換', trip: '神秘島', order: '訂購', other: '其他' };
 let tag = '';
 /** 開始一段有來源的流程（同時只有一段；巢狀時保留外層），回傳結束函式 */
 export function begin(t) { if (tag) return () => {}; tag = t; return () => { if (tag === t) tag = ''; }; }
