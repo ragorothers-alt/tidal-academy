@@ -9,14 +9,14 @@ const BENDV = `uniform float uCurve; uniform float uBendF;
   vec4 bendPos(vec4 mv){ float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve; return mv; }`;
 
 /* ---------- 沙灘浪花 ---------- */
-const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: { value: 0.1 }, uNight: { value: 0 }, uBlue: { value: 0 } };
+const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: { value: 0.1 }, uNight: { value: 0 }, uBlue: { value: 0 }, uDim: { value: 1 } };   // uDim：v9.22.16 陰雨天的天光比較暗
 const waveMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: waveU,
   vertexShader: `${BENDV}
     attribute float side; attribute float along; uniform float uSea; varying float vS; varying float vA;
     void main(){ vS = side; vA = along; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02;   // 水線與海面側貼著海平面（隨潮汐升降）
       vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`,
-  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; varying float vS; varying float vA;
+  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; varying float vS; varying float vA;
     float h(float x){ return fract(sin(x * 91.7) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -60,7 +60,7 @@ const waveMat = new THREE.ShaderMaterial({
         foam *= 0.3 + 0.7 * smoothstep(0.25, 0.6, vn(vec2(a * 0.9 + 3.1, t * 0.05)));   // v8.7 一段有泡、一段只剩濕沙，浪線不再是整條等亮的白線
         c = mix(c, vec4(1.0, 1.0, 1.0, 0.6), max(foam, bubbles));   // v8.7 泡沫淡一點（以前 0.85）
       }
-      c.rgb *= mix(1.0, 0.45, uNight);
+      c.rgb *= mix(vec3(1.0), vec3(0.22, 0.25, 0.32), uNight) * uDim;   // v9.22.16 浪花不受光照：夜裡只有冷冷的月光那麼亮（以前 0.45 的白在暗藍的夜海上太搶眼），雨天再暗一點
       if (uBlue > 0.001) {   // 藍眼淚：浪花裡的夜光藻被拍打就發光——一點一點閃，泡沫越濃越亮；亮度超過 1，泛光讓它真的像在發光（濕沙與水膜不亮）
         float spk = vn(vec2(a * 13.0 + t * 0.7, abs(vS) * 46.0 - t * 1.9)), k = uBlue * smoothstep(0.2, 0.5, c.a);
         c.rgb = mix(c.rgb, vec3(0.05, 0.45, 1.0) * (1.5 + 2.8 * smoothstep(0.45, 0.95, spk)), k);
@@ -177,14 +177,14 @@ const ringTex = decalTex(c => { c.strokeStyle = 'rgba(255,255,255,0.3)'; c.lineW
 const decalVert = `${BENDV}
   attribute float aAlpha; varying float vAlpha; varying vec2 vUv;
   void main(){ vUv = uv; vAlpha = aAlpha; vec4 mv = modelViewMatrix * instanceMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`;
-const decalFrag = `uniform sampler2D map; uniform float uNight; varying float vAlpha; varying vec2 vUv;
-  void main(){ vec4 t = texture2D(map, vUv); gl_FragColor = vec4(t.rgb * mix(1.0, 0.5, uNight), t.a * vAlpha); }`;
+const decalFrag = `uniform sampler2D map; uniform float uNight; uniform float uDim; varying float vAlpha; varying vec2 vUv;
+  void main(){ vec4 t = texture2D(map, vUv); gl_FragColor = vec4(t.rgb * mix(vec3(1.0), vec3(0.26, 0.29, 0.36), uNight) * uDim, t.a * vAlpha); }`;   // v9.22.16 腳印與漣漪：夜裡、雨天跟著暗下來
 const glowFrag = `uniform sampler2D map; varying float vAlpha; varying vec2 vUv;
   void main(){ float a = texture2D(map, vUv).a * vAlpha; gl_FragColor = vec4(vec3(0.06, 0.48, 1.0) * 2.4 * a, a); }`;   // v8.9.1 藍眼淚的腳印：加法混色的藍光
 function pool(tex, n, glow) {
   const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), alpha = new Float32Array(n);
   geo.setAttribute('aAlpha', new THREE.InstancedBufferAttribute(alpha, 1));
-  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: { map: { value: tex }, uCurve: U.uCurve, uBendF: U.uBendF, uNight: waveU.uNight }, vertexShader: decalVert, fragmentShader: glow ? glowFrag : decalFrag });
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending, uniforms: { map: { value: tex }, uCurve: U.uCurve, uBendF: U.uBendF, uNight: waveU.uNight, uDim: waveU.uDim }, vertexShader: decalVert, fragmentShader: glow ? glowFrag : decalFrag });
   const im = new THREE.InstancedMesh(geo, mat, n); im.frustumCulled = false; im.renderOrder = 3; scene.add(im);
   const items = Array.from({ length: n }, () => ({ life: 0, max: 1, x: 0, y: -99, z: 0, r: 0, s: 1, grow: 0 }));
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -256,7 +256,7 @@ export function ripple(x, z, size, y) {
 /** 每幀：浪花時間、玩家在沙灘上的腳印、下雨與魚影的漣漪 */
 export function update(dt, player, opt) {
   if (!feet) return;
-  waveU.uSea.value = seaMesh.position.y; waveU.uNight.value = opt.night || 0;
+  waveU.uSea.value = seaMesh.position.y; waveU.uNight.value = opt.night || 0; waveU.uDim.value = 1 - (opt.rain || 0) * 0.35;
   const p = player.position;
   if (lastX != null && !opt.inAir) {
     const d = Math.hypot(p.x - lastX, p.z - lastZ);
