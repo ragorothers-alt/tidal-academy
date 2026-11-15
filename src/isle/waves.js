@@ -28,19 +28,21 @@ const waveMat = new THREE.ShaderMaterial({
       vec4 c = vec4(0.0);
       if (vS > 0.0) {
         // 海面那一側：一道道碎浪往岸邊推進——寬窄不一、斷斷續續，靠岸越近越碎
+        // v9.22.12 每道碎浪是一條往岸邊推的泡沫帶：靠岸的前緣緻密，後面（往外海）拖著一段漸漸破成蕾絲、越來越淡的泡沫（以前是幾公分寬的細白線，交錯起來像塗鴉）
         float v = vS;   // 0 = 岸邊，1 = 外海
         for (int k = 0; k < 3; k++) {
           float fk = float(k), p = fract(t * 0.18 + fk / 3.0 + sin(a * 0.4 + fk) * 0.06);
           float pos = 1.0 - p + (vn(vec2(a * 0.7, fk * 3.0)) - 0.5) * 0.08;   // 浪線不是平行的：沿岸前後錯開
-          float wid = 0.025 + 0.04 * vn(vec2(a * 1.3 + fk * 7.0, t * 0.1));
-          float w = smoothstep(wid, 0.0, abs(v - pos)) * smoothstep(0.0, 0.25, p) * (1.0 - p * 0.5);
+          float d = v - pos, tl = 0.035 + 0.06 * vn(vec2(a * 1.3 + fk * 7.0, t * 0.1));   // d > 0：浪頭後方；tl：拖尾長短不一（約 8–23 公分）
+          float w = smoothstep(-0.01, 0.004, d) * exp(-max(d, 0.0) / tl) * smoothstep(0.0, 0.25, p) * (1.0 - p * 0.4);
           float brk = smoothstep(0.18, 0.5, vn(vec2(a * 0.9 + fk * 11.0, t * 0.15)));   // 有些段落沒有浪
-          w *= brk * (0.35 + 0.65 * lace(vec2(a * 4.0, v * 18.0 + t * 0.6)));
-          c.a += w * 0.75;
+          float lc = lace(vec2(a * 5.5 + t * 0.05, d * 13.0 + fk * 5.3 + t * 0.15));   // 蕾絲紋跟著浪頭走、慢慢變形（沿岸與離岸同樣的尺度，不拉成長條）
+          w *= brk * mix(0.8 + 0.2 * lc, lc * lc, smoothstep(0.0, 0.04, d));   // 前緣一整道泡沫，後面破成一團團、中間有洞
+          c.a += w * 0.62;
         }
         c.rgb = vec3(1.0);   // 修正：原本每道浪都把白色加一次（最多 3 倍亮），泛光把浪花放大成一條條發亮的白帶
-        float shore = smoothstep(0.2, 0.0, v);
-        c.a += shore * (0.25 + 0.75 * lace(vec2(a * 3.2 + t * 0.2, v * 24.0 - t * 0.9))) * 0.85;   // 貼著岸邊的泡沫：蕾絲狀的碎泡
+        float shore = smoothstep(0.13, 0.0, v);   // v9.22.12 碎浪帶變寬後，岸邊泡沫仍約 30 公分
+        c.a += shore * (0.2 + 0.8 * lace(vec2(a * 5.0 + t * 0.2, v * 12.0 - t * 0.9))) * 0.75;   // 貼著岸邊的泡沫：蕾絲狀的碎泡
         c.a = min(c.a, 0.9);
       } else {
         // 沙灘那一側：一層薄薄的海水推上來再退去，前緣是一條斷續的泡沫，退去後留下濕沙與殘留的泡泡
@@ -48,8 +50,8 @@ const waveMat = new THREE.ShaderMaterial({
         float reach = 0.55 + 0.4 * sin(t * 0.55 + a * 0.35) * (0.7 + 0.3 * sin(a * 1.3)) + (vn(vec2(a * 1.1, 2.0)) - 0.5) * 0.15;
         float f = clamp(reach, 0.05, 0.95);
         float film = 1.0 - smoothstep(f - 0.08, f, v);
-        float lc = lace(vec2(a * 5.0, v * 14.0 + t * 0.4));
-        float foam = smoothstep(0.05, 0.0, abs(v - f)) * (0.45 + 0.55 * lc);
+        float lc = lace(vec2(a * 5.0, v * 14.0 + t * 0.4)), dd = f - v;   // dd > 0：水膜前緣後方（往海那一側）
+        float foam = smoothstep(-0.03, 0.0, dd) * exp(-max(dd, 0.0) / 0.1) * mix(0.9, lc, smoothstep(0.0, 0.06, dd));   // v9.22.12 前緣一道泡沫，往海那一側拖著漸散的蕾絲泡（以前是一條細線）
         float bubbles = film * smoothstep(0.55, 0.85, lace(vec2(a * 9.0, v * 30.0 - t * 0.3))) * 0.5;   // 薄水膜上的小泡泡
         float wet = (1.0 - smoothstep(0.9, 1.0, v)) * (1.0 - film);
         c = mix(vec4(0.32, 0.25, 0.14, wet * 0.16), vec4(0.6, 0.92, 0.96, 0.16), film);
@@ -110,7 +112,7 @@ function coastLines() {
 function buildShore() {
   const P = [], S = [], A = [];           // 浪花帶
   const BP = [], BC = [];                 // 沙灘緩坡（蓋住格子狀的階梯邊緣）
-  const OFF = 0.42, ySand = 0.362, WL = 0.6, W_OUT = 1.5, IN = 1.7, SLOPE = 1.8;
+  const OFF = 0.42, ySand = 0.362, WL = 0.6, W_OUT = 2.4, IN = 1.7, SLOPE = 1.8;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺
   const sand = new THREE.Color('#f1e1b1'), sandWet = new THREE.Color('#e0c78a');
   const push = (x, y, z, s, a) => { P.push(x, y, z); S.push(s); A.push(a); };
   const bpush = (x, y, z, c) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); };
@@ -129,7 +131,15 @@ function buildShore() {
     // 曲線往海推一點，包住突出的格子角
     const cp = pts.map((p, i) => [p[0] + nor[i][0] * OFF, p[1] + nor[i][1] * OFF]);
     let along = 0; const al = cp.map((p, i) => { if (i) along += Math.hypot(p[0] - cp[i - 1][0], p[1] - cp[i - 1][1]); return along; });
-    const at = (i, d) => [cp[i][0] + nor[i][0] * d, cp[i][1] + nor[i][1] * d];
+    // v9.22.12 緩坡與浪花帶改用平滑過的法線：格子海岸的斜邊是一階一階的，磨圓後法線左右擺動，往外推兩公尺多的浪花帶就一片片交疊，浪線交錯成一條條直線
+    const K = 12, ns = nor.map((v0, i) => { let sx = 0, sz = 0; for (let k = -K; k <= K; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; const w = 1 - Math.abs(k) / (K + 1); sx += nor[j][0] * w; sz += nor[j][1] * w; } const l = Math.hypot(sx, sz); return l > 0.3 * (K + 1) ? [sx / l, sz / l] : v0; });
+    const at = (i, d) => [cp[i][0] + ns[i][0] * d, cp[i][1] + ns[i][1] * d];
+    // 內凹的海灣：浪花帶推到會和鄰段交疊之前就停（寬度不超過彎曲半徑），再讓寬度沿岸慢慢變化
+    const wraw = ns.map((v0, i) => { const a = closed ? (i - 1 + n) % n : Math.max(0, i - 1), b = closed ? (i + 1) % n : Math.min(n - 1, i + 1), R = WL + W_OUT;
+      const din = Math.hypot(cp[b][0] - cp[a][0], cp[b][1] - cp[a][1]), dout = Math.hypot(cp[b][0] + ns[b][0] * R - cp[a][0] - ns[a][0] * R, cp[b][1] + ns[b][1] * R - cp[a][1] - ns[a][1] * R);
+      if (a === b || din < 1e-4 || dout >= din) return W_OUT;
+      const th = Math.acos(Math.min(1, ns[a][0] * ns[b][0] + ns[a][1] * ns[b][1])); return Math.max(0.6, Math.min(W_OUT, 0.85 * din / Math.max(th, 1e-4) - WL)); });
+    const wo = wraw.map((w, i) => { let m = w; for (let k = -8; k <= 8; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; m = Math.min(m, wraw[j] + Math.abs(k) * 0.08); } return m; });
     const last = closed ? n : n - 1;
     for (let i = 0; i < last; i++) {
       const j = (i + 1) % n, a0 = al[i], a1 = j === 0 ? along + Math.hypot(cp[i][0] - cp[j][0], cp[i][1] - cp[j][1]) : al[j];
@@ -146,7 +156,7 @@ function buildShore() {
       push(w0[0], 0, w0[1], -0.0001, a0); push(i0[0], slopeY(-0.25) + 0.012, i0[1], -1, a0); push(i1[0], slopeY(-0.25) + 0.012, i1[1], -1, a1);
       push(w0[0], 0, w0[1], -0.0001, a0); push(i1[0], slopeY(-0.25) + 0.012, i1[1], -1, a1); push(w1[0], 0, w1[1], -0.0001, a1);
       // 海面側浪線
-      const o0 = at(i, WL + W_OUT), o1 = at(j, WL + W_OUT);
+      const o0 = at(i, WL + wo[i]), o1 = at(j, WL + wo[j]);
       push(w0[0], 0, w0[1], 0.0001, a0); push(w1[0], 0, w1[1], 0.0001, a1); push(o1[0], 0, o1[1], 1, a1);
       push(w0[0], 0, w0[1], 0.0001, a0); push(o1[0], 0, o1[1], 1, a1); push(o0[0], 0, o0[1], 1, a0);
     }
