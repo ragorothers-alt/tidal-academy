@@ -337,7 +337,10 @@
      圖書館、夢境、潮靈、導師、錯題本與手機都從這裡拿下一題，完成量也共用（d.rv：今天答過的複習題）。
      每天一份（REVIEW_DAY 題，考前一週 12 題）；做完就好，還想多做也可以繼續。 ---------- */
   L.reviewGoal = () => (L.phase() === 'final' ? 12 : 20);
-  L.reviewLeft = f => L.pickReview(9999).filter(id => L.inTrack(L.Q[id].subject) && !L.cooling(id) && (!f || f(id)));
+  /** v9.21 今天的複習的全部題目（含冷卻中的）：錯題也要到期才排。在不同天答對、往前一格的錯題，到期前再答也不會往前，
+      以前冷卻二十分鐘後又排回今天的複習，等於白做一次（錯題本裡挑一科「全部錯題」照舊，用 pickReview） */
+  L.reviewPool = f => L.pickReview(9999).filter(id => L.inTrack(L.Q[id].subject) && L.isDue(id) && (!f || f(id)));
+  L.reviewLeft = f => L.reviewPool(f).filter(id => !L.cooling(id));
   L.reviewNext = (n, f) => L.reviewLeft(f).slice(0, n);
   /** { done 今天複習了幾題, left 今天這份還剩幾題, more 這份以外還能複習幾題 } */
   L.reviewToday = function () {
@@ -362,7 +365,7 @@
     const rnd = U.rng(key + ':' + S.created), ph = L.phase(), size = L.dailySize(), main = L.mainSubjects();
     const inTr = id => L.inTrack(L.Q[id].subject);
     // 只排要考的考科；考前 30 天起多排複習（8 題）、不出新題（湊不滿才補），主力考科的新題多一倍
-    const due = L.pickReview(40).filter(inTr).slice(0, ph ? 8 : 5);
+    const due = L.reviewPool().slice(0, ph ? 8 : 5);   // v9.21 和今天的複習同一份：到期的錯題與到期題
     const weakUnits = L.weakUnits(16).filter(u => L.inTrack(u.subject.id)).slice(0, 4).map(u => u.id);
     const weak = weakUnits.map(uid => U.shuffle(L.BY_UNIT[uid], rnd).find(id => !due.includes(id))).filter(Boolean);
     const pools = L.trackSubjects().flatMap(sid => { const p = U.shuffle((L.BY_SUBJECT[sid] || []).filter(id => !seen(id) && L.Q[id].d <= 2), rnd); return main.includes(sid) ? [p, p.slice().reverse()] : [p]; });

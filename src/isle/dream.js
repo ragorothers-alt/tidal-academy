@@ -21,7 +21,7 @@ export async function sleep(paint) {
   if (busy) return; busy = true;
   try {
     const h = new Date().getHours(), night = h >= 21 || h < 5, sp = { name: '夢境', color: '#9a8ad8', voice: 260 };
-    const ids = L.reviewNext(5), cool = !ids.length && L.pickReview(9999).some(id => L.inTrack(L.Q[id].subject));
+    const ids = L.reviewNext(5), cool = !ids.length && L.reviewPool().length > 0;
     veil(true); Audio.sfx('open');
     if (cool) { await ui.say(sp, `${night ? '你沉沉睡去' : '你打了個小盹'}……剛答錯的題目還在腦中打轉，夢裡一片模糊。過一陣子再睡，那些題目才會清楚地浮現（隔一段時間再複習，記得更牢）。`); return; }
     if (!ids.length) { await ui.say(sp, `${night ? '你沉沉睡去' : '你打了個小盹'}……一夜無夢。今天沒有要複習的題目，睡得很安穩。`); return; }

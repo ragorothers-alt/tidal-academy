@@ -357,13 +357,13 @@ export function showResult(r) {
 export function reviewLine() {
   const r = L.reviewToday();
   if (!r.left) {   // v8.2 錯題都還在冷卻：說「剛練過、幾分鐘後」，不要說沒有題目
-    const cool = L.pickReview(9999).filter(id => L.inTrack(L.Q[id].subject) && L.cooling(id));
+    const cool = L.reviewPool().filter(L.cooling);   // v9.21 只算冷卻完今天還會排回來的
     if (cool.length) { const m = Math.max(1, Math.ceil((Math.min(...cool.map(L.coolUntil)) - Date.now()) / 60000)); return `${cool.length} 題剛練過，約 ${m} 分鐘後再複習${r.done ? `（今天已複習 ${r.done} 題）` : ''}`; }
   }
   return r.left ? `今天的複習還有 ${r.left} 題${r.done ? `（已複習 ${r.done} 題）` : ''}` : r.done ? `今天的複習完成了 ✔（${r.done} 題）` : '今天沒有要複習的題目';
 }
 /** 沒有題目可以出時的原因（全部在冷卻中，或真的沒有） */
-export const reviewEmpty = () => L.pickReview(9999).some(id => L.inTrack(L.Q[id].subject)) ? `剛答過的題目要隔 ${L.COOL_MIN} 分鐘再複習，過一會兒再來` : '今天沒有要複習的題目了';
+export const reviewEmpty = () => L.reviewPool().length ? `剛答過的題目要隔 ${L.COOL_MIN} 分鐘再複習，過一會兒再來` : '今天沒有要複習的題目了';
 /** 接著做今天的複習（下一小段，預設 8 題） */
 export function reviewGo(n) {
   const ids = L.reviewNext(n || 8);

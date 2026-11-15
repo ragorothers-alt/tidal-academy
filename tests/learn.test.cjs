@@ -777,3 +777,21 @@ test('v9.20 練習成果卡：這一科還沒有熟練的題目時，不顯示�
   assert.ok(!P.cardParts(P.summarize(rows, { name: '數學', before: 0, after: 0 })).extra.includes('pg-sub'));
   assert.match(P.cardParts(P.summarize(rows, { name: '數學', before: 3, after: 3 })).extra, /數學已熟練 3 題</);
 });
+
+test('v9.21 今天的複習：在不同天答對、往前一格的錯題，到期前不再排進來（以前冷卻完又排回今天，再答也不會往前）', () => {
+  const day = 864e5, t0 = new Date(2026, 9, 26, 10).getTime(), { TA, setNow } = boot(null, t0), L = TA.L;
+  const [a, b] = L.BY_SUBJECT.math.filter(id => !L.Q[id].pid).slice(0, 2);
+  L.record(L.Q[a], false, { silent: true }); L.record(L.Q[b], false, { silent: true });
+  setNow(t0 + day);
+  assert.deepEqual([...L.reviewLeft()].sort(), [a, b].sort(), '昨天答錯的兩題都在今天的複習');
+  L.record(L.Q[a], true, { silent: true });   // 錯題在不同天答對：往前一格，明天到期
+  L.record(L.Q[b], false, { silent: true });   // 又答錯：今天到期
+  setNow(t0 + day + 30 * 60e3);
+  assert.ok(L.isMistake(a), 'a 還在錯題本');
+  assert.deepEqual([...L.reviewLeft()], [b], '冷卻完只排回今天又答錯的 b');
+  assert.deepEqual([...L.reviewPool()], [b]);
+  assert.ok(L.pickReview(15).includes(a), '錯題本挑一科「全部錯題」照舊');
+  setNow(t0 + 2 * day);
+  assert.ok(L.reviewLeft().includes(a), '到期那天再排回來');
+  assert.ok(L.pickDaily().includes(a) || L.pickDaily().length >= L.dailySize(), '每日潮汐也從同一份挑');
+});

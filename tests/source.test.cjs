@@ -119,3 +119,44 @@ test('v9.20 isle.html 載入 src/data 裡的每一個題庫檔（新增題庫檔
   const missing = fs.readdirSync(path.join(ROOT, 'src/data')).filter(f => f.endsWith('.js') && !html.includes(`src="src/data/${f}"`));
   assert.deepEqual(missing, []);
 });
+
+test('v9.21 互動提示：內容沒變不重寫、位置沒動不重設；換內容才重建，沒有提示就收起；動作鈕同理', () => {
+  const vm = require('vm'), src = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8');
+  const seg = src.slice(src.indexOf('const PR = {'), src.indexOf('function houseTick('));
+  let html = 0, left = 0, top = 0, text = 0, created = 0, removed = 0, measured = 0;
+  const mk = () => {
+    created++; const el = { isConnected: true, classList: { toggle() {} }, remove() { removed++; el.isConnected = false; }, style: {} };
+    Object.defineProperty(el, 'offsetWidth', { get() { measured++; return 80; } });
+    Object.defineProperty(el, 'innerHTML', { set() { html++; } });
+    Object.defineProperty(el.style, 'left', { set() { left++; } }); Object.defineProperty(el.style, 'top', { set() { top++; } });
+    return el;
+  };
+  const act = { classList: { toggle() {} } }; Object.defineProperty(act, 'textContent', { set() { text++; } });
+  const c = { ui: { el: mk }, $: id => (id === 'labels' ? { appendChild() {} } : act), THREE: { MathUtils: { clamp: (v, a, b) => Math.max(a, Math.min(b, v)) } }, innerWidth: 1000, Math };
+  vm.createContext(c); vm.runInContext(seg + ';globalThis.promptAt = promptAt; globalThis.actLabel = actLabel;', c);
+  for (let i = 0; i < 60; i++) { c.promptAt('聊天', [100, 200]); c.actLabel('聊天'); }
+  assert.deepEqual([created, html, left, top, text], [1, 1, 1, 1, 1], '站著不動 60 格：每樣只寫一次');
+  c.promptAt('聊天', [130, 200]); assert.deepEqual([html, left, top], [1, 2, 1], '移動只更新位置');
+  c.promptAt('看信箱', [130, 200]); c.actLabel('看信箱'); assert.deepEqual([html, text], [2, 2], '換內容才重建');
+  c.promptAt('', null); assert.equal(removed, 1, '沒有提示就收起');
+  c.promptAt('聊天', [130, 200]); assert.equal(created, 2, '再出現時重新建立');
+  for (let i = 0; i < 30; i++) c.promptAt('聊天', [990, 200], { clamp: true });
+  assert.equal(measured, 1, '不超出畫面：寬度只在內容改變時量一次');
+});
+
+test('v9.21 島民名牌：看不到的名牌不搬位置，位置與透明度沒變不寫；藏起來再出現會重新寫透明度', () => {
+  const vm = require('vm'), src = fs.readFileSync(path.join(ROOT, 'src/isle/main.js'), 'utf8');
+  const seg = src.slice(src.indexOf('const PR = {'), src.indexOf('function houseTick('));
+  let op = 0, pos = 0;
+  const el = { style: {} };
+  Object.defineProperty(el.style, 'opacity', { set() { op++; } });
+  Object.defineProperty(el.style, 'left', { set() { pos++; } }); Object.defineProperty(el.style, 'top', { set() { pos++; } });
+  const c = { ui: {}, $: () => ({}), THREE: {}, Math };
+  vm.createContext(c); vm.runInContext(seg + ';globalThis.tagAt = tagAt; globalThis.tagOff = tagOff;', c);
+  for (let i = 0; i < 60; i++) c.tagAt(el, 100 + i, 200 + i, 0);
+  assert.deepEqual([op, pos], [1, 0], '遠處看不到的名牌：只寫一次透明度，不搬位置');
+  for (let i = 0; i < 60; i++) c.tagAt(el, 300, 200, 0.9);
+  assert.deepEqual([op, pos], [2, 2], '走近：寫一次透明度與位置，站著不動就不再寫');
+  c.tagOff(el); c.tagAt(el, 300, 200, 0.9);
+  assert.deepEqual([op, pos], [4, 2], '進屋藏起來再出來：重新寫透明度，位置沒變不寫');
+});

@@ -2246,9 +2246,36 @@ function jumpPose(dt) {
 }
 const houseHand = createHand(player, house.scene);   // 整棟室內的第一人稱手（室內是另一個場景）
 /** 整棟室內的每一格：天色跟著島上時間、第一人稱的過渡與手、互動提示 */
+/* v9.21 頭上的「E 動作」提示與右下角的動作鈕：內容變了才重寫（以前每一格都重建提示裡的 kbd、重設按鈕文字，站著不動也一直觸發排版）。
+   提示的位置照角色在畫面上的位置每格更新，沒移動就不寫；clamp 讓提示不超出畫面左右（寬度在內容改變時才重量） */
+const PR = { el: null, html: '', w: 0, x: NaN, y: NaN, urgent: false, act: null, actUrgent: false };
+function promptAt(text, at, opt) {
+  if (!text) { if (PR.el) { PR.el.remove(); PR.el = null; } return; }
+  if (!PR.el || !PR.el.isConnected) { PR.el = ui.el('div', 'prompt'); $('labels').appendChild(PR.el); PR.html = ''; PR.x = PR.y = NaN; PR.urgent = false; }
+  const html = `<kbd>E</kbd>${text}`, urgent = !!(opt && opt.urgent);
+  if (html !== PR.html) { PR.el.innerHTML = html; PR.html = html; PR.w = 0; }
+  if (urgent !== PR.urgent) { PR.el.classList.toggle('urgent', urgent); PR.urgent = urgent; }
+  let x = at[0]; const y = at[1];
+  if (opt && opt.clamp) { if (!PR.w) PR.w = PR.el.offsetWidth; const half = PR.w / 2 + 10; x = THREE.MathUtils.clamp(x, half, innerWidth - half); }
+  if (!(Math.abs(x - PR.x) <= 0.1)) { PR.el.style.left = x + 'px'; PR.x = x; }
+  if (!(Math.abs(y - PR.y) <= 0.1)) { PR.el.style.top = y + 'px'; PR.y = y; }
+}
+function actLabel(text, urgent) {
+  if (text !== PR.act) { $('actBtn').textContent = text; PR.act = text; }
+  if (!!urgent !== PR.actUrgent) { $('actBtn').classList.toggle('urgent', !!urgent); PR.actUrgent = !!urgent; }
+}
+/** v9.21 島民頭上的名牌：看不到（透明度 0）的名牌不再每格搬位置；位置、透明度沒變就不寫。透明度一律經過這裡，記下的值才不會過期 */
+function tagAt(el, x, y, op) {
+  const c = el._at || (el._at = { x: NaN, y: NaN, o: NaN });
+  if (op !== c.o) { el.style.opacity = op; c.o = op; }
+  if (!op) return;
+  if (!(Math.abs(x - c.x) <= 0.1)) { el.style.left = x + 'px'; c.x = x; }
+  if (!(Math.abs(y - c.y) <= 0.1)) { el.style.top = y + 'px'; c.y = y; }
+}
+const tagOff = el => tagAt(el, 0, 0, 0);
 function houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow) {
   seasons.update(dt, t, { inside: true });
-  player.userData.umbrella.visible = false; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; v.tag.style.opacity = 0; });
+  player.userData.umbrella.visible = false; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; tagOff(v.tag); });
   const { golden } = applyTime(hourOverride ?? nowHour());
   fpK += ((fpNow ? 1 : 0) - fpK) * Math.min(1, dt * 4.5); if (Math.abs(fpK - (fpNow ? 1 : 0)) < 0.003) fpK = fpNow ? 1 : 0;
   fpLens(fpK, 0.12);
@@ -2261,11 +2288,10 @@ function houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow) {
   if (!house.inside) return;
   houseHand.update(dt, { active: fpK > 0.92, show: fpNow && !talking && !ui.dialogOpen() && !ui.cardOpen() && !ui.panelOpen(), camera, tool: player.userData.tool, umbrella: false, fishing: false, moving, run, yaw: camYaw, pitch: fpPitch, t });
   photo.grab(renderer.domElement); memo.grab(renderer.domElement);
-  let pr = $('labels').querySelector('.prompt'); const h = !locked && house.hint();
-  if (h) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${h}`; const [x, y] = screenOf(player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
-  else if (pr) pr.remove();
+  const h = !locked && house.hint();
+  promptAt(h, h && screenOf(player, 2.25));
   document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
-  $('actBtn').textContent = h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
+  actLabel(h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作'));
   hudT += dt; if (hudT > 2) { hudT = 0; paintHud(); }
 }
 function tick(fixed) {
@@ -2302,16 +2328,11 @@ function tick(fixed) {
   if (elsewhere()) {
     if (trip.inside || lantern.inside || yuehome.inside || shopin.inside || dive.inside) applyTime(hourOverride ?? nowHour());   // 天色跟著主島的時間，岳家的窗景與燈光也跟著變化
     if (yuehome.inside) yuehome.tick(dt, t, ix, iz, len, moving, run, locked, skyU.night.value); else if (shopin.inside) shopin.tick(dt, t, ix, iz, len, moving, run, locked, skyU.night.value); else if (museum.inside) museum.tick(dt, t, ix, iz, len, moving, run, locked); else if (dreamisle.inside) dreamisle.tick(dt, t, ix, iz, len, moving, run, locked); else if (dive.inside) dive.tick(dt, t, ix, iz, len, moving, run, locked); else if (lantern.inside) lantern.tick(dt, t, ix, iz, len, moving, run, locked); else trip.tick(dt, t, ix, iz, len, moving, run, locked);
-    let pr = $('labels').querySelector('.prompt'); const h = !locked && (yuehome.inside ? yuehome.hint() : shopin.inside ? shopin.hint() : museum.inside ? museum.hint() : dreamisle.inside ? dreamisle.hint() : dive.inside ? dive.hint() : lantern.inside ? lantern.townHint() : trip.tripHint());
-    if (h) {
-      if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); }
-      pr.innerHTML = `<kbd>E</kbd>${h}`; const [x, y] = screenOf(player, 2.25);
-      const half = yuehome.inside ? pr.offsetWidth / 2 + 10 : 0;
-      pr.style.left = (half ? THREE.MathUtils.clamp(x, half, innerWidth - half) : x) + 'px'; pr.style.top = y + 'px';
-    } else if (pr) pr.remove();
-    villagers.forEach(v => { v.tag.style.opacity = 0; });
+    const h = !locked && (yuehome.inside ? yuehome.hint() : shopin.inside ? shopin.hint() : museum.inside ? museum.hint() : dreamisle.inside ? dreamisle.hint() : dive.inside ? dive.hint() : lantern.inside ? lantern.townHint() : trip.tripHint());
+    promptAt(h, h && screenOf(player, 2.25), { clamp: yuehome.inside });   // 岳家的鏡頭很近：提示不超出畫面左右
+    villagers.forEach(v => tagOff(v.tag));
     document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
-    $('actBtn').textContent = h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
+    actLabel(h || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作'));
     hudT += dt; if (hudT > (life.tourney ? 0.25 : 2)) { hudT = 0; paintHud(); }
     return;
   }
@@ -2350,7 +2371,7 @@ function tick(fixed) {
   villagers.forEach(v => {
     const away = whereOf(v, hourNow) !== 'out' && talking !== v;
     v.away = away; v.mesh.visible = !away;
-    if (away) { v.tag.style.opacity = 0; v.benchGoal = null; v.goPlayer = 0; routine.off(v); return; }   // 回家或睡覺：要去的長椅與打招呼都取消，手上的事放下
+    if (away) { tagOff(v.tag); v.benchGoal = null; v.goPlayer = 0; routine.off(v); return; }   // 回家或睡覺：要去的長椅與打招呼都取消，手上的事放下
     const m = v.mesh, dpx = player.position.x - m.position.x, dpz = player.position.z - m.position.z, dp = Math.hypot(dpx, dpz);
     const rc = guard('routine', () => { const r = routine.tick(v, dt, dp); routine.nearTick(v, dp); return r; }, null);   // v8.9 照作息走過去、做事；null 表示照原本的方式自由活動
     let mv = 0;
@@ -2358,7 +2379,7 @@ function tick(fixed) {
       const st = v.sitting.seat, [sx, sz] = slotPos(st, v.sitting.slot); m.position.set(sx, seatY(st), sz); m.rotation.y = st.ry; setSit(m, true);
       lookAt(m, sitting && sitting.mate === v && Math.sin(t * 0.4 + v.mesh.id) > 0.2 ? headPos.copy(player.position).setY(player.position.y + 1.1) : null); animate(m, dt, 0, t);
       if (v.standAt && simT > v.standAt) standVillager(v);
-      const [tx, ty, tvis] = screenOf(m, 1.6); v.tag.style.left = tx + 'px'; v.tag.style.top = ty + 'px'; v.tag.style.opacity = tvis && dp < 7 ? 0.9 : 0;
+      const [tx, ty, tvis] = screenOf(m, 1.6); tagAt(v.tag, tx, ty, tvis && dp < 7 ? 0.9 : 0);
       return;
     }
     if (v.sitGoal) {
@@ -2399,10 +2420,9 @@ function tick(fixed) {
     animate(m, dt, mv, t);
     const facing = (-dpx * Math.sin(player.rotation.y) - dpz * Math.cos(player.rotation.y)) / (dp || 1);
     if (dp < best && !talking && !sitting && !v.sitGoal && (facing > 0.35 || !player.userData.tool)) { best = dp; nearV = v; }
-    const [sx, sy, vis] = screenOf(m, 1.75); v.tag.style.left = sx + 'px'; v.tag.style.top = sy + 'px'; v.tag.style.opacity = vis && dp < 7 && talking !== v ? Math.min(1, (7 - dp) / 2) * (Math.hypot(sx - plx, sy - ply) < 64 && camera.position.distanceTo(m.position) > plD ? 0.25 : 1) : 0;   // 只顯示附近島民的名牌，避免互相重疊
+    const [sx, sy, vis] = screenOf(m, 1.75); tagAt(v.tag, sx, sy, vis && dp < 7 && talking !== v ? Math.min(1, (7 - dp) / 2) * (Math.hypot(sx - plx, sy - ply) < 64 && camera.position.distanceTo(m.position) > plD ? 0.25 : 1) : 0);   // 只顯示附近島民的名牌，避免互相重疊
   });
   // 提示
-  let pr = $('labels').querySelector('.prompt');
   const tool = player.userData.tool;
   nearDoor = locked || swimming || boat.isRiding() || Math.cos(player.rotation.y) > -0.3 ? null : DOORS().find(d => Math.hypot(player.position.x - d.door[0], player.position.z - d.door[1]) < 1.3) || null;
   nearMail = !!myHome && !locked && !swimming && !boat.isRiding() && !nearDoor && Math.hypot(player.position.x - mailPos[0], player.position.z - mailPos[1]) < 1.2;
@@ -2410,11 +2430,11 @@ function tick(fixed) {
   const gHint = !locked && boat.isRiding() ? boat.hint(player.position.x, player.position.z) : !locked && swimming ? (swim.near(player.position.x, player.position.z) ? '潛水' : boat.hint(player.position.x, player.position.z)) : !locked && !nearDoor && !nearMail && !nearV && !design.active() ? ((sitting ? '站起來' : nearSeat() ? '坐下' : '') || boat.hint(player.position.x, player.position.z) || northcoast.hint(player.position.x, player.position.z) || works.hint(player.position.x, player.position.z) || guard('starbridge', () => starbridge.hint(player.position.x, player.position.z), '') || guard('nightmarket', () => nightmarket.hint(player.position.x, player.position.z), '') || guard('sportsday', () => sportsday.hint(player.position.x, player.position.z), '') || guard('kitefest', () => kitefest.hint(player.position.x, player.position.z), '') || fauna.hint() || highland.hint() || hotel.hint() || trip.hint() || lantern.hint() || tablets.hint() || balloon.hint() || spirit.hint() || winter.hint() || garden.hint(tool, tool === 'shovel' && life.spotAhead()) || diy.hint(tool) || tide.hint(tool)) : '';
   const gj = nearV && routine.joinable(nearV);   // v8.9 走近正在進行的團體活動：按 E 加入
   const hint = !locked && (design.active() ? (coarse.matches ? '放置' : '放置（Esc 結束）') : nearDoor ? nearDoor.label : nearMail ? '看信箱' + (social.unread() ? `（${social.unread()}）` : '') : nearV ? (gj ? '加入' + gj.name : '聊天') : gHint ? gHint : swimming || boat.isRiding() ? '' : tool === 'can' ? '澆水' : tool === 'rod' ? (life.fishing() ? { bite: '拉起！', nibble: '等一下…' }[life.rodState()] || '收竿' : '拋竿') : tool === 'net' ? '揮網' : tool === 'shovel' ? '挖掘' : '');
-  if (hint) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = `<kbd>E</kbd>${hint}`; pr.classList.toggle('urgent', hint === '拉起！'); $('actBtn').classList.toggle('urgent', hint === '拉起！'); const [x, y] = fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
-  else if (pr) pr.remove();
+  const bite = hint === '拉起！';   // 魚咬鉤：提示與動作鈕變成醒目的顏色
+  promptAt(hint, hint && (fpK > 0.5 ? [innerWidth / 2, innerHeight * 0.64] : screenOf(nearV && !nearDoor && !nearMail ? nearV.mesh : player, 2.25)), { urgent: bite });
   document.body.classList.toggle('placing', design.active());
   document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
-  $('actBtn').textContent = hint || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作');
+  actLabel(hint || (ui.dialogOpen() || ui.cardOpen() ? '繼續' : '動作'), bite);
   life.update(dt, t, run && moving);
   tide.update(dt, t, simDate()); spirit.update(dt, t); balloon.update(dt, t, !weather.raining() && !weather.now.startsWith('cloud') && (hourOverride ?? nowHour()) >= 8 && (hourOverride ?? nowHour()) < 18); env.luck = cooking.lucky();
   design.update();
@@ -2587,15 +2607,12 @@ function roomTick(dt, t, ix, iz, len, moving, locked) {
   const host = roomHost;
   if (host) { const hx = player.position.x - host.mesh.position.x, hz = player.position.z - host.mesh.position.z; host.mesh.rotation.y = angLerp(host.mesh.rotation.y, Math.atan2(hx, hz), Math.min(1, dt * 5)); animate(host.mesh, dt, 0, t); }
   const nearHost = host && !locked && Math.hypot(host.mesh.position.x - player.position.x, host.mesh.position.z - player.position.z) < 1.8;
-  villagers.forEach(v => { v.tag.style.opacity = 0; });
-  let pr = $('labels').querySelector('.prompt');
+  villagers.forEach(v => tagOff(v.tag));
   const it = !locked && !placing && !nearHost && room.facingItem();
-  if (nearHost) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = '<kbd>E</kbd>聊天'; const [x, y] = screenOf(host.mesh, 2.0); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
-  else if (it) { if (!pr) { pr = ui.el('div', 'prompt'); $('labels').appendChild(pr); } pr.innerHTML = '<kbd>E</kbd>查看家具'; const [x, y] = screenOf(player, 2.0); pr.style.left = x + 'px'; pr.style.top = y + 'px'; }
-  else if (pr) pr.remove();
+  promptAt(nearHost ? '聊天' : it ? '查看家具' : '', nearHost ? screenOf(host.mesh, 2.0) : it && screenOf(player, 2.0));
   document.body.classList.toggle('placing', placing); document.body.classList.toggle('room-placing', placing);
   document.body.classList.toggle('talking', ui.dialogOpen() || ui.cardOpen()); document.body.classList.toggle('picking', ui.picking());
-  $('actBtn').textContent = placing ? '放下' : it ? '查看' : nearHost ? '聊天' : '動作';
+  actLabel(placing ? '放下' : it ? '查看' : nearHost ? '聊天' : '動作');
   const { night, golden } = applyTime(hourOverride ?? nowHour());
   room.render(dt, night, { golden, t, winter: seasons.winter() }); photo.grab(renderer.domElement); memo.grab(renderer.domElement);
   hudT += dt; if (hudT > (life.tourney ? 0.5 : 2)) { hudT = 0; paintHud(); }
