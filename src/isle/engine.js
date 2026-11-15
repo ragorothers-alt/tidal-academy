@@ -636,7 +636,10 @@ export function bend(mat, kind) {
         vec3 qd = vWP * 0.62; diffuseColor.rgb *= mix(vec3(1.0), (triD(uD0, qd, gB) - 0.5) * 2.0 + 1.0, 0.25);   // 一片片重疊的葉子
         gDetN = triN(uN0, qd, gB) * 0.12;
       }
-      #endif   // Tripo 模型的貼圖本身已有葉片明暗，不再疊程式的葉團花紋（TA_MODEL 由 actors.js 的 loadModel 設定）
+      #endif   // Tripo 模型的貼圖本身已有葉片明暗，不再疊程式的葉團花紋（TA_MODEL 由 actors.js 的 loadModel 設定）${kind === 'pine' ? `
+      #ifdef TA_LEAFTEX
+        diffuseColor.rgb *= 1.85;   // v9.22.13 松針卡（propmodels5 的松樹）：反照率提高，白天是深綠而不是一團近黑的剪影
+      #endif` : ''}
 `);
     if (kind === 'wall') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       {
