@@ -82,7 +82,7 @@ export function update(dt, t, ctx) {
     if (water.river) { if (!C.riverBase) C.riverBase = water.river.color.clone(); water.river.color.copy(C.riverBase).lerp(C.riverW, w * 0.85); water.river.opacity = 0.78 + w * 0.15; }
     const day = 1 - ctx.night;
     skyU.top.value.lerp(C.topW, w * 0.45 * day); skyU.bot.value.lerp(C.botW, w * 0.5 * day);
-    skyU.cover.value = Math.max(skyU.cover.value, 0.3 + w * 0.35);
+    skyU.cover.value = Math.max(skyU.cover.value, ctx.cloudy || ctx.wet ? 0.3 + w * 0.35 : 0.3);   // v9.22.17 冬天的陰天、下雪天雲多；晴天照樣是乾淨的藍天（以前晴天也畫出一大團模糊的軟雲）
     scene.fog.color.lerp(C.fogW, w * 0.35 * day);
     hemi.groundColor.lerp(C.hgW, w * 0.5);
     sun.color.lerp(C.sunW, w * 0.4 * day);
