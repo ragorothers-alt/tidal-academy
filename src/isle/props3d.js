@@ -207,8 +207,8 @@ const treeHash = (x, z) => { const X = Math.round(x * 10), Z = Math.round(z * 10
 const AUTUMN_HEX = ['#CDA23C', '#C9782F', '#A4532F', '#7F8C46'];   // v9.14 半寫實：金黃、橙、赭紅、還沒轉色的橄欖綠（以前是粉杏、柔金、珊瑚、鼠尾草）
 // Linear albedo, pre-divided by the existing engine tT and its 1.12 brightness gain.
 // A shared gold texture alone cannot undo four different channel multipliers.
-const AUTUMN_INPUT = AUTUMN_HEX.map((hex, i) => new THREE.Color(hex).toArray().map((v, j) => v / ([[1.12, .92, 1.6], [1.06, 1.06, 1.45], [1.02, .62, 1.7], [.45, .78, 1.5]][i][j] * 1.12)));
-const HERO_AUTUMN_INPUT = new THREE.Color('#D8AA40').toArray().map((v, j) => v / ([1.04, .98, 1.45][j] * 1.12));
+const AUTUMN_INPUT = AUTUMN_HEX.map((hex, i) => new THREE.Color(hex).toArray().map((v, j) => v / ([[1.1, .86, .8], [1.06, 1.02, .86], [1.06, .6, .6], [.64, .86, .78]][i][j] * 1.12)));   // 除以 engine.js 秋色的 tT（v9.22.18 改成自然色的乘數，這裡跟著改）
+const HERO_AUTUMN_INPUT = new THREE.Color('#D8AA40').toArray().map((v, j) => v / ([1.06, .98, .9][j] * 1.12));
 const autumnInput = (k, kind) => kind === 'sakura' ? HERO_AUTUMN_INPUT : AUTUMN_INPUT[k < .4 ? 0 : k < .7 ? 1 : k < .9 ? 2 : 3];
 /** Rank coarse spatial groups: deterministic 35/30/20/15, keeping neighbouring trees together. */
 function assignTreeColors(groups) {
