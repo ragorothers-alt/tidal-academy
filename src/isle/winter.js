@@ -1,7 +1,7 @@
 /* 潮汐小島 · 冬天的小細節：屋簷垂下的冰柱、煙囪飄出的炊煙、廣場旁的兩個雪人。
    雪人「雪寶」每天出一題複習題（答對有鈴錢），春天就融化不見。只在積雪時出現（seasons.js 的 uSnow）。 */
 import * as THREE from 'three';
-import { scene, M, mesh, U, renderer } from './engine.js';
+import { scene, M, mesh, U, renderer, hourNow } from './engine.js';
 import { groundAt, tileAt } from './terrain.js';
 import { homes, colliders, blocked, PLAZA } from './props.js';
 import * as ui from './ui.js';
@@ -56,12 +56,17 @@ const smoke = new THREE.Points(smGeo, new THREE.ShaderMaterial({
       gl_FragColor = vec4(uCol * (0.92 + (0.5 - gl_PointCoord.y) * 0.16), a); }`
 }));
 smoke.frustumCulled = false; smoke.renderOrder = 5; smoke.visible = false; scene.add(smoke);
-let chimneys = [];
+let chimneys = [], chimFor = -1;
 function buildChimneys() {
   chimneys = homes.filter(h => h.g && (h.smoke || !/^home_/.test(h.model || ''))).map((h, i) => { const v = h.smoke ? new THREE.Vector3().fromArray(h.smoke) : new THREE.Vector3(0.9, 3.95, -0.5); h.g.localToWorld(v); return { v, s: h.smoke ? 1 : h.s || 1, ph: i * 0.37 }; });   // v7.6：夢幻風住宅的煙囪口由模型宣告；沒有煙囪的不冒煙
   for (let i = 0; i < SM_MAX; i++) smAge[i] = (i % PER) / PER;
-  smGeo.setDrawRange(0, chimneys.length * PER);
+  smGeo.setDrawRange(0, chimneys.length * PER); chimFor = homes.length;
 }
+/* v9.22.8 炊煙：冬天整天都有；其他季節早上做早飯（6:00–8:30）、傍晚煮晚飯（17:30–20:00）時，大約一半的人家冒出淡淡的炊煙（每天、早晚不同家） */
+const ss = THREE.MathUtils.smoothstep;
+const cookAt = h => Math.max(ss(h, 5.8, 6.4) * (1 - ss(h, 8.0, 8.8)), ss(h, 17.2, 17.8) * (1 - ss(h, 19.6, 20.4)));
+let cookDay = '', cookSeed = 0;
+const cooks = (ci, h) => { const s = Math.sin((ci + 1) * 12.9898 + cookSeed + (h < 12 ? 0 : 3.7)) * 43758.5453; return s - Math.floor(s) < 0.5; };
 
 /* ---------- 雪人 ---------- */
 const SNOWM = { name: '雪寶', color: '#7ab8f0', voice: 560 };
@@ -100,16 +105,20 @@ export function update(dt, t, night) {
   if (on && iceFor !== homes.length) { buildIce(); buildChimneys(); }
   ice.visible = on;
   if (on !== shown) { shown = on; men.forEach(m => { m.g.visible = on; m.col.r = on ? 0.55 : 0; }); }
-  smoke.visible = on && chimneys.length > 0;
+  const h = hourNow.value, cook = on ? 0 : cookAt(h);
+  if (cook > 0.01) { const dk = String(dayKey()); if (dk !== cookDay) { cookDay = dk; cookSeed = [...dk].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 100003, 7) * 0.618; } }
+  if ((on || cook > 0.01) && chimFor !== homes.length) buildChimneys();
+  smoke.visible = (on || cook > 0.01) && chimneys.length > 0;
   if (!smoke.visible) return;
   smU.uH.value = renderer.domElement.height / 2; smU.uCol.value.setRGB(0.84, 0.86, 0.9).multiplyScalar(night > 0.5 ? 0.55 : 1);   // 比天空暗一點，白天才看得出來
   // 煙團：從煙囪口冒出，上升時被風吹往右後方、慢慢變大變淡
   chimneys.forEach((c, ci) => {
+    const amt = on ? w : cooks(ci, h) ? cook * 0.5 : 0;   // 平常的炊煙淡一點、只有一部分人家
     for (let k = 0; k < PER; k++) {
       const i = ci * PER + k; smAge[i] += dt / 4.2; if (smAge[i] > 1) smAge[i] -= 1;
       const a = smAge[i], o = i * 3;
       smPos[o] = c.v.x + a * 1.1 * c.s + Math.sin(t * 0.8 + k + c.ph) * 0.08; smPos[o + 1] = c.v.y + a * 2.2 * c.s; smPos[o + 2] = c.v.z - a * 0.5 * c.s;
-      smSize[i] = (0.22 + a * 0.75) * c.s; smAlpha[i] = Math.min(1, a * 6) * (1 - a) * 0.75 * w;
+      smSize[i] = (0.22 + a * 0.75) * c.s; smAlpha[i] = Math.min(1, a * 6) * (1 - a) * 0.75 * amt;
     }
   });
   smGeo.attributes.position.needsUpdate = true; smGeo.attributes.aSize.needsUpdate = true; smGeo.attributes.aAlpha.needsUpdate = true;
