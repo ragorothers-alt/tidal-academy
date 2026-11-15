@@ -86,6 +86,21 @@ function backdropMaterial(m) {
   m.customProgramCacheKey = () => 'far-sprite-depth-v2'; return m;
 }
 
+/* v9.22.14 遠景的空氣透視：遠山、遠方的城市與雲海（不含浮空島——紫色岩層是刻意的奇幻色）
+   先去掉貼圖陰影裡的洋紅（畫出來的薰衣草紫陰影乘上黃昏的橘光會變成灰紫），再依距離混一點地平線的天色：白天灰藍、黃昏帶暖、夜裡沉進夜色 */
+const BG_HAZE = { value: new THREE.Color('#c8d6e4') };
+function backdropGrade(m, kind) {
+  const k = { mt: 0.24, city: 0.18, cloud: 0.08 }[kind]; if (k == null) return m;
+  const previous = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    previous.call(m, sh, r);
+    sh.uniforms.uHaze = BG_HAZE; sh.uniforms.uHazeK = { value: k };
+    sh.fragmentShader = 'uniform vec3 uHaze; uniform float uHazeK;\n' + sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+      { vec3 c = diffuseColor.rgb; c.g += max(0.0, min(c.r, c.b) - c.g); diffuseColor.rgb = mix(c, uHaze, uHazeK); }`);
+  };
+  m.customProgramCacheKey = () => 'far-sprite-depth-v2-haze'; return m;
+}
+
 // 一次性三角形語意標記，不動原模型資料；同款島的幾何／材質共用。
 const paintedGeometry = new WeakMap();
 function preparePaint(mesh, castle) {
@@ -478,7 +493,7 @@ async function buildBg() {
   BG.forEach(c => {
     const t = texs[c.k]; if (!t) return;
     const m = new THREE.SpriteMaterial({ map: t.tex, transparent: true, depthWrite: false, fog: false });
-    backdropMaterial(m);
+    backdropGrade(backdropMaterial(m), c.kind);
     const s = new THREE.Sprite(m); s.center.set(0.5, c.foot); s.scale.set(c.w, c.w * t.aspect, 1); s.raycast = NO_HIT; s.renderOrder = -2; s.visible = false;
     scene.add(s); bgs.push({ s, m, c });
   });
@@ -498,6 +513,7 @@ function seaNdc(x, z) {
 function updateBg(night, gold) {
   if (!bgs.length) return;
   bgCol.setRGB(1, 1, 1).lerp(BG_DAWN, skyU.dawn.value * 0.6).lerp(BG_GOLD, gold * 0.8).lerp(BG_NIGHT, THREE.MathUtils.smoothstep(night, 0, 0.6)).lerp(RAINY, gloomK * 0.8).multiplyScalar(1 - gloomK * 0.3 - Math.max(0, skyU.gloom.value - 1) * 0.4);   // v8.7 雨天遠方的雲塔也灰下來（以前還是晴天的粉藍），暴風雨再暗
+  BG_HAZE.value.copy(skyU.bot.value);   // v9.22.14 空氣透視混進去的是此刻地平線的天色
   camera.getWorldDirection(camF);
   bgs.forEach(o => {
     const c = o.c, sx = Math.sin(c.az), sz = -Math.cos(c.az);

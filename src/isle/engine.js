@@ -1186,8 +1186,8 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         // 雜訊用沿著銀河的座標（gl 沿著光帶、gd 橫跨光帶）：雲團與塵埃帶順著光帶拉長，不會斜斜地刷成一道道條紋；天全黑了才看得到
         vec3 gN = normalize(vec3(0.55, 0.35, 0.76)), gU = normalize(cross(gN, vec3(0.0, 1.0, 0.0))), gV = cross(gN, gU); float gd = dot(d, gN), gl = atan(dot(d, gV), dot(d, gU));
         float gCore = exp(-gd * gd / 0.03), gCl = fbm(vec2(gl * 3.0, gd * 10.0)), gFine = fbm(vec2(gl * 16.0, gd * 44.0) + 5.0);
-        float dust = smoothstep(0.46, 0.7, fbm(vec2(gl * 7.0 + 3.0, gd * 26.0))) * exp(-gd * gd / 0.004);
-        band = gCore * (0.35 + 0.65 * gCl) * (0.6 + 0.8 * gFine) * (1.0 - dust * 0.75) * smoothstep(0.02, 0.3, d.y) * (1.0 - min(gloom, 1.0)) * smoothstep(0.75, 1.0, night);
+        float dust = smoothstep(0.42, 0.78, fbm(vec2(gl * 4.0 + 3.0, gd * 22.0))) * exp(-gd * gd / 0.005);   // v9.22.14 塵埃帶沿著光帶長一點、邊緣軟一點、淡一點（以前一小塊邊緣清楚的暗斑，像天上的污漬）
+        band = gCore * (0.35 + 0.65 * gCl) * (0.6 + 0.8 * gFine) * (1.0 - dust * 0.45) * smoothstep(0.02, 0.3, d.y) * (1.0 - min(gloom, 1.0)) * smoothstep(0.75, 1.0, night);
         c += mix(vec3(0.026, 0.034, 0.06), vec3(0.05, 0.05, 0.05), smoothstep(0.4, 0.9, gCore * gCl)) * band * night * 1.15;
         // 月亮：亮白的圓盤（表面有淡淡的斑紋）與一圈柔和的光暈
         float md = dot(d, moonDir);
@@ -1391,7 +1391,7 @@ const KEYS = [
   [17, { top: '#4a74b8', mid: '#9cb0cc', bot: '#f0d0a2', sea: '#a6b6c4', sun: '#ffcf96', si: 2.0, hs: '#a8bad4', hg: '#7a6a50', hi: 0.95, fog: '#dccab0', exp: 1.06, night: 0, fn: 60, ff: 175 }],   // 黃金時段：頭頂仍是藍、地平線金黃；逆光是暖橘，影子是天空的淺藍
   [18.2, { top: '#2f5090', mid: '#a6b4c2', bot: '#f0a062', sea: '#c08a68', sun: '#ffa060', si: 1.4, hs: '#869ab6', hg: '#5a4c42', hi: 0.72, fog: '#b89c86', exp: 1.02, night: 0.05, fn: 50, ff: 150 }],   // 夕陽：橘紅只在地平線，往上淡成灰白、淺藍到深藍（v9.22.1 低空不再是薰衣草灰）
   [18.85, { top: '#22386e', mid: '#5c7294', bot: '#d88c58', sea: '#5c6474', sun: '#c8b49a', si: 0.75, hs: '#6a7ea2', hg: '#3e3a36', hi: 0.62, fog: '#8a8c8c', exp: 1.03, night: 0.3, fn: 52, ff: 156 }],   // v9.22.1 剛日落：地平線的橘紅餘暉、往上是鋼藍；光是柔和的暖灰（橘光直接過渡到月光的藍，中間會變成粉紫）
-  [19.5, { top: '#1c2a56', mid: '#30497a', bot: '#9c7a6c', sea: '#28365a', sun: '#9cb0d8', si: 0.6, hs: '#566a92', hg: '#2a2c34', hi: 0.5, fog: '#424e66', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],   // 藍調時刻：天轉深藍，地平線還留一點餘暉
+  [19.5, { top: '#1c2a56', mid: '#30497a', bot: '#8a826e', sea: '#28365a', sun: '#9cb0d8', si: 0.6, hs: '#566a92', hg: '#2a2c34', hi: 0.5, fog: '#424e66', exp: 1.04, night: 0.7, fn: 55, ff: 165 }],   // 藍調時刻：天轉深藍，地平線還留一點餘暉（v9.22.14 餘暉是琥珀灰：以前的玫瑰棕和上方的藍混成一圈灰紫）
   [21, NIGHT], [24, NIGHT]
 ];
 // 月亮：在北偏東的天上（從廣場往北看在右上方）。MOON_L 是月光的方向（夜裡的主光）；天幕上畫月亮的位置由 main.js 依畫面上的地平線算
