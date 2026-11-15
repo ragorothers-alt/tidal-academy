@@ -741,7 +741,7 @@ export function update(dt, t, night, show) {
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar((1 - night * 0.55) * (1 - gloomK * 0.3));   // v8.7 雨天的低雲也暗一點
-  puffs.forEach(m => { m.color.copy(puffCol); });
+  puffs.forEach(m => { m.color.copy(puffCol); if (m.userData.op0 == null) m.userData.op0 = m.opacity; m.opacity = m.userData.op0 * (1 - skyU.wx.value.x * 0.55); });   // v9.22.6 雨裡島底的雲霧也淡進雨霧（以前在灰色的雨天裡還是一團白亮的雲）
   far.forEach(o => {
     const x = Math.sin(o.az) * o.d, z = -Math.cos(o.az) * o.d, on = inCone(x, z, (o.size || 60) * 0.8);
     o.g.visible = on; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = on;

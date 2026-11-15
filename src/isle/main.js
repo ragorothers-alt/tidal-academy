@@ -2575,6 +2575,7 @@ function tick(fixed) {
     U.uMistCol.value.copy(scene.fog.color).lerp(MIST_W, 0.4).lerp(sun.color, 0.12);   // 霧是帶一點晨光的白
   }
   { const c = U.uCloud.value, w = 0.06 * (0.7 + 0.3 * U.uWind.value) * dt; c.x = U.uShade.value * 0.5; c.y += w; c.z += w * 0.37; }   // v8.9.1 雲影：晴天的白天才有，風大時飄得快（約每秒 1.5 公尺）
+  U.uSkyRef.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.35);   // v9.22.6 濕地面映出的天光：低空的天色（陰雨天已經轉灰）
   U.uTrans.value = fxClear * (1 - night) * (0.55 + golden * 0.75);   // 葉片透光：晴天有，黃金時段的逆光最明顯
   motes.update(dt, t, look, golden, night, fxClear);
   waves.update(dt, player, { night, rain: rainVis, inAir: jump.air, fish: life.fishShadows && life.fishShadows() });

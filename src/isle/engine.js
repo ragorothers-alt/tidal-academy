@@ -93,7 +93,7 @@ export function dropTinyShadows(root) {
 }
 export const U = { uCurve: { value: CURVE }, uBendF: { value: 15 }, uTime: { value: 0 }, uWind: { value: 1 }, uSunV: { value: new THREE.Vector3(0, 1, 0) }, uRimCol: { value: new THREE.Color('#ffc870') }, uRim: { value: 0 },
   uOccP: { value: new THREE.Vector2(-9999, -9999) }, uOccR: { value: 0 }, uOccD: { value: 0 }, uOccY: { value: 0 }, uPlayer: { value: new THREE.Vector3(0, -99, 0) },
-  uSnow: { value: 0 }, uWet: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 }, uCloud: { value: new THREE.Vector3(0, 0, 0) }, uMist: { value: new THREE.Vector3(0, 0.3, 1.3) }, uMistCol: { value: new THREE.Color('#eef2f2') },   // uCloud：雲影的深淺、雲飄到哪裡（main.js 每格更新）
+  uSnow: { value: 0 }, uWet: { value: 0 }, uFall: { value: 0 }, uBloom: { value: 0 }, uShade: { value: 0 }, uCloud: { value: new THREE.Vector3(0, 0, 0) }, uMist: { value: new THREE.Vector3(0, 0.3, 1.3) }, uMistCol: { value: new THREE.Color('#eef2f2') }, uSkyRef: { value: new THREE.Color('#8fa0b4') },   // uCloud：雲影的深淺、雲飄到哪裡（main.js 每格更新）；uSkyRef：濕地面映出的天光（低空的天色）
   uWindDir: { value: new THREE.Vector2(0.97, 0.24).normalize() }, uTrans: { value: 0 }, uInside: { value: 0 } };   // uInside：v7.8 正在畫住宅的室內（house.js 畫的時候設 1）   // v7.0：風向（世界座標 xz，陣風順著它推過去）、逆光時葉片透光的強度（main.js 每幀設定）   // uShade：晴天雲影的強度   // 四季：積雪、紅葉、春意（seasons.js 每幀設定）
 const BEND = `#include <project_vertex>
   { float bz = max(-mvPosition.z - uBendF, 0.0); mvPosition.y -= bz * bz * uCurve; }
@@ -144,7 +144,7 @@ const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;
     float g = wn_(vec2(a * 0.04 - t * 0.2, c * 0.03)) * 0.65 + wn_(vec2(a * 0.11 - t * 0.62, c * 0.09 + 3.7)) * 0.35;
     return smoothstep(0.34, 0.86, g); }
 `;
-const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uWet;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform vec3 uCloud;\nuniform vec3 uMist;\nuniform vec3 uMistCol;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
+const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uWet;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform vec3 uCloud;\nuniform vec3 uMist;\nuniform vec3 uMistCol;\nuniform vec3 uSkyRef;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
 /* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
@@ -512,7 +512,7 @@ export function bend(mat, kind) {
     else v = v.replace('#include <project_vertex>', BEND);
     sh.vertexShader = v;
     if (!std) return;
-    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uWet: U.uWet, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uCloud: U.uCloud, uMist: U.uMist, uMistCol: U.uMistCol, uTrans: U.uTrans, uInside: U.uInside, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
+    Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uWet: U.uWet, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uCloud: U.uCloud, uMist: U.uMist, uMistCol: U.uMistCol, uSkyRef: U.uSkyRef, uTrans: U.uTrans, uInside: U.uInside, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
     const dk = DETK[kind];
     if (dk) dk.forEach((n, i) => { sh.uniforms['uD' + i] = DET[n].d; sh.uniforms['uN' + i] = DET[n].n; });
     if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
@@ -994,6 +994,9 @@ ${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `        { float lw 
         float wu = smoothstep(0.5, 0.85, normalize(vWN).y), pd = smoothstep(0.55, 0.75, n_f(vWP.xz * 0.35 + 7.0)) * wu;
         diffuseColor.rgb *= 1.0 - uWet * wu * (0.22 + pd * 0.16);
         roughnessFactor = mix(roughnessFactor, min(roughnessFactor, 0.32 - pd * 0.18), uWet * wu * (0.55 + pd * 0.45));
+        { // v9.22.6 濕的地面映著天光：越斜看（遠一點的地面）越像一層薄水膜在發亮，低窪積水的地方更亮、更像鏡子
+          float cv = max(dot(normalize(cameraPosition - vWP), normalize(vWN)), 0.0), fr = mix(0.04 + 0.96 * pow(1.0 - cv, 5.0), 0.24, pd * 0.5);
+          totalEmissiveRadiance += uSkyRef * fr * uWet * wu * (0.3 + pd * 0.9) * (1.0 - uInside); }
       }
     }`;
 }
