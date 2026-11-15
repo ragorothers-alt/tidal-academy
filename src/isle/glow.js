@@ -149,12 +149,43 @@ function rebuild() {
 /** 空氣中的光暈：每個點依世界大小（aSize 公尺）畫成柔和的光團，加法混色、不寫深度、被建築擋住時一起被擋 */
 const haloMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  uniforms: { map: { value: poolTex }, uScale: { value: 400 }, uCurve: U.uCurve, uBendF: U.uBendF },
-  vertexShader: `attribute float aSize; attribute vec3 aCol; varying vec3 vC; uniform float uScale; uniform float uCurve; uniform float uBendF;
-    void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vC = aCol * (0.3 + 0.7 * smoothstep(1.5, 5.0, -mv.z)); float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve;   // 和地形一樣的滾筒地平線彎曲；貼近鏡頭的燈（第一人稱走過路燈旁）光暈淡一點，不會蓋住半個畫面
-      gl_Position = projectionMatrix * mv; gl_PointSize = aSize * uScale / max(-mv.z, 0.5); }`,
+  uniforms: { map: { value: poolTex }, uScale: { value: 400 }, uCurve: U.uCurve, uBendF: U.uBendF, uWetAir: { value: 0 } },
+  vertexShader: `attribute float aSize; attribute vec3 aCol; varying vec3 vC; uniform float uScale; uniform float uCurve; uniform float uBendF; uniform float uWetAir;
+    void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vC = aCol * (0.3 + 0.7 * smoothstep(1.5, 5.0, -mv.z)) * (1.0 + uWetAir * 1.5); float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve;   // 和地形一樣的滾筒地平線彎曲；貼近鏡頭的燈（第一人稱走過路燈旁）光暈淡一點，不會蓋住半個畫面
+      gl_Position = projectionMatrix * mv; gl_PointSize = aSize * (1.0 + uWetAir * 1.6) * uScale / max(-mv.z, 0.5); }`,   // v9.22.9 雨夜、起霧時空氣濕，燈的光暈大一圈、亮一點
   fragmentShader: `uniform sampler2D map; varying vec3 vC; void main(){ float a = texture2D(map, gl_PointCoord).a; gl_FragColor = vec4(vC * a * a, 1.0); }`
 });
+
+/* ---------- v9.22.9 夜裡路燈旁繞著飛的小飛蛾（下雨不出來）：玩家附近的每盞路燈三隻，忽快忽慢地繞著燈罩打轉、一閃一閃 ---------- */
+const MOTH_N = 36, mothPos = new Float32Array(MOTH_N * 3), mothA = new Float32Array(MOTH_N), mothOf = new Array(MOTH_N).fill(null);
+const mothGeo = new THREE.BufferGeometry(); mothGeo.setAttribute('position', new THREE.BufferAttribute(mothPos, 3)); mothGeo.setAttribute('aA', new THREE.BufferAttribute(mothA, 1));
+const moths = new THREE.Points(mothGeo, new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, uniforms: { uScale: { value: 400 }, uCurve: U.uCurve, uBendF: U.uBendF },
+  vertexShader: `attribute float aA; varying float vA; uniform float uScale; uniform float uCurve; uniform float uBendF;
+    void main(){ vA = aA; vec4 mv = modelViewMatrix * vec4(position, 1.0); float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve;
+      gl_Position = projectionMatrix * mv; gl_PointSize = max(2.0, 0.05 * uScale / max(-mv.z, 0.5)); }`,
+  fragmentShader: `varying float vA; void main(){ float a = smoothstep(0.5, 0.12, length(gl_PointCoord - 0.5)) * vA; if (a < 0.01) discard; gl_FragColor = vec4(vec3(1.0, 0.92, 0.76) * a, 1.0); }`
+}));
+moths.frustumCulled = false; moths.renderOrder = 3; moths.visible = false; scene.add(moths);
+let mothT = 0, mothAt = null;
+function updateMoths(dt, target, on) {
+  moths.visible = on > 0.02; if (!moths.visible) return;
+  mothT += dt;
+  if (!mothAt || Math.hypot(target.x - mothAt.x, target.z - mothAt.z) > 4 || mothT % 3 < dt) {   // 每三秒或走遠了：換成離玩家最近的幾盞路燈
+    mothAt = { x: target.x, z: target.z };
+    const near = emitters.filter(e => (e.kind === 'lamp' || e.kind === 'garden') && Math.hypot(e.x - target.x, e.z - target.z) < 24).sort((a, b) => Math.hypot(a.x - target.x, a.z - target.z) - Math.hypot(b.x - target.x, b.z - target.z)).slice(0, MOTH_N / 3);
+    for (let i = 0; i < MOTH_N; i++) mothOf[i] = near[Math.floor(i / 3)] || null;
+  }
+  for (let i = 0; i < MOTH_N; i++) {
+    const e = mothOf[i], o = i * 3;
+    if (!e) { mothA[i] = 0; continue; }
+    const ph = i * 2.399, t = mothT, r = 0.22 + 0.12 * Math.sin(t * 1.3 + ph) + 0.05 * Math.sin(t * 9.7 + ph * 3), ang = t * (2.0 + (i % 3) * 0.7) * (i % 2 ? 1 : -1) + ph;
+    mothPos[o] = e.lx + Math.cos(ang) * r + Math.sin(t * 17 + ph) * 0.03; mothPos[o + 1] = e.ly - 0.05 + 0.12 * Math.sin(t * 2.9 + ph * 1.7) + Math.sin(t * 13 + ph) * 0.03; mothPos[o + 2] = e.lz + Math.sin(ang) * r;
+    mothA[i] = on * (0.55 + 0.45 * Math.sin(t * 23 + ph * 5)) * 0.9;
+  }
+  mothGeo.attributes.position.needsUpdate = true; mothGeo.attributes.aA.needsUpdate = true;
+  moths.material.uniforms.uScale.value = camera.projectionMatrix.elements[5] * innerHeight * 0.5;
+}
 
 /* ---------- 每格更新 ---------- */
 let lastLit = -1;
@@ -163,9 +194,11 @@ export function update(dt, target, show) {
   if (dirty) rebuild();
   const night = skyU.night.value, lit = Math.max(THREE.MathUtils.smoothstep(night, 0.12, 0.6), lampK.value * 0.85);   // v8.7 跟著燈泡一起在黃昏亮起
   U.uLOn.value = show ? lit : 0;   // 白天 0：著色器整段跳過
+  updateMoths(dt, target, show ? THREE.MathUtils.smoothstep(night, 0.6, 0.9) * (1 - THREE.MathUtils.smoothstep(skyU.wx.value.x, 0.4, 0.8)) : 0);   // 天全黑、沒下雨才有飛蛾
   if (!halos) return;
   halos.visible = show; if (!show) return;
   haloMat.uniforms.uScale.value = camera.projectionMatrix.elements[5] * innerHeight * 0.5;   // 世界大小 → 畫面像素（和透視一樣）
+  haloMat.uniforms.uWetAir.value = Math.min(1, Math.max(skyU.wx.value.x * (skyU.wx.value.x > 0.5 ? 1 : 0.4), U.uMist.value.x * 2.2));   // 空氣多濕：下雨、晨霧
   if (Math.abs(lit - lastLit) < 0.002) return; lastLit = lit;
   const list = halos.userData.list, C = halos.geometry.attributes.aCol;
   for (let i = 0; i < list.length; i++) { const e = list[i], on = Math.max(lit, (e.k.day || 0) * 0.6) * 0.24; C.setXYZ(i, e.haloCol.r * on, e.haloCol.g * on, e.haloCol.b * on); }
