@@ -1144,14 +1144,14 @@ export function screenOf(obj, dy) {
 /* ---------- 天空 ---------- */
 export const skyU = { glow: { value: 0 }, top: { value: new THREE.Color('#5ec2ff') }, mid: { value: new THREE.Color('#9ad4ff') }, bot: { value: new THREE.Color('#d8f3ff') }, moonDir: { value: new THREE.Vector3(0.4, 0.75, -0.55).normalize() }, dawn: { value: 0 }, span: { value: 0.4 }, sunSky: { value: new THREE.Vector3(0, 1, 0) }, sea: { value: new THREE.Color('#7ad3f6') }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color('#fff4d6') }, night: { value: 0 },
   lift: { value: 0.36 }, time: U.uTime, cover: { value: 0.3 }, aurora: { value: 0 }, hz: { value: 0 }, gloom: { value: 0 },
-  glowC: { value: new THREE.Color('#fff4e0') }, discC: { value: new THREE.Color('#fff4e0') }, wx: { value: new THREE.Vector2() }, moonPh: { value: 0.5 } };   // moonPh：v9.22.25 月相（0 新月、0.25 上弦、0.5 滿月、0.75 下弦）   // wx：x 是雨層雲蓋住天空的程度、y 是暴風雨（weather.js 設定）   // hz：畫面上地平線在天幕的高度；glowC：晨昏地平線暖光與雲的受光色（跟著太陽的真實仰角變色）；discC：日輪本身的顏色
+  glowC: { value: new THREE.Color('#fff4e0') }, discC: { value: new THREE.Color('#fff4e0') }, wx: { value: new THREE.Vector2() }, moonPh: { value: 0.5 }, bolt: { value: new THREE.Vector4() } };   // bolt：v9.22.28 閃電（方位、亂數種子、亮度、有沒有分叉）   // moonPh：v9.22.25 月相（0 新月、0.25 上弦、0.5 滿月、0.75 下弦）   // wx：x 是雨層雲蓋住天空的程度、y 是暴風雨（weather.js 設定）   // hz：畫面上地平線在天幕的高度；glowC：晨昏地平線暖光與雲的受光色（跟著太陽的真實仰角變色）；discC：日輪本身的顏色
 /** v9.22.1 天上看得到的太陽方向（含真實仰角，日出約 5:35、日落約 18:30 會沉到海平線下）；光的方向另外算，日落後慢慢轉成月光 */
 export const sunDisc = new THREE.Vector3(0, 1, 0);
 /* 天空：滾筒地平線讓鏡頭下傾時也看得到天空，所以天空用「抬高」後的方向計算漸層、太陽與雲（lift） */
 export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; uniform vec3 glowC; uniform vec3 discC; uniform vec2 wx; uniform float moonPh; varying vec3 vD;
+  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; uniform vec3 glowC; uniform vec3 discC; uniform vec2 wx; uniform float moonPh; uniform vec4 bolt; varying vec3 vD;
     float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,45.164))) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1348,6 +1348,18 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
           acc += mix(vec3(0.12, 0.95, 0.42), vec3(0.08, 0.66, 0.56), smoothstep(0.0, 0.2, ay)) * prof * ray * act * (1.0 - fl * 0.4);
         }
         c += acc * north * aurora * 0.8;
+      }
+      // v9.22.28 暴風雨的閃電：遠方一道從雲底劈到海平線的電光（鋸齒狀、六成帶一條分叉），跟著天空的閃光一亮一暗
+      float bPw = max(length(fwidth(d)), 1e-4);   // 一個像素在天幕上多寬（導數要在分支外面算）
+      if (bolt.z > 0.05 && e > -0.005 && e < 0.26) {
+        float da = atan(d.x, -d.z) - bolt.x; da = atan(sin(da), cos(da));
+        float t = e / 0.24, path = (fbm(vec2(t * 5.0, bolt.y)) - 0.5) * 0.07 + (fbm(vec2(t * 19.0, bolt.y + 3.1)) - 0.5) * 0.02 + (vn(vec2(t * 60.0, bolt.y + 7.0)) - 0.5) * 0.006;
+        float dm = abs(da - path), br = smoothstep(bPw * 1.6, 0.0, dm) + exp(-dm / (bPw * 3.0)) * 0.3;   // 細亮的核心＋貼著的一圈光暈（寬的柔光交給泛光：只照水平距離算會一列列錯開成橫條紋）
+        float tb = 0.45 + 0.3 * h2(vec2(bolt.y, 1.0)), sd = h2(vec2(bolt.y, 2.0)) > 0.5 ? 1.0 : -1.0, tt = tb - t;   // 分叉：從主幹中段斜斜往下岔出去
+        float pb = (fbm(vec2(tb * 5.0, bolt.y)) - 0.5) * 0.07 + (fbm(vec2(tb * 19.0, bolt.y + 3.1)) - 0.5) * 0.02 + sd * tt * 0.12 + (fbm(vec2(t * 23.0, bolt.y + 9.0)) - 0.5) * 0.015 * smoothstep(0.0, 0.05, tt);
+        float db = abs(da - pb);
+        br += (smoothstep(bPw * 1.2, 0.0, db) + exp(-db / (bPw * 2.5)) * 0.2) * step(0.0, tt) * smoothstep(0.32, 0.1, tt) * 0.6 * bolt.w;
+        c += vec3(0.85, 0.9, 1.0) * br * smoothstep(1.0, 0.92, t) * smoothstep(-0.005, 0.02, e) * smoothstep(0.25, 0.8, bolt.z) * 2.2;   // 上端埋進雲裡、下端到海平線
       }
       gl_FragColor = vec4(c, 1.0); }`
 }));

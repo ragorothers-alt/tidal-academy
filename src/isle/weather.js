@@ -10,6 +10,12 @@ const hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^
 const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 let forceT = null;
 export const setTyphoon = v => { forceT = v; };
+const boltV = new THREE.Vector3();
+/** 一道閃電：天空一白、隔一兩秒才打雷。v9.22.28 遠方看得到電光本身（多半在鏡頭前方左右 45° 內，六成帶分叉） */
+export function strike() {
+  flash = 1; boltIn = 7 + Math.random() * 10; thunderIn = 0.6 + Math.random() * 1.6; if (Math.random() < 0.4) setTimeout(() => { flash = Math.max(flash, 0.7); }, 140);
+  camera.getWorldDirection(boltV); skyU.bolt.value.set(Math.atan2(boltV.x, -boltV.z) + (Math.random() - 0.5) * 1.6, Math.random() * 100, 1, Math.random() < 0.6 ? 1 : 0);
+}
 /** 颱風日：7–10 月偶爾一天（依日期固定） */
 export function typhoon(d) { d = d || new Date(); if (forceT != null) return forceT; const m = d.getMonth() + 1; return m >= 7 && m <= 10 && hash(ymd(d) + ':typhoon') < 0.05; }
 export function afterTyphoon(d) { const today = new Date(d || new Date()), y = new Date(today); y.setDate(y.getDate() - 1); return forceT == null && !typhoon(today) && typhoon(y); }
@@ -83,7 +89,8 @@ export function update(dt, hour, night, focus, onChange) {
   wetK += ((wet && !winter() ? 1 : 0) - wetK) * Math.min(1, dt * (wet ? 0.12 : 0.02));
   // v8.7 暴風雨：偶爾一道閃電（天空一白、隔一兩秒才打雷）
   flash = Math.max(0, flash - dt * 5);
-  if (stormK > 0.6 && (boltIn -= dt) <= 0) { flash = 1; boltIn = 7 + Math.random() * 10; thunderIn = 0.6 + Math.random() * 1.6; if (Math.random() < 0.4) setTimeout(() => { flash = Math.max(flash, 0.7); }, 140); }
+  if (stormK > 0.6 && (boltIn -= dt) <= 0) strike();
+  skyU.bolt.value.z = flash;   // v9.22.28 天幕上看得到的那道閃電跟著閃光一亮一暗
   if (thunderIn >= 0 && (thunderIn -= dt) < 0) sfx('thunder');
   // 光線
   const dim = cloudK * (0.22 + rainK * 0.16) + rainK * 0.55 + stormK * 0.05;   // v9.22.17 雨天的直射光 15% → 7%：燈柱、樹的影子幾乎看不出來   // v9.22.10 多雲時陽光只淡一點，暗的是一片片雲影（以前整片均勻變暗 0.38）；v9.22.2 下雨幾乎沒有直射光（影子淡到看不出來），光來自整片灰白的天空（v6.93：雨天的影子再淡一點）
