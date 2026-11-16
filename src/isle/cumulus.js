@@ -113,9 +113,9 @@ const TRI = { uCShd: { value: new THREE.Color() }, uCLit: { value: new THREE.Col
 /* v9.22 晨昏的雲照真的天色走：清晨受光面是淡桃、背光是灰藍；午後偏奶油色；太陽貼近海平線時受光面是橘、雲緣金黃；
    日落後的餘暉把雲底染成灰玫瑰、很快轉成暗的灰藍；夜裡是比天空亮不了多少的暗灰藍剪影，只有月光照到的雲緣是銀灰 */
 const TRIS = { dawn: ['#7c8698', '#f2c6a4', '#ffe4c8'], day: ['#a8b4c6', '#eef1f5', '#ffffff'], gold: ['#9aa2b2', '#f6e0c2', '#fff0d8'],
-  sunset: ['#626a82', '#f0a46e', '#ffd28e'], after: ['#434c60', '#ac9082', '#d8b296'], dusk: ['#2a3244', '#58627a', '#8e98b0'], night: ['#121823', '#2a3347', '#8792ae'] };   // v9.22.1 餘暉的雲少一點粉紅；藍調時刻是灰藍
+  sunset: ['#626a82', '#f0a46e', '#ffd28e'], after: ['#434c60', '#ac9082', '#d8b296'], dusk: ['#2a3244', '#58627a', '#8e98b0'], night: ['#11151d', '#262d3a', '#4f586a'] };   // v9.22.1 餘暉的雲少一點粉紅；藍調時刻是灰藍   // v9.22.22 夜裡的雲緣暗下來、藍少一點：以前每一團雲泡都描著一圈亮藍邊，像發光的花椰菜
 const triC = Object.fromEntries(Object.entries(TRIS).map(([k, v]) => [k, v.map(c => new THREE.Color(c))]));
-const HZ = { sea: 0 }, col = new THREE.Color(), gold = new THREE.Color('#f2d0aa'), dawnC = new THREE.Color('#ffdcc0'), sunsetC = new THREE.Color('#f6e2d0'), afterC = new THREE.Color('#a2a2aa'), duskC = new THREE.Color('#8890a4'), nightC = new THREE.Color('#7a8aaa'), rainC = new THREE.Color('#a4a9b4');   // v9.13：黃昏染暖金、清晨淡橘、夜裡深藍灰
+const HZ = { sea: 0 }, col = new THREE.Color(), gold = new THREE.Color('#f2d0aa'), dawnC = new THREE.Color('#ffdcc0'), sunsetC = new THREE.Color('#f6e2d0'), afterC = new THREE.Color('#a2a2aa'), duskC = new THREE.Color('#8890a4'), nightC = new THREE.Color('#76829c'), rainC = new THREE.Color('#a4a9b4');   // v9.13：黃昏染暖金、清晨淡橘、夜裡深藍灰
 /** 每格更新：horizonNdc(x, z) 是該方向畫面地平線的 NDC 高度、yForNdc 反推世界高度（都由 fantasy.js 提供），golden、night 0–1
     地平線高度是沿路取樣地面算的，鏡頭快速移動時，懸崖、台地邊緣在取樣點之間進出，估計值會突然跳一下；
     海面的地平線每格照實算（連續、和鏡頭一起動），只有地形墊高的那一段用彈簧平滑地追上（約一秒），雲才不會一格一格地跳 */

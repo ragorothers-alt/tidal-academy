@@ -1242,8 +1242,8 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
           vec3 cc = mix(shdC, litC, clamp(lit * 0.75 + hk * 0.25 + toward * 0.08 - (1.0 - core) * 0.3 - 0.1, 0.0, 1.0));
           cc += glowC * smoothstep(edgeW * 6.0, 0.0, body + bump) * (0.1 + 0.25 * max(toward, 0.0)) * lit * (1.0 - night);   // 雲頂受光的金邊
           cc = mix(cc, mix(bo, top, 0.1) * 1.05, smoothstep(0.05, -0.01, e) * 0.55);   // 雲腳融進地平線的空氣裡
-          float rimN = smoothstep(edgeW * 9.0, 0.0, body + bump);   // 夜晚：月光只照亮雲頂的邊緣
-          vec3 ncc = mix(vec3(0.026, 0.038, 0.075), vec3(0.28, 0.32, 0.42), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v9.22.1 夜裡的雲是暗藍灰的雲體、月光照到的銀灰雲緣（以前紫藍、淡紫）
+          float rimN = smoothstep(edgeW * 9.0, 0.0, body + bump) * smoothstep(0.012, 0.045, H);   // 夜晚：月光只照亮雲頂的邊緣。v9.22.22 只有夠高的雲塔才有：海平線上矮矮的雲丘整團都落在亮邊裡，夜裡成了一排銀白的小丘
+          vec3 ncc = mix(vec3(0.024, 0.032, 0.058), vec3(0.15, 0.17, 0.215), clamp(rimN * 0.8 + lit * hk * 0.18, 0.0, 1.0));   // v9.22.1 夜裡的雲是暗藍灰的雲體、月光照到的銀灰雲緣（以前紫藍、淡紫）   // v9.22.22 雲緣暗一半、藍少一點
           cc = mix(cc, mix(vec3(0.44, 0.47, 0.52), vec3(0.26, 0.29, 0.34), wx.y) * (0.85 + lit * 0.2), wx.x * 0.85); ncc = mix(ncc, vec3(0.03, 0.035, 0.045), wx.x * 0.8);   // v9.22.2 陰雨天：雲堆是灰的，沒有被太陽照白的雲頂
           c = mix(c, mix(cc, ncc, night), cm * 0.98);   // 夜晚的雲是深藍的雲體、銀白的雲緣
         }
