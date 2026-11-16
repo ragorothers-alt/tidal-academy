@@ -381,7 +381,11 @@ const LG_GLSL = `
         lgCap = min( lgCap, 4.0 );   // 草、花、葉片卡：一層疊一層，只算這一格最亮的四盞
       #endif
       vec3 lgN = normalize( ( vec4( geometryNormal, 0.0 ) * viewMatrix ).xyz );   // 世界座標的法線（漫射在世界座標算，不必每盞燈都換座標）
-      vec3 lgD = vec3( 0.0 );
+      vec3 lgD = vec3( 0.0 ), lgS = vec3( 0.0 ), lgR = vec3( 0.0 ); float lgWet = 0.0;
+      #ifndef TA_LGFEW
+        lgWet = uWet * smoothstep( 0.85, 0.97, normalize( vWN ).y ) * ( 1.0 - uInside );   // v9.22.29 濕的地面、石板像一層薄水膜：映出路燈、窗光的倒影
+        if ( lgWet > 0.01 ) { vec3 lgV = normalize( cameraPosition - vWP ); lgR = reflect( -lgV, normalize( vWN ) ); lgWet *= 0.03 + 0.97 * pow( 1.0 - max( dot( lgV, normalize( vWN ) ), 0.0 ), 5.0 ); }   // 菲涅耳：斜看遠處的地面才像鏡子，往腳下看幾乎沒有倒影
+      #endif
       for ( int k = 0; k < ${LGRID.q}; k ++ ) {
         vec4 ids = texelFetch( uLGrid, ivec2( lgc.x * ${LGRID.q} + k, lgc.y ), 0 );
         if ( ids.x < 0.5 || lgn >= lgCap ) break;
@@ -397,6 +401,7 @@ const LG_GLSL = `
           if ( ld >= lr ) continue;
           if ( lcode > 0.5 && dot( Lw, lcode < 2.5 ? vec3( 3.0 - 2.0 * lcode, 0.0, 0.0 ) : vec3( 0.0, 0.0, 7.0 - 2.0 * lcode ) ) > 0.85 ) continue;   // 窗戶的燈只照牆外那一側：牆後、屋後不會被照亮
           vec4 lc = texelFetch( uLData, ivec2( li, 1 ), 0 );
+          if ( lgWet > 0.003 ) lgS += lc.rgb * pow( max( dot( lgR, Lw / ld ), 0.0 ), 260.0 ) / ( 1.0 + ld * 0.15 );   // 看得到燈泡本身的倒影：不管燈罩的光錐；從低角度斜看，倒影沿著視線拉成一條長長的燈影
           vec3 lcol = lc.rgb * getDistanceAttenuation( max( ld, 0.55 ), lr, lc.a );   // 燈有柔和的發光半徑：貼著燈泡的燈罩、燈框不會被照到爆白（v6.93）
           if ( lcone > 0.5 ) { vec4 la = texelFetch( uLData, ivec2( li, 2 ), 0 ); lcol *= smoothstep( la.w, mix( la.w, 1.0, 0.45 ), dot( Lw, la.xyz ) / -ld ); }   // v8.0 有燈罩的燈只照光錐裡面：柱燈與路燈往下、樹的投光往上、窗光往外往下（不再把整面牆洗白）
           if ( dot( lcol, lcol ) < 1e-8 ) continue;
@@ -412,6 +417,7 @@ const LG_GLSL = `
         }
       }
       reflectedLight.directDiffuse += lgD * uLOn * BRDF_Lambert( material.diffuseColor );
+      reflectedLight.directSpecular += lgS * uLOn * lgWet * 2.2 * ( 0.55 + 0.45 * n_v( vWP.xz * 3.0 + vec2( uTime * 0.7, -uTime * 0.5 ) ) );   // 雨點打出的細漣漪讓倒影一閃一閃、斷斷續續
     }
   }
   #endif`;
