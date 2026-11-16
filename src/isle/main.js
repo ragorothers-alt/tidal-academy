@@ -2563,6 +2563,10 @@ function tick(fixed) {
   const L = skyU.lift.value, sS = skyU.sunSky.value, A = sS.y * L + Math.sqrt(Math.max(0, sS.y * sS.y * L * L - L * L + 1));   // 用天幕上畫太陽的方向（以畫面地平線為準）反推畫面位置
   const fxSp = sunTmp.p.set(sS.x * A, sS.y * A - L, sS.z * A).multiplyScalar(200).add(camera.position).project(camera);
   post.fx.golden = golden * (1 - night); post.fx.haze.copy(scene.fog.color).lerp(skyU.bot.value, 0.5); post.fx.sunW.copy(dir); post.fx.clear = fxClear; post.fx.night = night; { const g = skyU.glowC.value, gm = Math.max(g.r, g.g, g.b); post.fx.sunCol.copy(g).lerp(sunTmp.c.setRGB(gm, gm * 0.88, gm * 0.62), 0.45); }   // v9.22.1 光暈與霧裡的散射用天上的陽光色，再偏淡金（日落後是漸暗的暖光，不是轉藍的光；太橘的光暈疊在藍天上會變成粉紫）
+  { // v9.22.26 清晨的薄霧：日出前後低處的霧濃一點、緊貼著地面與海面（隨高度散得更快），太陽升高（7:20–8:50）就散了；雨天交給雨霧
+    const mist = THREE.MathUtils.smoothstep(hourNow, 4.4, 5.6) * (1 - THREE.MathUtils.smoothstep(hourNow, 7.2, 8.8)) * (1 - Math.min(1, rk * 1.2));
+    post.fx.fog.set(0.003 + 0.03 * mist, 0.11 + 0.34 * mist, 0.4 + 0.4 * mist, 0.24 + 0.3 * mist);
+    if (mist > 0) post.fx.haze.lerp(sunTmp.c.set('#e2e6ea'), 0.3 * mist); }   // 霧是淡淡的乳白（朝太陽那一側由散射染成暖金）
   post.fx.sunVis = fxSp.z < 1 ? fxFront * THREE.MathUtils.smoothstep(sunDisc.y, -0.05, 0.03) : 0; post.fx.sun.set(THREE.MathUtils.clamp((fxSp.x + 1) / 2, -0.1, 1.1), THREE.MathUtils.clamp((fxSp.y + 1) / 2, 0.55, 1.08));   // 太陽在畫面外時，把光源拉到畫面邊緣附近
   U.uSunV.value.copy(dir).transformDirection(camera.matrixWorldInverse); U.uRimCol.value.copy(sun.color);
   U.uRim.value = (0.28 + golden * 0.4) * fxClear * (1 - night);   // 白天也有側逆光的亮邊
