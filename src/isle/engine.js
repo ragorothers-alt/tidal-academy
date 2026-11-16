@@ -1289,9 +1289,10 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         vec2 cp = d.xz / (d.y + 0.18) * 0.6, rp = vec2(cp.x * 0.8 + cp.y * 0.6, -cp.x * 0.6 + cp.y * 0.8);
         vec2 wq = rp * vec2(0.55, 1.5) + vec2(time * 0.0035, 0.0);
         float wp = fbm(wq * 0.6 + 3.0), ci = fbm(wq + vec2(wp * 2.2, wp * 0.6));   // 被扭曲過的雲片：一片片斜斜的羽毛狀
-        float fib = fbm(vec2(wq.x * 0.9 + wp * 1.5, wq.y * 9.0 + wp * 3.0));   // 順著雲片方向的細絲（橫向變化快、縱向變化慢）
+        float wv = fbm(vec2(wq.x * 2.6, wq.y * 1.8) + 7.0);   // v9.22.23 讓細絲彎一彎、沿著絲斷斷續續（一束束的馬尾雲），以前是又粗又長、等寬的平行條紋，像噴槍畫的
+        float fib = fbm(vec2(wq.x * 0.9 + wp * 1.5, wq.y * 15.0 + wp * 3.0 + wv * 2.4));   // 順著雲片方向的細絲（橫向變化快、縱向變化慢）
         float field = smoothstep(0.42, 0.62, fbm(wq * 0.22 + 11.0));   // 只有幾片天空有卷雲，其他地方是乾淨的藍
-        float ca = smoothstep(0.5, 0.8, ci) * smoothstep(0.22, 0.8, fib) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
+        float ca = smoothstep(0.48, 0.8, ci) * smoothstep(0.3, 0.86, fib) * mix(0.3, 1.0, smoothstep(0.32, 0.68, wv)) * field * smoothstep(0.03, 0.22, e) * (1.0 - smoothstep(0.55, 0.95, d.y));
         ca *= mix(0.27, 0.46, clamp(glow * 2.0, 0.0, 1.0)) * (1.0 - night) * (1.0 - smoothstep(0.5, 0.9, cover) * 0.5) * (1.0 - min(gloom, 1.0));
         vec3 cc = mix(vec3(1.0, 1.0, 1.03), glowC * vec3(1.06, 0.95, 0.76), clamp(glow * 1.7, 0.0, 0.92) * mix(0.5, 1.0, smoothstep(0.14, 0.0, sunSky.y))) + glowC * pow(s, 10.0) * 0.7;   // v9.22.1 晨昏的卷雲是金橘（以前偏粉）；v9.22.11 太陽還高時是白裡帶一點淡金，貼近海平線才染金橘
         vec3 cm = mix(c, cc, ca); cm.g += max(0.0, min(cm.r, cm.b) - cm.g) * min(1.0, ca * 3.0); c = cm;   // v9.22.11 半透明的暖色疊在藍天上會變成粉紫：把多出來的洋紅拿掉
