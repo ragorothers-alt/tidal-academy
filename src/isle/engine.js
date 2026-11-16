@@ -1333,16 +1333,21 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
           c = mix(c, vec3(0.1, 0.115, 0.14) * mix(1.0, 0.15, night), sc * sto * 0.85);
         }
       }
-      // 極光：北方地平線上方一層層飄動的光幕（下緣綠、上緣轉紫），有細細的直條紋
+      // 極光：北方地平線上方飄動的光簾。v9.22.27 兩層光簾，下緣沿著方位起伏、摺疊，亮而清楚，往上指數淡掉；
+      // 細細的直條紋不等距、慢慢游移；有的段落亮、有的幾乎沒有。顏色是氧原子的黃綠、往上偏一點青（以前一整片等寬的青綠色直帶、上緣轉紫，像畫上去的）
       if (aurora > 0.001 && d.y > -0.02) {
-        float az = atan(d.x, -d.z), north = smoothstep(2.2, 0.6, abs(az));
-        float w = fbm(vec2(az * 1.6 + time * 0.018, time * 0.012)), w2 = fbm(vec2(az * 3.1 - time * 0.03, 4.0));
-        float base = 0.08 + w2 * 0.08, top = base + 0.3 + w * 0.3;
-        float h = smoothstep(base, base + 0.05, d.y) * (1.0 - smoothstep(top - 0.08, top, d.y));
-        float rays = 0.55 + 0.45 * sin(az * 46.0 + w * 9.0 + time * 0.25);
-        float curtain = smoothstep(0.28, 0.55, w) * 0.75 + 0.25;
-        vec3 ac = mix(vec3(0.15, 1.0, 0.6), vec3(0.62, 0.32, 1.0), smoothstep(base + 0.04, top, d.y));
-        c += ac * curtain * rays * h * north * aurora * 1.1;
+        float az = atan(d.x, -d.z), north = smoothstep(2.3, 0.5, abs(az));
+        vec3 acc = vec3(0.0);
+        for (int L = 0; L < 2; L++) {
+          float fl = float(L);
+          float aw = fbm(vec2(az * (1.3 + fl * 0.9) + time * 0.015 + fl * 7.0, time * 0.01 + fl * 3.0)), fold = fbm(vec2(az * 4.2 - time * 0.025 + fl * 11.0, 2.0 + fl));
+          float ay = d.y - (0.1 + fl * 0.06 + (aw - 0.5) * 0.12 + (fold - 0.5) * 0.05);
+          float prof = smoothstep(-0.008, 0.014, ay) * exp(-max(ay, 0.0) / (0.1 + 0.08 * aw));
+          float ray = 0.35 + 0.85 * smoothstep(0.3, 0.85, fbm(vec2(az * 36.0 + aw * 5.0 + fl * 13.0, time * 0.15 + ay * 1.2)));
+          float act = smoothstep(0.3, 0.62, fbm(vec2(az * 0.9 + time * 0.02 + fl * 5.0, fl * 2.0)));
+          acc += mix(vec3(0.12, 0.95, 0.42), vec3(0.08, 0.66, 0.56), smoothstep(0.0, 0.2, ay)) * prof * ray * act * (1.0 - fl * 0.4);
+        }
+        c += acc * north * aurora * 0.8;
       }
       gl_FragColor = vec4(c, 1.0); }`
 }));
