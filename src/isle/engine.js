@@ -1144,14 +1144,14 @@ export function screenOf(obj, dy) {
 /* ---------- 天空 ---------- */
 export const skyU = { glow: { value: 0 }, top: { value: new THREE.Color('#5ec2ff') }, mid: { value: new THREE.Color('#9ad4ff') }, bot: { value: new THREE.Color('#d8f3ff') }, moonDir: { value: new THREE.Vector3(0.4, 0.75, -0.55).normalize() }, dawn: { value: 0 }, span: { value: 0.4 }, sunSky: { value: new THREE.Vector3(0, 1, 0) }, sea: { value: new THREE.Color('#7ad3f6') }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color('#fff4d6') }, night: { value: 0 },
   lift: { value: 0.36 }, time: U.uTime, cover: { value: 0.3 }, aurora: { value: 0 }, hz: { value: 0 }, gloom: { value: 0 },
-  glowC: { value: new THREE.Color('#fff4e0') }, discC: { value: new THREE.Color('#fff4e0') }, wx: { value: new THREE.Vector2() } };   // wx：x 是雨層雲蓋住天空的程度、y 是暴風雨（weather.js 設定）   // hz：畫面上地平線在天幕的高度；glowC：晨昏地平線暖光與雲的受光色（跟著太陽的真實仰角變色）；discC：日輪本身的顏色
+  glowC: { value: new THREE.Color('#fff4e0') }, discC: { value: new THREE.Color('#fff4e0') }, wx: { value: new THREE.Vector2() }, moonPh: { value: 0.5 } };   // moonPh：v9.22.25 月相（0 新月、0.25 上弦、0.5 滿月、0.75 下弦）   // wx：x 是雨層雲蓋住天空的程度、y 是暴風雨（weather.js 設定）   // hz：畫面上地平線在天幕的高度；glowC：晨昏地平線暖光與雲的受光色（跟著太陽的真實仰角變色）；discC：日輪本身的顏色
 /** v9.22.1 天上看得到的太陽方向（含真實仰角，日出約 5:35、日落約 18:30 會沉到海平線下）；光的方向另外算，日落後慢慢轉成月光 */
 export const sunDisc = new THREE.Vector3(0, 1, 0);
 /* 天空：滾筒地平線讓鏡頭下傾時也看得到天空，所以天空用「抬高」後的方向計算漸層、太陽與雲（lift） */
 export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false, uniforms: skyU,
   vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; uniform vec3 glowC; uniform vec3 discC; uniform vec2 wx; varying vec3 vD;
+  fragmentShader: `uniform float glow; uniform float gloom; uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 moonDir; uniform float dawn; uniform vec3 sea; uniform float span; uniform vec3 sunSky; uniform vec3 sunDir; uniform vec3 sunCol; uniform float night; uniform float lift; uniform float time; uniform float cover; uniform float aurora; uniform float hz; uniform vec3 glowC; uniform vec3 discC; uniform vec2 wx; uniform float moonPh; varying vec3 vD;
     float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,45.164))) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1187,14 +1187,16 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
         vec3 gN = normalize(vec3(0.55, 0.35, 0.76)), gU = normalize(cross(gN, vec3(0.0, 1.0, 0.0))), gV = cross(gN, gU); float gd = dot(d, gN), gl = atan(dot(d, gV), dot(d, gU));
         float gCore = exp(-gd * gd / 0.03), gCl = fbm(vec2(gl * 3.0, gd * 10.0)), gFine = fbm(vec2(gl * 16.0, gd * 44.0) + 5.0);
         float dust = smoothstep(0.42, 0.78, fbm(vec2(gl * 4.0 + 3.0, gd * 22.0))) * exp(-gd * gd / 0.005);   // v9.22.14 塵埃帶沿著光帶長一點、邊緣軟一點、淡一點（以前一小塊邊緣清楚的暗斑，像天上的污漬）
+        float mIll = 0.5 - 0.5 * cos(moonPh * 6.2831853);   // v9.22.25 月面被照亮的比例：新月 0、滿月 1
         band = gCore * (0.35 + 0.65 * gCl) * (0.6 + 0.8 * gFine) * (1.0 - dust * 0.45) * smoothstep(0.02, 0.3, d.y) * (1.0 - min(gloom, 1.0)) * smoothstep(0.75, 1.0, night);
-        c += mix(vec3(0.026, 0.034, 0.06), vec3(0.05, 0.05, 0.05), smoothstep(0.4, 0.9, gCore * gCl)) * band * night * 1.15;
-        // 月亮：亮白的圓盤（表面有淡淡的斑紋）與一圈柔和的光暈
+        c += mix(vec3(0.026, 0.034, 0.06), vec3(0.05, 0.05, 0.05), smoothstep(0.4, 0.9, gCore * gCl)) * band * night * 1.15 * (1.0 - 0.7 * mIll);   // v9.22.25 滿月的夜裡銀河被月光沖淡，沒有月亮的夜才清楚
+        // 月亮：亮白的圓盤（表面有淡淡的斑紋）與一圈柔和的光暈。v9.22.25 有月相：盈月亮在右邊、虧月亮在左邊，暗的那一面只有淡淡的地球反照
         float md = dot(d, moonDir);
         vec3 mU = normalize(cross(moonDir, vec3(0.0, 1.0, 0.0))), mV = cross(mU, moonDir); vec2 mp = vec2(dot(d, mU), dot(d, mV)) / 0.032;
         float disc = smoothstep(1.0, 0.93, length(mp)), maria = fbm(mp * 2.2 + 3.0);
-        c = mix(c, vec3(1.0, 0.98, 0.92) * (1.05 - smoothstep(0.45, 0.75, maria) * 0.22), disc * night);
-        c += vec3(0.55, 0.62, 0.8) * (pow(max(md, 0.0), 2200.0) * 0.5 + pow(max(md, 0.0), 160.0) * 0.12 + pow(max(md, 0.0), 18.0) * 0.03) * night * (1.0 - disc);
+        float mw = sqrt(max(0.0, 1.0 - mp.y * mp.y)), mSide = moonPh < 0.5 ? mp.x : -mp.x, litM = smoothstep(-0.07, 0.07, mSide - mw * cos(moonPh * 6.2831853));
+        c = mix(c, vec3(1.0, 0.98, 0.92) * (1.05 - smoothstep(0.45, 0.75, maria) * 0.22), disc * night * litM) + vec3(0.011, 0.013, 0.018) * disc * (1.0 - litM) * night;   // 暗面前面還有一層夜空的散射光：跟夜空差不多，只多一點地球反照（不是一個黑洞）
+        c += vec3(0.55, 0.62, 0.8) * (pow(max(md, 0.0), 2200.0) * 0.5 * (1.0 - disc) + (pow(max(md, 0.0), 160.0) * 0.12 + pow(max(md, 0.0), 18.0) * 0.03) * (1.0 - disc * litM)) * night * pow(mIll, 0.7);   // 寬的月暈是大氣散射，蓋在月面暗的那一面前面，跟旁邊的天空接得平
       }
       { // 星星（v9.22.3）：兩層——很多暗淡的小星＋少數亮星。大小以像素計（至少一個像素，以前小於一個像素、大多畫不出來），
         // 亮度大多暗、少數亮；銀河裡比較密、月亮附近被月光蓋掉一些、越靠近海平線越暗（大氣消光）；慢慢閃爍，亮星帶一點藍或暖色
@@ -1214,7 +1216,8 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
               stc += tint * exp(-dd * dd / (px * px * (L == 0 ? 0.9 : 1.5))) * br * tw;
             }
           }
-          c += stc * nv * 0.55 * smoothstep(-0.005, 0.22, e) * (1.0 - smoothstep(0.82, 0.995, mdS) * 0.85) * step(mdS, 0.9993);
+          float mI2 = 0.5 - 0.5 * cos(moonPh * 6.2831853);   // v9.22.25 月亮越圓，附近的星星被月光蓋掉越多；沒有月亮的夜裡暗星多一點
+          c += stc * nv * 0.55 * (1.12 - 0.22 * mI2) * smoothstep(-0.005, 0.22, e) * (1.0 - smoothstep(0.82, 0.995, mdS) * 0.85 * mI2) * step(mdS, 0.9993);
         }
       }
       // 積雲堆：沿著地平線堆起的大朵積雲（在遠山後面）。雲頂由一顆顆圓團疊成花椰菜的輪廓，每一團各自受光——
@@ -1398,6 +1401,10 @@ const KEYS = [
 // 月亮：在北偏東的天上（從廣場往北看在右上方）。MOON_L 是月光的方向（夜裡的主光）；天幕上畫月亮的位置由 main.js 依畫面上的地平線算
 const moonAt = (az, el) => new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el));
 const MOON_L = moonAt(0.55, 0.5);
+/* v9.22.25 月相照真實的日期走（朔望月 29.53 天，以 2000-01-06 18:14 UTC 的新月起算）：月光、海上的月光帶、銀河都跟著變。
+   moon.override 是除錯用（0–1） */
+export const moon = { override: null, ph: 0.5, ill: 1 };
+export const moonPhase = (ms = Date.now()) => { const p = (ms / 86400000 - 10962.76) / 29.530588; return p - Math.floor(p); };
 const ca = new THREE.Color(), cb = new THREE.Color();
 const lerpC = (a, b, k) => ca.set(a).lerp(cb.set(b), k).clone();
 /* ---------- 天空環境光（IBL）：把目前的天色畫成一個小天球，用 PMREM 預先模糊，當成整個島的環境光（scene.environment）----------
@@ -1462,6 +1469,9 @@ export function applyTime(h) {
   dir.lerp(MOON_L, toMoon).normalize();
   const se = sunDisc.y;
   sun.intensity *= 1 - (1 - toMoon) * (1 - ss(se, -0.06, 0.03)) * 0.45;   // 太陽沉下去以後沒有直射的陽光：光先弱下來，再由月光接手
+  moon.ph = moon.override ?? moonPhase(); moon.ill = 0.5 - 0.5 * Math.cos(moon.ph * Math.PI * 2); skyU.moonPh.value = moon.ph;
+  const mDim = 0.5 + 0.5 * moon.ill;   // v9.22.25 月光跟著月相：新月的夜裡只剩一半（還看得到路），滿月最亮
+  sun.intensity *= 1 - toMoon * (1 - mDim); hemi.intensity *= 1 - night * (1 - mDim) * 0.35;
   scene.fog.near = (A.fn + (B.fn - A.fn) * k) * FOG.near / 60; scene.fog.far = (A.ff + (B.ff - A.ff) * k) * FOG.far / 150;   // 每個時段自己的霧距（FOG 是整體倍率；雨天由 weather.js 再拉近）
   const dawn = THREE.MathUtils.smoothstep(h, 4.8, 5.9) * (1 - THREE.MathUtils.smoothstep(h, 7.0, 8.4));   // 清晨：粉金的晨光
   skyU.glow.value = Math.max(golden * 0.5, dawn * 0.42); skyU.dawn.value = dawn;   // v9.22.1 清晨的曙光亮一點（0.32 → 0.42）
@@ -1469,7 +1479,7 @@ export function applyTime(h) {
   // v9.22.1 天上的陽光色（地平線的暖光、雲的受光面）：高掛時就是陽光，貼近海平線轉成橘、沉下去後是漸暗的橘紅——日落後的餘暉、日出前的曙光；日輪本身貼近海平線時是橘紅、不再亮成白色
   skyU.glowC.value.copy(sun.color).lerp(cb.set('#ffa04e'), 1 - ss(se, 0.04, 0.3)).lerp(cb.set('#ff6c3c'), 1 - ss(se, -0.08, 0.03)).multiplyScalar(ss(se, -0.25, 0.0));
   skyU.discC.value.set('#fff6e8').lerp(cb.set('#ffa050').multiplyScalar(0.4), 1 - ss(se, 0.03, 0.25)).lerp(cb.set('#ff6a30').multiplyScalar(0.3), 1 - ss(se, -0.03, 0.04));
-  skyU.sunCol.value.copy(skyU.glowC.value).lerp(ca.copy(sun.color).multiplyScalar(0.4), toMoon);   // 夜裡是月光（海面的反光帶、雲）
+  skyU.sunCol.value.copy(skyU.glowC.value).lerp(ca.copy(sun.color).multiplyScalar(0.4 * (0.15 + 0.85 * moon.ill)), toMoon);   // 夜裡是月光（海面的反光帶、雲）；v9.22.25 月光帶跟著月相，新月的海上幾乎沒有
   const lit = Math.max(night, h > 12 ? THREE.MathUtils.smoothstep(h, 17.3, 18.6) : 1 - THREE.MathUtils.smoothstep(h, 5.4, 6.5));   // v8.7 燈比天黑早一點亮：日落前後二十分鐘逐漸亮起、清晨天亮後才熄（以前直接乘夜晚程度，17:36 全暗、18:30 還很暗）
   lampK.value = lit;
   nightMats.forEach(m => { const gl = m.userData.kind === 'glass'; m.emissiveIntensity = (gl ? lit + (1 - lit) * 0.09 : lit) * (m.userData.glowK ?? (gl ? 0.95 : 1.25)); });   // v7.6 夢幻風：白天的窗也透出一點暖光（屋裡亮著燈的感覺）   // 窗戶是溫暖的琥珀色燈光（參考圖的夜景：家家戶戶的窗都亮著），不會亮成一片白（v6.93 再收：看得到燈框與窗格）
