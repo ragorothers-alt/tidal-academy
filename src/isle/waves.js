@@ -111,16 +111,24 @@ function coastLines() {
 }
 function buildShore() {
   const P = [], S = [], A = [];           // 浪花帶
-  const BP = [], BC = [];                 // 沙灘緩坡（蓋住格子狀的階梯邊緣）
-  const OFF = 0.42, ySand = 0.362, WL = 0.6, W_OUT = 2.4, IN = 1.7, SLOPE = 1.8;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺
+  const BP = [], BC = [], BN = [];        // 沙灘緩坡（蓋住格子狀的階梯邊緣）
+  const OFF = 0.5, ySand = 0.362, WL = 0.6, W_OUT = 2.4, IN = 1.7, SLOPE = 1.8;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺；v9.22.20 OFF 0.42 → 0.5（海岸線磨平後，2:1 的斜階梯凸角也包得住）
   const sand = new THREE.Color('#f1e1b1'), sandWet = new THREE.Color('#e0c78a');
   const push = (x, y, z, s, a) => { P.push(x, y, z); S.push(s); A.push(a); };
-  const bpush = (x, y, z, c) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); };
+  const bpush = (x, y, z, c, nr) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); BN.push(nr[0], nr[1], nr[2]); };
   // 三角形一律朝上（海岸線串接方向不固定，要依法線校正繞向，不然一半會被背面剔除）
-  const btri = (a, b, c) => { const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]); const L = cy >= 0 ? [a, b, c] : [a, c, b]; L.forEach(v => bpush(v[0], v[1], v[2], v[3])); };
-  const slopeY = d => (d <= 0 ? ySand - Math.max(0, -d - IN * 0.5) * 0.004 : ySand - (d / SLOPE) * 0.95);   // d：從海岸曲線往海的距離
-  coastLines().forEach(({ pts, closed }) => {
-    const n = pts.length; if (n < 3) return;
+  const btri = (a, b, c) => { const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]); const L = cy >= 0 ? [a, b, c] : [a, c, b]; L.forEach(v => bpush(v[0], v[1], v[2], v[3], v[4])); };
+  // d：從海岸曲線往海的距離。v9.22.20 坡肩是圓的（前 RSH 公尺坡度慢慢加大），以前平台和坡面之間是一道折線
+  const S0 = 0.95 / SLOPE, RSH = 0.3;
+  const slopeY = d => (d <= 0 ? ySand - Math.max(0, -d - IN * 0.5) * 0.004 : ySand - S0 * (d < RSH ? d * d / (2 * RSH) : d - RSH / 2));
+  const slopeG = d => (d <= 0 ? 0 : S0 * Math.min(1, d / RSH));   // 往海每公尺降多少（算法線用）
+  coastLines().forEach(({ pts: raw, closed }) => {
+    const n = raw.length; if (n < 3) return;
+    // v9.22.20 海岸線位置也磨平（沿線約 ±1.5 公尺的加權平均）：格子的斜邊磨圓後還是一公尺一個波浪，緩坡跟著一個個鼓出來，從海上看像一階階的沙壁
+    const KP = closed ? Math.min(12, Math.floor((n - 1) / 2)) : 12;
+    const pts = raw.map((p, i) => { const k = closed ? KP : Math.min(KP, i, n - 1 - i); let sx = 0, sz = 0, sw = 0;
+      for (let o = -k; o <= k; o++) { const q = raw[closed ? (i + o + n) % n : i + o], w = 1 - Math.abs(o) / (k + 1); sx += q[0] * w; sz += q[1] * w; sw += w; }
+      return [sx / sw, sz / sw]; });
     const nor = pts.map((p, i) => {
       const a = pts[closed ? (i - 1 + n) % n : Math.max(0, i - 1)], b = pts[closed ? (i + 1) % n : Math.min(n - 1, i + 1)];
       let tx = b[0] - a[0], tz = b[1] - a[1]; const l = Math.hypot(tx, tz) || 1; tx /= l; tz /= l;
@@ -128,11 +136,11 @@ function buildShore() {
     });
     let vote = 0; pts.forEach((p, i) => { vote += tileAt(p[0] + nor[i][0] * 0.6, p[1] + nor[i][1] * 0.6) === -1 ? 1 : -1; });
     if (vote < 0) nor.forEach(v => { v[0] = -v[0]; v[1] = -v[1]; });
-    // 曲線往海推一點，包住突出的格子角
-    const cp = pts.map((p, i) => [p[0] + nor[i][0] * OFF, p[1] + nor[i][1] * OFF]);
-    let along = 0; const al = cp.map((p, i) => { if (i) along += Math.hypot(p[0] - cp[i - 1][0], p[1] - cp[i - 1][1]); return along; });
     // v9.22.12 緩坡與浪花帶改用平滑過的法線：格子海岸的斜邊是一階一階的，磨圓後法線左右擺動，往外推兩公尺多的浪花帶就一片片交疊，浪線交錯成一條條直線
     const K = 12, ns = nor.map((v0, i) => { let sx = 0, sz = 0; for (let k = -K; k <= K; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; const w = 1 - Math.abs(k) / (K + 1); sx += nor[j][0] * w; sz += nor[j][1] * w; } const l = Math.hypot(sx, sz); return l > 0.3 * (K + 1) ? [sx / l, sz / l] : v0; });
+    // 曲線往海推一點，包住突出的格子角（v9.22.20 順著平滑的法線推）
+    const cp = pts.map((p, i) => [p[0] + ns[i][0] * OFF, p[1] + ns[i][1] * OFF]);
+    let along = 0; const al = cp.map((p, i) => { if (i) along += Math.hypot(p[0] - cp[i - 1][0], p[1] - cp[i - 1][1]); return along; });
     const at = (i, d) => [cp[i][0] + ns[i][0] * d, cp[i][1] + ns[i][1] * d];
     // 內凹的海灣：浪花帶推到會和鄰段交疊之前就停（寬度不超過彎曲半徑），再讓寬度沿岸慢慢變化
     const wraw = ns.map((v0, i) => { const a = closed ? (i - 1 + n) % n : Math.max(0, i - 1), b = closed ? (i + 1) % n : Math.min(n - 1, i + 1), R = WL + W_OUT;
@@ -143,12 +151,13 @@ function buildShore() {
     const last = closed ? n : n - 1;
     for (let i = 0; i < last; i++) {
       const j = (i + 1) % n, a0 = al[i], a1 = j === 0 ? along + Math.hypot(cp[i][0] - cp[j][0], cp[i][1] - cp[j][1]) : al[j];
-      // 緩坡：內側平台（-IN 到 0）＋往海傾斜（0 到 SLOPE），分 4 段
-      const ds = [-IN, -IN * 0.5, 0, SLOPE * 0.33, SLOPE * 0.66, SLOPE];
+      // 緩坡：內側平台（-IN 到 0）＋往海傾斜（0 到 SLOPE）。v9.22.20 坡肩多切幾段、法線照坡度算（平滑的明暗），以前三段平面的折痕像一層層台階
+      const ds = [-IN, -IN * 0.5, 0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.4, SLOPE];
+      const nrm = (k, d) => { const g = slopeG(d), l = Math.hypot(ns[k][0] * g, 1, ns[k][1] * g); return [ns[k][0] * g / l, 1 / l, ns[k][1] * g / l]; };
       for (let k = 0; k < ds.length - 1; k++) {
         const d0 = ds[k], d1 = ds[k + 1], c0 = sand.clone().lerp(sandWet, Math.max(0, d0) / SLOPE), c1 = sand.clone().lerp(sandWet, Math.max(0, d1) / SLOPE);
         const q00 = at(i, d0), q01 = at(i, d1), q10 = at(j, d0), q11 = at(j, d1);
-        const v00 = [q00[0], slopeY(d0), q00[1], c0], v10 = [q10[0], slopeY(d0), q10[1], c0], v11 = [q11[0], slopeY(d1), q11[1], c1], v01 = [q01[0], slopeY(d1), q01[1], c1];
+        const v00 = [q00[0], slopeY(d0), q00[1], c0, nrm(i, d0)], v10 = [q10[0], slopeY(d0), q10[1], c0, nrm(j, d0)], v11 = [q11[0], slopeY(d1), q11[1], c1, nrm(j, d1)], v01 = [q01[0], slopeY(d1), q01[1], c1, nrm(i, d1)];
         btri(v00, v10, v11); btri(v00, v11, v01);
       }
       // 沙灘側水膜：從水線（著色器設成海平面）沿著緩坡往上到內側
@@ -162,7 +171,7 @@ function buildShore() {
     }
   });
   const bg = new THREE.BufferGeometry();
-  bg.setAttribute('position', new THREE.Float32BufferAttribute(BP, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(BC, 3)); bg.computeVertexNormals();
+  bg.setAttribute('position', new THREE.Float32BufferAttribute(BP, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(BC, 3)); bg.setAttribute('normal', new THREE.Float32BufferAttribute(BN, 3));   // v9.22.20 法線照坡度算，不再每個三角形各自平面
   const beach = new THREE.Mesh(bg, TERRAIN); beach.receiveShadow = true; scene.add(beach);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('side', new THREE.Float32BufferAttribute(S, 1)); g.setAttribute('along', new THREE.Float32BufferAttribute(A, 1));
