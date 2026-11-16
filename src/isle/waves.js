@@ -137,17 +137,32 @@ function buildShore() {
     let vote = 0; pts.forEach((p, i) => { vote += tileAt(p[0] + nor[i][0] * 0.6, p[1] + nor[i][1] * 0.6) === -1 ? 1 : -1; });
     if (vote < 0) nor.forEach(v => { v[0] = -v[0]; v[1] = -v[1]; });
     // v9.22.12 緩坡與浪花帶改用平滑過的法線：格子海岸的斜邊是一階一階的，磨圓後法線左右擺動，往外推兩公尺多的浪花帶就一片片交疊，浪線交錯成一條條直線
-    const K = 12, ns = nor.map((v0, i) => { let sx = 0, sz = 0; for (let k = -K; k <= K; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; const w = 1 - Math.abs(k) / (K + 1); sx += nor[j][0] * w; sz += nor[j][1] * w; } const l = Math.hypot(sx, sz); return l > 0.3 * (K + 1) ? [sx / l, sz / l] : v0; });
+    const K = 12, n12 = nor.map((v0, i) => { let sx = 0, sz = 0; for (let k = -K; k <= K; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; const w = 1 - Math.abs(k) / (K + 1); sx += nor[j][0] * w; sz += nor[j][1] * w; } const l = Math.hypot(sx, sz); return l > 0.3 * (K + 1) ? [sx / l, sz / l] : v0; });
+    // v9.22.21 碎浪帶往外海推的方向再平滑一層（沿岸約 ±5 公尺）：格子海岸每三四公尺一個台階，只平滑 ±1.5 公尺時，往外三公尺的浪花帶在每個內彎收成一點又摺回來，浪線就折成一個個 V
+    const KW = closed ? Math.min(40, Math.floor(n / 6)) : 40;
+    const nw = n12.map((v0, i) => { let sx = 0, sz = 0; for (let k = -KW; k <= KW; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; const w = 1 - Math.abs(k) / (KW + 1); sx += n12[j][0] * w; sz += n12[j][1] * w; } const l = Math.hypot(sx, sz); return l > 0.3 * (KW + 1) ? [sx / l, sz / l] : v0; });
+    // v9.22.21 格子小凹口（海往沙裡凹一格）的急彎：往海推到緩坡外緣時曲線會倒退打結，水線、水膜跟著摺成 V。那一小段改用 nw，兩旁 2 公尺內漸變；凸出的岬角不會打結，維持原方向，側面的格子牆才包得住
+    const DF = OFF + SLOPE, mark = new Uint8Array(n), beta = new Float32Array(n);
+    let ns = n12;
+    for (let it = 0; it < 4; it++) {
+      let nf = 0;
+      for (let i = 0; i < (closed ? n : n - 1); i++) { const j = (i + 1) % n, bx = pts[j][0] - pts[i][0], bz = pts[j][1] - pts[i][1], ox = bx + (ns[j][0] - ns[i][0]) * DF, oz = bz + (ns[j][1] - ns[i][1]) * DF;
+        if (ox * bx + oz * bz < 0.25 * (bx * bx + bz * bz) && !(mark[i] && mark[j])) { mark[i] = mark[j] = 1; nf++; } }   // 往外推的那條線縮到不到四分之一長、甚至倒退
+      if (!nf) break;
+      for (let i = 0; i < n; i++) { let b = 0; for (let k = -16; k <= 16; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; if (mark[j]) b = Math.max(b, 1 - Math.abs(k) / 17); } beta[i] = b; }
+      ns = n12.map((v, i) => { const b = beta[i], x = v[0] * (1 - b) + nw[i][0] * b, z = v[1] * (1 - b) + nw[i][1] * b, l = Math.hypot(x, z) || 1; return [x / l, z / l]; });
+    }
     // 曲線往海推一點，包住突出的格子角（v9.22.20 順著平滑的法線推）
     const cp = pts.map((p, i) => [p[0] + ns[i][0] * OFF, p[1] + ns[i][1] * OFF]);
     let along = 0; const al = cp.map((p, i) => { if (i) along += Math.hypot(p[0] - cp[i - 1][0], p[1] - cp[i - 1][1]); return along; });
     const at = (i, d) => [cp[i][0] + ns[i][0] * d, cp[i][1] + ns[i][1] * d];
     // 內凹的海灣：浪花帶推到會和鄰段交疊之前就停（寬度不超過彎曲半徑），再讓寬度沿岸慢慢變化
-    const wraw = ns.map((v0, i) => { const a = closed ? (i - 1 + n) % n : Math.max(0, i - 1), b = closed ? (i + 1) % n : Math.min(n - 1, i + 1), R = WL + W_OUT;
-      const din = Math.hypot(cp[b][0] - cp[a][0], cp[b][1] - cp[a][1]), dout = Math.hypot(cp[b][0] + ns[b][0] * R - cp[a][0] - ns[a][0] * R, cp[b][1] + ns[b][1] * R - cp[a][1] - ns[a][1] * R);
+    const wraw = nw.map((v0, i) => { const a = closed ? (i - 1 + n) % n : Math.max(0, i - 1), b = closed ? (i + 1) % n : Math.min(n - 1, i + 1), R = W_OUT;
+      const wa = at(a, WL), wb = at(b, WL), din = Math.hypot(wb[0] - wa[0], wb[1] - wa[1]), dout = Math.hypot(wb[0] + nw[b][0] * R - wa[0] - nw[a][0] * R, wb[1] + nw[b][1] * R - wa[1] - nw[a][1] * R);
       if (a === b || din < 1e-4 || dout >= din) return W_OUT;
-      const th = Math.acos(Math.min(1, ns[a][0] * ns[b][0] + ns[a][1] * ns[b][1])); return Math.max(0.6, Math.min(W_OUT, 0.85 * din / Math.max(th, 1e-4) - WL)); });
+      const th = Math.acos(Math.min(1, nw[a][0] * nw[b][0] + nw[a][1] * nw[b][1])); return Math.max(0.6, Math.min(W_OUT, 0.85 * din / Math.max(th, 1e-4))); });
     const wo = wraw.map((w, i) => { let m = w; for (let k = -8; k <= 8; k++) { let j = i + k; if (closed) j = (j + n) % n; else if (j < 0 || j >= n) continue; m = Math.min(m, wraw[j] + Math.abs(k) * 0.08); } return m; });
+    const out = i => { const w = at(i, WL); return [w[0] + nw[i][0] * wo[i], w[1] + nw[i][1] * wo[i]]; };   // 浪花帶外緣
     const last = closed ? n : n - 1;
     for (let i = 0; i < last; i++) {
       const j = (i + 1) % n, a0 = al[i], a1 = j === 0 ? along + Math.hypot(cp[i][0] - cp[j][0], cp[i][1] - cp[j][1]) : al[j];
@@ -165,7 +180,7 @@ function buildShore() {
       push(w0[0], 0, w0[1], -0.0001, a0); push(i0[0], slopeY(-0.25) + 0.012, i0[1], -1, a0); push(i1[0], slopeY(-0.25) + 0.012, i1[1], -1, a1);
       push(w0[0], 0, w0[1], -0.0001, a0); push(i1[0], slopeY(-0.25) + 0.012, i1[1], -1, a1); push(w1[0], 0, w1[1], -0.0001, a1);
       // 海面側浪線
-      const o0 = at(i, WL + wo[i]), o1 = at(j, WL + wo[j]);
+      const o0 = out(i), o1 = out(j);
       push(w0[0], 0, w0[1], 0.0001, a0); push(w1[0], 0, w1[1], 0.0001, a1); push(o1[0], 0, o1[1], 1, a1);
       push(w0[0], 0, w0[1], 0.0001, a0); push(o1[0], 0, o1[1], 1, a1); push(o0[0], 0, o0[1], 1, a0);
     }
