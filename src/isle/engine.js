@@ -150,7 +150,7 @@ const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r
 export const DET = {};
 ['grass', 'dirt', 'sand', 'rock', 'plaster', 'planks', 'tiles', 'bark', 'leaves', 'cobble', 'masonry', 'metal'].forEach(n => { DET[n] = { d: { value: neutral(128, 128, 128) }, n: { value: neutral(128, 128, 255) } }; });
 /** 每種材質用哪幾張細節圖（uD0..uD2 / uN0..uN2） */
-const DETK = { terrain: ['grass', 'sand', 'rock'], wall: ['planks'], roof: ['plaster'], stone: ['rock'], bark: ['bark'], sway: ['leaves'], sakura: ['leaves'], pine: ['leaves'], wood: ['planks'], fabric: ['plaster'], ceramic: ['plaster'], metal: ['metal'], foliage: ['leaves'], paper: ['plaster'] };   // v9.13：金屬有自己的拉絲細節（以前借用岩石）
+const DETK = { terrain: ['grass', 'sand', 'rock'], wall: ['planks'], roof: ['plaster'], plaster: ['plaster'], stone: ['rock'], bark: ['bark'], sway: ['leaves'], sakura: ['leaves'], pine: ['leaves'], wood: ['planks'], fabric: ['plaster'], ceramic: ['plaster'], metal: ['metal'], foliage: ['leaves'], paper: ['plaster'] };   // v9.13：金屬有自己的拉絲細節（以前借用岩石）
 /** v7.6 室內與家具的材質種類（M(color, opts, kind) 的 kind）：木頭、布料、陶瓷、金屬、室內葉子、紙 */
 export const MATK = ['wood', 'fabric', 'ceramic', 'metal', 'foliage', 'paper'];
 const TRI = `
@@ -721,6 +721,20 @@ export function bend(mat, kind) {
         diffuseColor.rgb *= mix(vec3(1.025, 1.01, 0.965), vec3(1.045, 1.025, 0.975), pn);
         diffuseColor.rgb *= mix(vec3(0.955, 0.95, 0.95), vec3(1.035, 1.02, 0.99), smoothstep(0.3, 0.7, tr));
         diffuseColor.rgb *= 1.0 + (fine - 0.5) * 0.07 * aa;
+        // v9.23.3 灰泥有抹面的顆粒與起伏（烘焙的細節貼圖，跟木板、石材同一套）
+        vec3 qp = vWP * 0.7; diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, qp, gB) * 2.0, 0.38);
+        gDetN = triN(uN0, qp, gB) * 0.16;
+        { // v9.23.3 戶外的牆經過風吹雨淋：雨水沿著牆面流下來留下一道道長短不一的淡灰痕、幾塊受潮的深色斑，牆腳一段被泥水濺髒、零星長了青苔。室內的牆不變
+          vec3 wn = normalize(vWN); float ext = (1.0 - uInside) * (1.0 - smoothstep(0.35, 0.7, abs(wn.y)));
+          float hc = abs(wn.x) > abs(wn.z) ? vWP.z : vWP.x;
+          float sk = n_v(vec2(hc * 8.0, vWP.y * 0.45 + 3.0)) * 0.65 + n_v(vec2(hc * 21.0, vWP.y * 1.1 + 7.0)) * 0.35 * aa;
+          float streak = smoothstep(0.52, 0.78, sk) * smoothstep(0.35, 0.7, n_f(vec2(hc * 0.6, vWP.y * 0.25) + 11.0));
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.8, 0.79, 0.76), streak * ext);
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.88, 0.875, 0.85), smoothstep(0.5, 0.82, n_f(sp * 0.9 + 21.0)) * ext);
+          float gh = vOP.y + (n_v(vec2(hc * 1.7, 4.0)) - 0.5) * 0.3, grime = smoothstep(1.35, 0.5, gh) * ext;   // 牆身從石基座上緣（離地約半公尺）開始
+          diffuseColor.rgb *= mix(vec3(1.0), vec3(0.74, 0.715, 0.66), grime * (0.5 + 0.5 * n_v(vec2(hc * 5.0, vWP.y * 3.0))));
+          float moss = smoothstep(0.95, 0.5, gh) * smoothstep(0.48, 0.76, n_v(vec2(hc * 2.4, vWP.y * 1.3) + 9.0)) * ext;
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.84, 0.6), moss * 0.6); }
       }`);
     if (kind === 'bark') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { vec2 p = vec2(vOP.x + vOP.z * 0.6, vOP.y);
