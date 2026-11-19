@@ -758,6 +758,13 @@ export function bend(mat, kind) {
         reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.13 + 0.09 * (1.0 - swn.y)) * (1.0 - uInside);
       }
       #endif`);
+    if (kind === 'plaster' || kind === 'wall') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      #if NUM_DIR_LIGHTS > 0
+      { // v9.23.8 戶外的牆：被陽光照亮的地面把光反彈到牆上，越靠近地面越亮、帶一點草地的暖綠——背光的牆不再是從上到下同一個灰
+        vec3 pwn = normalize(vWN); float pvert = 1.0 - smoothstep(0.35, 0.7, abs(pwn.y));
+        reflectedLight.indirectDiffuse += directionalLights[0].color * vec3(0.97, 0.985, 0.9) * diffuseColor.rgb * RECIPROCAL_PI * 0.085 * smoothstep(3.0, 0.3, vOP.y) * pvert * (1.0 - uInside);
+      }
+      #endif`);
     if (kind === 'bark') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       #if NUM_DIR_LIGHTS > 0
       { // v9.23.2 樹蔭下的樹幹不是一根黑柱子：被陽光照亮的地面和葉子把光反彈回來（朝下、朝旁邊的面多一點）

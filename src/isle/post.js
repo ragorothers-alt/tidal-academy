@@ -74,14 +74,17 @@ const AO = mat(`#include <packing>
     vec3 pr = vp(vUv + vec2(px.x, 0.0)), pl = vp(vUv - vec2(px.x, 0.0)), pu = vp(vUv + vec2(0.0, px.y)), pd = vp(vUv - vec2(0.0, px.y));
     vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl, dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;
     vec3 N = normalize(cross(dx, dy)); float z0 = -P.z;
-    float rpx = clamp(rad * pscale / z0, 2.5, 80.0), ang = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2832, occ = 0.0;
+    float ang = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2832, occ = 0.0, occL = 0.0, nL = 0.0;
+    // v9.23.8 兩種尺度：三分之二的取樣抓縫隙與接觸處（半徑 rad），三分之一抓大範圍的遮蔽（半徑 3.4 倍：屋簷下、牆腳、建築之間柔和的暗）
     for (int i = 0; i < 16; i++) {
       float fi = float(i); if (fi >= taps) break;
-      float a = ang + fi * 2.39996, rr = (fi + 0.5) / taps; rr = rr * (0.35 + 0.65 * rr);
+      float big = step(1.5, mod(fi, 3.0)), R = rad * mix(1.0, 3.4, big), rpx = clamp(R * pscale / z0, 2.5, mix(80.0, 150.0, big));
+      float a = ang + fi * 2.39996, rr = (fi + 0.5) / taps; rr = rr * (0.35 + 0.65 * rr); rr = mix(rr, 0.25 + 0.75 * rr, big);
       vec3 v = vp(vUv + vec2(cos(a), sin(a)) * rr * rpx * px) - P; float L = length(v);
-      occ += max(dot(v, N) / max(L, 1e-4) - 0.12, 0.0) * (1.0 - smoothstep(rad * 0.45, rad, L));
+      float o = max(dot(v, N) / max(L, 1e-4) - 0.12, 0.0) * (1.0 - smoothstep(R * 0.45, R, L));
+      occ += o * (1.0 - big); occL += o * big; nL += big;
     }
-    gl_FragColor = vec4(clamp(1.0 - occ / taps * 1.9, 0.0, 1.0), z0, 0.0, 1.0); }`,
+    gl_FragColor = vec4(clamp(1.0 - occ / max(taps - nL, 1.0) * 1.9 - occL / max(nL, 1.0) * 1.15, 0.0, 1.0), z0, 0.0, 1.0); }`,
   { dep: { value: null }, res: { value: new THREE.Vector2() }, near: { value: 0.5 }, far: { value: 500 }, pinv: { value: new THREE.Vector2(1, 1) }, pscale: { value: 500 }, rad: { value: 0.9 }, taps: { value: 16 } });
 const BIL = mat(`uniform sampler2D tex; uniform vec2 dir; varying vec2 vUv;
   void main(){ vec2 c0 = texture2D(tex, vUv).rg; float z0 = c0.g, s = c0.r * 0.227, ws = 0.227, tol = z0 * 0.05 + 0.04;
