@@ -124,7 +124,7 @@ function buildShore() {
   const btri = (a, b, c) => { const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]); const L = cy >= 0 ? [a, b, c] : [a, c, b]; L.forEach(v => bpush(v[0], v[1], v[2], v[3], v[4], v[5])); };
   // d：從海岸曲線往海的距離。v9.22.20 坡肩是圓的（前 RSH 公尺坡度慢慢加大），以前平台和坡面之間是一道折線
   const S0 = 0.95 / SLOPE, RSH = 0.3;
-  const slopeY = d => (d <= 0 ? ySand - Math.max(0, -d - IN * 0.5) * 0.004 : ySand - S0 * (d < RSH ? d * d / (2 * RSH) : d - RSH / 2));
+  const slopeY = d => (d <= 0 ? ySand - Math.max(0, -d - IN * 0.5) * 0.022 : ySand - S0 * (d < RSH ? d * d / (2 * RSH) : d - RSH / 2));   // v9.23.9 內緣沉到沙地底下約 7 公釐（以前高出 9 公釐，接縫是一條有陰影的細線）
   const slopeG = d => (d <= 0 ? 0 : S0 * Math.min(1, d / RSH));   // 往海每公尺降多少（算法線用）
   coastLines().forEach(({ pts: raw, closed }) => {
     const n = raw.length; if (n < 3) return;
