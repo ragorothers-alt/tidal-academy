@@ -25,15 +25,22 @@ function slab(b, outline, surface, color, bevel = 0.018, depth = 0.07) {
   const area = outline.reduce((s, p, i) => { const q = outline[(i + 1) % outline.length]; return s + p[0] * q[1] - q[0] * p[1]; }, 0);
   if (area < 0) outline = [...outline].reverse();
   const n = outline.length, cx = outline.reduce((s, p) => s + p[0], 0) / n, cz = outline.reduce((s, p) => s + p[1], 0) / n;
-  const top = outline.map(([x, z]) => { const d = Math.hypot(x - cx, z - cz), k = Math.max(0, 1 - bevel / d); return [cx + (x - cx) * k, surface(x, z), cz + (z - cz) * k]; });
+  // v9.23.4 每塊石板鋪了多年：各自沉陷、傾斜一點點（幾公釐，陽光下每塊受光不同）；中間被踩得乾淨，靠邊約 7 公分積了土、顏色深一截，三成的石板邊緣長了青苔；倒角與石縫更暗
+  const h1 = hash(cx * 12.9898 + cz * 78.233), h2 = hash(cx * 39.31 + cz * 11.73 + 4.1), h3 = hash(cx * 7.13 - cz * 23.37 + 9.2);
+  const tx = (h1 - 0.5) * 0.01, tz = (h2 - 0.5) * 0.01, dy = (h3 - 0.5) * 0.006, topY = (x, z) => surface(x, z) + dy + (x - cx) * tx + (z - cz) * tz;
+  const inset = (x, z, w) => { const d = Math.hypot(x - cx, z - cz), k = Math.max(0, 1 - w / d), px = cx + (x - cx) * k, pz = cz + (z - cz) * k; return [px, topY(px, pz), pz]; };
+  const top = outline.map(([x, z]) => inset(x, z, bevel)), inn = outline.map(([x, z]) => inset(x, z, bevel + 0.07));
   const rim = outline.map(([x, z]) => [x, surface(x, z) - 0.014, z]);
   const bot = outline.map(([x, z]) => [x, surface(x, z) - depth, z]);
-  const center = [cx, surface(cx, cz), cz];
+  const center = [cx, topY(cx, cz), cz];
+  const mossK = Math.max(0, (h2 - 0.7) / 0.3) * 0.7, dirt = [0.86 - 0.07 * h1, 0.855 - 0.07 * h1, 0.82 - 0.08 * h1];
+  const EDGE = [dirt[0] + (0.7 - dirt[0]) * mossK, dirt[1] + (0.8 - dirt[1]) * mossK, dirt[2] + (0.58 - dirt[2]) * mossK], BEV = EDGE.map(v => v * 0.86);
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    tri(b, center, top[j], top[i], color, 1.03, RIM, RIM);   // v7.7：石板中間亮、邊緣暗一點；v9.16 半寫實：差距小一點，是磨平的石板、不像鼓起的枕頭
-    tri(b, top[i], top[j], rim[j], color, 0.97); tri(b, top[i], rim[j], rim[i], color, 0.97);
-    tri(b, rim[i], rim[j], bot[j], color, 0.84); tri(b, rim[i], bot[j], bot[i], color, 0.84);
+    tri(b, center, inn[j], inn[i], color, 1.03, 1.0, 1.0);   // v7.7：石板中間亮、邊緣暗一點；v9.16 半寫實：差距小一點，是磨平的石板、不像鼓起的枕頭
+    tri(b, inn[i], inn[j], top[j], color, 1.0, 1.0, EDGE); tri(b, inn[i], top[j], top[i], color, 1.0, EDGE, EDGE);
+    tri(b, top[i], top[j], rim[j], color, BEV); tri(b, top[i], rim[j], rim[i], color, BEV);
+    tri(b, rim[i], rim[j], bot[j], color, 0.72); tri(b, rim[i], bot[j], bot[i], color, 0.72);
   }
 }
 
