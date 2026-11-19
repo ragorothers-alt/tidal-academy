@@ -727,7 +727,23 @@ export function bend(mat, kind) {
         float grain = sin(p.x * 11.0 + n_v(p * 0.8) * 1.5);
         diffuseColor.rgb *= 0.98 + grain * 0.02;
         gDetN = triN(uN0, vWP * vec3(0.9, 0.25, 0.9), gB) * 0.12;
+        // v9.23.2 樹皮的直向裂紋：一道道深色的溝、溝之間的皮脊亮一點，零星有幾塊灰綠的地衣；遠看收掉不閃
+        float baa = clamp(1.0 - length(fwidth(vWP)) * 26.0, 0.0, 1.0);
+        float bu = (vWP.x + vWP.z * 0.7) * 38.0, bfur = n_v(vec2(bu, vWP.y * 2.0)) * 0.62 + n_v(vec2(bu * 2.3 + 5.0, vWP.y * 5.5)) * 0.38;
+        float bcr = smoothstep(0.46, 0.24, bfur) * baa;
+        diffuseColor.rgb *= mix(1.0, 0.6, bcr) * (1.0 + smoothstep(0.55, 0.8, bfur) * 0.12 * baa) * (0.93 + 0.14 * n_v(vWP.xz * 2.6 + vWP.y * 1.1));
+        float blich = smoothstep(0.66, 0.84, n_v(vWP.xz * 1.9 + vWP.y * 0.8 + 4.0)) * (1.0 - bcr);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.94, 1.06, 0.86) + vec3(0.012, 0.02, 0.006), blich * 0.4);
+        { vec3 bwn = normalize(vWN), bt = normalize(vec3(-bwn.z, 0.0, bwn.x) + 1e-4);   // 裂紋的起伏：法線沿著樹幹的橫向偏
+          gDetN += bt * (n_v(vec2(bu + 0.35, vWP.y * 2.0)) - n_v(vec2(bu - 0.35, vWP.y * 2.0))) * 0.55 * baa; }
       }`);
+    if (kind === 'bark') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      #if NUM_DIR_LIGHTS > 0
+      { // v9.23.2 樹蔭下的樹幹不是一根黑柱子：被陽光照亮的地面和葉子把光反彈回來（朝下、朝旁邊的面多一點）
+        vec3 bwn2 = normalize(vWN);
+        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.16 + 0.07 * (1.0 - bwn2.y)) * (1.0 - uInside);
+      }
+      #endif`);
     if (MATK.includes(kind)) f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { // v7.6 室內與家具的材質細節（全用世界座標：合併成整棟的網格也能用）；高頻紋理隨距離淡掉，遠看不閃
         vec3 wn = normalize(vWN); float lev = step(0.7, abs(wn.y));
