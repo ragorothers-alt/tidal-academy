@@ -402,6 +402,17 @@ export const terrain = (function build() {
   for (let i = 0; i < RC.length; i++) Cc.push(RC[i]);
   for (let i = 0; i < RS.length; i++) SF.push(RS[i]);
   for (let i = 0; i < RP.length / 3; i++) { WALL.push(false); BNR.push(null); }
+  if (PLAN) { // v9.23.6 道路和通往各家門口的小徑底下是踩實的泥土：路面石板之間、路的兩側露出來的是暖褐的土，往外半公尺漸漸回到草地（以前石縫裡是鮮綠的草地底色，石板像擺在草皮上）
+    const RD = PLAN.roads.filter(r => r.kind === 'stone' || r.kind === 'earth' || r.kind === 'address'), D1 = new THREE.Color('#8f7d62'), D2 = new THREE.Color('#a18d6f'), dc = new THREE.Color();
+    const roadD = (x, z) => { let m = 9; for (const r of RD) { const Q = r.path, hw = r.w / 2; for (let i = 0; i < Q.length - 1; i++) { const a = Q[i], b = Q[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], u = Math.max(0, Math.min(1, ((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz || 1))), d = Math.hypot(x - a[0] - dx * u, z - a[1] - dz * u) - hw; if (d < m) m = d; } } return m; };
+    for (let i = 0; i < originalVertices; i++) {
+      if (SF[i * 4] < 0.5 || WALL[i]) continue;
+      const x = P[i * 3], z = P[i * 3 + 2], d = roadD(x, z); if (d > 1.4) continue;
+      const k = 1 - THREE.MathUtils.smoothstep(d + (noise(x * 1.3 + 5, z * 1.3) - 0.5) * 0.6, -0.25, 0.85); if (k <= 0) continue;
+      dc.copy(D1).lerp(D2, noise(x * 0.8, z * 0.8));
+      Cc[i * 3] += (dc.r - Cc[i * 3]) * k; Cc[i * 3 + 1] += (dc.g - Cc[i * 3 + 1]) * k; Cc[i * 3 + 2] += (dc.b - Cc[i * 3 + 2]) * k; SF[i * 4] *= 1 - k * 0.9;
+    }
+  }
   chamfer(P);
   for (let i = 0; i < P.length; i += 3) { const [wx, wz] = warp(P[i], P[i + 2]); P[i] = wx; P[i + 2] = wz; }
   for (let i = 0; i < RP.length; i++) P.push(RP[i]);   // 凸石已在世界座標做平面倒角，避免再次扭曲正面
