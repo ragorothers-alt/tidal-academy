@@ -751,6 +751,13 @@ export function bend(mat, kind) {
         { vec3 bwn = normalize(vWN), bt = normalize(vec3(-bwn.z, 0.0, bwn.x) + 1e-4);   // 裂紋的起伏：法線沿著樹幹的橫向偏
           gDetN += bt * (n_v(vec2(bu + 0.35, vWP.y * 2.0)) - n_v(vec2(bu - 0.35, vWP.y * 2.0))) * 0.55 * baa; }
       }`);
+    if (kind === 'stone') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      #if defined(TA_NATURE) && NUM_DIR_LIGHTS > 0
+      { // v9.23.5 圓石與礁石背光的那一面：被陽光照亮的沙地、草地把光反彈上來，不是一團黑
+        vec3 swn = normalize(vWN);
+        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.13 + 0.09 * (1.0 - swn.y)) * (1.0 - uInside);
+      }
+      #endif`);
     if (kind === 'bark') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       #if NUM_DIR_LIGHTS > 0
       { // v9.23.2 樹蔭下的樹幹不是一根黑柱子：被陽光照亮的地面和葉子把光反彈回來（朝下、朝旁邊的面多一點）

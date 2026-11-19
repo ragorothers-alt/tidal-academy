@@ -17,7 +17,7 @@ const READY = new Set([...MODEL_IDS, ...NATURE_IDS, ...ROCK_IDS]);
 const KIND = { prop_pine: 'pine', prop_palm: 'pine', prop_bamboo: 'pine', prop_tree: 'sway', prop_shrub: 'sway', prop_boulder: 'stone', prop_shorerock: 'stone' };   // 會隨風擺動的植物；其他是不動的擺設
 /** 擺設模型的朝向修正（Tripo 靜態模型的正面方向，視模型而定） */
 const TURN = {};
-const LOW = new Set(['prop_shrub', 'prop_boulder', 'prop_shorerock', 'prop_mailbox']);
+const LOW = new Set(['prop_shrub', 'prop_mailbox']);   // v9.23.5 圓石與礁石改成會投影子：沒有影子的石頭像浮在地上
 const TREES = new Set(['prop_tree', 'prop_palm', 'prop_pine', 'prop_bamboo']);
 
 const box = new THREE.Box3(), size = new THREE.Vector3(), ctr = new THREE.Vector3();
