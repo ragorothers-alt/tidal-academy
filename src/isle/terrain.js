@@ -254,7 +254,7 @@ export const waterY = (x, z) => { const [tx, tz] = tileOf(x, z); return isCreek(
 /* ---------- 地形網格 ---------- */
 // 明確表面分類只套用在主島網格；waves.js／trip.js 保留原 TERRAIN 的相容路徑。
 // aSurface = (草, 沙, 白石[1牆身／2立體石], 水底)。不影響任何格子與高度查詢。
-const surfaceMat = bend(TERRAIN.clone(), 'terrain');
+export const surfaceMat = bend(TERRAIN.clone(), 'terrain');   // v9.23.1 waves.js 的沙灘緩坡也用（aSurface.z 負值＝離浪多近）
 surfaceMat.defines = { ...TERRAIN.defines, TA_SURFACE: '' };
 /** 崖頂邊緣的取樣點 [x, y, z, 往外的方向 dx, dz]（世界座標）：grass.js 在這裡長出往下垂的草 */
 export const cliffTops = [];

@@ -2,7 +2,7 @@
    v8.9.1 藍眼淚的夜晚（bluetears.js 設 uBlue）：碎浪與浪花前緣一點一點發出藍光，海邊濕沙上的腳印也亮一下。 */
 import * as THREE from 'three';
 import { scene, U, TERRAIN, renderer } from './engine.js';
-import { N, C, T, tileAt, groundAt, seaMesh, waterAt, waterY, warp } from './terrain.js';
+import { N, C, T, tileAt, groundAt, seaMesh, waterAt, waterY, warp, surfaceMat, noise } from './terrain.js';
 
 /* 自訂著色器也要跟著滾筒地平線彎曲 */
 const BENDV = `uniform float uCurve; uniform float uBendF;
@@ -111,13 +111,17 @@ function coastLines() {
 }
 function buildShore() {
   const P = [], S = [], A = [];           // 浪花帶
-  const BP = [], BC = [], BN = [];        // 沙灘緩坡（蓋住格子狀的階梯邊緣）
+  const BP = [], BC = [], BN = [], BS = [];        // 沙灘緩坡（蓋住格子狀的階梯邊緣）；BS：v9.23.1 表面分類（沙＋離浪多近）
   const OFF = 0.5, ySand = 0.362, WL = 0.6, W_OUT = 2.4, IN = 1.7, SLOPE = 1.8;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺；v9.22.20 OFF 0.42 → 0.5（海岸線磨平後，2:1 的斜階梯凸角也包得住）
-  const sand = new THREE.Color('#f1e1b1'), sandWet = new THREE.Color('#e0c78a');
+  const sandWet = new THREE.Color('#e0c78a');
   const push = (x, y, z, s, a) => { P.push(x, y, z); S.push(s); A.push(a); };
-  const bpush = (x, y, z, c, nr) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); BN.push(nr[0], nr[1], nr[2]); };
+  const bpush = (x, y, z, c, nr, wt) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); BN.push(nr[0], nr[1], nr[2]); BS.push(0, 1, -wt, 0); };
+  // v9.23.1 緩坡的沙色跟內側的沙地同一套（terrain.js 的 sandC）：以前緩坡是比較黃、比較亮的另一種沙，和沙地之間有一條明顯的色差線。往海的坡面才漸漸偏暖
+  const SA = new THREE.Color('#e8d8bc'), SB = new THREE.Color('#d9cdb8');
+  const col = (q, d) => SA.clone().lerp(SB, noise(q[0] * 0.5, q[1] * 0.5) * 0.7).lerp(sandWet, Math.max(0, d) / SLOPE * 0.8);
+  const wetAt = d => Math.max(0, Math.min(1, (d + 1.15) / 1.0));   // v9.23.1 浪推得到的範圍：坡肩往岸上約一公尺內漸漸變濕
   // 三角形一律朝上（海岸線串接方向不固定，要依法線校正繞向，不然一半會被背面剔除）
-  const btri = (a, b, c) => { const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]); const L = cy >= 0 ? [a, b, c] : [a, c, b]; L.forEach(v => bpush(v[0], v[1], v[2], v[3], v[4])); };
+  const btri = (a, b, c) => { const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]); const L = cy >= 0 ? [a, b, c] : [a, c, b]; L.forEach(v => bpush(v[0], v[1], v[2], v[3], v[4], v[5])); };
   // d：從海岸曲線往海的距離。v9.22.20 坡肩是圓的（前 RSH 公尺坡度慢慢加大），以前平台和坡面之間是一道折線
   const S0 = 0.95 / SLOPE, RSH = 0.3;
   const slopeY = d => (d <= 0 ? ySand - Math.max(0, -d - IN * 0.5) * 0.004 : ySand - S0 * (d < RSH ? d * d / (2 * RSH) : d - RSH / 2));
@@ -167,12 +171,12 @@ function buildShore() {
     for (let i = 0; i < last; i++) {
       const j = (i + 1) % n, a0 = al[i], a1 = j === 0 ? along + Math.hypot(cp[i][0] - cp[j][0], cp[i][1] - cp[j][1]) : al[j];
       // 緩坡：內側平台（-IN 到 0）＋往海傾斜（0 到 SLOPE）。v9.22.20 坡肩多切幾段、法線照坡度算（平滑的明暗），以前三段平面的折痕像一層層台階
-      const ds = [-IN, -IN * 0.5, 0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.4, SLOPE];
+      const ds = [-IN, -IN * 0.5, -0.55, -0.3, 0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.4, SLOPE];
       const nrm = (k, d) => { const g = slopeG(d), l = Math.hypot(ns[k][0] * g, 1, ns[k][1] * g); return [ns[k][0] * g / l, 1 / l, ns[k][1] * g / l]; };
       for (let k = 0; k < ds.length - 1; k++) {
-        const d0 = ds[k], d1 = ds[k + 1], c0 = sand.clone().lerp(sandWet, Math.max(0, d0) / SLOPE), c1 = sand.clone().lerp(sandWet, Math.max(0, d1) / SLOPE);
+        const d0 = ds[k], d1 = ds[k + 1];
         const q00 = at(i, d0), q01 = at(i, d1), q10 = at(j, d0), q11 = at(j, d1);
-        const v00 = [q00[0], slopeY(d0), q00[1], c0, nrm(i, d0)], v10 = [q10[0], slopeY(d0), q10[1], c0, nrm(j, d0)], v11 = [q11[0], slopeY(d1), q11[1], c1, nrm(j, d1)], v01 = [q01[0], slopeY(d1), q01[1], c1, nrm(i, d1)];
+        const v00 = [q00[0], slopeY(d0), q00[1], col(q00, d0), nrm(i, d0), wetAt(d0)], v10 = [q10[0], slopeY(d0), q10[1], col(q10, d0), nrm(j, d0), wetAt(d0)], v11 = [q11[0], slopeY(d1), q11[1], col(q11, d1), nrm(j, d1), wetAt(d1)], v01 = [q01[0], slopeY(d1), q01[1], col(q01, d1), nrm(i, d1), wetAt(d1)];
         btri(v00, v10, v11); btri(v00, v11, v01);
       }
       // 沙灘側水膜：從水線（著色器設成海平面）沿著緩坡往上到內側
@@ -187,7 +191,8 @@ function buildShore() {
   });
   const bg = new THREE.BufferGeometry();
   bg.setAttribute('position', new THREE.Float32BufferAttribute(BP, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(BC, 3)); bg.setAttribute('normal', new THREE.Float32BufferAttribute(BN, 3));   // v9.22.20 法線照坡度算，不再每個三角形各自平面
-  const beach = new THREE.Mesh(bg, TERRAIN); beach.receiveShadow = true; scene.add(beach);
+  bg.setAttribute('aSurface', new THREE.Float32BufferAttribute(BS, 4));
+  const beach = new THREE.Mesh(bg, surfaceMat); beach.receiveShadow = true; scene.add(beach);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('side', new THREE.Float32BufferAttribute(S, 1)); g.setAttribute('along', new THREE.Float32BufferAttribute(A, 1));
   const m = new THREE.Mesh(g, waveMat); m.frustumCulled = false; m.renderOrder = 2; scene.add(m);

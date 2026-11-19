@@ -527,7 +527,7 @@ export function bend(mat, kind) {
     if (kind === 'water') Object.assign(sh.uniforms, { uSkyT: skyU.top, uSkyM: skyU.mid, uSkyB: skyU.bot, uSunCol: skyU.sunCol, uGlow: skyU.glow, uNight: skyU.night });   // 大海的倒影用當下的天色
     if (kind === 'water') Object.assign(sh.uniforms, WL);   // 第二階段：讀得到底下的場景
     let f = FTOP + LG_TOP + NOISE + CLOUD_FN + (dk ? TRI : '') + (kind === 'terrain' ? '#ifdef TA_SURFACE\nvarying vec4 vSurface;\n#endif\nuniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry; uniform float uSplit;\n' : '') + (kind === 'water' ? 'varying float vPond;\nvarying vec3 vFlow;\n' + WATER_FN + 'uniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
-    if (kind === 'terrain') f = f.replace('void main() {', 'float tGlint = 0.0;\nvoid main() {');   // 沙灘的閃光（顏色階段算、打光後加）
+    if (kind === 'terrain') f = f.replace('void main() {', 'float tGlint = 0.0; float tShore = 0.0;\nvoid main() {');   // 沙灘的閃光（顏色階段算、打光後加）
     if (kind === 'water') f = f.replace('void main() {', '#define TA_CREEK (vWP.y > 0.8 && vPond <= 0.0)\n' + LATE_W + 'void main() {');   // v7.4：高地泉（水面 2.75）以前也被當成高處的小溪，整片光網和一圈白沫
     if (dk) {
       // gDetN：細節法線在世界空間的擾動（顏色階段算好，法線階段加上）
@@ -564,9 +564,9 @@ export function bend(mat, kind) {
         float up = smoothstep(0.55, 0.85, wn.y);
         float green = smoothstep(0.03, 0.12, bc.g - max(bc.r, bc.b));
         float sandy = (1.0 - green) * smoothstep(0.55, 0.7, bc.r) * step(bc.b, bc.g);
-        float masonK = uMasonry * smoothstep(1.06, 1.24, vWP.y) * (1.0 - sandy) * (1.0 - green), bed = 0.0, relief = 0.0;
+        float masonK = uMasonry * smoothstep(1.06, 1.24, vWP.y) * (1.0 - sandy) * (1.0 - green), bed = 0.0, relief = 0.0, shoreA = 0.0;
         #ifdef TA_SURFACE
-          green = vSurface.x; sandy = vSurface.y; masonK = clamp(vSurface.z, 0.0, 1.0); bed = vSurface.w;
+          green = vSurface.x; sandy = vSurface.y; masonK = clamp(vSurface.z, 0.0, 1.0); bed = vSurface.w; shoreA = max(-vSurface.z, 0.0);   // z 負值：waves.js 的沙灘緩坡離浪多近
           relief = step(1.5, vSurface.z);
         #endif
         vec2 p = vWP.xz;
@@ -582,6 +582,11 @@ export function bend(mat, kind) {
         float wetEdge = 0.22 + (n_v(p * 0.42 + 3.0) - 0.5) * 0.24;
         float wet = 1.0 - smoothstep(wetEdge - 0.12, wetEdge + 0.24, vWP.y);
         sd *= mix(vec3(1.0), vec3(0.86, 0.90, 0.96), wet * 0.55);
+        // v9.23.1 浪打得到的那一段沙是濕的：顏色深一截、偏暖褐，越靠水線越深；邊界跟著雜訊進進出出（打光階段再加上映著天光的水亮）
+        float rph = dot(p, vec2(0.8, 0.6)) * 7.0 + n_v(p * 0.7) * 5.0;
+        { float sn = n_v(p * 0.9 + 3.0) * 0.6 + n_v(p * 3.1 + 8.0) * 0.4;   // 濕沙的上緣：浪一次次推到不同的地方，留下不規則的邊
+          tShore = sandy * (1.0 - green) * up * max(1.0 - smoothstep(0.17, 0.345, vWP.y + (sn - 0.5) * 0.07), smoothstep(sn * 0.55, sn * 0.55 + 0.4, shoreA)) * smoothstep(-0.12, 0.05, vWP.y); }
+        sd *= mix(vec3(1.0), vec3(0.6, 0.555, 0.48), tShore);
         float band = sin(vWP.y * 5.0 + n_v(p * 0.45) * 1.1);
         vec3 cl = bc * mix(vec3(0.965, 0.96, 0.955), vec3(1.035, 1.0, 0.95), band * 0.5 + 0.5);   // 岩層是灰與暖褐交替（v9.13：以前是暖杏與薰衣草）
         if (masonK > 0.0) {
@@ -613,6 +618,7 @@ export function bend(mat, kind) {
         vec3 q = vWP * 0.5, det = triD(uD0, q, gB) * wG + triD(uD1, q, gB) * wS + triD(uD2, q, gB) * wR;
         diffuseColor.rgb *= mix(vec3(1.0), det * 2.0, 0.42);   // v9.13：烘焙的土粒、沙粒與岩面顆粒（以前 0.35，配的是幾乎平的程式微表面）
         gDetN = (triN(uN0, q, gB) * wG + triN(uN1, q, gB) * wS + triN(uN2, q, gB) * wR) * 0.15;
+        gDetN += vec3(0.8, 0.0, 0.6) * cos(rph) * 0.16 * sandy * (1.0 - green) * up * (1.0 - tShore) * clamp(1.0 - length(fwidth(p)) * 2.2, 0.0, 1.0);   // v9.23.1 風吹出來的沙紋有起伏：斜陽下一道亮、一道暗（遠處收掉，不變成摩爾紋）
         // 焦散放在水底，窄而斷續；水面不再疊一層明亮的網。
         float uw = max(bed, smoothstep(0.32, 0.12, vWP.y) * up);
         if (uw > 0.0) {
@@ -856,7 +862,7 @@ export function bend(mat, kind) {
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.13, 0.96) + vec3(0.012, 0.016, 0.0), clamp(vGust, 0.0, 1.0) * 0.5);   // 陣風壓過去的草露出較亮的葉背
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
-    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade * taSunK();');   // 晴天才閃（雲影裡不閃）
+    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade * taSunK();\n  if (tShore > 0.01) { roughnessFactor = mix(roughnessFactor, 0.24, tShore * 0.85); float cvS = max(dot(normalize(cameraPosition - vWP), normalize(vWN)), 0.0); totalEmissiveRadiance += uSkyRef * (0.03 + 0.97 * pow(1.0 - cvS, 5.0)) * tShore * 0.2 * (1.0 - uInside); }');   // 晴天才閃（雲影裡不閃）；v9.23.1 濕沙像一層薄水膜，斜看映著天光
     if (kind === 'grass') f = f.replace('float sGl = 0.0;', `float sGl = 0.0;
   if (uDew > 0.001) {   // v9.22.30 晴天的早上草葉掛著露珠：稀疏的細點在晨光裡隨著視角一閃一閃（只在近處，遠處的細點會變成閃爍的雜訊）
     vec3 dqs = vWP * vec3(30.0, 24.0, 30.0), dq = floor(dqs); float dh = n_h(dq.xz + dq.y * 7.13);
