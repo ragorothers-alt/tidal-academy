@@ -39,16 +39,18 @@ const fallMat = new THREE.ShaderMaterial({
     float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
     void main(){
-      float y = vUv.y, x = vW.z * 2.6;
-      float streak = n(vec2(x, y * 3.2 + uTime * 1.8)) * 0.65 + n(vec2(x * 2.1, y * 5.0 + uTime * 2.4)) * 0.35;
-      float lip = smoothstep(0.83, 0.99, y), foot = 1.0 - smoothstep(0.02, 0.17, y);
-      vec3 c = mix(uShade, uBody, 0.50 + streak * 0.42);
-      c = mix(c, uFoam, smoothstep(0.57, 0.88, streak) * 0.35 + lip * 0.22 + foot * 0.27);
-      c *= (0.90 + max(normalize(vNormal).y, 0.0) * 0.10) * mix(1.0, 0.40, uNight);
+      // v9.24.5 一道道往下拉長的白色水柱，越往下流得越快，水柱之間透得出後面的岩壁；瀑腳是翻騰的白沫（以前是幾片半透明的平滑薄板）
+      float y = vUv.y, x = vW.z * 5.0, ft = uTime * 2.4, yy = pow(1.0 - y, 0.72) * 5.0;
+      float s1 = n(vec2(x * 2.2, yy * 1.1 - ft)), s2 = n(vec2(x * 6.0 + 3.0, yy * 2.2 - ft * 1.5)), s3 = n(vec2(x * 15.0 + 7.0, yy * 4.6 - ft * 2.3));
+      float streak = s1 * 0.5 + s2 * 0.32 + s3 * 0.18, white = smoothstep(0.4, 0.68, streak);
+      float lip = smoothstep(0.83, 0.99, y), foot = (1.0 - smoothstep(0.02, 0.2, y)) * (0.6 + 0.4 * n(vec2(x * 3.0, uTime * 3.5)));
+      vec3 c = mix(uShade * 0.86, uBody, 0.32 + streak * 0.5);
+      c = mix(c, uFoam, clamp(white * 0.8 + lip * 0.25 + foot * 0.7, 0.0, 1.0));
+      c *= (0.90 + max(normalize(vNormal).y, 0.0) * 0.10) * mix(1.0, 0.24, uNight);   // 夜裡是月光下的灰藍，不發亮
       float edge = 0.22 + 0.78 * smoothstep(0.0, 0.075, vUv.x) * (1.0 - smoothstep(0.925, 1.0, vUv.x));
       float fade = smoothstep(0.0, 0.05, y);
       float shell = mix(0.28, 1.0, smoothstep(-0.25, 0.25, vNormal.x));
-      gl_FragColor = vec4(c, (0.48 + streak * 0.18) * edge * fade * shell);
+      gl_FragColor = vec4(c, clamp(0.36 + white * 0.52 + foot * 0.3 + lip * 0.15, 0.0, 0.96) * edge * fade * shell);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`

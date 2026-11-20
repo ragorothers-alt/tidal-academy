@@ -786,6 +786,13 @@ export function bend(mat, kind) {
         reflectedLight.indirectDiffuse += directionalLights[0].color * vec3(0.97, 0.985, 0.9) * diffuseColor.rgb * RECIPROCAL_PI * 0.085 * smoothstep(3.0, 0.3, vOP.y) * pvert * (1.0 - uInside);
       }
       #endif`);
+    if (kind === 'plain') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      #if defined(TA_MODEL) && NUM_DIR_LIGHTS > 0
+      { // v9.24.5 戶外的模型（船、攤位、路燈、擺設）背光的那一面：地面與海面把陽光反彈上來，不是一片黑（碼頭邊的渡輪背光面以前黑得看不出船身）
+        vec3 qwn = normalize(vWN);
+        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.1 + 0.07 * (1.0 - qwn.y)) * (1.0 - uInside);
+      }
+      #endif`);
     if (kind === 'bark') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       #if NUM_DIR_LIGHTS > 0
       { // v9.23.2 樹蔭下的樹幹不是一根黑柱子：被陽光照亮的地面和葉子把光反彈回來（朝下、朝旁邊的面多一點）

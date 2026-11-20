@@ -35,6 +35,7 @@ const pos = new Float32Array(N * 3), seed = new Float32Array(N), spd = new Float
 for (let i = 0; i < N; i++) { pos[i * 3] = (Math.random() - 0.5) * BOX.x; pos[i * 3 + 1] = Math.random() * BOX.y; pos[i * 3 + 2] = (Math.random() - 0.5) * BOX.z; seed[i] = Math.random() * 100; spd[i] = 0.7 + Math.random() * 0.6; }
 const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
 const mat = bend(new THREE.PointsMaterial({ map: flake, size: 0.11, sizeAttenuation: true, transparent: true, opacity: 0, depthWrite: false, color: '#ffffff', fog: true }));
+{ const compile = mat.onBeforeCompile; mat.onBeforeCompile = (sh, rd) => { compile(sh, rd); sh.vertexShader = sh.vertexShader.replace('#include <fog_vertex>', '#include <fog_vertex>\n  gl_PointSize = min(gl_PointSize, 20.0);'); }; }   // v9.24.5 飄到鏡頭前的花瓣、雪花不放大成一顆顆白色大圓盤
 const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 4; scene.add(pts);
 const wrap = (v, L) => ((((v + L / 2) % L) + L) % L) - L / 2;
 
