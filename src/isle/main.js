@@ -99,6 +99,7 @@ import * as dreamisle from './dreamisle.js';
 import * as actors from './actors.js';
 import * as props3d from './props3d.js';
 import * as fantasy from './fantasy.js';
+import * as gulls from './gulls.js';
 import * as minimap from './minimap.js';
 import * as winter from './winter.js';
 import * as memo from './memo.js';
@@ -236,6 +237,7 @@ const sp = v => ({ name: v.name, color: v.color, voice: v.voice, mesh: v.mesh })
 nav.init({ ground, water: (x, z) => isWater(x, z), colliders, roads: ((TA.ISLE || {}).PLAN || {}).roads || [], warp });
 routine.init({ ground, villagers, player, slotPos: (st, k) => slotPos(st, k), seatY: st => seatY(st), seatFree: (st, k, self) => seatFree(st, k, self), standVillager: v => standVillager(v),
   waterSpot: (x, z) => waterSpot(x, z), simT: () => simT, hour: () => hourOverride ?? nowHour(), date: () => simDate(), talking: () => talking, sp });
+gulls.init({ ground, player, isWater: (x, z) => isWater(x, z), pier: PIER });
 fauna.init({ ground, player, villagers, simT: () => simT, hour: () => hourOverride ?? nowHour(), talking: () => talking, isWater: (x, z) => isWater(x, z), waterY: (x, z) => waterY(x, z) });
 /** 新加的島上生活（作息、動物）出錯時只停用那一塊並記一次警告，不讓整個主迴圈停下來 */
 const offMods = {};

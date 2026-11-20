@@ -9,6 +9,7 @@ import * as cumulus from './cumulus.js';
 import { gloom } from './weather.js';
 import { loadModel } from './actors.js';
 import { MODEL_IDS } from './model-list.js';
+import * as gulls from './gulls.js';
 
 const READY = new Set(MODEL_IDS);
 const hazeU = { uHaze: { value: new THREE.Color('#cfe6ff') }, uDens: { value: 0.0024 }, uHazeMax: { value: 0.38 }, uFront: { value: new THREE.Color(0.5, 0.5, 0.5) }, uFarNight: { value: 0 }, uFarDay: { value: 1 } };
@@ -445,20 +446,17 @@ function towers(model) {
   });
 }
 
-/* ---------- 白鳥：幾群繞著島飛，翅膀拍動、偶爾滑翔 ---------- */
+/* ---------- 遠方的海鷗群：幾群繞著島飛，翅膀拍動、偶爾滑翔（v9.24.1 模型換成 gulls.js 的海鷗） ---------- */
 const birds = [];
 function makeBirds() {
-  const mat = farMat(new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#d8e6ff', emissiveIntensity: 0.35, side: THREE.DoubleSide, roughness: 0.8 }), 0.4, undefined, undefined, false);
-  const wingG = new THREE.BufferGeometry(); wingG.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, -0.18, 0, 0, 0.22, 1.05, 0.13, -0.08, 0, 0, 0.22, 0.55, -0.06, 0.2, 1.05, 0.13, -0.08], 3)); wingG.computeVertexNormals();
-  const bodyG = new THREE.SphereGeometry(0.14, 6, 4); bodyG.scale(1, 2.8, 1); bodyG.rotateX(Math.PI / 2);
+  const mat = farMat(new THREE.MeshStandardMaterial({ vertexColors: true, emissive: '#d8e6ff', emissiveIntensity: 0.16, side: THREE.DoubleSide, roughness: 0.8 }), 0.4, undefined, undefined, false);
   const flocks = [{ r: 46, h: 0.16, n: 5, sp: 0.04, ph: 0 }, { r: 62, h: 0.3, n: 4, sp: -0.03, ph: 2.4 }, { r: 40, h: 0.1, n: 3, sp: 0.05, ph: 4.1 }];   // h：在畫面地平線上方多少（NDC）
   flocks.forEach(f => {
     for (let i = 0; i < f.n; i++) {
-      const b = new THREE.Group(), body = new THREE.Mesh(bodyG, mat), L = new THREE.Mesh(wingG, mat), R = new THREE.Mesh(wingG, mat);
-      R.scale.x = -1; b.name = "far:bird"; b.add(body, L, R); b.scale.setScalar(0.9 + Math.random() * 0.4);
+      const gull = gulls.makeGull(mat), b = gull.g; b.name = "far:bird"; b.scale.setScalar(1.5 + Math.random() * 0.5);   // 幾十公尺外：放大一點才看得出是鳥
       b.traverse(o => { o.frustumCulled = cullable(o); o.raycast = NO_HIT; });
       scene.add(b);
-      birds.push({ b, L, R, f, off: [(i % 3 - 1) * 1.6 + Math.random(), (Math.random() - 0.5) * 1.2, -Math.floor(i / 1.5) * 1.4], flap: Math.random() * 6.28, rate: 7 + Math.random() * 2 });
+      birds.push({ b, gull, f, off: [(i % 3 - 1) * 1.6 + Math.random(), (Math.random() - 0.5) * 1.2, -Math.floor(i / 1.5) * 1.4], flap: Math.random() * 6.28, rate: 7 + Math.random() * 2 });
     }
   });
 }
@@ -743,6 +741,7 @@ function yForNdc(x, z, T) {
 export function update(dt, t, night, show) {
   if (show !== visible) { visible = show; far.forEach(o => { o.g.visible = show; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = show; }); birds.forEach(o => { o.b.visible = show; }); if (ring.g) ring.g.visible = show; bgs.forEach(o => { o.s.visible = show; }); }
   if (show) { camera.updateMatrixWorld(); viewCone(); }
+  gulls.update(dt, t, night, show);
   cumulus.update(show, horizonNdc, yForNdc, skyU.glow.value * 2, night, dt, inCone);
   if (!show) { updateLinks(false, t); return; }
   hazeU.uFarNight.value = night;
@@ -790,8 +789,8 @@ export function update(dt, t, night, show) {
     const px = f.x + sx * o.off[0] + fx * o.off[2], pz = f.z + sz * o.off[0] + fz * o.off[2];
     o.b.position.set(px, f.y + o.off[1] + Math.sin(t * 0.7 + o.flap) * 0.4, pz);
     o.b.rotation.set(0, Math.atan2(fx, fz), -Math.sign(f.sp) * 0.18);
-    const glide = Math.sin(t * 0.35 + o.flap) > 0.55, w = glide ? 0.08 : Math.sin(t * o.rate + o.flap) * 0.55;
-    o.L.rotation.z = w; o.R.rotation.z = -w;
+    const glide = Math.sin(t * 0.35 + o.flap) > 0.2; o.k = (o.k || 0) + ((glide ? 0 : 1) - (o.k || 0)) * Math.min(1, dt * 3);
+    gulls.wings(o.gull, o.k, t * o.rate + o.flap);
     o.b.visible = night < 0.5;   // 晚上鳥回巢
   });
 }

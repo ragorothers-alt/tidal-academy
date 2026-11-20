@@ -20,6 +20,7 @@ const group = new THREE.Group(); scene.add(group);
 export const isBusy = () => busy;
 /** v9.0 現在的潮位（約 -1 乾潮到 1 滿潮，跟著海面慢慢變；swim.js 依這個決定潛得到哪些地形） */
 export const lvl = () => level;
+export const force = { h: null };   // 測試用：指定潮位（-1 乾潮到 1 滿潮），null 照時間
 export function init(player) {
   P = player;
   const s = S(); list('sea').filter(x => !x.price && s.dex.sea[x.id] && !s.museum.sea[x.id]).forEach(x => { s.museum.sea[x.id] = s.dex.sea[x.id]; });   // 以前拍過照的保育類：補進博物館
@@ -64,7 +65,8 @@ function showPools(on) {
 }
 /** 每幀：海面高度、潮池出現與否 */
 export function update(dt, t, dateOverride) {
-  const st = state(dateOverride); level += (st.h - level) * Math.min(1, dt * 0.5);
+  const st = state(dateOverride); if (force.h != null) { st.h = force.h; st.low = st.h < LOW; }
+  level += (st.h - level) * Math.min(1, dt * 0.5);
   seaMesh.position.y = 0.02 + level * 0.2;
   const key = (st.low ? 'low' : 'high') + dayKey();
   if (key !== poolKey) { poolKey = key; showPools(st.low); }
