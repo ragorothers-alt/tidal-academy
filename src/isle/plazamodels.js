@@ -8,7 +8,7 @@ const hash = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v
 const stoneMat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.94 }), 'stone');   // v7.7：石面的水彩色塊、柔和明暗與零星地衣（以前是純色）
 const colors = ['#aea596', '#a59c8f', '#b5ab99', '#9c958a', '#b0a48e', '#99958a', '#b9af9d'].map(c => new THREE.Color(c));   // v9.13 半寫實：石灰岩、砂岩與一點花崗岩的灰褐石塊（太接近白色的鋪面在白天會整片過曝）；v9.16 再暗一成
 const buffer = () => ({ p: [], c: [] });
-const RIM = [0.95, 0.945, 0.94];   // 石板邊緣暗一點（磨圓的倒角積了一點灰）
+const RIM = [0.95, 0.945, 0.94], GROUT = new THREE.Color('#8b8171');   // GROUT：v9.24.12 石縫裡的填縫砂（每塊石板同色，相鄰兩塊重疊也看不出來）   // 石板邊緣暗一點（磨圓的倒角積了一點灰）
 function tri(b, a, c, d, color, shade = 1, sc = shade, sd = shade) {
   b.p.push(...a, ...c, ...d);
   for (const s of [shade, sc, sd]) { const k = Array.isArray(s) ? s : [s, s, s]; b.c.push(color.r * k[0], color.g * k[1], color.b * k[2]); }
@@ -30,8 +30,11 @@ function slab(b, outline, surface, color, bevel = 0.018, depth = 0.07) {
   const tx = (h1 - 0.5) * 0.01, tz = (h2 - 0.5) * 0.01, dy = (h3 - 0.5) * 0.006, topY = (x, z) => surface(x, z) + dy + (x - cx) * tx + (z - cz) * tz;
   const inset = (x, z, w) => { const d = Math.hypot(x - cx, z - cz), k = Math.max(0, 1 - w / d), px = cx + (x - cx) * k, pz = cz + (z - cz) * k; return [px, topY(px, pz), pz]; };
   const top = outline.map(([x, z]) => inset(x, z, bevel)), inn = outline.map(([x, z]) => inset(x, z, bevel + 0.07));
-  const rim = outline.map(([x, z]) => [x, surface(x, z) - 0.014, z]);
-  const bot = outline.map(([x, z]) => [x, surface(x, z) - depth, z]);
+  // v9.24.12 石縫填了砂土：石板邊緣只往下收 7 公釐，外面一圈填縫砂（和鄰塊的接在一起），不再是一道四五公分深的黑縫——石板像埋在土裡，不像一片片厚板排在地上
+  const outer = (x, z, w) => { const d = Math.hypot(x - cx, z - cz), k = 1 + w / d; return [cx + (x - cx) * k, cz + (z - cz) * k]; };
+  const rim = outline.map(([x, z]) => [x, surface(x, z) - 0.007, z]);
+  const fill = outline.map(([x, z]) => { const [px, pz] = outer(x, z, 0.04); return [px, surface(px, pz) - 0.01, pz]; });
+  const bot = fill.map(([x, y, z]) => [x, y + 0.01 - depth, z]);
   const center = [cx, topY(cx, cz), cz];
   const mossK = Math.max(0, (h2 - 0.7) / 0.3) * 0.7, dirt = [0.86 - 0.07 * h1, 0.855 - 0.07 * h1, 0.82 - 0.08 * h1];
   const EDGE = [dirt[0] + (0.7 - dirt[0]) * mossK, dirt[1] + (0.8 - dirt[1]) * mossK, dirt[2] + (0.58 - dirt[2]) * mossK], BEV = EDGE.map(v => v * 0.86);
@@ -40,7 +43,8 @@ function slab(b, outline, surface, color, bevel = 0.018, depth = 0.07) {
     tri(b, center, inn[j], inn[i], color, 1.03, 1.0, 1.0);   // v7.7：石板中間亮、邊緣暗一點；v9.16 半寫實：差距小一點，是磨平的石板、不像鼓起的枕頭
     tri(b, inn[i], inn[j], top[j], color, 1.0, 1.0, EDGE); tri(b, inn[i], top[j], top[i], color, 1.0, EDGE, EDGE);
     tri(b, top[i], top[j], rim[j], color, BEV); tri(b, top[i], rim[j], rim[i], color, BEV);
-    tri(b, rim[i], rim[j], bot[j], color, 0.72); tri(b, rim[i], bot[j], bot[i], color, 0.72);
+    tri(b, rim[i], rim[j], fill[j], GROUT); tri(b, rim[i], fill[j], fill[i], GROUT);
+    tri(b, fill[i], fill[j], bot[j], GROUT, 0.7); tri(b, fill[i], bot[j], bot[i], GROUT, 0.7);
   }
 }
 
@@ -99,13 +103,13 @@ export function roadPavers(rows, { groundAt, warp, plaza, clear, clearGrass, sce
   for (const [key, b] of chunks) {
     const m = finish(b, 'w04-road-' + key), [cx, cz] = key.split(',').map(Number).map(v => v * 16 + 8);
     const far = buffer();
-    // slab每條邊固定五個三角形；第一個是頂面，另外四個為倒角與側面。
-    for (let i = 0; i < b.p.length; i += 45) { far.p.push(...b.p.slice(i, i + 9)); far.c.push(...b.c.slice(i, i + 9)); }
+    // slab每條邊固定九個三角形；第一個是頂面，其餘為內環、倒角、填縫與側面。
+    for (let i = 0; i < b.p.length; i += 81) { far.p.push(...b.p.slice(i, i + 27)); far.c.push(...b.c.slice(i, i + 27)); }   // v9.24.12 頂面連同內環三個三角形（以前步長沒跟著 v9.23.4 的內環更新，遠景取到的是錯位的三角形）
     const fm = finish(far, 'w04-road-lod-' + key), lod = new THREE.LOD(); lod.name = 'w04-road-lod'; lod.position.set(cx, 0, cz);
     m.position.set(-cx, 0, -cz); fm.position.copy(m.position); lod.addLevel(m, 0); lod.addLevel(fm, 32);
     group.add(lod); registerAt(lod, cx, groundAt(cx, cz), cz, 12, null, 5);
   }
-  group.userData.w04 = { stones: count, triangles: count * 40, materials: 1 }; scene.add(group);
+  group.userData.w04 = { stones: count, triangles: count * 72, materials: 1 }; scene.add(group);
   return group;
 }
 

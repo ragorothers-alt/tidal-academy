@@ -40,6 +40,29 @@ export function init(c) { ctx = c; P = c.player; }
 
 /* ---------- 海底地形 ---------- */
 const hash = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
+/* v9.24.12 海床的沙紋：水流在沙上推出一道道二十公分上下的沙脊，會分岔、有深有淺，凹處積了深色的細沙和零星的碎貝。
+   一張可以接起來的法線圖和一張明暗圖（進水時才算一次），鋪在海床上；以前海床是一片平滑的底色，看不出大小 */
+let RIPPLE = null;
+function ripples() {
+  if (RIPPLE) return RIPPLE;
+  const S = 512, PI2 = Math.PI * 2, per = (x, z, P) => hash(((x % P) + P) % P, ((z % P) + P) % P + P * 17);
+  const pn = (x, z, P) => { const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); return (per(ix, iz, P) * (1 - u) + per(ix + 1, iz, P) * u) * (1 - v) + (per(ix, iz + 1, P) * (1 - u) + per(ix + 1, iz + 1, P) * u) * v; };
+  const Hh = new Float32Array(S * S);
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    const u = x / S, v = y / S, w = (pn(u * 5, v * 5, 5) - 0.5) * 1.5 + (pn(u * 13 + 3, v * 13, 13) - 0.5) * 0.45;   // 沙脊不是直線：整條彎來彎去、偶爾併成一條
+    const amp = 0.35 + 0.65 * pn(u * 4 + 9, v * 4 + 2, 4), s = Math.sin((v * 13 + w + u * 2) * PI2), crest = s > 0 ? Math.pow(s, 0.7) : -Math.pow(-s, 1.3);   // 脊尖、谷寬
+    Hh[y * S + x] = crest * amp * 0.5 + (pn(u * 64, v * 64, 64) - 0.5) * 0.12;
+  }
+  const mk = fn => { const cv = document.createElement('canvas'); cv.width = cv.height = S; const cx = cv.getContext('2d'), im = cx.createImageData(S, S), d = im.data;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const o = (y * S + x) * 4, c = fn(x, y); d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255; }
+    cx.putImageData(im, 0, 0); const tx = new THREE.CanvasTexture(cv); tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.repeat.set(15, 15); tx.anisotropy = 8; return tx; };
+  const at = (x, y) => Hh[((y + S) % S) * S + (x + S) % S];
+  const nrm = mk((x, y) => { const dx = (at(x - 1, y) - at(x + 1, y)) * 5, dy = (at(x, y - 1) - at(x, y + 1)) * 5, l = Math.hypot(dx, dy, 1); return [(dx / l * 0.5 + 0.5) * 255, (dy / l * 0.5 + 0.5) * 255, (1 / l * 0.5 + 0.5) * 255]; });
+  const col = mk((x, y) => { const h = at(x, y), sp = hash(x * 0.37 + 5, y * 0.73 + 1); let k = 0.9 + h * 0.2; if (sp > 0.9975) k = 1.22; else if (sp < 0.004) k = 0.6;   // 碎貝的亮點、深色的砂粒
+    const g = Math.max(0, Math.min(255, k * 232)); return [g, g * 0.99, g * 0.97]; });
+  col.colorSpace = THREE.SRGBColorSpace;
+  return (RIPPLE = { nrm, col });
+}
 function vnoise(x, z) { const ix = Math.floor(x), iz = Math.floor(z), fx = x - ix, fz = z - iz, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz); return (hash(ix, iz) * (1 - u) + hash(ix + 1, iz) * u) * (1 - v) + (hash(ix, iz + 1) * (1 - u) + hash(ix + 1, iz + 1) * u) * v; }
 let seed = 0;
 /** 海底的高度（場景座標；水面在 H.depth） */
@@ -123,7 +146,7 @@ function build() {
     c.copy(base).multiplyScalar(0.72 + n * 0.2).lerp(W, 0.12); if (H.grass) c.lerp(green, Math.max(0, m - 0.35) * 0.9); col.set([c.r, c.g, c.b], i * 3);
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
-  bed = new THREE.Mesh(g, O(bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96 })))); bed.receiveShadow = true; sc.add(bed);
+  { const rp = ripples(); bed = new THREE.Mesh(g, O(bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, map: rp.col, normalMap: rp.nrm, normalScale: new THREE.Vector2(1.1, 1.1) })))); } bed.receiveShadow = true; sc.add(bed);
   caus = new THREE.Mesh(g, O(new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uK: { value: 0.32 * dark * (H.depth > 8 ? 0.35 : 1) }, uScale: { value: 4.4 - 0.2 * H.depth }, uCol: { value: new THREE.Color('#d8fbff') }, uCam: { value: new THREE.Vector3() }, uFog: { value: H.fog } },
     vertexShader: WV, fragmentShader: CAUS_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, fog: false })));
   sc.add(caus);

@@ -1131,7 +1131,7 @@ ${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `        { float lw 
           float sAA = clamp(1.0 - length(fwidth(vWP)) * 2.0, 0.0, 1.0), sH = sBev * 0.16 + cov * ((n - 0.5) * 1.0 + (n2 - 0.5) * 0.1 * sAA);
           vec3 dpx = dFdx(vWP), dpy = dFdy(vWP), r1 = cross(dpy, wn), r2 = cross(wn, dpx); float det = dot(dpx, r1);
           vec3 sg = (dFdx(sH) * r1 + dFdy(sH) * r2) * sign(det) / max(abs(det), 1e-7);
-          sNrm = -sg / max(1.0, length(sg) / 0.9) * sAA; }   // 遠處一個像素蓋住好幾十公分：收掉，不閃
+          sNrm += -sg / max(1.0, length(sg) / 0.9) * sAA; }   // 遠處一個像素蓋住好幾十公分：收掉，不閃
         #endif
         vec2 glq = vWP.xz * 46.0 + vWP.y * 13.0; float gl = step(0.9965, n_h(floor(glq))) * smoothstep(0.4, 0.1, length(fract(glq) - 0.5)) * 2.0;   // v9.24：雪面的閃光也是圓的一小點
         sGl = gl * cov * (0.5 + 0.5 * sin(uTime * 2.4 + n_h(floor(vWP.xz * 46.0)) * 40.0)) * 0.9;

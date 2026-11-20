@@ -136,12 +136,14 @@ function fringe(mat) {
   const P = [], Cc = [], Nn = [];
   const base = new THREE.Color('#5f8f3e'), tip = new THREE.Color('#a8c46a'), vine = new THREE.Color('#4f7a36');
   const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); Nn.push(0, 1, 0); };
-  for (let i = 0; i < 9; i++) {
-    const ox = (Math.random() - 0.5) * 0.3, long = i === 0 && Math.random() < 0.6, len = long ? 0.28 + Math.random() * 0.2 : 0.1 + Math.random() * 0.14, w = 0.014 + Math.random() * 0.01, out = 0.05 + Math.random() * 0.06;
-    const mx = ox + (Math.random() - 0.5) * 0.04, my = -len * 0.35, mz = out + 0.03, tx = ox + (Math.random() - 0.5) * 0.08, ty = -len, tz = out * 0.8 + 0.02;
-    const c1 = long ? vine : base, c2 = long ? vine : tip;
-    push(ox - w, 0.02, -0.02, c1); push(ox + w, 0.02, -0.02, c1); push(mx, my, mz, c2);
-    push(mx - w * 0.8, my, mz, c2); push(mx + w * 0.8, my, mz, c2); push(tx, ty, tz, c2);
+  // v9.24.12 每一片是由寬到尖的一整條葉子（根部、中段、葉尖三截）：以前是兩個尖對底的三角形接在一起，一排看過去像鋸齒；葉子也細一點、多一點
+  for (let i = 0; i < 14; i++) {
+    const ox = (Math.random() - 0.5) * 0.34, long = i === 0 && Math.random() < 0.6, len = long ? 0.28 + Math.random() * 0.2 : 0.07 + Math.random() * 0.16, w = 0.006 + Math.random() * 0.007, out = 0.04 + Math.random() * 0.07;
+    const mx = ox + (Math.random() - 0.5) * 0.04, my = -len * 0.3, mz = out + 0.03, tx = mx + (Math.random() - 0.5) * 0.07, ty = -len, tz = out * 0.85 + 0.02, wm = w * 0.75;
+    const c1 = long ? vine : base, c2 = long ? vine : tip, cm = c1.clone().lerp(c2, 0.55);
+    push(ox - w, 0.02, -0.02, c1); push(ox + w, 0.02, -0.02, c1); push(mx + wm, my, mz, cm);
+    push(ox - w, 0.02, -0.02, c1); push(mx + wm, my, mz, cm); push(mx - wm, my, mz, cm);
+    push(mx - wm, my, mz, cm); push(mx + wm, my, mz, cm); push(tx, ty, tz, c2);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3));
