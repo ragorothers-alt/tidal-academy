@@ -1,14 +1,15 @@
-/* 潮汐小島 · 第一人稱的手：把角色模型的右臂與右手切下來（保留原本的貼圖與袖口），擺在鏡頭右下角，
+/* 潮汐小島 · 第一人稱的手：照角色右手骨架的關節位置長出一隻手（handmodel.js；骨架沒有手指時才退回把模型的手臂切下來），擺在鏡頭右下角，
    拿著現在的工具（下雨又沒拿工具時撐傘）。走路時跟著步伐晃、轉頭時稍微落後、使用工具時揮動（網子橫掃、鏟子往下挖、
    澆水壺倒水、釣竿拋竿），釣魚時把竿子舉起來、釣魚線從竿尖拉出去；聊天、坐下、看選單時把手放下。 */
 import * as THREE from 'three';
 import { setTool } from './chars.js';
+import { buildHand, handMaterial } from './handmodel.js';
 
 const ARM = /(Right|R_)(Arm|ForeArm|Forearm|Hand|Wrist|Thumb|Index|Middle|Ring|Pinky)/;   // 右上臂、前臂、手腕、手掌與手指
 const HAND = ['RightHand', 'R_Hand', 'R_Wrist'];
 // 各工具在畫面裡的擺法（鏡頭空間的位移與旋轉微調）。rotation.x 為正：工具尖端往上抬
 export const POSE = {
-  none: { p: [0.03, -0.07, 0.03], r: [0.05, 0, 0.12] },   // v8.7 空手放低一點、不往上舉（以前一直舉著抓握的手，前臂佔了右下角一大塊）
+  none: { p: [0.02, -0.1, 0.02], r: [0.45, 1.9, -0.35] },   // v9.24.2 空手：放低、從拇指側看過去，手指自然微彎（以前掌心朝著鏡頭，像捧著東西）   // v8.7 空手放低一點、不往上舉（以前一直舉著抓握的手，前臂佔了右下角一大塊）
   net: { p: [0, 0, 0], r: [0, 0, 0] },
   rod: { p: [0, 0, 0], r: [0.08, 0, 0] },
   shovel: { p: [0, -0.01, 0], r: [-0.05, 0, 0] },
@@ -66,6 +67,37 @@ function cutArm(gl) {
   if (uv.length) geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setIndex(ind);
   return { geo, mat: sk.material, scale: hand.getWorldScale(new THREE.Vector3()).x };
+}
+/** v9.24.2 待機姿勢下右手各關節的位置（手骨頭座標），以及角色貼圖上的膚色、袖子顏色。骨架沒有手指就回傳 null */
+function armJoints(gl) {
+  let sk = null; gl.model.traverse(o => { if (!sk && o.isSkinnedMesh) sk = o; });
+  if (!sk) return null;
+  const nm = b => b.name.replace(/^mixamorig:?/, ''), bones = sk.skeleton.bones, hand = bones.find(b => nm(b) === 'RightHand');
+  if (!hand) return null;
+  const idle = gl.acts.idle;
+  if (idle) { gl.mixer.stopAllAction(); idle.reset().setEffectiveWeight(1).play(); gl.mixer.update(0); gl.cur = null; }
+  gl.model.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(hand.matrixWorld).invert(), J = {};
+  bones.forEach(b => { const m = /^Right(?:Hand)?(ForeArm|(?:Index|Middle|Ring|Pinky|Thumb)[1-4])$/.exec(nm(b)); if (m) J[m[1]] = new THREE.Vector3().setFromMatrixPosition(b.matrixWorld).applyMatrix4(inv); });
+  if (idle) idle.stop();
+  if (!J.ForeArm || ['Index', 'Middle', 'Ring', 'Pinky', 'Thumb'].some(f => [1, 2, 3, 4].some(i => !J[f + i]))) return null;
+  const col = { skin: new THREE.Color('#EACCC0'), sleeve: new THREE.Color('#AF9EBC'), trim: new THREE.Color('#F0E5D5') };
+  try {   // 顏色：右手的皮膚色、右前臂上不是皮膚的顏色（袖子）；偏亮、低彩度的是滾邊
+    const G = sk.geometry, UV = G.attributes.uv, si = G.attributes.skinIndex, sw = G.attributes.skinWeight, mat = Array.isArray(sk.material) ? sk.material[0] : sk.material, image = mat.map && mat.map.image;
+    if (image && UV) {
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64; const c2 = canvas.getContext('2d', { willReadFrequently: true }); c2.drawImage(image, 0, 0, 64, 64);
+      const data = c2.getImageData(0, 0, 64, 64).data, kind = bones.map(b => (/^Right(Hand|ForeArm)/.test(nm(b)) ? (/^RightHand/.test(nm(b)) ? 1 : 2) : 0)), acc = { skin: [], sleeve: [], trim: [] }, c = new THREE.Color();
+      for (let i = 0; i < UV.count; i++) {
+        let b = -1, w = -1; for (let k = 0; k < 4; k++) { const x = sw.getComponent(i, k); if (x > w) { w = x; b = si.getComponent(i, k); } } if (!kind[b]) continue;
+        const x = THREE.MathUtils.clamp(Math.floor(UV.getX(i) * 64), 0, 63), v = UV.getY(i), y = THREE.MathUtils.clamp(Math.floor((mat.map.flipY ? 1 - v : v) * 64), 0, 63), at = (y * 64 + x) * 4, r = data[at] / 255, g = data[at + 1] / 255, bl = data[at + 2] / 255;
+        const isSkin = r > g * 1.06 && r > bl * 1.035, isTrim = !isSkin && Math.min(r, g, bl) > 0.48 && Math.max(r, g, bl) - Math.min(r, g, bl) < 0.2;
+        c.setRGB(r, g, bl, THREE.SRGBColorSpace); (isSkin ? (kind[b] === 1 ? acc.skin : null) : isTrim ? acc.trim : acc.sleeve)?.push([c.r, c.g, c.b]);
+      }
+      const mean = (list, top) => { if (list.length < 6) return null; const s = list.slice().sort((p, q) => (q[0] + q[1] + q[2]) - (p[0] + p[1] + p[2])).slice(0, Math.max(4, Math.round(list.length * top))), o = [0, 0, 0]; s.forEach(q => { o[0] += q[0]; o[1] += q[1]; o[2] += q[2]; }); return new THREE.Color(o[0] / s.length, o[1] / s.length, o[2] / s.length); };
+      col.skin = mean(acc.skin, 0.5) || col.skin; col.sleeve = mean(acc.sleeve, 0.7) || col.sleeve; col.trim = mean(acc.trim, 0.7) || col.sleeve.clone().lerp(new THREE.Color('#ffffff'), 0.45);
+    }
+  } catch (_) { /* 讀不到貼圖：用預設色 */ }
+  return { J, col, scale: hand.getWorldScale(new THREE.Vector3()).x };
 }
 const noRay = () => {};
 /** 只細分掌指色區；共用邊一併切開避免 T 接縫。保留外框尺寸，最高不超過 4k 三角形。 */
@@ -173,7 +205,7 @@ function polishArm(geo, source) {
 export function createHand(player, scene) {
   const u = player.userData, root = new THREE.Group(), piv = new THREE.Group(), arm = new THREE.Group(), holder = new THREE.Group(), tip = new THREE.Object3D();
   root.add(piv); piv.add(arm); arm.add(holder); root.visible = false; scene.add(root);
-  let built = false, kind, low = 1, ph = 0, useT = 1, useKind = null, lastYaw = null, lastPitch = 0;
+  let built = false, kind, low = 1, ph = 0, useT = 1, useKind = null, lastYaw = null, lastPitch = 0, fillU = null, lights = null;
   const sway = new THREE.Vector2(), E = new THREE.Euler();
   function setKind(k) {
     kind = k; setTool({ userData: { hand: holder } }, k === 'umbrella' || k === 'none' ? null : k);
@@ -184,8 +216,11 @@ export function createHand(player, scene) {
   /** o：{ active（第一人稱鏡頭已就位）, show（手舉起來）, camera, tool, umbrella, fishing, moving, run, yaw, pitch, t } */
   function update(dt, o) {
     if (!built && o.active && o.show && u.gltf) {
-      built = true; const a = cutArm(u.gltf);
-      if (a) {
+      built = true; const j = armJoints(u.gltf), a = j ? null : cutArm(u.gltf);
+      if (j) {
+        const hm = handMaterial(), m = new THREE.Mesh(buildHand(j.J, j.col), hm); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m); fillU = hm.userData.fill;
+        arm.scale.setScalar(j.scale); holder.position.copy(u.hand.position); holder.scale.copy(u.hand.scale);
+      } else if (a) {
         const m = new THREE.Mesh(a.geo, polishArm(a.geo, a.mat)); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m);
         arm.scale.setScalar(a.scale); holder.position.copy(u.hand.position); holder.scale.copy(u.hand.scale);   // 工具和第三人稱一樣握在手骨頭上
       } else built = 'none';
@@ -199,6 +234,10 @@ export function createHand(player, scene) {
     root.visible = ready && o.active && low < 0.97;
     u.fpTip = root.visible && kind === 'rod' ? tip : null;
     if (!root.visible) { lastYaw = null; return; }
+    if (fillU) {   // 環境補光：天空光的一部分加上一點陽光的反彈
+      if (!lights) { lights = []; scene.traverse(l => { if (l.isHemisphereLight || l.isDirectionalLight || l.isAmbientLight) lights.push(l); }); }
+      fillU.value.setRGB(0, 0, 0); for (const l of lights) if (l.visible) { const k = l.intensity * (l.isDirectionalLight ? 0.035 : 0.16); fillU.value.r += l.color.r * k; fillU.value.g += l.color.g * k; fillU.value.b += l.color.b * k; }
+    }
     // 放在畫面右下角：依視角換算，橫式、直式螢幕看起來位置差不多（直式放高一點，避開右下角的按鈕）
     const cam = o.camera, tv = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2), th = tv * (cam.aspect > 0.2 ? cam.aspect : 1.6), D = 0.45;
     const P = POSE[kind] || POSE.none;
