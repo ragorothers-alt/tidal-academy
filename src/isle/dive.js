@@ -87,7 +87,7 @@ const CAUS_F = `uniform float uTime; uniform float uK; uniform float uScale; uni
     float I = caus(p, uTime), c = smoothstep(2.2, 11.0, I) * 0.7 + smoothstep(0.8, 2.6, I) * 0.06;   // 亮線之外還有一點點散開的光
     float I2 = caus(p.yx * 1.83 + vec2(3.7, 1.9), uTime * 1.25 + 2.0); c += smoothstep(2.6, 10.0, I2) * 0.34;
     c *= 0.3 + 0.7 * smoothstep(0.2, 0.8, sin(vW.x * 0.41 + uTime * 0.06) * sin(vW.z * 0.37 - uTime * 0.05) * 0.5 + 0.5);   // 一片亮、一片暗
-    float d = length(vW - uCam) * uFog; gl_FragColor = vec4(uCol * c * uK * exp(-d * d), 1.0); }`;
+    float d = length(vW - uCam) * uFog; gl_FragColor = vec4(uCol * c * uK * exp(-d * d * 2.4), 1.0); }`;   // v9.24.13 光紋淡三成、遠處收得更快：海床有了沙紋之後，粗亮的光網反而搶過地形與生物
 const SURF_F = `uniform float uTime; uniform vec3 uCol; uniform vec3 uHi; uniform vec3 uCam; uniform vec3 uFar; varying vec3 vW; ${CELL}
   void main(){ vec2 p = vW.xz * 0.32 + vec2(uTime * 0.05, uTime * 0.03); float c = cell(p, uTime * 0.6), l = 1.0 - smoothstep(0.0, 0.2, c);
     float win = 1.0 - smoothstep(3.0, 15.0, length(vW.xz - uCam.xz));   // 正上方亮（光從水面的窗照進來）
@@ -147,7 +147,7 @@ function build() {
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
   { const rp = ripples(); bed = new THREE.Mesh(g, O(bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96, map: rp.col, normalMap: rp.nrm, normalScale: new THREE.Vector2(1.1, 1.1) })))); } bed.receiveShadow = true; sc.add(bed);
-  caus = new THREE.Mesh(g, O(new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uK: { value: 0.32 * dark * (H.depth > 8 ? 0.35 : 1) }, uScale: { value: 4.4 - 0.2 * H.depth }, uCol: { value: new THREE.Color('#d8fbff') }, uCam: { value: new THREE.Vector3() }, uFog: { value: H.fog } },
+  caus = new THREE.Mesh(g, O(new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uK: { value: 0.22 * dark * (H.depth > 8 ? 0.3 : 1) }, uScale: { value: 4.4 - 0.2 * H.depth }, uCol: { value: new THREE.Color('#d8fbff') }, uCam: { value: new THREE.Vector3() }, uFog: { value: H.fog } },
     vertexShader: WV, fragmentShader: CAUS_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, fog: false })));
   sc.add(caus);
   // 從下往上看的海面

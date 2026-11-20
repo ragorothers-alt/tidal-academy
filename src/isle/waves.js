@@ -32,6 +32,7 @@ const waveMat = new THREE.ShaderMaterial({
       return d2 - d1; }
     float net(float e, float m){ return smoothstep(0.0, 0.3, m - smoothstep(0.0, 0.36, e) * 0.8); }   // m：泡沫多濃。接近 1 是一整團白沫，中間是白線圍著洞，越小線越細，0.07 以下沒有
     float fb(vec2 p){ return vn(p) * 0.6 + vn(p * 2.3 + 4.1) * 0.4; }
+    float brk(float m, vec2 p){ return mix(m * (0.2 + 0.8 * smoothstep(0.3, 0.62, vn(p))), m, smoothstep(0.7, 1.0, m)); }   // v9.24.13 把泡沫網打斷：一段有線、一段沒有，不再是一圈圈封閉的多邊形；濃泡的地方照舊成團
     vec2 wp(vec2 p){ return p + (vec2(vn(p * 0.5 + 1.7), vn(p * 0.5 + 8.3)) - 0.5) * 1.1; }   // 把格子扭一扭：泡沫的洞有大有小、不排成整齊的網
     void main(){
       float t = uTime, a = vA;
@@ -53,7 +54,7 @@ const waveMat = new THREE.ShaderMaterial({
         }
         float shore = smoothstep(0.13, 0.0, v);   // 岸邊約 30 公分的碎泡
         m = max(m, shore * (0.2 + 0.9 * fb(vec2(a * 2.2 + t * 0.1, v * 9.0 - t * 0.4))));
-        c = vec4(0.97, 0.98, 0.97, max(net(e1, m), net(e2, m * 0.8) * 0.8) * (0.62 + 0.3 * vn(vec2(a * 37.0, v * 90.0))));   // 細泡的質感：不是一片平塗的白
+        c = vec4(0.97, 0.98, 0.97, max(net(e1, brk(m, q * 1.3 + 3.0)), net(e2, brk(m * 0.8, q * 2.9 + 11.0)) * 0.8) * (0.62 + 0.3 * vn(vec2(a * 37.0, v * 90.0))));   // 細泡的質感：不是一片平塗的白
       } else {
         // 沙灘那一側：一層薄薄的海水推上來再退去，前緣是一條斷續的泡沫，退去後留下濕沙與殘留的泡泡
         // v9.24：水膜貼著坡面往上鋪到平台上；水線跟著潮汐沿坡面移動
@@ -69,11 +70,11 @@ const waveMat = new THREE.ShaderMaterial({
         float fringe = smoothstep(-0.008, 0.0, dd) * (1.0 - smoothstep(fw * 0.35, fw, dd)) * (0.3 + 0.8 * smoothstep(0.2, 0.55, vn(vec2(a * 1.7 + 3.1, t * 0.09))));   // 一段濃、一段幾乎沒有
         float age = clamp(dd / 0.4, 0.0, 1.0);
         float m = max(fringe, film * (1.0 - age) * (1.0 - age) * (0.05 + 1.1 * fb(vec2(a * 1.5 + 3.1, (v - f) * 5.0 + t * 0.05))) * smoothstep(0.0, 0.02, dd));   // 前緣後面 80 公分內漸散的泡沫：一塊濃、一塊只剩細線
-        float trail = max(net(e1, m), net(e2, m * 0.8) * 0.8) * (0.72 + 0.28 * vn(vec2(a * 37.0, v * 75.0)));
+        float trail = max(net(e1, brk(m, q * 1.3 + 3.0)), net(e2, brk(m * 0.8, q * 2.9 + 11.0)) * 0.8) * (0.72 + 0.28 * vn(vec2(a * 37.0, v * 75.0)));
         // 浪退之後留在沙上的細泡：這一點上次被水蓋住是多久以前（由主要的那一道來回算），兩三秒內淡掉
         float sv = clamp((v - 0.3) / amp, -0.98, 0.98), since = mod(ph - (3.14159 - asin(sv)), 6.28318);
         float lk = (1.0 - film) * step(abs((v - 0.3) / amp), 0.98) * exp(-since * 1.6), left = 0.0;
-        if (lk > 0.1) left = net(cell(wp(vec2(a * 13.0, v * 27.0))), lk * 0.7 * fb(vec2(a * 1.9 + 5.0, v * 4.0))) * 0.32;   // 只有剛退水的那一小段才算
+        if (lk > 0.1) left = smoothstep(0.72, 0.9, vn(vec2(a * 46.0, v * 95.0)) * 0.6 + vn(vec2(a * 17.0 + 3.0, v * 35.0)) * 0.4 + lk * 0.22) * lk * fb(vec2(a * 1.9 + 5.0, v * 4.0)) * 0.6;   // v9.24.13 剛退水的沙上留下一點一點的碎泡（以前也是網狀的線，印在裸沙上看得出網孔）
         vec3 Vw = normalize(cameraPosition - vW); float F = 0.02 + 0.98 * pow(1.0 - max(Vw.y, 0.0), 5.0);
         float thick = film * (0.3 + 0.7 * (1.0 - smoothstep(0.0, f, v)));   // 水膜靠海那一側厚、前緣薄得幾乎看不見
         c = vec4(uSky * 0.9, film * (0.02 + 0.05 * thick + 0.55 * F));   // 清水：正著看幾乎看不見，斜著看映著低空的天色

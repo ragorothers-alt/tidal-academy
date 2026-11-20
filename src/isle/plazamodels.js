@@ -33,7 +33,7 @@ function slab(b, outline, surface, color, bevel = 0.018, depth = 0.07) {
   // v9.24.12 石縫填了砂土：石板邊緣只往下收 7 公釐，外面一圈填縫砂（和鄰塊的接在一起），不再是一道四五公分深的黑縫——石板像埋在土裡，不像一片片厚板排在地上
   const outer = (x, z, w) => { const d = Math.hypot(x - cx, z - cz), k = 1 + w / d; return [cx + (x - cx) * k, cz + (z - cz) * k]; };
   const rim = outline.map(([x, z]) => [x, surface(x, z) - 0.007, z]);
-  const fill = outline.map(([x, z]) => { const [px, pz] = outer(x, z, 0.04); return [px, surface(px, pz) - 0.01, pz]; });
+  const fill = outline.map(([x, z]) => { const [px, pz] = outer(x, z, 0.085); return [px, surface(px, pz) - 0.01, pz]; });
   const bot = fill.map(([x, y, z]) => [x, y + 0.01 - depth, z]);
   const center = [cx, topY(cx, cz), cz];
   const mossK = Math.max(0, (h2 - 0.7) / 0.3) * 0.7, dirt = [0.86 - 0.07 * h1, 0.855 - 0.07 * h1, 0.82 - 0.08 * h1];
