@@ -561,6 +561,9 @@ export function bend(mat, kind) {
     if (kind === 'flower') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       #ifdef TA_BLOOM
         normal = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);   // 草叢裡的小花：花瓣正反面都像地面一樣朝天受光（不會背面整片發黑）
+      #endif
+      #ifdef TA_FLOWERTINT
+        normal = normalize(mix(normal, normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), 0.72));   // v9.24.8 野花：莖、葉和花瓣跟草一樣主要朝天受光（以前背光的莖是一根根黑線，遠看像插在黑桿上的大頭針）
       #endif`);
     if (kind === 'grass') f = f.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       { vec3 grassUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);

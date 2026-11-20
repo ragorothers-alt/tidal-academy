@@ -58,23 +58,42 @@ function geos() {
   b = builder();   // 腳
   for (const s of [-1, 1]) { b.box(s * 0.026, -0.11, -0.01, 0.008, 0.1, 0.008, LEG); b.box(s * 0.026, -0.158, 0.008, 0.024, 0.004, 0.04, LEG); }
   const legs = b.geo();
-  return (GEO = { body, head, inner, outer, fold, legs });
+  // 遠景用的簡化版：身體和頭合成一塊；每邊翅膀一整片（外節固定往下折一點，像滑翔時的 M 形），左翼是右翼的鏡像
+  const far = join([body, head.clone().translate(0, 0.03, 0.185)]), wingR = join([inner, outer.clone().rotateZ(-0.25).translate(0.3, 0, 0)]);
+  const wingL = wingR.clone().scale(-1, 1, 1); { const ix = wingL.index.array; for (let i = 0; i < ix.length; i += 3) { const s = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = s; } wingL.computeVertexNormals(); }
+  return (GEO = { body, head, inner, outer, fold, legs, far, wingR, wingL });
 }
-/** 一隻海鷗。mat 要是開了 vertexColors 的材質；fold／legs 只有站著時顯示 */
-export function makeGull(mat) {
-  const G = geos(), g = new THREE.Group(), tilt = new THREE.Group(), M = geo => new THREE.Mesh(geo, mat);
-  const body = M(G.body), head = M(G.head), fold = M(G.fold), legs = M(G.legs); head.position.set(0, 0.03, 0.185);
+/** 把幾個只有位置、顏色與索引的幾何合成一個 */
+function join(list) {
+  const p = [], c = [], ix = []; let base = 0;
+  for (const g of list) { p.push(...g.attributes.position.array); c.push(...g.attributes.color.array); for (const i of g.index.array) ix.push(i + base); base += g.attributes.position.count; }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); g.setIndex(ix); g.computeVertexNormals(); return g;
+}
+const STUB = { rotation: { z: 0 } };
+/** 一隻海鷗。mat 要是開了 vertexColors 的材質；fold／legs 只有站著時顯示。
+    lod（v9.24.8，場景物件少一點）：'far' 遠景鳥群——身體一塊、翅膀左右各一片，4 個物件 3 次繪製；'fly' 只會飛的——沒有收起的翅膀與腳；不給就是完整的 12 個物件 */
+export function makeGull(mat, lod) {
+  const G = geos(), g = new THREE.Group(), M = geo => new THREE.Mesh(geo, mat); g.rotation.order = 'YXZ';
+  if (lod === 'far') {
+    const body = M(G.far), R = { inner: M(G.wingR), outer: STUB }, L = { inner: M(G.wingL), outer: STUB };
+    R.inner.position.set(0.05, 0.045, 0.05); L.inner.position.set(-0.05, 0.045, 0.05); g.add(body, R.inner, L.inner);
+    return { g, tilt: g, body, head: body, R, L, flat: true };
+  }
+  const tilt = new THREE.Group(), body = M(G.body), head = M(G.head); head.position.set(0, 0.03, 0.185);
   const wing = s => { const piv = new THREE.Group(); piv.position.set(0.05 * s, 0.045, 0.05); piv.scale.x = s; const inner = M(G.inner), outer = M(G.outer); outer.position.x = 0.3; inner.add(outer); piv.add(inner); return { piv, inner, outer }; };
-  const R = wing(1), L = wing(-1);
-  tilt.add(body, head, R.piv, L.piv, fold); g.add(tilt, legs); fold.visible = legs.visible = false; g.rotation.order = 'YXZ';
+  const R = wing(1), L = wing(-1); let fold = null, legs = null;
+  tilt.add(body, head, R.piv, L.piv); g.add(tilt);
+  if (lod !== 'fly') { fold = M(G.fold); legs = M(G.legs); tilt.add(fold); g.add(legs); fold.visible = legs.visible = false; }
   return { g, tilt, body, head, R, L, fold, legs };
 }
 /** 翅膀姿勢：k = 0 滑翔、1 拍翅；ph 是拍翅相位 */
 export function wings(o, k, ph) {
   const a = 0.14 * (1 - k) + k * (0.08 + 0.62 * Math.sin(ph)), b = -0.3 * (1 - k) + k * (-0.2 + 0.5 * Math.sin(ph - 1.0));
-  o.R.inner.rotation.z = o.L.inner.rotation.z = a; o.R.outer.rotation.z = o.L.outer.rotation.z = b;
+  o.R.inner.rotation.z = a; o.L.inner.rotation.z = o.flat ? -a : a; o.R.outer.rotation.z = o.L.outer.rotation.z = b;
 }
 function standing(o, on) { o.fold.visible = o.legs.visible = on; o.R.piv.visible = o.L.piv.visible = !on; }
+/** 看不到的海鷗不留在場景裡（three 每格都會更新場景裡每個物件的矩陣，藏起來的也算） */
+const put = (o, v) => { if (v) { if (!o.g.parent) scene.add(o.g); } else if (o.g.parent) scene.remove(o.g); o.g.visible = v; };
 
 /* ---------- 島上的海鷗 ---------- */
 let ctx = null, mat = null, shown = true, lastP = null, pSpeed = 0;
@@ -84,11 +103,11 @@ const COAST = 44, rnd = (a, b) => a + Math.random() * (b - a), wrap = a => Math.
 export function init(c) {
   ctx = c; mat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, emissive: '#93a7bd', emissiveIntensity: 0.3 }));
   for (let i = 0; i < 5; i++) {
-    const o = makeGull(mat); o.g.scale.setScalar(rnd(0.95, 1.15)); o.g.traverse(m => { m.frustumCulled = false; }); scene.add(o.g);
+    const o = makeGull(mat, 'fly'); o.g.scale.setScalar(rnd(0.95, 1.15)); o.g.traverse(m => { m.frustumCulled = false; }); o.g.visible = false;
     soar.push(Object.assign(o, { ang: rnd(-3, 3), offA: [-0.5, -0.18, 0.12, 0.42, 0.85][i], R0: rnd(7, 13), ph: rnd(0, 6), dir: i % 2 ? 1 : -1, alt: rnd(5.5, 12), spd: rnd(5.5, 7.5), out: 70, out0: rnd(-3, 9), flapT: rnd(2, 6), flap: 0, fph: rnd(0, 6), on: false }));
   }
   for (let i = 0; i < 5; i++) {
-    const o = makeGull(mat); o.g.scale.setScalar(rnd(0.95, 1.15)); o.g.traverse(m => { m.frustumCulled = false; if (m.isMesh) m.castShadow = true; }); o.g.visible = false; scene.add(o.g);
+    const o = makeGull(mat); o.g.scale.setScalar(rnd(0.95, 1.15)); o.g.traverse(m => { m.frustumCulled = false; if (m.isMesh) m.castShadow = true; }); o.g.visible = false;
     perch.push(Object.assign(o, { st: 'away', t: rnd(1, 8) + i * 3, spot: null, look: 0, lookTo: 0, lookT: 1, fph: rnd(0, 6), from: new THREE.Vector3(), dirX: 0, dirZ: 1 }));
   }
 }
@@ -108,7 +127,7 @@ const sm = (e0, e1, x) => { const k = Math.min(1, Math.max(0, (x - e0) / (e1 - e
 /** 每格更新（fantasy.update 呼叫）：show = 在主島戶外 */
 export function update(dt, t, night, show) {
   if (!ctx) return;
-  if (show !== shown) { shown = show; if (!show) { soar.forEach(o => { o.g.visible = false; }); perch.forEach(o => { o.g.visible = false; }); } }
+  if (show !== shown) { shown = show; if (!show) { soar.forEach(o => put(o, false)); perch.forEach(o => put(o, false)); } }
   if (!show) return;
   if (!spots.length) findSpots();
   const p = ctx.player.position, rain = skyU.wx.value.x, storm = skyU.wx.value.y, dark = night > 0.55;
@@ -119,29 +138,29 @@ export function update(dt, t, night, show) {
   soar.forEach((o, i) => {
     const on = i < want; if (on && !o.on) { o.on = true; o.ang = pa + o.offA + rnd(-0.4, 0.4); } o.on = on;
     o.out += ((on ? o.out0 : 75) - o.out) * Math.min(1, dt * (on ? 0.35 : 0.22));
-    if (!on && o.out > 66) { o.g.visible = false; return; }
+    if (!on && o.out > 66) { put(o, false); return; }
     if (!inland) o.ang += Math.max(-0.07 * dt, Math.min(0.07 * dt, wrap(pa + o.offA - o.ang)));
     const R = o.R0 + 3 * Math.sin(t * 0.07 + i * 1.9), ax = Math.sin(o.ang) * (COAST + o.out), az = Math.cos(o.ang) * (COAST + o.out);
     o.ph += o.dir * o.spd / R * dt;
     const cp = Math.cos(o.ph), sp = Math.sin(o.ph), y = o.alt + 1.8 * Math.sin(t * 0.13 + i * 2.1) + (on ? 0 : (o.out - o.out0) * 0.12), climb = 1.8 * 0.13 * Math.cos(t * 0.13 + i * 2.1);
-    o.g.position.set(ax + cp * R, y, az + sp * R); o.g.visible = true;
+    o.g.position.set(ax + cp * R, y, az + sp * R); put(o, true);
     o.g.rotation.set(-climb * 0.12, Math.atan2(-sp * o.dir, cp * o.dir), o.dir * 0.38);   // 朝切線方向飛，往圓心側傾
     o.flapT -= dt; if (o.flapT < 0) { o.flapOn = !o.flapOn; o.flapT = o.flapOn ? rnd(1.2, 2.6) : rnd(3.5, 9); }
     o.flap += ((o.flapOn ? 1 : 0) - o.flap) * Math.min(1, dt * 3); o.fph += dt * 8.5;
     wings(o, o.flap * 0.85, o.fph);
     o.tilt.rotation.z = Math.sin(t * 0.9 + i) * 0.05; o.head.rotation.y = Math.sin(t * 0.4 + i * 3) * 0.25;
-    if (dbg.pin && i === 0) { o.g.position.set(dbg.pin[0], dbg.pin[1], dbg.pin[2]); o.g.rotation.set(0, dbg.pin[3], dbg.pin[4] || 0); o.g.visible = true; }
+    if (dbg.pin && i === 0) { o.g.position.set(dbg.pin[0], dbg.pin[1], dbg.pin[2]); o.g.rotation.set(0, dbg.pin[3], dbg.pin[4] || 0); put(o, true); }
   });
 
   const hide = storm > 0.3;
   perch.forEach((o, i) => {
     const s = o.spot;
     if (o.st === 'away') {
-      o.g.visible = false; o.t -= dt;
+      put(o, false); o.t -= dt;
       if (o.t < 0 && !hide) { const ns = freeSpot(p); if (!ns) { o.t = 4; return; } ns.by = o; o.spot = ns; o.st = 'arrive'; o.t = 0; o.dirX = Math.sin(ns.a + rnd(-0.5, 0.5)); o.dirZ = Math.cos(ns.a + rnd(-0.5, 0.5)); o.face = Math.atan2(-o.dirX, -o.dirZ); standing(o, false); }
       return;
     }
-    o.g.visible = true;
+    put(o, true);
     if (o.st === 'arrive') {   // 從外海滑進來：最後一秒仰身、張翅減速
       o.t += dt; const T = 6.5, u = Math.min(1, o.t / T), e = 1 - u, d = 34 * e * e, h = 0.16 + 7.5 * e * e * (0.55 + 0.45 * e), flare = sm(0.78, 1, u);
       o.g.position.set(s.x + o.dirX * d, s.y + h, s.z + o.dirZ * d); o.g.rotation.set(-0.1 - flare * 0.55, o.face, Math.sin(o.t * 1.3) * 0.12 * e);
@@ -159,7 +178,7 @@ export function update(dt, t, night, show) {
     }
     // 站著：轉頭張望、偶爾理毛；夜裡把頭埋到背上睡
     const dP = Math.hypot(p.x - s.x, p.z - s.z), far = dP > 80;
-    if (hide || far) { o.st = 'away'; o.t = far ? rnd(2, 6) : rnd(20, 40); s.by = null; o.spot = null; o.g.visible = false; return; }
+    if (hide || far) { o.st = 'away'; o.t = far ? rnd(2, 6) : rnd(20, 40); s.by = null; o.spot = null; put(o, false); return; }
     const scared = !dbg.calm && (dP < 2.6 + Math.min(3.4, pSpeed * 0.9) || perch.some(q => q !== o && q.st === 'flee' && q.t > 0.25 && q.t < 0.9 && Math.hypot(q.from.x - s.x, q.from.z - s.z) < 5));
     if (scared) { o.st = 'flee'; o.t = 0; o.d = 0; o.from.set(s.x, s.y, s.z); const ax = s.x - p.x, az = s.z - p.z, al = Math.hypot(ax, az) || 1, sx = Math.sin(s.a), sz = Math.cos(s.a); let dx = ax / al * 0.6 + sx * 0.7, dz = az / al * 0.6 + sz * 0.7; const dl = Math.hypot(dx, dz) || 1; o.dirX = dx / dl; o.dirZ = dz / dl; standing(o, false); return; }
     o.t += dt; o.lookT -= dt; if (o.lookT < 0) { o.lookT = rnd(1.2, 4.5); o.lookTo = Math.random() < 0.2 ? 9 : rnd(-1.1, 1.1); }

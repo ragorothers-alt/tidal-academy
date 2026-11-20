@@ -453,7 +453,7 @@ function makeBirds() {
   const flocks = [{ r: 46, h: 0.16, n: 5, sp: 0.04, ph: 0 }, { r: 62, h: 0.3, n: 4, sp: -0.03, ph: 2.4 }, { r: 40, h: 0.1, n: 3, sp: 0.05, ph: 4.1 }];   // h：在畫面地平線上方多少（NDC）
   flocks.forEach(f => {
     for (let i = 0; i < f.n; i++) {
-      const gull = gulls.makeGull(mat), b = gull.g; b.name = "far:bird"; b.scale.setScalar(1.5 + Math.random() * 0.5);   // 幾十公尺外：放大一點才看得出是鳥
+      const gull = gulls.makeGull(mat, 'far'), b = gull.g; b.name = "far:bird"; b.scale.setScalar(1.5 + Math.random() * 0.5);   // 幾十公尺外：放大一點才看得出是鳥
       b.traverse(o => { o.frustumCulled = cullable(o); o.raycast = NO_HIT; });
       scene.add(b);
       birds.push({ b, gull, f, off: [(i % 3 - 1) * 1.6 + Math.random(), (Math.random() - 0.5) * 1.2, -Math.floor(i / 1.5) * 1.4], flap: Math.random() * 6.28, rate: 7 + Math.random() * 2 });
