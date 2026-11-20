@@ -1135,26 +1135,68 @@ export function flowerGeos() {
     const flat = (r, n, y) => new THREE.CircleGeometry(r, n).rotateX(-Math.PI / 2).translate(0, y, 0);
     return (FLOWER_GEOS = { stemG: merge([new THREE.CylinderGeometry(0.008, 0.012, 0.26, 3, 1, true).translate(0, 0.13, 0)]), headG: merge([flat(0.07, 5, 0).rotateX(-0.25).translate(0, 0.27, 0)]), coreG: merge([flat(0.022, 4, 0.29)]) });
   }
-  const leaf = (sign, y) => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([0,y,0, sign*.035,y+.02,-.023,sign*.085,y+.035,0, 0,y,0,sign*.085,y+.035,0,sign*.035,y+.02,.023],3));g.computeVertexNormals();return g; };
-  const stemG = merge([new THREE.CylinderGeometry(0.0045, 0.007, 0.26, 4, 1, true).translate(0, 0.13, 0), leaf(1, .07), leaf(-1, .13)]);   // v9.15 半寫實：莖細一點，不像一根根小棍子
-  const petals = []; for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; petals.push(new THREE.SphereGeometry(0.032, 5, 2).scale(1.12, 0.32, 0.72).translate(0.034, 0, 0).rotateZ(0.35).rotateY(a)); }   // v9.15 半寫實：花頭直徑約 14 公分（以前 23），花瓣往上翹成淺杯
-  const headG = merge(petals).rotateX(-0.25).translate(0, 0.27, 0), coreG = new THREE.SphereGeometry(0.019, 5, 2).scale(1, 0.7, 1).translate(0, 0.28, 0);
-  return (FLOWER_GEOS = { stemG, headG, coreG });
+  /* v9.25 近看的野花（91 個三角形，以前 72）：莖往花朝的方向彎、帶兩片折成淺 V 的葉子和一枝花苞；六片花瓣分內外兩輪交錯
+     （外輪平展、內輪上翹成杯，每片寬圓、沿中線微凹，長短角度各差一點），中間一顆鼓起來的花心。
+     三份幾何都帶頂點色，只放明暗（花瓣根部、花心邊緣、莖的下段暗一點），顏色由 flowerOne 或外面的材質決定 */
+  const V = (x, y, z) => new THREE.Vector3(x, y, z), bag = () => ({ p: [], n: [], c: [] }), ab = V(0, 0, 0), ac = V(0, 0, 0), fn = V(0, 0, 0);
+  const tri = (o, a, b, c, sa, sb, sc, ref) => {   // 一個三角形：面法線要和 ref 同一邊（不是就把頂點順序反過來）
+    fn.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a)).normalize();
+    if (fn.dot(ref) < 0) { fn.negate(); [b, c, sb, sc] = [c, b, sc, sb]; }
+    [[a, sa], [b, sb], [c, sc]].forEach(([q, s]) => { o.p.push(q.x, q.y, q.z); o.n.push(fn.x, fn.y, fn.z); o.c.push(s, s, s); });
+  };
+  const geo = o => { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(o.p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(o.n, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(o.c, 3)); return g; };
+  const St = bag(), Hd = bag(), Co = bag(), UP = V(0, 1, 0), HT = 0.262, ring = (c, a, r) => V(c.x + Math.cos(a) * r, c.y, c.z + Math.sin(a) * r);
+  const spine = t => V(0, HT * t, -0.034 * t * t);   // 莖的中線：越往上越往花朝的方向彎
+  for (let i = 0; i < 3; i++) {   // 莖：三邊的細管分三段，上細下粗
+    const t0 = i / 3, t1 = (i + 1) / 3, c0 = spine(t0), c1 = spine(t1), r0 = 0.0062 - 0.0018 * t0, r1 = 0.0062 - 0.0018 * t1, s0 = 0.78 + 0.22 * t0, s1 = 0.78 + 0.22 * t1;
+    for (let k = 0; k < 3; k++) {
+      const a0 = k * 2.0944, a1 = a0 + 2.0944, out = V(Math.cos(a0 + 1.0472), 0, Math.sin(a0 + 1.0472)), p00 = ring(c0, a0, r0), p01 = ring(c0, a1, r0), p10 = ring(c1, a0, r1), p11 = ring(c1, a1, r1);
+      tri(St, p00, p01, p11, s0, s0, s1, out); tri(St, p00, p11, p10, s0, s1, s1, out);
+    }
+  }
+  const leafAt = (t, az, len, wid) => {   // 葉子：從莖上往外上方伸出去、葉尖垂一點，沿中肋折成淺 V
+    const b = spine(t), dx = Math.cos(az), dz = Math.sin(az), m = V(b.x + dx * len * 0.5, b.y + len * 0.42, b.z + dz * len * 0.5), tip = V(b.x + dx * len, b.y + len * 0.34, b.z + dz * len);
+    const ml = V(m.x + dz * wid, m.y + wid * 0.35, m.z - dx * wid), mr = V(m.x - dz * wid, m.y + wid * 0.35, m.z + dx * wid), mc = V(m.x, m.y - wid * 0.2, m.z);
+    tri(St, b, ml, mc, 0.8, 1, 0.84, UP); tri(St, b, mc, mr, 0.8, 0.84, 1, UP); tri(St, ml, tip, mc, 1, 1.06, 0.84, UP); tri(St, mc, tip, mr, 0.84, 1.06, 1, UP);
+  };
+  leafAt(0.26, 0.5, 0.085, 0.015); leafAt(0.5, 3.5, 0.068, 0.013);
+  { // 花苞：一枝細梗從莖上分出去，頂端是萼片托著還沒開的花（上半染花色）
+    const b0 = spine(0.56), bp = V(0.024, b0.y + 0.05, 0.013), mid = V(bp.x + 0.004, bp.y + 0.017, bp.z + 0.002), apex = V(bp.x + 0.008, bp.y + 0.034, bp.z + 0.004);
+    for (let k = 0; k < 3; k++) { const a0 = k * 2.0944, a1 = a0 + 2.0944, out = V(Math.cos(a0 + 1.0472), 0.2, Math.sin(a0 + 1.0472)); tri(St, ring(b0, a0, 0.0048), ring(b0, a1, 0.0048), ring(bp, a1, 0.0034), 0.84, 0.84, 0.95, out); tri(St, ring(b0, a0, 0.0048), ring(bp, a1, 0.0034), ring(bp, a0, 0.0034), 0.84, 0.95, 0.95, out); }
+    for (let k = 0; k < 4; k++) {
+      const a0 = k * 1.5708 + 0.3, out = V(Math.cos(a0 + 0.7854), 0, Math.sin(a0 + 0.7854)), q0 = ring(mid, a0, 0.0075), q1 = ring(mid, a0 + 1.5708, 0.0075);
+      tri(St, bp, q0, q1, 0.84, 1.04, 1.04, out); tri(Hd, q0, q1, apex, 0.82, 0.82, 0.96, out);   // 萼片占一半，露出來的花瓣尖是花色
+    }
+  }
+  const top = spine(1), AX = V(0, 1, -0.3).normalize(), U = V(1, 0, 0), W = V(0, 0, 0).crossVectors(AX, U);   // 花頭朝莖彎過去的方向仰一點
+  const hp = (az, u, v, w) => top.clone().addScaledVector(U, Math.cos(az) * u - Math.sin(az) * v).addScaledVector(W, Math.sin(az) * u + Math.cos(az) * v).addScaledVector(AX, w);   // 花頭座標：az 方向往外 u、橫向 v、沿花軸往上 w
+  for (let j = 0; j < 6; j++) {
+    const inner = j % 2, az = j * 1.0472 + [0.08, -0.1, 0.12, 0.04, -0.12, 0.07][j], Lp = (inner ? 0.055 : 0.066) * [1, 0.95, 1.06, 1.03, 0.94, 1][j], Wd = inner ? 0.02 : 0.022, e = inner ? 0.52 : 0.2, cv = inner ? 2.2 : -1.3, k = inner ? 1 : 0.93;
+    const pt = (fu, fv, dw) => hp(az, Lp * fu, Wd * fv, e * Lp * fu + cv * Lp * Lp * fu * fu + Math.abs(fv) * Wd * 0.2 + dw);   // 花瓣越往外越高（內輪翹得多），兩側比中線高一點
+    const b = pt(0.06, 0, 0), l1 = pt(0.42, -0.78, 0), l2 = pt(0.8, -0.8, 0), t = pt(1, 0, 0), r2 = pt(0.8, 0.8, 0), r1 = pt(0.42, 0.78, 0), c = pt(0.58, 0, -Wd * 0.12);
+    tri(Hd, b, l1, c, 0.72 * k, 0.95 * k, 0.88 * k, AX); tri(Hd, l1, l2, c, 0.95 * k, k, 0.88 * k, AX); tri(Hd, l2, t, c, k, k, 0.88 * k, AX);
+    tri(Hd, t, r2, c, k, k, 0.88 * k, AX); tri(Hd, r2, r1, c, k, 0.95 * k, 0.88 * k, AX); tri(Hd, r1, b, c, 0.95 * k, 0.72 * k, 0.88 * k, AX);
+  }
+  for (let k = 0; k < 5; k++) {   // 花心：五邊兩層的小圓頂，邊緣暗、頂端亮
+    const a0 = k * 1.2566, a1 = a0 + 1.2566, o0 = hp(a0, 0.017, 0, 0.006), o1 = hp(a1, 0.017, 0, 0.006), i0 = hp(a0, 0.0105, 0, 0.014), i1 = hp(a1, 0.0105, 0, 0.014), ap = hp(0, 0, 0, 0.017), out = hp(a0 + 0.6283, 1, 0, 0.8).sub(top);
+    tri(Co, o0, o1, i1, 0.7, 0.7, 0.98, out); tri(Co, o0, i1, i0, 0.7, 0.98, 0.98, out); tri(Co, i0, i1, ap, 0.98, 0.98, 1.12, out);
+  }
+  return (FLOWER_GEOS = { stemG: geo(St), headG: geo(Hd), coreG: geo(Co) });
 }
 /** 莖、花冠、花心合成一個幾何（v7.3：一塊野花原本三個 InstancedMesh，現在一個）：顏色烘進頂點色，aTint 標出要染上每朵花顏色的花瓣 */
 function flowerOne() {
   const { stemG, headG, coreG } = flowerGeos(), P = [], N = [], C = [], T = [];
   [[stemG, '#7fa05a', 0], [headG, '#ffffff', 1], [coreG, '#d6a332', 0]].forEach(([g0, hex, tint]) => {
-    const g = g0.index ? g0.toNonIndexed() : g0, c = new THREE.Color(hex), n = g.attributes.position.count;
+    const g = g0.index ? g0.toNonIndexed() : g0, c = new THREE.Color(hex), n = g.attributes.position.count, sh = g.attributes.color;   // sh：幾何自帶的明暗（v9.25）
     P.push(...g.attributes.position.array); N.push(...g.attributes.normal.array);
-    for (let i = 0; i < n; i++) { C.push(c.r, c.g, c.b); T.push(tint); }
+    for (let i = 0; i < n; i++) { const k = sh ? sh.getX(i) : 1; C.push(c.r * k, c.g * k, c.b * k); T.push(tint); }
   });
   const o = new THREE.BufferGeometry();
   o.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
   o.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); o.setAttribute('aTint', new THREE.Float32BufferAttribute(T, 1));
   return o;
 }
-/* 野花按16m分塊，一材質、一朵72 tris；5–9株一叢，保留原花色與flowerSpots。 */
+/* 野花按16m分塊，一材質、一朵91 tris；5–9株一叢，保留原花色與flowerSpots。 */
 {
   const oneG = flowerOne(), FC = 16, TOTAL = 6000, SPARE = 120;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide }); mat.defines = { TA_FLOWERTINT: '' }; bend(mat, 'flower');
@@ -1239,7 +1281,7 @@ function flowerOne() {
     registerAt(g, c.x, (lo + hi) / 2 + 0.3, c.z, FC * 0.75 + 0.5, null, (hi - lo) / 2 + 0.8);
   };
   const write = (c, m, token) => { const i = c.n++, im = c.im; c.tints[i] = token; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(tint(token))); im.instanceColor.needsUpdate = true; };
-  const matrix = (x, z, size, level = 1) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.08, R() * Math.PI * 2, (R() - 0.5) * 0.08)), sc.set(size, [0.4, 0.8, 1.2][level], size));
+  const matrix = (x, z, size, level = 1) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.3, R() * Math.PI * 2, (R() - 0.5) * 0.3)), sc.set(size, [0.4, 0.8, 1.2][level], size));   // v9.25 每株往不同方向歪一點（亂數的次數和順序不變）
   const safe = (x, z, pad = 0.13) => {
     const t = tileAt(x, z); return (t === 1 || t === 2) && !onRoad(x, z) && !blocked(x, z, pad) && !homeKeepout(x, z, pad) && !isBridgeAt(x, z) && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > 6.72;
   };

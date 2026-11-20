@@ -30,6 +30,17 @@
       const q=kit.rbox(w,h,d,r);
       roundedGeometry.set(key,q);return q;
     }
+    // v9.25.0 家具的形狀語言：木料是小倒角的方料、坐墊鼓起有滾邊、桌旗貼著桌面垂下、地毯薄而貼地（kit 沒有這些工具時——測試用的假 kit——退回方塊）。
+    const board=kit.board||((w,h,d)=>new THREE.BoxGeometry(w,h,d)),pad=kit.pad||((w,h,d)=>kit.rbox(w,h,d,.06)),joinG=kit.join||(parts=>parts[0][0]);
+    const woodV=kit.mat('#ffffff',{vertexColors:true},'wood'),clothV=kit.mat('#ffffff',{vertexColors:true},'fabric');   // 顏色寫在頂點色裡的木頭與布
+    const cols=[],ghostGeo=new THREE.BoxGeometry(1,1,1);let softSeed=1;
+    // 外形換掉的家具：碰撞箱照原本那幾個方塊算。items 是家具自己座標的 [x,y,z,w,h,d,繞 z 的傾斜]；union：原本是一整個群組擋路（合成一個箱子）。
+    function keep(x,y,z,a,items,union=false){
+      const q=new THREE.Group();q.position.set(x,y,z);q.rotation.y=a;
+      for(const v of items){const o=new THREE.Mesh(ghostGeo);o.position.set(v[0],v[1],v[2]);o.scale.set(v[3],v[4],v[5]);if(v[6])o.rotation.z=v[6];q.add(o);}
+      q.updateMatrixWorld(true);
+      for(const o of union?[q]:q.children){const b=new THREE.Box3().setFromObject(o);cols.push([b.min.x,b.min.y,b.min.z,b.max.x,b.max.y,b.max.z]);}
+    }
     // The scenery must not seal the real opening's sunlight; preserve the engine's live sky uniforms.
     const viewSource=kit.view(),windowView=viewSource.clone();windowView.uniforms=viewSource.uniforms;windowView.transparent=true;windowView.depthWrite=false;
     function mesh(geo, mat, x, y, z, ud) {
@@ -106,17 +117,36 @@
         if(yy<2.2)for(let j=0;j<10;j++){const xx=x-w*.43+j*w*.086,h=.35+(j%3)*.085;box(xx,y+yy+h/2+.06,z+.33,w*.065,h,.32,[m.lilac,m.ink,m.paper,m.red][j%4]);box(xx,y+yy+h+.05,z+.30,w*.05,.014,.23,m.paper);box(xx,y+yy+.15,z+.503,w*.06,.025,.01,m.gold);}
       }
     }
+    // 桌子：桌面是一片片順著 x 的木板（板縫是倒角拼出的 V 溝，兩端看得到年輪的端面），板下是退後的望板，桌腳往下收細、望板的榫頭用木釘穿過桌腳。
+    // 擋路的那一個網格（桌面板＋望板）外框和原本的桌面一樣是 w × .16 × d。
     function table(x,y,z,w,d) {
-      mesh(roundBox(w,.16,d,.055),m.honey,x,y+.86,z,{solid:true});for(const xx of [-w*.4,w*.4])for(const zz of [-d*.35,d*.35])box(x+xx,y+.4,z+zz,.12,.8,.12,m.oak);
+      const nb=Math.max(2,Math.round(d/.27)),bw=d/nb,lx=w/2-.1,lz=d/2-.1,top=[],legs=[];
+      for(let j=0;j<nb;j++)top.push([board(w,.045,bw,{col:m.honey.color,c:.004,end:'x',tone:.93+((j*7)%5)*.035}),0,.0575,-d/2+bw*(j+.5)]);
+      for(const s of [-1,1]){top.push([board(2*lx-.09,.115,.028,{col:m.oak.color,c:0}),0,-.0225,s*(lz+.02)]);top.push([board(.028,.115,2*lz-.09,{col:m.oak.color,c:0}),s*(lx+.02),-.0225,0]);}
+      mesh(joinG(top),woodV,x,y+.86,z,{solid:true});
+      for(const sx of [-1,1])for(const sz of [-1,1]){
+        legs.push([board(.1,.895,.1,{col:m.oak.color,c:.007,taper:.74}),sx*lx,.4475,sz*lz]);
+        for(const dy of [-.03,.03]){legs.push([board(.017,.017,.007,{col:m.honey.color,c:0,tone:.85}),sx*lx,.8375+dy,sz*(lz+.049)]);legs.push([board(.007,.017,.017,{col:m.honey.color,c:0,tone:.85}),sx*(lx+.049),.8375+dy,sz*lz]);}
+      }
+      mesh(joinG(legs),woodV,x,y,z);
     }
-    function chair(x,y,z,a=0) {
+    // 扶手椅：木頭的座框、收細的椅腳與扶手（扶手前後端是端面），坐墊、椅背、靠墊與抱枕各是自己的軟墊；blanket：坐墊上放一條摺好的毯子。
+    function chair(x,y,z,a=0,blanket=false) {
       const c=new THREE.Group();g.add(c);c.position.set(x,y,z);c.rotation.y=a;
-      const items=[[0,.5,0,1.15,.22,1.1,m.lilac],[0,1.1,.48,1.15,1.1,.2,m.linen],[-.59,.75,0,.16,.35,1.1,m.honey],[.59,.75,0,.16,.35,1.1,m.honey]];
-      items.forEach(v=>{const o=new THREE.Mesh(roundBox(v[3],v[4],v[5],.09),v[6]);o.position.set(...v.slice(0,3));c.add(o);});
-      for(const xx of [-.43,.43])for(const zz of [-.38,.38]){const leg=new THREE.Mesh(boxGeo,m.oak);leg.position.set(xx,.2,zz);leg.scale.set(.1,.4,.1);c.add(leg);}
-      const pillow=new THREE.Mesh(roundBox(.63,.45,.2,.09),m.pink);pillow.position.set(.15,.94,.1);pillow.rotation.z=-.14;c.add(pillow);
-      const upholstery=new THREE.Mesh(roundBox(.98,.85,.3,.14),m.linen);upholstery.position.set(0,1.08,.33);c.add(upholstery);
-      for(const xx of [-.28,.28]){const button=new THREE.Mesh(new THREE.IcosahedronGeometry(.035,0),m.lilac);button.position.set(xx,1.33,.17);c.add(button);}c.userData.solid=true;
+      const put=(geo,mat,px,py,pz)=>{const o=new THREE.Mesh(geo,mat);o.position.set(px,py,pz);c.add(o);return o;};
+      keep(x,y,z,a,[[0,.5,0,1.15,.22,1.1],[0,1.1,.48,1.15,1.1,.2],[-.59,.75,0,.16,.35,1.1],[.59,.75,0,.16,.35,1.1],[-.43,.2,-.38,.1,.4,.1],[.43,.2,-.38,.1,.4,.1],[-.43,.2,.38,.1,.4,.1],[.43,.2,.38,.1,.4,.1],[.15,.94,.1,.63,.45,.2,-.14],[0,1.08,.33,.98,.85,.3]],true);
+      const wood=[[board(1.15,.11,1.1,{col:m.honey.color,c:.008}),0,.445,0]];
+      for(const sx of [-1,1]){
+        for(const sz of [-1,1]){wood.push([board(.085,.39,.085,{col:m.oak.color,c:.006,taper:.7}),sx*.47,.195,sz*.44]);wood.push([board(.07,.38,.07,{col:m.oak.color,c:.006}),sx*.59,.685,sz*.44]);}
+        wood.push([board(.16,.055,1.12,{col:m.honey.color,c:.012,end:'z'}),sx*.59,.8975,0]);
+      }
+      put(joinG(wood),woodV,0,0,0);
+      put(pad(1,.2,1.03,{col:m.lilac.color,seed:3}),clothV,0,.6,-.04);
+      put(pad(1.15,1.1,.2,{col:m.linen.color,face:'z-',crown:.02,dip:0,r:.1,seed:4}),clothV,0,1.1,.48);
+      put(pad(.94,.82,.15,{col:m.linen.color,face:'z-',crown:.04,dips:[[-.28,.25,.024,.075],[.28,.25,.024,.075]],seed:5}),clothV,0,1.08,.31);   // 靠墊：兩顆鈕扣把布面拉出凹陷
+      for(const xx of [-.28,.28]){const button=put(new THREE.IcosahedronGeometry(.03,1),m.lilac,xx,1.33,.268);button.scale.z=.5;}
+      const pillow=put(pad(.6,.43,.18,{col:m.pink.color,pillow:true,face:'z-',seed:6}),clothV,.15,.95,.13);pillow.rotation.set(.16,0,-.14);
+      if(blanket){put(pad(.46,.05,.56,{col:m.ink.color,pr:0,crown:.02,dip:0,lump:.005,r:.05,seed:7}),clothV,-.2,.71,-.16);put(pad(.45,.05,.3,{col:m.ink.color,pr:0,crown:.024,dip:0,lump:.005,r:.06,seed:8}),clothV,-.19,.745,-.27).rotation.y=.09;}
     }
     function vine(x,y,z) { for(let j=0;j<7;j++){const xx=x+(j-3)*.27;ball(xx,y,z,.3,m.leaf,.5);for(let k=0;k<5;k++)ball(xx+Math.sin(j+k)*.04,y-.24-k*.18,z,.14-k*.018,k%2?m.pinkPetal:m.petal,1.3);} }
 
@@ -178,9 +208,8 @@
     for(const z of [-9.9,9.9])rail([-9.9,z],[9.9,z],4);for(const x of [-9.9,9.9])rail([x,-9.9],[x,9.9],4);
     vine(-8.8,6.7,9.6);vine(8.8,6.7,-9.5);pot(-7.6,4,8.9);pot(7.6,4,8.9);
     // Ground-floor living: low island map, lavender sofa, kitchen and a generous clear hall.
-    box(-4.3,.018,4.5,4.5,.035,3.8,m.lilac);box(-4.3,.04,4.5,4.1,.012,3.4,m.linen);
-    chair(-6.3,0,4.3,-Math.PI/2);chair(-3.3,0,6.4,0);table(-4.6,0,4.1,1.7,1.1);box(-4.6,.96,4.1,1.1,.035,.65,m.blue);
-    for(let j=0;j<5;j++)box(-4.9+j*.15,.985,4.1+Math.sin(j)*.17,.1,.008,.08,m.paper);
+    chair(-6.3,0,4.3,-Math.PI/2,true);chair(-3.3,0,6.4,0,true);table(-4.6,0,4.1,1.7,1.1);box(-4.6,.9485,4.1,1.1,.004,.65,m.blue);   // v9.25.0 地毯只留後面 rug() 那一張薄的（以前這裡還墊了兩層厚板）；地圖是一張鋪在桌旗上的紙
+    for(let j=0;j<5;j++)box(-4.9+j*.15,.9545,4.1+Math.sin(j)*.17,.1,.008,.08,m.paper);
     books(-6.6,0,1.7,2.1);pot(-7.1,0,6.8,1.1);
     box(3.8,.53,-7.35,5.7,1.06,.92,m.honey,{solid:true});box(3.8,1.1,-7.35,5.9,.1,1.05,m.stone);
     box(6,1.18,-7.35,1.1,.08,.7,m.soot);for(const xx of [5.7,6.2])mesh(new THREE.TorusGeometry(.14,.02,5,12),m.gold,xx,1.24,-7.35).rotation.x=-Math.PI/2;
@@ -233,8 +262,8 @@
     flame(-5.4,4.43,-7.14,.35,.73,m.fireCore,-.08);
     flame(-5.4,4.43,-7.04,.17,.45,m.fireInner,.035);
     books(4.55,4,-7.6,3.4);
-    chair(-5.6,4,-4.2,.3);box(-4.3,4.02,-3.9,4.4,.035,3.2,m.lilac);table(-3.1,4,-5.4,1.1,.8);pot(-6.8,4,-6.3);
-    table(-3.1,4,6.5,3.1,1.1);box(-3.2,4.97,6.5,1.2,.035,.7,m.paper);box(-3.65,4.99,6.5,.04,.02,.7,m.lilac);chair(-3.1,4,5,Math.PI);
+    chair(-5.6,4,-4.2,.3,true);table(-3.1,4,-5.4,1.1,.8);pot(-6.8,4,-6.3);
+    table(-3.1,4,6.5,3.1,1.1);box(-3.2,4.9485,6.5,1.2,.004,.7,m.paper);box(-3.65,4.9565,6.5,.04,.012,.7,m.lilac);chair(-3.1,4,5,Math.PI);
     // A brass telescope on a real tripod, pointing through the front-right arch.
     beam([3.1,5.2,6.6],[3.1,5.8,7.6],.14,m.gold);beam([3.1,5.15,6.7],[3.1,4.1,6.7],.055,m.dark);
     for(let j=0;j<3;j++){const a=j*Math.PI*2/3;beam([3.1,4.95,6.7],[3.1+Math.cos(a)*.6,4.05,6.7+Math.sin(a)*.6],.04,m.honey);}
@@ -252,7 +281,12 @@
     for(let j=0;j<6;j++)box(3.3+(j%3)*.65,2.5-Math.floor(j/3)*.4,-7.83,.45,.25,.02,j%2?m.artPink:m.artLilac);
     // Second dressing pass. The private 8 x 8 floor is deliberately untouched.
     const softGeos=new Map();
-    function soft(x,y,z,w,h,d,mat,r=.06,solid=false){r=Math.min(r,w*.45,h*.45,d*.45);const key=[w,h,d,r].join('/');if(!softGeos.has(key))softGeos.set(key,roundBox(w,h,d,r));return mesh(softGeos.get(key),mat,x,y,z,solid?{solid:true}:undefined);}
+    function soft(x,y,z,w,h,d,mat,r=.06,solid=false){
+      r=Math.min(r,w*.45,h*.45,d*.45);const kind=(mat.userData||{}).kind,ud=solid?{solid:true}:undefined;
+      if(kind==='wood'&&kit.board)return mesh(board(w,h,d,{col:mat.color,c:Math.min(.008,r*.14)}),woodV,x,y,z,ud);   // 木頭：俐落的小倒角（外框不變）
+      if(kind==='fabric'&&kit.pad&&h<=.35&&Math.min(w,d)>=.4)return mesh(pad(w,h,d,h<.12?{col:mat.color,pr:0,crown:h*.22,dip:0,r:.03,seed:softSeed++}:{col:mat.color,seed:softSeed++}),clothV,x,y,z,ud);   // 布：軟墊（薄的是摺好的毯子，不滾邊）
+      const key=[w,h,d,r].join('/');if(!softGeos.has(key))softGeos.set(key,roundBox(w,h,d,r));return mesh(softGeos.get(key),mat,x,y,z,ud);
+    }
     function ring(x,y,z,r,mat,vertical=false){const o=mesh(new THREE.TorusGeometry(r,.018,3,10),mat,x,y,z);if(!vertical)o.rotation.x=Math.PI/2;return o;}
     function jug(x,y,z,s=1,mat=m.ceramic){
       const o=mesh(new THREE.SphereGeometry(.18,8,5),mat,x,y+.2*s,z);o.scale.set(s,s*1.1,s);
@@ -268,11 +302,16 @@
       box(x,y+.56,z+.355,.15,.16,.045,m.gold);ring(x,y+.53,z+.39,.035,m.dark,true);
     }
     function basket(x,y,z,s=.7){mesh(new THREE.CylinderGeometry(s*.5,s*.38,s*.5,10),m.honey,x,y+s*.25,z);for(let j=0;j<4;j++)ring(x,y+.08+j*s*.12,z,s*(.4+j*.023),m.floorLight);const h=ring(x,y+s*.55,z,s*.42,m.oak,true);h.scale.y=.65;}
+    // 地毯（y 是地板的高度）：薄薄一張貼在地上，包邊、米色的色帶與細線、兩端的流蘇都在同一個幾何裡。
     function rug(x,y,z,w,d){
-      soft(x,y+.023,z,w,.04,d,m.lilac,.04);soft(x,y+.046,z,w-.22,.014,d-.22,m.linen,.02);soft(x,y+.058,z,w-.42,.012,d-.42,m.lilac,.01);
-      for(const end of [-1,1])for(let j=0;j<Math.floor(w/.16);j++)box(x-w/2+.1+j*.16,y+.03,z+end*(d/2+.07),.035,.02,.19,m.linen);
+      if(!kit.rug){box(x,y+.008,z,w,.016,d,m.lilac);return;}
+      mesh(kit.rug(w,d,{col:m.lilac.color,bands:[[.16,.1,m.linen.color],[.275,.018,m.linen.color]],fringe:m.linen.color,fy:.011,T:.016,seed:Math.round(w*7+d*3)}),clothV,x,y,z);
     }
-    function runner(x,y,z,w,d){soft(x,y,z,w,.018,d,m.lilac,.012);for(const side of [-1,1]){box(x,y-.14,z+side*d/2,w,.28,.015,m.lilac);for(let j=0;j<6;j++)beam([x-w*.43+j*w*.17,y-.28,z+side*d/2],[x-w*.43+j*w*.17,y-.38,z+side*d/2],.012,m.linen);}}
+    // 桌旗（y 是桌面的高度、d 是桌子的深度）：貼著桌面沿 z 鋪過去，過桌緣垂下，有淺褶、收邊與流蘇。
+    function runner(x,y,z,w,d,drop=.28){
+      if(!kit.drape){box(x,y+.003,z,w,.006,d,m.lilac);return;}
+      mesh(kit.drape(w,d,drop,{col:m.lilac.color,fringe:m.linen.color,seed:Math.round(Math.abs(x*10+z*7))+1}),clothV,x,y,z);
+    }
     function flowerBox(x,y,z,w=1.4,a=0){
       const start=g.children.length;box(x,y+.12,z,w,.24,.32,m.honey);box(x,y+.25,z,w+.08,.05,.38,m.paleWood);
       for(let j=0;j<7;j++)pot(x-w*.4+j*w*.13,y+.22,z,.29);
@@ -317,9 +356,8 @@
     for(const u of [-3.1,3.1]){curtains(0,8.16,Math.PI,u,5.2,2,2.12);flowerBox(-u,5.18,7.85,1.75,Math.PI);curtains(0,-8.16,0,u,5.2,2,2.12);}
     curtains(8.16,0,-Math.PI/2,-2,1.3,2.15,1.9);curtains(0,8.16,Math.PI,4,1.25,2,1.95);
     // Ground living and kitchen: tactile textiles, tea, dishes and daily collections.
-    rug(-4.3,.065,4.5,4.55,3.85);runner(-4.6,.956,4.1,.45,1.12);stack(-5.12,.96,4.12,2);mug(-4.4,.97,4.28);jug(-4.12,.97,3.9,.65);
-    runner(-3.3,.66,6.45,.5,.85);runner(-6.3,.66,4.3,.5,.85);
-    rug(3.05,.005,-3.6,3.5,2.7);runner(3.1,.955,-3.5,.55,1.45);mug(2.45,.96,-3.5);jug(3.1,.96,-3.5,.9);pot(3.9,.96,-3.5,.43);
+    rug(-4.3,0,4.5,4.55,3.85);runner(-4.6,.94,4.1,.45,1.1);stack(-5.12,.945,4.12,2);mug(-4.4,.9505,4.28);jug(-4.12,.9505,3.9,.65);   // v9.25.0 桌上的東西放回桌面／桌旗上（以前桌旗厚 1.8 公分，東西跟著墊高）
+    rug(3.05,0,-3.6,3.5,2.7);runner(3.1,.94,-3.5,.55,1.4);mug(2.45,.94,-3.5);jug(3.1,.946,-3.5,.9);pot(3.9,.94,-3.5,.43);
     // A flush compass rose dresses the broad entry hall without taking walking space.
     ring(2.6,.015,2.8,1.32,m.gold);for(let j=0;j<8;j++){
       const a=j*Math.PI/4,q=poly([[0,0],[-.17,.55],[0,1.2],[.17,.55]],.008,j%2?m.paleWood:m.honey,2.6,.016,2.8);q.rotation.set(-Math.PI/2,0,a);
@@ -329,7 +367,7 @@
     for(let j=0;j<4;j++)mug(1.55+j*.4,1.16,-7.35);basket(6.95,0,-7.2,.8);chest(-7.25,0,2.65,.9);
     books(-6.3,0,.55,2.9);stack(-7.05,2.56,.55,3);jug(-5.8,2.56,.55,.85);pot(-6.4,2.56,.55,.45);vine(-6.5,3.35,.3);
     // Loft fireplace, library, travel chest, and furnished bays, leaving cross-house routes clear.
-    rug(-4.3,4.045,-3.9,4.5,3.25);runner(-5.6,4.65,-4.15,.5,.88);runner(-3.1,4.956,-5.4,.45,.83);mug(-3.15,4.97,-5.4);jug(-2.85,4.97,-5.4,.65);
+    rug(-4.3,4,-3.9,4.5,3.25);runner(-3.1,4.94,-5.4,.45,.8);mug(-3.15,4.946,-5.4);jug(-2.85,4.946,-5.4,.65);
     for(let j=0;j<5;j++)beam([-5.9+j*.25,4.18,-6.85],[-5.9+j*.25,4.77,-6.85],.025,m.dark);
     beam([-6.05,4.75,-6.85],[-4.8,4.75,-6.85],.03,m.dark);
     for(let j=0;j<6;j++)beam([-7.1+(j%2)*.25,4.13+Math.floor(j/2)*.17,-7.2],[-7.1+(j%2)*.25,4.13+Math.floor(j/2)*.17,-6.65],.09,m.oak);
@@ -343,12 +381,12 @@
     for(const [x,y,z] of [[4.55,6.56,-7.6],[-7.35,6.55,.3]]){stack(x,y,z,3);jug(x+.6,y,z,.8);pot(x-.6,y,z,.5);}
     chest(6.5,4,-6.7,1.4);basket(6.7,4,-7.6,.7);vine(4.5,7.3,-7.8);
     // Low window-side console, travel rolls and tiny star chart around the telescope.
-    table(5.7,4,7.35,2.6,.65);runner(5.7,4.956,7.35,.42,.68);stack(5.1,4.96,7.35,3);jug(6.4,4.96,7.35,.7);scrollRoll(5.7,4.96,7.35);
+    table(5.7,4,7.35,2.6,.65);runner(5.7,4.94,7.35,.42,.65);stack(5.1,4.94,7.35,3);jug(6.4,4.94,7.35,.7);scrollRoll(5.7,4.942,7.35);
     box(3.1,4.06,6.7,2.2,.03,1.75,m.ink);for(let j=0;j<8;j++)ball(2.3+(j%4)*.46,4.09,6.25+Math.floor(j/4)*.8,.035,m.gold);
     ring(3.1,5.8,7.59,.16,m.dark,true);beam([3.1,5.62,7.3],[3.1,5.65,7.36],.19,m.gold);
-    runner(-3.1,4.96,6.5,.5,1.13);stack(-4.15,4.97,6.5,3);scrollRoll(-2.45,4.97,6.5);mug(-3.9,4.97,6.58);pot(-1.9,4.97,6.5,.42);
+    runner(-3.1,4.94,6.5,.5,1.1);stack(-4.15,4.94,6.5,3);scrollRoll(-2.45,4.94,6.5);mug(-3.9,4.94,6.58);pot(-1.9,4.94,6.5,.42);
     // A low two-seat hobby island occupies the formerly bare west-central loft.
-    rug(-4.5,4.005,1.9,4.4,3);table(-4.9,4,2.1,1.9,1.05);runner(-4.9,4.96,2.1,.5,1.07);stack(-5.4,4.96,2.1,2);mug(-4.6,4.96,2.1);chair(-6.25,4,2.1,-Math.PI/2);
+    rug(-4.5,4,1.9,4.4,3);table(-4.9,4,2.1,1.9,1.05);runner(-4.9,4.94,2.1,.5,1.05);stack(-5.4,4.94,2.1,2);mug(-4.6,4.946,2.1);chair(-6.25,4,2.1,-Math.PI/2);
     for(const z of [-5.3,4.9]){box(7.91,5.7,z,.1,1.35,1.75,m.honey);box(7.84,5.7,z,.025,1.15,1.55,m.paper);for(let k=0;k<5;k++)ball(7.81,5.4+(k%2)*.35,z-.55+k*.25,.09,k%2?m.artLilac:m.paper);}
     // Ropes visibly support high hanging planters; the lower private room stays available.
     for(const [x,y,z] of [[-7.5,2.65,7.3],[7.4,2.65,-5.7],[-7.5,6.5,5.7],[7.45,6.5,-4.9]]){pot(x,y,z,.6);for(const dx of [-.15,.15])beam([x+dx,y+.3,z],[x,y+.85,z],.012,m.dark);beam([x,y+.85,z],[x,y+1.05,z],.015,m.dark);vine(x,y+.65,z);}
@@ -370,28 +408,48 @@
       }
     }
     function sofa(x,y,z,w=3.1,a=0){
-      const start=g.children.length;
-      soft(x,y+.4,z,w,.5,1.42,m.honey,.08,true);soft(x,y+.72,z-.05,w-.14,.27,1.28,m.linen,.12,true);
-      soft(x,y+1.1,z+.58,w,.96,.28,m.linen,.12,true);
-      for(const side of [-1,1]){soft(x+side*(w/2-.08),y+.94,z,.24,.62,1.45,m.lilac,.1,true);soft(x+side*w*.24,y+1.02,z+.25,.65,.55,.22,side<0?m.pink:m.lilac,.1);}
-      for(let j=0;j<3;j++)soft(x-w*.3+j*w*.3,y+.88,z-.05,w*.28,.035,1.05,m.linen,.01);
+      // v9.25.0 木頭的底座（座框、退後的踢腳、四支收細的腳）與椅背木框；三塊坐墊、三塊靠墊、兩側扶手與抱枕各是自己的軟墊。碰撞箱照原本的五個方塊。
+      const start=g.children.length,sw=(w-.4)/3,base=[[board(w,.34,1.42,{col:m.honey.color,c:.008}),0,.48,0],[board(w-.16,.1,1.3,{col:m.oak.color,c:.004}),0,.26,0]];
+      keep(x,y,z,a,[[0,.4,0,w,.5,1.42],[0,.72,-.05,w-.14,.27,1.28],[0,1.1,.58,w,.96,.28],[-(w/2-.08),.94,0,.24,.62,1.45],[w/2-.08,.94,0,.24,.62,1.45]]);
+      for(const sx of [-1,1])for(const sz of [-1,1])base.push([board(.09,.22,.09,{col:m.oak.color,c:.006,taper:.72}),sx*(w/2-.1),.11,sz*.6]);
+      mesh(joinG(base),woodV,x,y,z);mesh(board(w,.95,.07,{col:m.honey.color,c:.008}),woodV,x,y+1.1,z+.685);
+      for(let j=0;j<3;j++){
+        mesh(pad(sw-.004,.25,1.26,{col:m.linen.color,seed:11+j}),clothV,x+(j-1)*sw,y+.765,z-.09);
+        mesh(pad(sw-.004,.74,.24,{col:m.linen.color,face:'z-',crown:.05,dip:.014,seed:21+j}),clothV,x+(j-1)*sw,y+1.21,z+.5).rotation.x=.09;
+      }
+      for(const side of [-1,1]){
+        mesh(pad(.24,.62,1.45,{col:m.lilac.color,crown:.05,dip:0,r:.09,seed:32+side}),clothV,x+side*(w/2-.08),y+.94,z);
+        mesh(pad(.6,.48,.2,{col:(side<0?m.pink:m.lilac).color,pillow:true,face:'z-',seed:42+side}),clothV,x+side*w*.24,y+1.1,z+.2).rotation.set(.2,0,side*.1);
+      }
       const parts=g.children.slice(start);if(a)parts.forEach(o=>{const dx=o.position.x-x,dz=o.position.z-z;o.position.set(x+dx*Math.cos(a)+dz*Math.sin(a),o.position.y,z-dx*Math.sin(a)+dz*Math.cos(a));o.rotation.y+=a;});
     }
-    function stool(x,y,z,w=1,d=.85){soft(x,y+.37,z,w,.54,d,m.honey,.07,true);soft(x,y+.68,z,w+.04,.2,d+.04,m.lilac,.085,true);}
+    // 軟墊凳：四支角柱、上下橫木與退後的嵌板組成的木箱（擋路的網格外框和原本一樣是 w × .54 × d），角柱往下是四支小腳；坐墊坐在箱子上、四邊各挑出一點。
+    function stool(x,y,z,w=1,d=.85){
+      const col=m.honey.color,P=[],feet=[];
+      for(const sx of [-1,1])for(const sz of [-1,1]){P.push([board(.055,.54,.055,{col,c:.005}),sx*(w/2-.0275),0,sz*(d/2-.0275)]);feet.push([board(.055,.1,.055,{col:m.oak.color,c:.005,taper:.78}),sx*(w/2-.0275),.05,sz*(d/2-.0275)]);}
+      for(const s of [-1,1]){
+        P.push([board(w-.1,.05,.04,{col,c:.003}),0,.245,s*(d/2-.026)],[board(w-.1,.045,.04,{col,c:.003}),0,-.2475,s*(d/2-.026)],[board(w-.1,.45,.014,{col,c:0,tone:.9}),0,0,s*(d/2-.034)]);
+        P.push([board(.04,.05,d-.1,{col,c:.003}),s*(w/2-.026),.245,0],[board(.04,.045,d-.1,{col,c:.003}),s*(w/2-.026),-.2475,0],[board(.014,.45,d-.1,{col,c:0,tone:.9}),s*(w/2-.034),0,0]);
+        if(w>1.3)P.push([board(.05,.45,.03,{col,c:.003}),0,0,s*(d/2-.024)]);
+        if(d>1.3)P.push([board(.03,.45,.05,{col,c:.003}),s*(w/2-.024),0,0]);
+      }
+      mesh(joinG(P),woodV,x,y+.37,z,{solid:true});mesh(joinG(feet),woodV,x,y,z);
+      keep(x,y,z,0,[[0,.68,0,w+.04,.2,d+.04]]);mesh(pad(w+.03,.15,d+.03,{col:m.lilac.color,seed:softSeed++}),clothV,x,y+.705,z);
+    }
     function fern(x,y,z,s=1){
       mesh(new THREE.CylinderGeometry(.34*s,.26*s,.55*s,9),m.ceramic,x,y+.275*s,z,{solid:.55*s>.45});
       for(let j=0;j<9;j++){const a=j*2.4,rad=(.35+j%3*.12)*s,h=(.6+j%4*.13)*s;beam([x,y+.48*s,z],[x+Math.cos(a)*rad,y+h,z+Math.sin(a)*rad],.018*s,m.leaf);const leaf=ball(x+Math.cos(a)*rad*.8,y+h,z+Math.sin(a)*rad*.8,.24*s,m.leaf,.45+j%3*.17);leaf.scale.x=1+j%3*.23;leaf.rotation.z=a;}
     }
     // A family sitting room: conversation sofa, footstool, shared books and a tea table.
-    sofa(-.95,0,5.05,2.8);table(-1.1,0,.85,1.5,.9);runner(-1.1,.955,.85,.5,.93);
-    mug(-.65,.96,.8);stack(-1.57,.96,.75,3);jug(-1.1,.96,1,.7);stool(-1.3,0,3.6,1.1,.75);
+    sofa(-.95,0,5.05,2.8);table(-1.1,0,.85,1.5,.9);runner(-1.1,.94,.85,.5,.9);
+    mug(-.65,.94,.8);stack(-1.57,.94,.75,3);jug(-1.1,.946,1,.7);stool(-1.3,0,3.6,1.1,.75);
     cabinet(-6.15,0,7.45,3,.65,.72);basket(-4.25,0,7.35,.85);fern(-2.7,0,7.3,.85);
     // Kitchen island and breakfast bench; the lane behind the dining table is 1.65 m wide.
-    cabinet(4.6,0,-.4,1.6,1.5,1.02);runner(4.6,1.12,-.4,.6,1.5);jug(4.15,1.13,-.4,.85);mug(4.7,1.13,-.4);basket(5.05,1.13,-.4,.5);
+    cabinet(4.6,0,-.4,1.6,1.5,1.02);runner(4.6,1.11,-.4,.6,1.58);jug(4.15,1.11,-.4,.85);mug(4.7,1.116,-.4);basket(5.05,1.116,-.4,.5);
     cabinet(7.45,0,-3.2,.7,2.4,1.1);stack(7.45,1.2,-3.7,2);jug(7.45,1.2,-2.65,.75);
     stool(.85,0,-3.35,.72,2.1);stool(4.95,0,-3.45,.72,1.7);basket(1,0,-6.85,.85);
     // Shoes, a folded throw, watering can and plants make the entrance a homecoming corner.
-    cabinet(6.1,0,7.4,3.2,.85,.62);soft(5.7,.8,7.4,1.8,.22,.83,m.linen,.09);runner(5.5,.92,7.4,.5,.85);
+    cabinet(6.1,0,7.4,3.2,.85,.62);soft(5.7,.8,7.4,1.8,.22,.83,m.linen,.09);soft(5.5,.925,7.4,.5,.05,.7,m.lilac,.02);   // 鞋櫃坐墊上一條摺好的毯子（以前是一塊穿過坐墊垂下來的板子）
     jug(7.2,.72,7.4,.8);fern(7.45,0,6.65,.7);chest(.95,0,7.45,.8);
     for(const x of [4.8,5.2]){soft(x,.16,6.96,.22,.26,.38,m.ink,.06);soft(x,.29,7.06,.22,.25,.2,m.ink,.06);}
     // A proper sleeping bay fills the west loft without taking the book-wall approach.
@@ -402,8 +460,8 @@
     cabinet(-3.55,4,-.85,1,.9,.82);mug(-3.55,4.92,-.85);stack(-3.55,4.92,-.6,2);basket(-3.5,4,.5,.8);
     cabinet(-6.1,4,4.25,3.3,.85,.9);jug(-5.4,5.0,4.25,.9);stack(-6.3,5,4.25,4);fern(-7.25,4,5.7,.85);
     // East library lounge: freestanding furniture leaves the stair landing cross-route open.
-    sofa(3.05,4,-.05,3.1);table(3,4,-4.55,3.35,1.8);runner(3,4.956,-4.55,.6,1.83);
-    stack(2.1,4.97,-4.55,4);mug(2.8,4.97,-4.5);jug(3.5,4.97,-4.6,.9);pot(4,4.97,-4.5,.6);
+    sofa(3.05,4,-.05,3.1);table(3,4,-4.55,3.35,1.8);runner(3,4.94,-4.55,.6,1.8);
+    stack(2.1,4.94,-4.55,4);mug(2.8,4.946,-4.5);jug(3.5,4.94,-4.6,.9);pot(4,4.94,-4.5,.6);
     stool(1.95,4,-6.2,1.25,.65);stool(4.1,4,-6.2,1.25,.65);fern(1.35,4,-.05,.7);
     cabinet(2.2,4,3.35,1.5,.45,1.05);basket(4.25,4,2.8,.85);fern(4.65,4,2.8,.8);
     // A low craft island and keepsake storage complement the desk rather than another owner's props.
@@ -411,11 +469,11 @@
     cabinet(-6.4,4,6.75,2.8,2.1,1.25);fern(-7.35,4,7.15,.75);jug(-5.65,5.35,6.75,.9);
     cabinet(6.45,4,-5.15,2.5,2.4,1.2);stack(6.45,5.3,-5.15,4);basket(6.45,4,-3.35,.8);
     // Tea for two stands clear of the host, gifts and the east-side stair approach.
-    table(3.6,0,3.65,1.2,1.4);runner(3.6,.955,3.65,.5,1.43);mug(3.3,.96,3.65);jug(3.85,.96,3.65,.8);   // 移到入口走道右邊：一進門往前走不會撞到
+    table(3.6,0,3.65,1.2,1.4);runner(3.6,.94,3.65,.5,1.4);mug(3.3,.946,3.65);jug(3.85,.946,3.65,.8);   // 移到入口走道右邊：一進門往前走不會撞到
     stool(3.4,0,4.7,.65,.6);fern(4.55,0,2.4,.58);fern(1.4,0,-5.7,.82);
     cabinet(.85,0,.7,.85,1.1,.8);basket(.85,.9,.7,.6);
     // The hall-side game table, folded linen and reading cabinets subdivide the loft.
-    table(-1.1,4,1.1,1.5,1.8);runner(-1.1,4.956,1.1,.55,1.83);stack(-1.5,4.97,1.1,3);mug(-.6,4.97,1.1);
+    table(-1.1,4,1.1,1.5,1.8);runner(-1.1,4.94,1.1,.55,1.8);stack(-1.5,4.946,1.1,3);mug(-.6,4.94,1.1);
     chair(-1.35,4,2.9);basket(-1.5,4,-.4,.9);
     cabinet(-2.65,4,-4.25,1.45,1.2,1.1);stack(-2.65,5.19,-4.25,4);pot(-3.05,5.19,-4.25,.65);
     fern(-1.65,4,-7.5,.65);
@@ -452,7 +510,7 @@
         {kind:'spot',p:[3.8,3.45,-6.7],t:[4,2.3,-7.82],r:0.6},
         {kind:'spot',p:[-3.1,7.35,7.65],t:[-3.2,4.995,6.5],r:0.75}
       ],
-      spawn:[2.6,0,6.2,Math.PI], exit:[2.6,7.6,.6], host:[.8,0,3.2,0], decor:{x:-4,y:0,z:-4},
+      spawn:[2.6,0,6.2,Math.PI], exit:[2.6,7.6,.6], host:[.8,0,3.2,0], decor:{x:-4,y:0,z:-4}, cols,   // cols：外形換掉的家具原本的碰撞箱（keep()）
       gifts:[[-.5,0,6.4,0],[3.5,0,1.5,0],[1.6,0,-.9,0],[-1.5,4,-2,0],[1.7,4,2.5,0]],
       lights:[[1.03,1.94,-1.75,'#ffd8ad',0.55,0.35],[3.8,2.65,-4.7,'#ffd8ad',1,0.5],[-5.4,4.92,-6.92,'#ffd8ad',0.6,0],[-2.3,7.3,4.5,'#ffd8ad',1.05,0.5],[6.6,6.6,0.2,'#ffd8ad',0.9,0.5],[-4,2.65,-4,'#ffd8ad',1,0.5]], sun:[.15,.7,1],
       spots:[

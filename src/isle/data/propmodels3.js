@@ -74,11 +74,18 @@
       const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),v=B.clone().sub(A),g=new THREE.CylinderGeometry(r,r,v.length(),5,1,true);
       g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize()));g.translate(...A.add(B).multiplyScalar(.5).toArray());put(g,mat,label);
     }
+    // v9.25 葉子和花瓣很薄，正反兩面各有一組三角形；以前背面的法線朝下，斜看花壇時一整排葉背、花瓣背面幾乎全黑。
+    // 現在背面沿用正面的法線、再往天空偏一些：薄葉透光，兩面受光差不多
+    function skyward(geo,face,k) {
+      const na=geo.getAttribute('normal'),v=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
+      for(let i=0;i<na.count;i++){v.fromBufferAttribute(na,i);if(v.dot(face)<0)v.negate();v.lerp(up,k).normalize();na.setXYZ(i,v.x,v.y,v.z);}
+      return geo;
+    }
     function leaf(x,y,z,length,width,az,tilt,mat) {
       const c=Math.cos(az),s=Math.sin(az),ct=Math.cos(tilt),st=Math.sin(tilt);
       const raw=[[0,0,0],[-width/2,0,length*.45],[0,length*.075,length*.45],[0,0,length],[width/2,0,length*.45]];
       const pts=raw.map(p=>{const yy=p[1]*ct+p[2]*st,zz=-p[1]*st+p[2]*ct;return [x+p[0]*c+zz*s,y+yy,z+zz*c-p[0]*s];});
-      put(meshFrom(pts,[0,2,1,1,2,3,3,2,4,4,2,0,0,1,4,1,3,4]),mat,'foliage');
+      put(skyward(meshFrom(pts,[0,2,1,1,2,3,3,2,4,4,2,0,0,1,4,1,3,4]),new THREE.Vector3(-st*s,ct,-st*c),.35),mat,'foliage');
     }
     function bloom(x,y,z,r,mat,center,seed) {
       // Broad rounded petal profiles, folded upwards; explicit reverse faces remain visible from rear.
@@ -88,9 +95,9 @@
         const a=j*Math.PI*.4+seed*.35,c=Math.cos(a),s=Math.sin(a);
         const raw=[[0,0,r*.1],[-r*.36,r*.1,r*.4],[-r*.34,r*.27,r*.78],[0,r*.34,r*.9],[r*.34,r*.27,r*.78],[r*.36,r*.1,r*.4]];   // v9.15 半寫實：花瓣寬、末端圓鈍並上翹成淺杯（以前尖菱形）
         const pts=raw.map(p=>new THREE.Vector3(p[0]*c+p[2]*s,p[1],p[2]*c-p[0]*s).applyQuaternion(q).add(new THREE.Vector3(x,y,z)).toArray());
-        put(meshFrom(pts,[0,2,1,0,3,2,0,4,3,0,5,4,0,1,2,0,2,3,0,3,4,0,4,5]),mat,'petals');
+        put(skyward(meshFrom(pts,[0,2,1,0,3,2,0,4,3,0,5,4,0,1,2,0,2,3,0,3,4,0,4,5]),n,.55),mat,'petals');
       }
-      const g=new THREE.OctahedronGeometry(r*.22,0);g.scale(1,.55,1);g.translate(x,y+r*.07,z);put(g,center,'flower-centers');
+      const g=new THREE.OctahedronGeometry(r*.22,0);g.scale(1,.55,1);g.translate(x,y+r*.07,z);put(skyward(g,n,.4),center,'flower-centers');
     }
     function chamfer(w,h,d,b,x,y,z,mat,label) {
       const rings=[],p=[],idx=[];
@@ -113,7 +120,7 @@
       }
       return root;
     }
-    return {root,put,box,lathe,lobe,rod,leaf,bloom,chamfer,finish};
+    return {root,put,box,lathe,lobe,rod,leaf,bloom,chamfer,finish,skyward};
   }
 
   I.PROPMODELS['flower_pots'] = function (THREE, kit) {
@@ -177,7 +184,7 @@
     if(stage>1){
       for(let i=0;i<5;i++){
         const x=-.82+i*.4,z=-.095+.035*(i%2),h=.548+.009*(i%3);t.rod([x,.36,z],[x+.014,h,z],.005,M.leaf,'foliage');
-        for(let j=0;j<4;j++) {const a=j*2.1,g=new THREE.OctahedronGeometry(.016-j*.0015,0);g.scale(1,1.25,1);g.translate(x+Math.sin(a)*.013,.465+j*.025,z+Math.cos(a)*.013);t.put(g,M.lavender,'lavender-spikes');}
+        for(let j=0;j<4;j++) {const a=j*2.1,g=new THREE.OctahedronGeometry(.016-j*.0015,0);g.scale(1,1.25,1);g.translate(x+Math.sin(a)*.013,.465+j*.025,z+Math.cos(a)*.013);t.put(t.skyward(g,new THREE.Vector3(0,1,0),.45),M.lavender,'lavender-spikes');}
       }
     }
     for(const x of [-.8,-.27,.27,.8])for(const side of [-1,1]){t.rod([x,.37,side*.23],[x,.18,side*.36],.004,M.leaf,'foliage');for(let j=0;j<4;j++)t.leaf(x+(j%2?.025:-.025),.35-j*.043,side*(.245+j*.023),.067,.048,side*(j%2?.7:-.7),-.9,M.leaf);if(side>0)t.bloom(x,.315,.35,.06,x<0?M.blue:M.white,M.yellow,x+41);}

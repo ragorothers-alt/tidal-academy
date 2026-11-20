@@ -14,7 +14,17 @@
     const bookM=['pink','sky','yellow','lilac','leaf','peach','blue','mint','red','sand'].map(k=>kit.mat(C[k],{roughness:.92},'paper'));
     const cols=[], batches=new Map(), unit=new THREE.BoxGeometry(1,1,1).toNonIndexed(), tmp=new THREE.Vector3(), norm=new THREE.Vector3(), mat4=new THREE.Matrix4(), quat=new THREE.Quaternion();
     function mesh(geo,m,x=0,y=0,z=0,solid=false,walk=false) { const o=new THREE.Mesh(geo,m); o.position.set(x,y,z);o.userData.solid=solid;o.userData.walk=walk;g.add(o);return o; }
-    function box(x,y,z,w,h,d,m=M.wood,solid=false,walk=false,r=0) { return mesh(r?kit.rbox(w,h,d,r):new THREE.BoxGeometry(w,h,d),m,x,y,z,solid,walk); }
+    // v9.25.0 家具的形狀語言：木料是小倒角的方料、坐墊鼓起有滾邊、地毯薄而貼地（kit 沒有這些工具時——測試用的假 kit——退回方塊）；顏色寫在頂點色裡，和同種類的材質併成一次繪製。
+    const timber=kit.board||((w,h,d)=>new THREE.BoxGeometry(w,h,d)),pad=kit.pad||((w,h,d)=>kit.rbox(w,h,d,.06)),joinG=kit.join||(parts=>parts[0][0]);
+    const woodV=kit.mat('#ffffff',{roughness:.76,metalness:0,vertexColors:true},'wood'),clothV=kit.mat('#ffffff',{roughness:.93,metalness:0,vertexColors:true},'fabric'),woods=new Set([M.wood,M.dark]),cloths=new Set([M.lilac,M.pink,M.red,cloth]);let padSeed=1;
+    function box(x,y,z,w,h,d,m=M.wood,solid=false,walk=false,r=0) {
+      if(r&&kit.board&&woods.has(m))return mesh(timber(w,h,d,{col:m.color,c:Math.min(.008,r*.14)}),woodV,x,y,z,solid,walk);   // 圓角的木頭：改成俐落的小倒角（外框不變）
+      if(r&&kit.pad&&cloths.has(m)){
+        if(h<=.35&&Math.min(w,d)>=.38)return mesh(pad(w,h,d,h<.12?{col:m.color,pr:0,crown:h*.22,dip:0,r:.03,seed:padSeed++}:{col:m.color,seed:padSeed++}),clothV,x,y,z,solid,walk);   // 坐墊（薄的是摺好的毯子，不滾邊）
+        if(h>.3&&d<.25&&w>.3)return mesh(pad(w,h,d,{col:m.color,pillow:true,face:'z-',seed:padSeed++}),clothV,x,y,z,solid,walk);   // 立著的抱枕
+      }
+      return mesh(r?kit.rbox(w,h,d,r):new THREE.BoxGeometry(w,h,d),m,x,y,z,solid,walk);
+    }
     function ball(x,y,z,r,m,sx=1,sy=1,sz=1) { const o=mesh(new THREE.SphereGeometry(r,m===M.leaf?6:8,m===M.leaf?3:4),m,x,y,z);o.scale.set(sx,sy,sz);return o; }
     function beam(a,b,r,m=M.wood) { const A=new THREE.Vector3(...a),B=new THREE.Vector3(...b),o=mesh(new THREE.CylinderGeometry(r,r,A.distanceTo(B),m===M.leaf?3:4),m,...A.clone().add(B).multiplyScalar(.5).toArray());o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),B.sub(A).normalize());return o; }
     function at(x,z,u,d,a=0) { return [x+u*Math.cos(a)+d*Math.sin(a),z-u*Math.sin(a)+d*Math.cos(a)]; }
@@ -52,11 +62,43 @@
     function openBook(x,y,z,s=.6,a=0,tilt=0){const start=g.children.length;box(x,y,z,s,.035,s*.62,M.red);for(const sd of [-1,1]){const o=box(x+sd*s*.245,y+.04,z,s*.47,.035,s*.59,M.paper);o.rotation.z=sd*-.09;const p=sign(29,x+sd*s*.245,y+.068,z,s*.41,s*.52);p.rotation.x=-Math.PI/2;}box(x+.025,y+.075,z+s*.15,.035,.012,s*.64,M.red);if(a||tilt){const q=new THREE.Group();g.add(q);for(const o of g.children.slice(start,-1)){g.remove(o);q.add(o);o.position.sub(new THREE.Vector3(x,y,z));}q.position.set(x,y,z);q.rotation.set(tilt,a,0);}}
     function plant(x,y,z,s=1){mesh(new THREE.CylinderGeometry(.22*s,.16*s,.36*s,9),ceramic,x,y+.18*s,z,true);for(let j=0;j<7;j++){const a=j*2.4,h=(.55+j%3*.12)*s,dx=Math.sin(a)*.29*s,dz=Math.cos(a)*.24*s;beam([x,y+.3*s,z],[x+dx,y+h,z+dz],.017*s,M.leaf);const o=ball(x+dx,y+h,z+dz,.20*s,M.leaf,1.35,.35,.72);o.rotation.z=Math.sin(a)*.5;}}
     function mug(x,y,z){mesh(new THREE.CylinderGeometry(.085,.07,.15,9),ceramic,x,y+.075,z);const o=mesh(new THREE.TorusGeometry(.055,.017,5,10),M.gold,x+.09,y+.08,z);o.rotation.y=Math.PI/2;}
-    function chair(x,y,z,a=0,m=M.lilac,w=.72){lb(x,z,0,y+.42,0,w,.13,.70,M.wood,a,true,.04);lb(x,z,0,y+.53,0,w-.07,.14,.64,m,a,false,.07);lb(x,z,0,y+.93,.28,w,.77,.14,m,a,true,.07);for(const u of [-w*.36,w*.36])for(const d of [-.24,.24])lb(x,z,u,y+.2,d,.065,.4,.065,M.wood,a);}
-    function table(x,y,z,w,d,h=.72){box(x,y+h-.05,z,w,.10,d,M.wood,true,false,.06);for(const u of [-w/2+.15,w/2-.15])for(const v of [-d/2+.15,d/2-.15])box(x+u,y+(h-.1)/2,z+v,.13,h-.1,.13,M.wood);box(x,y+h-.20,z,w-.24,.18,d-.24,M.wood);}
+    // 閱覽椅：木頭的座板與望板、收細的前腳，後腳往上就是椅背的立柱，上下橫木之間是靠墊；坐墊坐在座板上。擋路的範圍照原本的椅座與椅背兩個方塊。
+    function chair(x,y,z,a=0,m=M.lilac,w=.72){
+      for(const [dd,yy,hh,dep] of [[0,.42,.13,.70],[.28,.93,.77,.14]]){const p=at(x,z,0,dd,a),hx=(Math.abs(Math.cos(a))*w+Math.abs(Math.sin(a))*dep)/2,hz=(Math.abs(Math.sin(a))*w+Math.abs(Math.cos(a))*dep)/2;cols.push([p[0]-hx,y+yy-hh/2,p[1]-hz,p[0]+hx,y+yy+hh/2,p[1]+hz]);}
+      const col=M.wood.color,hw=w/2,W=[[timber(w,.045,.70,{col,c:.006,end:'x'}),0,.4625,0],[timber(w-.11,.075,.035,{col,c:.005}),0,1.2775,.3225],[timber(w-.11,.05,.03,{col,c:.004}),0,.62,.3225],[timber(w-.11,.6,.012,{col,c:0,tone:.92}),0,.94,.335]];
+      for(const s of [-1,1]){
+        W.push([timber(w-.1,.085,.025,{col,c:0}),0,.3975,s*.30],[timber(.025,.085,.54,{col,c:0}),s*(hw-.05),.3975,0]);
+        W.push([timber(.06,.44,.06,{col,c:.005,taper:.72}),s*(hw-.04),.22,-.30],[timber(.055,1.315,.055,{col,c:.005}),s*(hw-.0275),.6575,.3225],[timber(.014,.014,.006,{col:M.dark.color,c:0}),s*(hw-.04),.3975,-.332]);
+      }
+      mesh(joinG(W),woodV,x,y,z).rotation.y=a;
+      const p1=at(x,z,0,-.025,a),p2=at(x,z,0,.27,a);
+      mesh(pad(w-.02,.11,.66,{col:m.color,seed:padSeed++}),clothV,p1[0],y+.535,p1[1]).rotation.y=a;
+      mesh(pad(w-.12,.58,.09,{col:m.color,face:'z-',crown:.03,dip:.01,seed:padSeed++}),clothV,p2[0],y+.94,p2[1]).rotation.y=a;
+    }
+    // 桌子：桌面是一片片順著 x 的木板（兩端看得到年輪的端面），板下一圈深色的底框；桌腳往下收細，望板的榫頭用深色木釘穿過桌腳。擋路的網格（桌面板＋底框）外框和原本一樣是 w × .10 × d。
+    function table(x,y,z,w,d,h=.72){
+      const col=M.wood.color,dk=M.dark.color,nb=Math.max(2,Math.round(d/.3)),bw=d/nb,lx=w/2-.15,lz=d/2-.15,top=[],legs=[];
+      for(let j=0;j<nb;j++)top.push([timber(w,.05,bw,{col,c:.004,end:'x',tone:.94+((j*7)%5)*.03}),0,.025,-d/2+bw*(j+.5)]);
+      for(const s of [-1,1]){top.push([timber(w-.2,.05,.03,{col:dk,c:0}),0,-.025,s*(d/2-.1)],[timber(.03,.05,d-.2,{col:dk,c:0}),s*(w/2-.1),-.025,0]);legs.push([timber(2*lx-.1,.14,.03,{col,c:0}),0,h-.17,s*(lz+.03)],[timber(.03,.14,2*lz-.1,{col,c:0}),s*(lx+.03),h-.17,0]);}
+      mesh(joinG(top),woodV,x,y+h-.05,z,true);
+      for(const sx of [-1,1])for(const sz of [-1,1]){
+        legs.push([timber(.12,h-.05,.12,{col,c:.008,taper:.72}),sx*lx,(h-.05)/2,sz*lz]);
+        for(const dy of [-.035,.035])legs.push([timber(.018,.018,.007,{col:dk,c:0}),sx*lx,h-.17+dy,sz*(lz+.058)],[timber(.007,.018,.018,{col:dk,c:0}),sx*(lx+.058),h-.17+dy,sz*lz]);
+      }
+      mesh(joinG(legs),woodV,x,y,z);
+    }
     function roundTable(x,y,z,r=.48,h=.62){mesh(new THREE.CylinderGeometry(r,r,.09,20),M.wood,x,y+h-.045,z,true);mesh(new THREE.CylinderGeometry(.08,.13,h-.1,8),M.wood,x,y+(h-.1)/2,z);mesh(new THREE.CylinderGeometry(r*.65,r*.7,.08,12),M.wood,x,y+.04,z);}
     function flat(points,y,m){if(!batches.has(m))batches.set(m,{p:[],n:[],uv:[]});const b=batches.get(m),area=points.reduce((v,p,j)=>{const q=points[(j+1)%points.length];return v+p[0]*q[1]-q[0]*p[1];},0);for(let j=1;j<points.length-1;j++)for(const p of area>0?[points[0],points[j+1],points[j]]:[points[0],points[j],points[j+1]]){b.p.push(p[0],y,p[1]);b.n.push(0,1,0);b.uv.push(p[0],p[1]);}}
+    // 地毯：薄薄一張貼在地上，包邊、色帶與花紋都在同一個幾何裡（kit.rug）；沒有這個工具時用下面原本的做法。
     function rug(x,y,z,w,d){
+      if(kit.rug){
+        const mo=[],petal=(u,v,r,m)=>{for(let j=0;j<4;j++){const a=j*Math.PI/2,dx=Math.cos(a)*r,dz=Math.sin(a)*r;mo.push([m.color,[u,v],[u+dx-dz*.35,v+dz+dx*.35],[u+dx*1.5,v+dz*1.5],[u+dx+dz*.35,v+dz-dx*.35]]);}};
+        for(let u=-w/2+.55;u<w/2-.3;u+=.42)for(const sd of [-1,1])petal(u,sd*(d/2-.23),.075,M.lilac);
+        for(let v=-d/2+.55;v<d/2-.3;v+=.42)for(const sd of [-1,1])petal(sd*(w/2-.23),v,.075,M.lilac);
+        for(const u of [-w*.25,w*.25])for(const v of [-d*.25,d*.25])petal(u,v,.22,M.pink);
+        for(let j=0;j<8;j++){const a=j*Math.PI/4;petal(Math.sin(a)*w*.17,Math.cos(a)*d*.17,.15,M.pink);}
+        mesh(kit.rug(w,d,{col:M.lilac.color,T:.012,bands:[[.07,.035,rugCream.color],[.23,.20,M.pink.color],[.39,.035,rugCream.color]],motifs:mo,seed:Math.round(w*5+d*3)}),clothV,x,y,z);return;
+      }
       box(x,y+.018,z,w,.025,d,M.lilac,false,false,.04);
       const frame=(inset,width,m)=>{const a=w/2-inset,b=d/2-inset;for(const v of [-b,b])flat([[x-a,z+v-width/2],[x+a,z+v-width/2],[x+a,z+v+width/2],[x-a,z+v+width/2]],y+.039,m);for(const u of [-a,a])flat([[x+u-width/2,z-b],[x+u+width/2,z-b],[x+u+width/2,z+b],[x+u-width/2,z+b]],y+.039,m);};
       frame(.07,.035,rugCream);frame(.23,.20,M.pink);frame(.39,.035,rugCream);

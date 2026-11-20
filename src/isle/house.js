@@ -342,6 +342,7 @@ export const kit = {
   /** 透光的燈罩（布、紙、霧玻璃）：晚上燈罩本身透出一層暖光，看得到光、看不到燈泡 */
   shade: c => { const m = M(c || '#f6e6cc', { emissive: new THREE.Color(c || '#f6e6cc').multiply(WARM).multiply(WARM), emissiveIntensity: 0, roughness: 0.9, side: THREE.DoubleSide }, 'fabric'); shadeMats.add(m); return m; },
   furn: id => { const f = furn(id); return f ? buildFurniture(f) : null; },
+  board, pad, drape, rug, join,   // v9.25.0 家具的形狀語言（木料、坐墊、薄布、地毯；見下面 board 前的說明）
 };
 
 export let inside = false;
@@ -386,6 +387,197 @@ function refineFoliage(root) {
       old.dispose();
     } else if (type === 'CylinderGeometry' && P.radialSegments <= 4) { const old = o.geometry; o.geometry = new THREE.CylinderGeometry(P.radiusTop, P.radiusBottom, P.height, 7, 1, P.openEnded); old.dispose(); }
   });
+}
+/* v9.25.0 家具的形狀語言：木頭、坐墊、薄布、地毯各有自己的形狀（以前全是同一種圓角方塊，近看分不出材質）。室內資料檔從 kit 取用：
+     kit.board(w, h, d, o)     木料：小倒角的方料（不是大圓角）。o.c 倒角、o.col 顏色、o.tone 明暗倍率、o.end 端面在哪一軸（'x'｜'y'｜'z'：顏色深一點、看得到年輪弧線）、o.taper 底端收細的比例
+     kit.pad(w, h, d, o)       坐墊／靠墊／抱枕：中央微鼓、坐過的凹陷、沿邊一圈滾邊與縫線溝、四角大小不一；外框剛好是 w × h × d。
+                               o.face 鼓起的那一面（'y' 朝上、'z-'、'z+'）、o.pillow 兩面都鼓的抱枕、o.pr 滾邊粗細（0 是不要）、o.crown 鼓起多少、o.dip 凹陷深度、o.dips [[x, z, 深, 半徑]]、o.seed
+     kit.drape(w, d, drop, o)  薄布（桌旗）：原點在桌面中央，貼著桌面沿 z 鋪到兩側桌緣（桌深 d），過桌緣一道柔和的彎再垂下 drop，垂下的部分有幾道淺褶、收邊車線與流蘇（o.fringe 顏色）
+     kit.rug(w, d, o)          地毯：原點在地板，薄薄一層，邊緣貼地、有包邊，毯面微微起伏。o.bands [[離邊多遠, 寬, 顏色]] 色帶、o.motifs [[顏色, [x, z], …]] 花紋、o.fringe 兩端（±z）流蘇的顏色
+     kit.join(parts)           把幾個零件（[幾何, x, y, z, 繞 y 的轉角?]）併成一個幾何：一件家具一個網格
+   顏色（線性色彩）都寫進頂點色，配 vertexColors 的白色材質；props.mergeStatic 會把它們和同種類的材質併成一次繪製，不會多出場景物件。 */
+const SHAPE_GEO = new Map(), _fc = new THREE.Color();
+const lin = c => { if (c && c.isColor) return [c.r, c.g, c.b]; _fc.set(c || '#ffffff'); return [_fc.r, _fc.g, _fc.b]; };
+const mul3 = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
+const hsh = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
+const shapeKey = (tag, dims, o) => tag + dims.join('/') + JSON.stringify(o || {});
+function soupGeo(P, N, C) {
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(P.length / 3 * 2), 2)); return g;
+}
+/** 封閉的殼（共用頂點、平滑法線）：三角形一律朝外；fit [w, h, d] 把外框縮放成剛好這個大小 */
+function shellGeo(V, CL, IX, fit) {
+  let vol = 0;
+  for (let i = 0; i < IX.length; i += 3) { const a = IX[i] * 3, b = IX[i + 1] * 3, c = IX[i + 2] * 3;
+    vol += V[a] * (V[b + 1] * V[c + 2] - V[b + 2] * V[c + 1]) + V[a + 1] * (V[b + 2] * V[c] - V[b] * V[c + 2]) + V[a + 2] * (V[b] * V[c + 1] - V[b + 1] * V[c]); }
+  if (vol < 0) for (let i = 0; i < IX.length; i += 3) { const t = IX[i + 1]; IX[i + 1] = IX[i + 2]; IX[i + 2] = t; }
+  if (fit) for (let a = 0; a < 3; a++) {
+    let lo = Infinity, hi = -Infinity; for (let i = a; i < V.length; i += 3) { lo = Math.min(lo, V[i]); hi = Math.max(hi, V[i]); }
+    const k = fit[a] / (hi - lo || 1), mid = (lo + hi) / 2; for (let i = a; i < V.length; i += 3) V[i] = (V[i] - mid) * k;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(V, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(CL, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(V.length / 3 * 2), 2)); g.setIndex(IX); g.computeVertexNormals(); return g;
+}
+function board(w, h, d, o) {
+  o = o || {}; const key = shapeKey('b', [w, h, d], o); if (SHAPE_GEO.has(key)) return SHAPE_GEO.get(key);
+  const H = [w / 2, h / 2, d / 2], c = Math.max(0, Math.min(o.c ?? 0.006, w * 0.3, h * 0.3, d * 0.3)), col = mul3(lin(o.col), o.tone || 1), edgeCol = mul3(col, 1.06), tp = o.taper || 1, ea = 'xyz'.indexOf(o.end || '-'), P = [], N = [], C = [];
+  const V = (a, va, b, vb, e, ve) => { const v = [0, 0, 0]; v[a] = va; v[b] = vb; v[e] = ve; if (tp !== 1) { const k = tp + (1 - tp) * (v[1] / h + 0.5); v[0] *= k; v[2] *= k; } return v; };
+  const face = (pts, cols) => {   // 一個凸多邊形的平面，法線朝外（離開方料的中心）
+    const p0 = pts[0], p1 = pts[1], p2 = pts[2], ux = p1[0] - p0[0], uy = p1[1] - p0[1], uz = p1[2] - p0[2], vx = p2[0] - p0[0], vy = p2[1] - p0[1], vz = p2[2] - p0[2];
+    let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const flip = nx * (p0[0] + p1[0] + p2[0]) + ny * (p0[1] + p1[1] + p2[1]) + nz * (p0[2] + p1[2] + p2[2]) < 0, s = (flip ? -1 : 1) / (Math.hypot(nx, ny, nz) || 1); nx *= s; ny *= s; nz *= s;
+    for (let i = 1; i < pts.length - 1; i++) for (const k of flip ? [0, i + 1, i] : [0, i, i + 1]) { P.push(pts[k][0], pts[k][1], pts[k][2]); N.push(nx, ny, nz); const cc = cols ? cols[k] : col; C.push(cc[0], cc[1], cc[2]); }
+  };
+  for (let a = 0; a < 3; a++) {
+    const b = (a + 1) % 3, e = (a + 2) % 3, hb = H[b] - c, he = H[e] - c;
+    for (const s of [-1, 1]) {
+      if (a !== ea) { face([V(a, s * H[a], b, -hb, e, -he), V(a, s * H[a], b, hb, e, -he), V(a, s * H[a], b, hb, e, he), V(a, s * H[a], b, -hb, e, he)]); continue; }
+      // 端面（看得到年輪的那一面）：顏色深一點，切成小格畫出一圈圈的弧線（樹心在板子下方偏一邊）
+      const wide = hb >= he ? b : e, thin = wide === b ? e : b, hw = H[wide] - c, ht = H[thin] - c, nu = clampN(Math.ceil(hw * 2 / 0.025), 2, 12), nv = clampN(Math.ceil(ht * 2 / 0.025), 1, 3);
+      const u0 = (hsh(w + h, d) - 0.5) * hw * 1.2, v0 = -ht * (1.8 + hsh(d, w) * 2), k0 = o.endK ?? 0.78, ring = (u, v) => mul3(col, k0 * (1 + 0.17 * Math.sin(Math.hypot(u - u0, v - v0) * Math.PI * 2 / 0.042)));
+      for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+        const q = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([ii, jj]) => [-hw + 2 * hw * ii / nu, -ht + 2 * ht * jj / nv]);
+        face(q.map(([u, v]) => V(a, s * H[a], wide, u, thin, v)), q.map(([u, v]) => ring(u, v)));
+      }
+    }
+  }
+  if (c > 0) {
+    for (const [a, b] of [[0, 1], [0, 2], [1, 2]]) { const e = 3 - a - b, he = H[e] - c;   // 十二條邊的倒角：一道平的斜面（受光是一條俐落的亮線）
+      for (const sa of [-1, 1]) for (const sb of [-1, 1]) face([V(a, sa * H[a], b, sb * (H[b] - c), e, -he), V(a, sa * H[a], b, sb * (H[b] - c), e, he), V(a, sa * (H[a] - c), b, sb * H[b], e, he), V(a, sa * (H[a] - c), b, sb * H[b], e, -he)], [edgeCol, edgeCol, edgeCol, edgeCol]); }
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) face([V(0, sx * H[0], 1, sy * (H[1] - c), 2, sz * (H[2] - c)), V(0, sx * (H[0] - c), 1, sy * H[1], 2, sz * (H[2] - c)), V(0, sx * (H[0] - c), 1, sy * (H[1] - c), 2, sz * H[2])], [edgeCol, edgeCol, edgeCol]);
+  }
+  const g = soupGeo(P, N, C); SHAPE_GEO.set(key, g); return g;
+}
+function join(parts) {
+  const P = [], N = [], C = [];
+  for (const [g0, x = 0, y = 0, z = 0, ry = 0] of parts) {
+    const g = g0.index ? g0.toNonIndexed() : g0, p = g.attributes.position, n = g.attributes.normal, c = g.attributes.color, cs = Math.cos(ry), sn = Math.sin(ry);
+    for (let i = 0; i < p.count; i++) {
+      const px = p.getX(i), pz = p.getZ(i), nx = n.getX(i), nz = n.getZ(i);
+      P.push(x + px * cs + pz * sn, y + p.getY(i), z - px * sn + pz * cs); N.push(nx * cs + nz * sn, n.getY(i), -nx * sn + nz * cs);
+      if (c) C.push(c.getX(i), c.getY(i), c.getZ(i)); else C.push(1, 1, 1);
+    }
+  }
+  return soupGeo(P, N, C);
+}
+function pad(w, h, d, o) {
+  o = o || {}; const key = shapeKey('p', [w, h, d], o); if (SHAPE_GEO.has(key)) return SHAPE_GEO.get(key);
+  const up = (o.face || 'y') === 'y', A = w / 2, B = (up ? d : h) / 2, T = up ? h : d, sd = o.seed || 1, pil = !!o.pillow;   // 平面 2A × 2B、厚 T（先做成朝上的，最後再轉向）
+  const col = lin(o.col), pc = o.pipe ? lin(o.pipe) : mul3(col, 0.78), pr = o.pr ?? Math.min(0.0075, T * 0.09), r0 = Math.min(o.r ?? (pil ? 0.035 : 0.05), A * 0.6, B * 0.6), CS = 3;
+  // 外圈：圓角矩形，四個圓角大小不一、邊緣微微不直；抱枕的四邊往內收（四角像耳朵一樣尖出來）
+  const rc = [0, 1, 2, 3].map(i => r0 * (0.8 + 0.5 * hsh(sd, i))), sgx = [1, -1, -1, 1], sgz = [1, 1, -1, -1], pinch = pil ? Math.min(A, B) * 0.07 : 0, out = [];
+  for (let k = 0; k < 4; k++) {
+    const cx = sgx[k] * (A - rc[k]), cz = sgz[k] * (B - rc[k]);
+    for (let i = 0; i <= CS; i++) { const t = (k + i / CS) * Math.PI / 2; out.push([cx + Math.cos(t) * rc[k], cz + Math.sin(t) * rc[k], Math.cos(t), Math.sin(t)]); }
+    const k2 = (k + 1) % 4, nx = Math.cos((k + 1) * Math.PI / 2), nz = Math.sin((k + 1) * Math.PI / 2), ex = sgx[k2] * (A - rc[k2]) + nx * rc[k2], ez = sgz[k2] * (B - rc[k2]) + nz * rc[k2];
+    const last = out[out.length - 1], len = Math.hypot(ex - last[0], ez - last[1]), ns = clampN(Math.round(len / 0.16), 2, 7);
+    for (let i = 1; i < ns; i++) { const t = i / ns, pin = pinch * Math.sin(t * Math.PI); out.push([last[0] + (ex - last[0]) * t - nx * pin, last[1] + (ez - last[1]) * t - nz * pin, nx, nz]); }
+  }
+  const n = out.length;
+  out.forEach((q, i) => { const t = i / n * Math.PI * 2, wob = 0.003 * (Math.sin(t * 2 + sd * 1.3) * 0.6 + Math.sin(t * 3 + sd * 2.1) * 0.4); q[0] += q[2] * wob; q[1] += q[3] * wob; });
+  const crown = o.crown ?? Math.min(T * 0.36, 0.06), lump = o.lump ?? 0.0025, dep = o.dip ?? Math.min(0.028, T * 0.14), mn = Math.min(A, B), fz = o.face === 'z+' ? -1 : 1;
+  const dips = o.dips ? o.dips.map(q => [q[0], q[1] * fz, q[2], q[3]]) : pil || !dep ? [] : Math.max(A, B) > mn * 1.7
+    ? [-1, 1].map(s => [A > B ? s * A * 0.46 : 0, A > B ? 0 : s * B * 0.46, dep, mn * 0.5])
+    : [[(hsh(sd, 7) - 0.5) * mn * 0.2, (hsh(sd, 9) - 0.5) * mn * 0.2, dep, mn * 0.46]];   // 坐過的凹陷：長的坐墊左右各一個
+  const F = (x, z) => Math.pow(Math.max(0, (1 - (x / A) ** 2) * (1 - (z / B) ** 2)), pil ? 0.42 : 0.62);
+  const dipAt = (x, z) => { let s = 0; for (const q of dips) s += q[2] * Math.exp(-(((x - q[0]) / q[3]) ** 2 + ((z - q[1]) / q[3]) ** 2)); return s; };
+  const lumpAt = (x, z) => lump * (Math.sin(x * 9 + sd * 1.7) * Math.sin(z * 8 + sd * 2.9) + 0.6 * Math.sin((x + z) * 15 + sd));
+  const V = [], CL = [], IX = [], rings = [];
+  const ring = (inset, s, yf, cf) => { rings.push(V.length / 3); out.forEach((q, i) => { const x = (q[0] - q[2] * inset) * s, z = (q[1] - q[3] * inset) * s, cc = typeof cf === 'function' ? cf(x, z) : cf; V.push(x, typeof yf === 'function' ? yf(x, z, i) : yf, z); CL.push(cc[0], cc[1], cc[2]); }); };
+  const pt = (y, cc) => { V.push(0, y, 0); CL.push(cc[0], cc[1], cc[2]); return V.length / 3 - 1; };
+  const sag = i => 0.002 * Math.sin(i / n * Math.PI * 4 + sd * 3.1), SC = mn > 0.25 ? [0.972, 0.92, 0.8, 0.6, 0.32] : [0.97, 0.9, 0.72, 0.4];
+  const topCol = (x, z) => mul3(col, 1 - (dep ? Math.min(0.1, dipAt(x, z) / dep * 0.07) : 0));
+  let c0, c1;
+  if (pil) {   // 抱枕：中間一道滾邊，前後兩面都鼓
+    const fy = (x, z) => pr * 0.3 + (T / 2 - pr * 0.3) * F(x, z) + lumpAt(x, z) * F(x, z), back = mul3(col, 0.9), val = mul3(col, 0.68);
+    c0 = pt(-fy(0, 0), back);
+    for (let j = SC.length - 1; j >= 0; j--) ring(pr * 1.6, SC[j], (x, z) => -fy(x, z), back);
+    if (pr > 0) { ring(pr * 1.5, 1, -pr * 0.4, val); ring(0, 1, 0, pc); ring(pr * 1.5, 1, pr * 0.4, val); } else ring(0, 1, 0, val);
+    for (const s of SC) ring(pr * 1.6, s, fy, col);
+    c1 = pt(fy(0, 0), col);
+  } else {   // 坐墊：底平、四周一圈立邊，立邊與墊面之間是滾邊與縫線溝，墊面鼓起、坐過的地方凹下去
+    const yB = -T / 2, yE = T / 2 - crown, ty = (x, z) => yE + pr * 0.15 + crown * F(x, z) - dipAt(x, z) + lumpAt(x, z) * F(x, z);
+    c0 = pt(yB, mul3(col, 0.6));
+    ring(0.02, 1, yB, mul3(col, 0.6)); ring(0.004, 1, yB + Math.min(0.012, T * 0.1), mul3(col, 0.86)); if (T >= 0.16) ring(0.0015, 1, (yB + yE) / 2, col);
+    if (pr > 0) {
+      ring(0.004, 1, (x, z, i) => yE - pr * 1.6 + sag(i), mul3(col, 0.8)); ring(0, 1, (x, z, i) => yE - pr * 0.3 + sag(i), pc);
+      ring(pr * 0.8, 1, (x, z, i) => yE + pr * 0.75 + sag(i), pc); ring(pr * 1.9, 1, (x, z, i) => yE + pr * 0.15 + sag(i), mul3(col, 0.64));
+    } else ring(0.001, 1, (x, z, i) => yE + sag(i), mul3(col, 0.86));
+    for (const s of SC) ring(pr * 1.9, s, ty, topCol);
+    c1 = pt(ty(0, 0), topCol(0, 0));
+  }
+  for (let i = 0; i < n; i++) { const i2 = (i + 1) % n, f = rings[0], l = rings[rings.length - 1]; IX.push(c0, f + i, f + i2, l + i, c1, l + i2); }
+  for (let r = 0; r < rings.length - 1; r++) for (let i = 0; i < n; i++) { const i2 = (i + 1) % n, a = rings[r], b = rings[r + 1]; IX.push(a + i, b + i, b + i2, a + i, b + i2, a + i2); }
+  const g = shellGeo(V, CL, IX, [w, T, up ? d : h]);
+  if (!up) g.rotateX(o.face === 'z+' ? Math.PI / 2 : -Math.PI / 2);
+  SHAPE_GEO.set(key, g); return g;
+}
+function drape(w, d, drop, o) {
+  o = o || {}; const key = shapeKey('d', [w, d, drop], o); if (SHAPE_GEO.has(key)) return SHAPE_GEO.get(key);
+  const col = lin(o.col), fr = o.fringe ? lin(o.fringe) : null, t = o.t ?? 0.005, rb = o.rb ?? 0.016, gap = o.gap ?? 0.004, sd = o.seed || 1, NX = 8, amp = o.fold ?? 0.022, lam = w / (o.folds || 2.3), HEM = 0.02;
+  const zf = d / 2 + gap + t - rb, L = drop + t - rb, hs = (L - HEM) / L, st = [];   // st：+z 這一側從桌面中央到布邊的各站 [z, y, 法線 z, 法線 y, 垂下的比例, 0 一般｜1 車線｜2 收邊]
+  const nf = clampN(Math.round(zf / 0.16), 2, 4);
+  for (let i = 0; i <= nf; i++) st.push([zf * i / nf, t, 0, 1, 0, 0]);
+  for (let i = 1; i <= 3; i++) { const a = i / 3 * Math.PI / 2; st.push([zf + Math.sin(a) * rb, t - rb + Math.cos(a) * rb, Math.sin(a), Math.cos(a), 0, 0]); }   // 過桌緣的彎
+  [0.22, 0.45, 0.68, hs - 0.03, hs, hs + 0.025, 1].forEach((hh, i) => st.push([zf + rb, t - rb - L * hh, 1, 0, hh, i === 4 ? 1 : i > 4 ? 2 : 0]));
+  const all = []; for (let i = st.length - 1; i > 0; i--) all.push([st[i], -1]); for (const q of st) all.push([q, 1]);
+  const V = [], CL = [], IX = [], m = 2 * (NX + 1), inner = mul3(col, 0.82), stitch = mul3(col, 0.66);
+  const fold = (x, hh, side) => amp * Math.pow(hh, 1.3) * (0.5 + 0.5 * Math.cos(x / lam * Math.PI * 2 + sd * 2.1 + side * 1.3)) * (0.8 + 0.2 * Math.cos(x / lam * 4.1 + sd + side));   // 垂下的褶：只往外鼓，越往下越明顯
+  const hemY = (x, hh, side) => 0.004 * hh * hh * Math.sin(x * 9 + sd + side);
+  all.forEach(([q, side]) => {
+    const z = q[0], y = q[1], nz = q[2], ny = q[3], hh = q[4], fl = q[5];
+    for (let k = 0; k < m; k++) {
+      const outer = k <= NX, j = outer ? k : m - 1 - k, x0 = -w / 2 + w * j / NX, f = fold(x0, hh, side), off = outer ? f + (fl === 2 ? t * 0.6 : 0) : f - t - (fl === 2 ? t * 0.15 : 0);
+      const wr = outer && !nz ? 0.0012 * (0.5 + 0.5 * Math.sin(x0 * 23 + z * side * 17 + sd)) : 0, hk = Math.pow(hh, 1.3), cc = fl === 1 ? stitch : outer ? mul3(col, 1 - 0.14 * hk * (1 - f / (amp * hk || 1))) : inner;   // 褶的谷底暗一點
+      V.push(x0 * (1 - 0.05 * Math.pow(hh, 1.3)), y + ny * off + wr - hemY(x0, hh, side), side * (z + nz * off)); CL.push(cc[0], cc[1], cc[2]);
+    }
+  });
+  for (let s = 0; s < all.length - 1; s++) for (let k = 0; k < m; k++) { const k2 = (k + 1) % m, a = s * m, b = a + m; IX.push(a + k, b + k, b + k2, a + k, b + k2, a + k2); }
+  for (const s of [0, all.length - 1]) {   // 兩端的布邊封起來
+    let cx = 0, cy = 0, cz = 0; for (let k = 0; k < m; k++) { cx += V[(s * m + k) * 3]; cy += V[(s * m + k) * 3 + 1]; cz += V[(s * m + k) * 3 + 2]; }
+    const c = V.length / 3; V.push(cx / m, cy / m, cz / m); CL.push(inner[0], inner[1], inner[2]);
+    for (let k = 0; k < m; k++) { const k2 = (k + 1) % m; if (s) IX.push(s * m + k, c, s * m + k2); else IX.push(c, k, k2); }
+  }
+  if (fr) for (const side of [-1, 1]) {   // 流蘇：一條條細長的小布條，正反兩面
+    const q = st[st.length - 1], nt = Math.max(5, Math.round(w / 0.026));
+    for (let j = 0; j < nt; j++) {
+      const x0 = -w / 2 + w * (j + 0.5) / nt, x = x0 * 0.95, y = q[1] - hemY(x0, 1, side) + 0.004, z = side * (q[0] + fold(x0, 1, side) - t * 0.4), len = 0.05 + 0.03 * hsh(j, sd + side), dx = (hsh(j + 7, sd) - 0.5) * 0.014, dz = (hsh(j + 13, sd) - 0.5) * 0.012;
+      const cc = mul3(fr, 0.9 + 0.1 * hsh(j, 3)), pts = [[x - 0.005, y, z], [x + 0.005, y, z], [x + dx + 0.003, y - len, z + dz], [x + dx - 0.003, y - len, z + dz]];
+      for (const order of [[0, 1, 2, 0, 2, 3], [0, 2, 1, 0, 3, 2]]) { const b = V.length / 3; pts.forEach(p => { V.push(p[0], p[1], p[2]); CL.push(cc[0], cc[1], cc[2]); }); order.forEach(i => IX.push(b + i)); }
+    }
+  }
+  const g = shellGeo(V, CL, IX); SHAPE_GEO.set(key, g); return g;
+}
+function rug(w, d, o) {
+  o = o || {}; const key = shapeKey('r', [w, d], o); if (SHAPE_GEO.has(key)) return SHAPE_GEO.get(key);
+  const col = lin(o.col), bind = o.bind ? lin(o.bind) : mul3(col, 0.72), T = o.T ?? 0.014, bump = o.bump ?? 0.0034, sd = o.seed || 1, A = w / 2, B = d / 2, P = [], N = [], C = [];
+  const bands = (o.bands || []).map(b => [b[0] - b[1] / 2, b[0] + b[1] / 2, lin(b[2])]), sm = (a, b, x) => { const t = clampN((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const edge = (x, z) => Math.min(A - Math.abs(x), B - Math.abs(z));
+  /* 毯面的高度：最外緣貼地，7 公釐內升到毯厚，包邊是一道略鼓的捲邊；離邊 2 公分以後毯面有很緩的高低起伏 */
+  const hgt = (x, z) => { const e = edge(x, z);
+    return 0.002 + (T - 0.002) * sm(0, 0.007, e) + 0.003 * Math.exp(-(((e - 0.009) / 0.005) ** 2)) + sm(0.02, 0.25, e) * bump * (1 + Math.sin(x * 1.9 + sd) * Math.sin(z * 1.4 + sd * 2.3) * 0.45 + Math.sin(x * 0.8 - z * 1.1 + sd * 0.7) * 0.3 + Math.sin(x * 5.3 + sd * 1.9) * Math.sin(z * 4.1 + sd) * 0.25); };
+  const put = (x, z, lift, cc) => { const E = 0.004, y = hgt(x, z), nx = (hgt(x - E, z) - hgt(x + E, z)) / (2 * E), nz = (hgt(x, z - E) - hgt(x, z + E)) / (2 * E), l = Math.hypot(nx, 1, nz); P.push(x, y + lift, z); N.push(nx / l, 1 / l, nz / l); C.push(cc[0], cc[1], cc[2]); };
+  const tri = (a, b, c, lift, cc) => { const flip = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]) < 0; put(a[0], a[1], lift, cc); if (flip) { put(c[0], c[1], lift, cc); put(b[0], b[1], lift, cc); } else { put(b[0], b[1], lift, cc); put(c[0], c[1], lift, cc); } };   // 點是 [x, z]，一律正面朝上
+  const lines = half => { const s = new Set(), add = v => { if (v > -half - 1e-6 && v < half + 1e-6) s.add(Math.round(v * 1e4) / 1e4); };
+    [0, 0.005, 0.011, 0.02].forEach(i => { add(half - i); add(i - half); }); bands.forEach(b => { for (const i of [b[0], b[1]]) { add(half - i); add(i - half); } });
+    const nl = Math.ceil(half * 2 / 0.5); for (let i = 1; i < nl; i++) add(-half + half * 2 * i / nl);
+    return [...s].sort((a, b) => a - b); };
+  const X = lines(A), Z = lines(B);
+  for (let i = 0; i < X.length - 1; i++) for (let j = 0; j < Z.length - 1; j++) {
+    const e = edge((X[i] + X[i + 1]) / 2, (Z[j] + Z[j + 1]) / 2), bd = bands.find(b => e >= b[0] && e < b[1]), cc = e < 0.0145 ? bind : bd ? bd[2] : col;
+    const a = [X[i], Z[j]], b = [X[i + 1], Z[j]], c = [X[i + 1], Z[j + 1]], dd = [X[i], Z[j + 1]]; tri(a, b, c, 0, cc); tri(a, c, dd, 0, cc);
+  }
+  for (const mo of o.motifs || []) { const cc = lin(mo[0]); for (let i = 2; i < mo.length - 1; i++) tri(mo[1], mo[i], mo[i + 1], 0.0012, cc); }   // 花紋：貼在毯面上的小色塊
+  if (o.fringe) {   // 兩端的流蘇：一條條平躺在地板上，長短、方向略有不同
+    const fc = lin(o.fringe), fy = o.fy ?? 0.006, fl = o.fl ?? 0.085, nt = Math.round(w / 0.026);
+    for (const side of [-1, 1]) for (let j = 0; j < nt; j++) {
+      const x = -A + 0.012 + (w - 0.024) * (j + 0.5) / nt, len = fl * (0.75 + 0.45 * hsh(j, sd + side)), dx = (hsh(j + 5, sd * 2 + side) - 0.5) * 0.03, z0 = side * (B - 0.004), z1 = side * (B + len), cc = mul3(fc, 0.86 + 0.14 * hsh(j, 9));
+      const q = [[x - 0.004, z0], [x + 0.004, z0], [x + dx + 0.0025, z1], [x + dx - 0.0025, z1]], ys = [fy + 0.002, fy + 0.002, fy, fy];
+      for (const [i0, i1, i2] of side * 1 > 0 ? [[0, 2, 1], [0, 3, 2]] : [[0, 1, 2], [0, 2, 3]]) for (const k of [i0, i1, i2]) { P.push(q[k][0], ys[k], q[k][1]); N.push(0, 1, 0); C.push(cc[0], cc[1], cc[2]); }
+    }
+  }
+  const g = soupGeo(P, N, C); SHAPE_GEO.set(key, g); return g;
 }
 /** 建立一戶（第一次進門時）：收集地板、碰撞箱，依材質合併零件，算出主光的陰影範圍 */
 function build(key) {

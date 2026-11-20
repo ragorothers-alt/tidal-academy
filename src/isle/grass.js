@@ -11,36 +11,69 @@ import { current as seasonNow } from './seasons.js';
 
 let seed = 11;
 const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-/** 一叢草：7 片細長的葉片，每片兩個三角形（下半段、往外彎的上半段），根部顏色接近地面、葉尖受光偏黃綠 */
-function tuftGeo() {
-  const P = [], Cc = [], Nn = [];
-  const base = new THREE.Color('#3f6c1c'), mid = new THREE.Color('#7aa236'), tips = [new THREE.Color('#c6d264'), new THREE.Color('#a8c24e'), new THREE.Color('#d8d67c')];   // v6.93：葉尖改成柔和的鼠尾草金綠（明暗差不變）   // 根部深綠、葉尖受光的金黃綠，對比明顯   // 葉尖受光偏金黃
-  let bn = [0, 1, 0]; const push = (x, y, z, c) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); Nn.push(bn[0], bn[1], bn[2]); };   // 法線大致朝上（和地面同樣受光，看起來長在草地裡），每片往外偏一點：朝太陽的葉片亮、背光的暗
-  const NB = ULTRA ? 10 : 16;   // 極省電：每叢 10 片葉
-  for (let i = 0; i < NB; i++) {
-    const a = i / NB * Math.PI * 2 + Math.random() * 0.8, r = 0.02 + Math.random() * 0.15, h = 0.085 + Math.random() * 0.17 * (i % 3 ? 1 : 1.35), w = 0.013 + Math.random() * 0.009;   // 長一點、寬一點的草葉，往外彎成弧
-    const tip = tips[Math.floor(Math.random() * 3)], lean = 0.55 + Math.random() * 0.7;
-    const ox = Math.cos(a) * r, oz = Math.sin(a) * r, dx = Math.cos(a), dz = Math.sin(a);
-    const px = -dz * w, pz = dx * w; { const l = Math.hypot(dx * 0.32, 0.95, dz * 0.32); bn = [dx * 0.32 / l, 0.95 / l, dz * 0.32 / l]; }
-    const mx = ox + dx * h * 0.18 * lean, mz = oz + dz * h * 0.18 * lean, my = h * 0.55;   // 中段
-    const tx = ox + dx * h * 0.7 * lean, tz = oz + dz * h * 0.7 * lean, ty = h;   // 葉尖彎出去
-    // 下半段收到中段的一點，上半段從中段的寬度收到葉尖（兩個三角形，面數只有一半，看起來一樣是彎的）
-    // 下半段是連續的四邊形（中段寬度約根部的六成），上半段收成葉尖：一片完整、柔順彎曲的草葉，不會在中間掐成一點
-    const ml = [mx - px * 0.62, my, mz - pz * 0.62], mr = [mx + px * 0.62, my, mz + pz * 0.62];
-    push(ox - px, 0, oz - pz, base); push(ox + px, 0, oz + pz, base); push(mr[0], mr[1], mr[2], mid);
-    push(ox - px, 0, oz - pz, base); push(mr[0], mr[1], mr[2], mid); push(ml[0], ml[1], ml[2], mid);
-    push(ml[0], ml[1], ml[2], mid); push(mr[0], mr[1], mr[2], mid); push(tx, ty, tz, tip);
-  }
+/** 一叢草的葉片資料（v9.25）：四個分蘗（一高三矮、位置不對稱），每個分蘗兩片長葉、兩片中葉、兩三片貼地的新芽，各自往外彎、扭一點。
+    亂數種子固定：近、中、遠三種細緻度的幾何出自同一份資料，鏡頭走近換成細的那一份時，草叢的輪廓不變 */
+let BLADES = null;
+function tuftBlades() {
+  if (BLADES) return BLADES;
+  let s = 90217; const R = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
+  const till = [], main = [], buds = [], fill = [];
+  for (let c = 0; c < 4; c++) { const a = c * 1.571 + R() * 1.1, r = c ? 0.055 + R() * 0.085 : R() * 0.03; till.push({ a, x: Math.cos(a) * r, z: Math.sin(a) * r, hk: [1.12, 0.9, 1.02, 0.76][c] * (0.9 + R() * 0.2) }); }
+  for (let i = 0; i < 4; i++) till.forEach((tl, c) => {   // 先排每個分蘗的長葉，再排中葉：只取前幾片（極省電）時四個分蘗都還在
+    const tall = i < 2, a = c ? tl.a + (R() - 0.5) * 4.6 : R() * 6.283, rr = R() * 0.045, ra = R() * 6.283, t0 = 0.06 + R() * 0.3;
+    main.push({ x: tl.x + Math.cos(ra) * rr, z: tl.z + Math.sin(ra) * rr, a, tw: (R() - 0.5) * 1.1, L: (tall ? 0.2 + R() * 0.14 : 0.14 + R() * 0.1) * tl.hk, t0, t1: t0 + (tall ? 0.4 + R() * 0.7 : 0.25 + R() * 0.5), w: tall ? 0.0085 + R() * 0.004 : 0.007 + R() * 0.0035, tip: 0.44 + R() * 0.2, tall });
+  });
+  for (let i = 0; i < 8; i++) { const tl = till[i % 4], a = R() * 6.283, rr = 0.02 + R() * 0.06, ba = a + (R() - 0.5) * 1.6, t0 = 0.05 + R() * 0.35; fill.push({ x: tl.x + Math.cos(a) * rr, z: tl.z + Math.sin(a) * rr, a: ba, tw: (R() - 0.5) * 1.1, L: (0.1 + R() * 0.1) * (0.6 + tl.hk * 0.4), t0, t1: t0 + 0.3 + R() * 0.7, w: 0.0065 + R() * 0.003, tip: 0.42 + R() * 0.2, tall: false }); }   // 腳邊才畫的中葉：把分蘗之間填滿
+  till.forEach((tl, c) => { for (let i = 0; i < (c < 2 ? 3 : 2); i++) { const a = R() * 6.283, rr = 0.015 + R() * 0.05, t0 = 0.1 + R() * 0.5; buds.push({ x: tl.x + Math.cos(a) * rr, z: tl.z + Math.sin(a) * rr, a, tw: (R() - 0.5) * 0.8, L: 0.05 + R() * 0.055, t0, t1: t0 + 0.25, w: 0.0045 + R() * 0.002, tip: 0.5 + R() * 0.14, tall: false }); } });
+  { const top = main.filter(b => b.tall).sort((p, q) => bladeAt(q, 1)[1] - bladeAt(p, 1)[1]); [0.3, 0.27].forEach((h, i) => { top[i].L *= h / bladeAt(top[i], 1)[1]; }); }   // 最高的兩片拉到 30、27 公分（和以前最高的葉片一樣高：水草、莎草照草叢高 0.3 公尺去拉長）
+  return (BLADES = { main, buds, fill });
+}
+/** 沿著葉片走到 t（0–1）：離根部往外多遠、多高、這裡的葉片和鉛直夾幾度（越往葉尖越彎） */
+function bladeAt(b, t) {
+  let h = 0, y = 0;
+  for (let i = 0; i < 8; i++) { const th = b.t0 + (b.t1 - b.t0) * Math.pow((i + 0.5) / 8 * t, 1.2); h += Math.sin(th) * b.L * t / 8; y += Math.cos(th) * b.L * t / 8; }
+  return [h, y, b.t0 + (b.t1 - b.t0) * Math.pow(t, 1.2)];
+}
+/** 一叢草的幾何。lod 2（腳邊）：長葉分三段彎成弧、中葉兩段，每片沿中肋折成淺 V（左右兩半受光不同、折線暗一點），加上填空的中葉和貼地的新芽，共 196 個三角形；
+    lod 1（稍遠、其他島與水草）：長葉有折線、中葉是平的，66 個；lod 0（遠處）：16 片平的葉片、寬一點補回覆蓋，48 個（和以前一樣多）。
+    頂點色只當明暗用（著色器依亮度換成草色）：根部暗、葉尖亮 */
+function tuftGeo(lod = 0) {
+  const { main, buds, fill } = tuftBlades(), P = [], Cc = [], Nn = [];
+  let nrm = [0, 1, 0];
+  const tri = (...vs) => vs.forEach(p => { P.push(p[0], p[1], p[2]); Cc.push(p[3] * 0.62, p[3] * 1.3, p[3] * 0.22); Nn.push(nrm[0], nrm[1], nrm[2]); });
+  const unit = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+  const blade = (b, segs, fold, wk) => {
+    const dx = Math.cos(b.a), dz = Math.sin(b.a), sx = -Math.sin(b.a + b.tw), sz = Math.cos(b.a + b.tw);
+    const ts = segs === 3 ? [0, 0.36, 0.7, 1] : segs === 2 ? [0, 0.52, 1] : [0, 1], wp = segs === 3 ? [0.86, 1, 0.66] : segs === 2 ? [0.9, 0.82] : [1];   // 葉片中段最寬，往葉尖收
+    const sec = ts.map((t, i) => {
+      const [h, y, th] = bladeAt(b, t), w = i < ts.length - 1 ? b.w * wk * wp[i] : 0, kf = fold ? 0.55 * w : 0, lum = (t < 0.4 ? 0.045 + 0.185 * t / 0.4 : 0.23 + (b.tip - 0.23) * (t - 0.4) / 0.6) * (fold ? 1 : 0.94);   // 根部（埋在土裡那一截）最暗，露出地面的地方和以前的草根一樣深
+      const cx = b.x + dx * h, cy = i ? y : -0.03, cz = b.z + dz * h;   // 根部埋進土裡一點：草叢歪一邊時不會浮在地面上
+      return { L: [cx - sx * w, cy, cz - sz * w, lum], R: [cx + sx * w, cy, cz + sz * w, lum], K: [cx + dx * Math.cos(th) * kf, cy - Math.sin(th) * kf, cz + dz * Math.cos(th) * kf, lum * (0.7 + 0.22 * t)] };   // K：中肋往葉背凸出去，顏色暗一點
+    });
+    const nF = unit(dx * 0.32, 0.95, dz * 0.32), nL = unit(dx * 0.32 + sx * 0.36, 0.95, dz * 0.32 + sz * 0.36), nR = unit(dx * 0.32 - sx * 0.36, 0.95, dz * 0.32 - sz * 0.36);   // 法線大致朝上（和地面同樣受光，看起來長在草地裡），每片往外偏一點；折成 V 的兩半再各往中間偏
+    for (let i = 0; i < sec.length - 1; i++) {
+      const A = sec[i], B = sec[i + 1], last = i === sec.length - 2;
+      if (!fold) { nrm = nF; if (last) tri(A.L, A.R, B.L); else tri(A.L, A.R, B.R, A.L, B.R, B.L); continue; }
+      nrm = nL; if (last) tri(A.L, A.K, B.L); else tri(A.L, A.K, B.K, A.L, B.K, B.L);
+      nrm = nR; if (last) tri(A.K, A.R, B.L); else tri(A.K, A.R, B.R, A.K, B.R, B.K);
+    }
+  };
+  // 越遠的葉片越寬：遠看一片草的濃淡和以前一樣（葉片太細，遠處會透出底下偏淡的地面）
+  if (lod === 2) { main.forEach(b => blade(b, b.tall ? 3 : 2, true, 1.15)); fill.forEach(b => blade(b, 2, true, 1.15)); buds.forEach(b => blade(b, 1, true, 1.1)); }
+  else if (lod === 1) main.forEach((b, i) => { if (b.tall) blade(b, 2, true, 1.55); else if (i < 14) blade(b, 2, false, 1.6); });
+  else main.slice(0, ULTRA ? 10 : 16).forEach(b => blade(b, 2, false, 1.9));   // 極省電：每叢 10 片葉
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3));
   return g;
 }
 const PER = 20;   // 每格最多幾叢（茂密的草叢區；稀疏的草皮區會跳過一部分）
 const spots = [], chunks = [], CH = 6;   // 草叢分成 6×6 公尺一塊
+const NEAR = 5.5, MID = 12;   // 草塊的外框離鏡頭這麼近就換成細緻、中等的幾何（腳邊看得出一片片葉子的距離）
+let geoFar = null, geoMid = null, geoNear = null;
 export let mesh = null;
 let KIT = null;
 /** 草叢的網格與材質（夢境島也用同一種草） */
-export function tuftKit() { return KIT || (KIT = { geo: tuftGeo(), mat: bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), 'grass') }); }
+export function tuftKit() { return KIT || (KIT = { geo: tuftGeo(ULTRA || (S().settings && S().settings.lowPerf) ? 0 : 1), mat: bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), 'grass') }); }
 const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
 /** 建立草叢（要在建築、樹、物件都放好之後呼叫） */
 export function init() {
@@ -68,15 +101,20 @@ for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
 if (S().settings && S().settings.lowPerf) { const k = ULTRA ? 3 : 2, keep = spots.filter((p, i) => i % k === 0); keep.forEach(p => { p.s *= ULTRA ? 1.3 : 1.15; }); spots.length = 0; spots.push(...keep); }   // 省電模式：草叢減半，極省電剩三分之一（每叢稍大一點補回覆蓋），其餘位置不變
 const mat = bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }), 'grass');
 spots.forEach(p => { p.c = [0.85 + rnd() * 0.25, 0.92 + rnd() * 0.16, 0.75 + rnd() * 0.2]; });   // 每叢顏色略有不同（亂數順序和以前一樣）
+{ // v9.25 每叢各自往一邊歪、寬窄高矮不一：同一份幾何排在一起看不出是同一叢（用座標雜湊，不動草叢的亂數與位置）
+  const hh = (p, k) => Math.abs(Math.sin(p.x * 12.9898 + p.z * 78.233 + k * 37.719) * 43758.5453) % 1;
+  spots.forEach(p => { p.k = [(hh(p, 21) - 0.5) * 0.3, (hh(p, 22) - 0.5) * 0.3, 0.82 + hh(p, 23) * 0.42, 0.74 + hh(p, 24) * 0.52, 0.82 + hh(p, 25) * 0.42]; });
+}
 // 分塊：每 CH×CH 公尺一個 InstancedMesh，塊內順序打亂。每格依畫面剔除整塊、遠處只畫前面一部分（見 cull）
-const geo = tuftGeo(), byKey = new Map();
+const geo = geoFar = tuftGeo(0), byKey = new Map();
+if (!(S().settings && S().settings.lowPerf)) { geoMid = tuftKit().geo; geoNear = tuftGeo(2); }   // 省電模式不換細緻的幾何
 spots.forEach(p => { const k = Math.floor(p.x / CH) + ',' + Math.floor(p.z / CH); if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(p); });
 byKey.forEach((list, k) => {
   for (let i = list.length - 1; i > 0; i--) { const j = Math.floor((Math.abs(Math.sin(i * 12.9898 + list.length * 78.233)) * 43758.5453 % 1) * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
   const im = new THREE.InstancedMesh(geo, mat, list.length); im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false;
   list.forEach((p, i) => im.setColorAt(i, col.setRGB(...p.c)));
   let x = 0, z = 0; list.forEach(p => { x += p.x; z += p.z; });
-  const ch = { im, list, x: x / list.length, z: z / list.length, y: groundAt(x / list.length, z / list.length) };
+  const ch = { im, list, x: x / list.length, z: z / list.length, y: groundAt(x / list.length, z / list.length), gx: (+k.split(',')[0] + 0.5) * CH, gz: (+k.split(',')[1] + 0.5) * CH };   // gx、gz：這一塊格子的中心
   chunks.push(ch); scene.add(im);
 });
 mesh = chunks[0] ? chunks[0].im : null;
@@ -89,18 +127,24 @@ fringe(mat);
 const BLOOM = { spring: ['#c99aab', '#e3c04a', '#efece4', '#efece4', '#e3c04a', '#a090bb'], summer: ['#d9cf9a', '#e3c04a', '#efece4', '#efece4', '#9686b6', '#efece4'], autumn: ['#b48d9e', '#d6ac3e', '#ebe5d6', '#ebe5d6', '#9a88b4', '#d6ac3e'] };   // v9.15 半寫實：中間兩格白、其次黃，粉紫只在兩端零星
 const blooms = [], BCH = 16;
 let bloomSeason = '';
-/** 一朵小花（直徑約 13 公分）：五片往上翹的花瓣圍成淺杯（從側面低角度、從上面看都是一朵），花心淡黃、一根細莖；共 11 個三角形。
+/** 一朵小花（直徑約 13 公分）：五片往上翹的花瓣圍成淺杯（從側面低角度、從上面看都是一朵），花心淡黃、一根細莖；共 17 個三角形。
    只有花瓣（aTint = 1）染上這一季的花色，花心與莖維持頂點色 */
 function bloomGeo() {
   const P = [], Cc = [], Nn = [], A = [], w = new THREE.Color('#ffffff'), core = new THREE.Color('#d9a83a'), stem = new THREE.Color('#5d8a34'), H = 0.25, r = 0.042;   // v9.15 半寫實：花頭直徑約 8 公分（以前 13）
-  const push = (x, y, z, c, t) => { P.push(x, y, z); Cc.push(c.r, c.g, c.b); Nn.push(0, 1, 0); A.push(t); };
-  const at = (a, d) => [Math.cos(a) * d, H + d * 0.62, Math.sin(a) * d];   // 花瓣往外越高：淺杯
+  const push = (x, y, z, c, t, k = 1) => { P.push(x, y, z); Cc.push(c.r * k, c.g * k, c.b * k); Nn.push(0, 1, 0); A.push(t); };
+  // v9.25：五片花瓣一高一低、長短不一（不是一張平的星形紙片），花瓣根部暗一點；中間一顆鼓起來的花心；細莖彎一點（以前 11 個三角形）
   for (let i = 0; i < 5; i++) {
-    const a = i * 1.2566, L = at(a - 0.5, r * 0.72), T = at(a, r), Rr = at(a + 0.5, r * 0.72);   // v9.15 半寫實：花瓣寬圓（雛菊、毛茛的淺杯，不是尖星）
-    push(0, H, 0, core, 0); push(...L, w, 1); push(...T, w, 1);
-    push(0, H, 0, core, 0); push(...T, w, 1); push(...Rr, w, 1);
+    const a = i * 1.2566 + [0.1, -0.14, 0.05, 0.16, -0.08][i], up = i % 2 ? 0.95 : 0.42, len = r * (i % 2 ? 0.86 : 1.06), k = i % 2 ? 1 : 0.93;
+    const at = (da, d) => [Math.cos(a + da) * d, H + d * up, Math.sin(a + da) * d];   // 花瓣往外越高：淺杯
+    const L = at(-0.52, len * 0.7), T = at(0, len), Rr = at(0.52, len * 0.7);   // v9.15 半寫實：花瓣寬圓（雛菊、毛茛的淺杯，不是尖星）
+    push(0, H, 0, w, 1, 0.7); push(...L, w, 1, k); push(...T, w, 1, k);
+    push(0, H, 0, w, 1, 0.7); push(...T, w, 1, k); push(...Rr, w, 1, k);
   }
-  push(-0.005, 0, 0, stem, 0); push(0.005, 0, 0, stem, 0); push(0, H, 0, stem, 0);
+  for (let i = 0; i < 4; i++) { const a0 = i * 1.5708 + 0.4, a1 = a0 + 1.5708, cr = r * 0.3; push(Math.cos(a0) * cr, H + 0.004, Math.sin(a0) * cr, core, 0, 0.78); push(Math.cos(a1) * cr, H + 0.004, Math.sin(a1) * cr, core, 0, 0.78); push(0, H + 0.016, 0, core, 0, 1.12); }
+  { const sw = 0.0042, m = [0.012, H * 0.52, 0.006];
+    push(-sw, 0, 0, stem, 0, 0.8); push(sw, 0, 0, stem, 0, 0.8); push(m[0] + sw * 0.8, m[1], m[2], stem, 0);
+    push(-sw, 0, 0, stem, 0, 0.8); push(m[0] + sw * 0.8, m[1], m[2], stem, 0); push(m[0] - sw * 0.8, m[1], m[2], stem, 0);
+    push(m[0] - sw * 0.8, m[1], m[2], stem, 0); push(m[0] + sw * 0.8, m[1], m[2], stem, 0); push(0, H, 0, stem, 0); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(Cc, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(Nn, 3)); g.setAttribute('aTint', new THREE.Float32BufferAttribute(A, 1));
   return g;
@@ -162,7 +206,7 @@ export function refresh() {
   chunks.forEach(ch => {
     ch.list.forEach((p, i) => {
       const hide = !!d[p.tile] || zones.some(f => f(p.x, p.z));
-      m4.compose(v.set(p.x, groundAt(p.x, p.z) - 0.02, p.z), q.setFromEuler(e.set(0, p.r, 0)), sc.setScalar(hide ? 0 : p.s));
+      m4.compose(v.set(p.x, groundAt(p.x, p.z) - 0.02, p.z), q.setFromEuler(e.set(p.k[0], p.r, p.k[1])), hide ? sc.setScalar(0) : sc.set(p.s * p.k[2], p.s * p.k[3], p.s * p.k[4]));
       ch.im.setMatrixAt(i, m4);
     });
     ch.im.instanceMatrix.needsUpdate = true; if (ch.im.instanceColor) ch.im.instanceColor.needsUpdate = true;
@@ -186,7 +230,13 @@ export function cull() {
     return on ? Math.max(depth, 1) : -1;
   };
   const share = depth => { const px = pxK / depth; return px > (ULTRA ? 12 : 7) ? 1 : px > (ULTRA ? 6 : 3.5) ? 0.6 : 0.35; };   // 極省電：近一點就開始少畫
-  for (const ch of chunks) { const depth = seen(ch, R); ch.im.visible = depth > 0; if (depth > 0) ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth))); }
+  const cp = camera.position;
+  for (const ch of chunks) {
+    const depth = seen(ch, R); ch.im.visible = depth > 0; if (depth <= 0) continue;
+    ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth)));
+    const d = geoNear ? Math.hypot(Math.max(Math.abs(ch.gx - cp.x) - CH / 2, 0), Math.max(Math.abs(ch.gz - cp.z) - CH / 2, 0), cp.y - ch.y - 1.5) : 99;   // 鏡頭到這一塊外框的距離（第三人稱鏡頭拉高時也算進去）
+    const g = d < NEAR ? geoNear : d < MID ? geoMid : geoFar; if (ch.im.geometry !== g) ch.im.geometry = g;   // v9.25 腳邊的草塊用細緻的葉片（同一個 InstancedMesh 換幾何，不多畫東西）
+  }
   const sn = U.uSnow.value > 0.3 ? 'winter' : seasonNow(); if (sn !== bloomSeason) bloomTint(sn);
   for (const ch of blooms) { const depth = BLOOM[bloomSeason] ? seen(ch, BCH * 0.75 + 0.4) : -1; ch.im.visible = depth > 0; if (depth > 0) ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth))); }
 }

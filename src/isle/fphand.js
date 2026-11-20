@@ -3,7 +3,7 @@
    澆水壺倒水、釣竿拋竿），釣魚時把竿子舉起來、釣魚線從竿尖拉出去；聊天、坐下、看選單時把手放下。 */
 import * as THREE from 'three';
 import { setTool } from './chars.js';
-import { buildHand, handMaterial } from './handmodel.js';
+import { buildHand, handMaterial, gripOf } from './handmodel.js';
 
 const ARM = /(Right|R_)(Arm|ForeArm|Forearm|Hand|Wrist|Thumb|Index|Middle|Ring|Pinky)/;   // 右上臂、前臂、手腕、手掌與手指
 const HAND = ['RightHand', 'R_Hand', 'R_Wrist'];
@@ -99,7 +99,7 @@ function armJoints(gl) {
   } catch (_) { /* 讀不到貼圖：用預設色 */ }
   return { J, col, scale: hand.getWorldScale(new THREE.Vector3()).x };
 }
-const noRay = () => {};
+const noRay = () => {}, GEOS = new WeakMap();   // GEOS：角色模型 → { 握法: 手的網格 }
 /** 只細分掌指色區；共用邊一併切開避免 T 接縫。保留外框尺寸，最高不超過 4k 三角形。 */
 function roundFingers(geo, skin) {
   const P = geo.attributes.position, UV = geo.attributes.uv, C = geo.attributes.color, ids = Array.from(geo.index.array);
@@ -206,19 +206,25 @@ export function createHand(player, scene) {
   const u = player.userData, root = new THREE.Group(), piv = new THREE.Group(), arm = new THREE.Group(), holder = new THREE.Group(), tip = new THREE.Object3D();
   root.add(piv); piv.add(arm); arm.add(holder); root.visible = false; scene.add(root);
   let built = false, kind, low = 1, ph = 0, useT = 1, useKind = null, lastYaw = null, lastPitch = 0, fillU = null, lights = null;
-  const sway = new THREE.Vector2(), E = new THREE.Euler();
+  const sway = new THREE.Vector2(), E = new THREE.Euler(); let rig = null, handMesh = null, geos = null;   // geos：每種握法各一份手的網格（第一次拿到才做；戶外和室內的兩隻手共用）
   function setKind(k) {
     kind = k; setTool({ userData: { hand: holder } }, k === 'umbrella' || k === 'none' ? null : k);
     if (k === 'umbrella') { const g = new THREE.Group(); g.rotation.x = -1.2; const um = u.umbrella.clone(true); um.visible = true; um.position.set(0, 0.8, 0); g.add(um); holder.add(g); }   // 傘柄握在手裡（和工具一樣沿著手掌往前上方）
     if (k === 'rod' && holder.children[0]) { tip.position.set(0, 1.05, 0); holder.children[0].add(tip); }   // 竿尖：釣魚線從這裡拉出去
     holder.traverse(o => { o.frustumCulled = false; o.castShadow = false; o.raycast = noRay; });
+    if (handMesh) {   // 手換成握著這樣東西的姿勢：手指彎到貼著握把（握把在手骨頭座標的位置取自工具實際掛的地方）
+      const P = POSE[k] || POSE.none, tool = holder.children[0];
+      if (!geos[k]) { const g = gripOf(k, _qp.setFromEuler(E.set(P.r[0], P.r[1], 0.3 + P.r[2], 'XYZ')), holder.position, holder.scale.x, tool ? tool.quaternion : _qi.identity()); geos[k] = g ? buildHand(rig.J, rig.col, g) : geos.none; }   // 0.3：和 update 裡 rz 的基準一樣；沒有握法的東西就用空手
+      handMesh.geometry = geos[k];
+    }
   }
   /** o：{ active（第一人稱鏡頭已就位）, show（手舉起來）, camera, tool, umbrella, fishing, moving, run, yaw, pitch, t } */
   function update(dt, o) {
     if (!built && o.active && o.show && u.gltf) {
       built = true; const j = armJoints(u.gltf), a = j ? null : cutArm(u.gltf);
       if (j) {
-        const hm = handMaterial(), m = new THREE.Mesh(buildHand(j.J, j.col), hm); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m); fillU = hm.userData.fill;
+        geos = GEOS.get(u.gltf); if (!geos) GEOS.set(u.gltf, geos = { none: buildHand(j.J, j.col) });
+        const hm = handMaterial(), m = new THREE.Mesh(geos.none, hm); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m); fillU = hm.userData.fill; rig = j; handMesh = m;
         arm.scale.setScalar(j.scale); holder.position.copy(u.hand.position); holder.scale.copy(u.hand.scale);
       } else if (a) {
         const m = new THREE.Mesh(a.geo, polishArm(a.geo, a.mat)); m.frustumCulled = false; m.receiveShadow = true; m.raycast = noRay; arm.add(m);
