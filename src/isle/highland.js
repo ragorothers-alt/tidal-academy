@@ -43,14 +43,16 @@ const fallMat = new THREE.ShaderMaterial({
       float y = vUv.y, x = vW.z * 5.0, ft = uTime * 2.4, yy = pow(1.0 - y, 0.72) * 5.0;
       float s1 = n(vec2(x * 2.2, yy * 1.1 - ft)), s2 = n(vec2(x * 6.0 + 3.0, yy * 2.2 - ft * 1.5)), s3 = n(vec2(x * 15.0 + 7.0, yy * 4.6 - ft * 2.3));
       float streak = s1 * 0.5 + s2 * 0.32 + s3 * 0.18, white = smoothstep(0.4, 0.68, streak);
-      float lip = smoothstep(0.83, 0.99, y), foot = (1.0 - smoothstep(0.02, 0.2, y)) * (0.6 + 0.4 * n(vec2(x * 3.0, uTime * 3.5)));
+      float lip = smoothstep(0.83, 0.99, y), foot = (1.0 - smoothstep(0.02, 0.3, y)) * (0.65 + 0.35 * n(vec2(x * 3.0, uTime * 3.5)));
       vec3 c = mix(uShade * 0.86, uBody, 0.32 + streak * 0.5);
       c = mix(c, uFoam, clamp(white * 0.8 + lip * 0.25 + foot * 0.7, 0.0, 1.0));
       c *= (0.90 + max(normalize(vNormal).y, 0.0) * 0.10) * mix(1.0, 0.24, uNight);   // 夜裡是月光下的灰藍，不發亮
-      float edge = 0.22 + 0.78 * smoothstep(0.0, 0.075, vUv.x) * (1.0 - smoothstep(0.925, 1.0, vUv.x));
+      // v9.24.10 水幕兩側不再是筆直的切邊：邊緣寬窄不一、一直往下流，最外側只剩幾股細流
+      float ex = min(vUv.x, 1.0 - vUv.x), ew = 0.05 + 0.15 * n(vec2(yy * 1.3 - ft * 0.5, vW.z * 2.0 + vUv.x * 3.0));
+      float edge = smoothstep(ew * 0.2, ew, ex) * mix(smoothstep(0.4, 0.6, streak), 1.0, smoothstep(0.0, 0.24, ex));
       float fade = smoothstep(0.0, 0.05, y);
       float shell = mix(0.28, 1.0, smoothstep(-0.25, 0.25, vNormal.x));
-      gl_FragColor = vec4(c, clamp(0.36 + white * 0.52 + foot * 0.3 + lip * 0.15, 0.0, 0.96) * edge * fade * shell);
+      gl_FragColor = vec4(c, clamp(0.36 + white * 0.52 + foot * 0.45 + lip * 0.15, 0.0, 0.96) * edge * fade * shell);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
     }`

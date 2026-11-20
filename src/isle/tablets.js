@@ -43,12 +43,12 @@ function stele() {
   const panel = new THREE.ExtrudeGeometry(pan, { depth: 0.012, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.008, bevelSegments: 1, curveSegments: 12 }); panel.translate(0, 0, 0.1); { const n = panel.attributes.position.count, pc = new THREE.Color('#8e897b'), arr = new Float32Array(n * 3); for (let i = 0; i < n; i++) pc.toArray(arr, i * 3); panel.setAttribute('color', new THREE.BufferAttribute(arr, 3)); }   // 題板：比碑身深一點的同一種石頭
   // 青苔：腳邊幾團扁扁的、凹凸不平的小丘
   const MP = [], MC = [], MI = [], mc = new THREE.Color();
-  [[0.43, 0.16, 0.24, 0.13], [-0.45, 0.15, 0.2, 0.1], [0.5, 0.15, -0.16, 0.08], [-0.3, 0.16, 0.27, 0.07], [0.12, 0.16, 0.28, 0.06], [-0.52, 0.02, 0.02, 0.09]].forEach(([x, y, z, r], k) => {
+  [[0.43, 0.158, 0.24, 0.12], [-0.45, 0.155, 0.2, 0.1], [0.5, 0.155, -0.16, 0.08], [-0.3, 0.158, 0.27, 0.07], [0.12, 0.158, 0.28, 0.06], [0.3, 0.158, 0.26, 0.05], [-0.5, 0.156, -0.05, 0.06], [0.2, 0.156, -0.24, 0.07], [-0.56, 0.01, 0.05, 0.1], [0.58, 0.01, 0.12, 0.08], [0.1, 0.01, 0.32, 0.09]].forEach(([x, y, z, r], k) => {
     const s = new THREE.IcosahedronGeometry(1, 2), sp = s.attributes.position, m2 = new Map();
     for (let i = 0; i < sp.count; i++) {
-      const vx = sp.getX(i), vy = sp.getY(i), vz = sp.getZ(i), bump = 1 + 0.22 * Math.sin(vx * 5 + k) * Math.cos(vz * 6 - vy * 4 + k * 1.7);
+      const vx = sp.getX(i), vy = sp.getY(i), vz = sp.getZ(i), bump = 1 + 0.34 * Math.sin(vx * 5 + k) * Math.cos(vz * 6 - vy * 4 + k * 1.7) + 0.12 * Math.sin(vx * 11 - vz * 9 + k);   // 邊緣參差、薄薄一層貼著石面（以前是一塊塊鼓起來的厚綠片）
       const key = Math.round(vx * 1e3) + ',' + Math.round(vy * 1e3) + ',' + Math.round(vz * 1e3); let j = m2.get(key);
-      if (j == null) { j = MP.length / 3; m2.set(key, j); MP.push(x + vx * r * bump, y + Math.max(-0.2, vy) * r * 0.5 * bump, z + vz * r * bump); mc.set(k % 2 ? '#6d8848' : '#5f7b42').multiplyScalar(0.82 + 0.3 * Math.max(0, vy)); MC.push(mc.r, mc.g, mc.b); }
+      if (j == null) { j = MP.length / 3; m2.set(key, j); MP.push(x + vx * r * bump, y + Math.max(-0.2, vy) * r * 0.24 * bump, z + vz * r * bump); mc.set(k % 2 ? '#6d8848' : '#5f7b42').multiplyScalar(0.82 + 0.3 * Math.max(0, vy)); MC.push(mc.r, mc.g, mc.b); }
       MI.push(j);
     }
     s.dispose();

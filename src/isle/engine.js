@@ -781,6 +781,12 @@ export function bend(mat, kind) {
         vec3 swn = normalize(vWN);
         reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.13 + 0.09 * (1.0 - swn.y)) * (1.0 - uInside);
       }
+      #endif
+      #if !defined(TA_NATURE) && NUM_DIR_LIGHTS > 0
+      { // v9.24.10 石砌的牆、花台、橋身背光的直立面：地面把陽光反彈上來（樹蔭下的白石花台以前是一塊藍黑色）；朝上的面幾乎不加
+        vec3 swn2 = normalize(vWN);
+        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * 0.11 * (1.0 - 0.8 * max(swn2.y, 0.0)) * (1.0 - uInside);
+      }
       #endif`);
     if (kind === 'plaster' || kind === 'wall') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       #if NUM_DIR_LIGHTS > 0
@@ -800,7 +806,7 @@ export function bend(mat, kind) {
       #if NUM_DIR_LIGHTS > 0
       { // v9.24.9 地形的直立面（河岸與溪岸的土壁、矮崖）背光時：水面和對岸的草地把陽光反彈上來，不是一道黑邊
         vec3 twn = normalize(vWN); float tvert = 1.0 - smoothstep(0.3, 0.75, twn.y);
-        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * 0.2 * tvert * (1.0 - uInside);
+        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * 0.16 * tvert * (1.0 - uInside);
       }
       #endif`);
     if (kind === 'bark') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
