@@ -791,6 +791,6 @@ export function update(dt, t, night, show) {
     o.b.rotation.set(0, Math.atan2(fx, fz), -Math.sign(f.sp) * 0.18);
     const glide = Math.sin(t * 0.35 + o.flap) > 0.2; o.k = (o.k || 0) + ((glide ? 0 : 1) - (o.k || 0)) * Math.min(1, dt * 3);
     gulls.wings(o.gull, o.k, t * o.rate + o.flap);
-    o.b.visible = night < 0.5;   // 晚上鳥回巢
+    o.b.visible = night < 0.5 && skyU.wx.value.y < 0.3;   // 晚上鳥回巢；暴風雨也不飛
   });
 }

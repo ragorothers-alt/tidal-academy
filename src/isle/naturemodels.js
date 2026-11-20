@@ -150,30 +150,33 @@ function palm() {
   return root;
 }
 
-function bamboo() {
-  const root = new THREE.Group(), stems = [], leaves = [], r = natureRandom(709);
-  for (let s = 0; s < 6; s++) {
-    const a = s * 2.399, radius = s ? .22 + r() * .17 : 0, H = 2.35 + r() * .8, lean = (s - 2.5) * .025;
-    const point = t => new THREE.Vector3(Math.cos(a) * radius + lean * t, t * H, Math.sin(a) * radius + Math.cos(a) * .09 * t);
-    for (let j = 0; j < 7; j++) {
-      const p = point(j / 7), q = point((j + 1) / 7), rad = .045 - j * .0028;
-      stems.push(tint(segment(p.toArray(), q.toArray(), rad, rad - .0025, 10), s % 2 ? '#8fa55e' : '#6f8c4c'));   // v9.15 半寫實：竹稈是綠與黃綠（以前粉綠、灰青）
-      const ring = new THREE.TorusGeometry(rad + .0005, .0025, 3, 8); ring.rotateX(Math.PI / 2); ring.translate(...q.toArray()); stems.push(tint(ring, '#a9b47a'));
-      if (j < 2) continue;
-      const angle = a + j * 2.2, end = q.clone().add(new THREE.Vector3(Math.cos(angle) * .23, .055, Math.sin(angle) * .23));
-      stems.push(tint(segment(q.toArray(), end.toArray(), .011, .004, 5), '#8fa55e'));
-      for (let k = 0; k < 4; k++) {
-        const p0 = q.clone().lerp(end, .3 + k * .2), angle0 = angle + (k % 2 ? -.75 : .75);
-        leaves.push(tint(orientLeaf(leaf(.2 + r() * .08, .047, .018), p0, new THREE.Vector3(Math.cos(angle0), .12 - k * .1, Math.sin(angle0))), k % 2 ? '#7e9a50' : '#647f42'));
+function bamboo() {   // v9.24.3：稈梢彎垂、每節兩根小枝、枝梢是一叢叢下垂的竹葉（以前每節只有四片葉，遠看像幾根光禿的竿子）
+  const root = new THREE.Group(), stems = [], leaves = [], r = natureRandom(709), LEAF = ['#7e9a50', '#647f42', '#8aa558', '#6f8c48', '#98b060'];
+  for (let s = 0; s < 7; s++) {
+    const a = s * 2.399, radius = s ? .2 + r() * .2 : 0, H = 2.5 + r() * .9, lean = .1 + r() * .16, N = 10;
+    const point = t => new THREE.Vector3(Math.cos(a) * (radius + lean * t * t * t * H * .32), H * (t - .1 * t * t * t), Math.sin(a) * (radius + lean * t * t * t * H * .32));   // 上面三分之一往外彎
+    for (let j = 0; j < N; j++) {
+      const t0 = j / N, p = point(t0), q = point((j + 1) / N), rad = .043 * (1 - t0 * .78);
+      stems.push(tint(segment(p.toArray(), q.toArray(), rad, rad * .93, j < 6 ? 9 : 6), s % 2 ? '#8fa55e' : '#6f8c4c'));   // v9.15 半寫實：竹稈是綠與黃綠（以前粉綠、灰青）
+      if (j < N - 1) { const ring = new THREE.TorusGeometry(rad * .96, .0026, 3, 8); ring.rotateX(Math.PI / 2); ring.translate(...q.toArray()); stems.push(tint(ring, '#a9b47a')); }
+      if (j < 3) continue;
+      const twigs = j >= N - 2 ? 3 : 2;
+      for (let w = 0; w < twigs; w++) {
+        const angle = a + j * 2.2 + w * (Math.PI * 2 / twigs) + r() * .6, L = (.2 + r() * .16) * (1 - t0 * .25), rise = .5 - t0 * .35 + r() * .2;
+        const dir = new THREE.Vector3(Math.cos(angle), rise, Math.sin(angle)).normalize(), mid = q.clone().addScaledVector(dir, L * .6), end = mid.clone().addScaledVector(new THREE.Vector3(dir.x, dir.y - .5, dir.z).normalize(), L * .5);
+        stems.push(tint(segment(q.toArray(), mid.toArray(), .008, .005, 4), '#8fa55e')); stems.push(tint(segment(mid.toArray(), end.toArray(), .005, .002, 4), '#8fa55e'));
+        for (const [at, n] of [[mid, 3], [end, 5]]) for (let k = 0; k < n; k++) {   // 一叢葉：從同一點往外張開、葉尖下垂
+          const la = angle + (k - (n - 1) / 2) * .62 + (r() - .5) * .3, d = new THREE.Vector3(Math.cos(la), -.18 - r() * .45, Math.sin(la));
+          leaves.push(tint(orientLeaf(leaf(.15 + r() * .1, .03 + r() * .014, .02), at, d, r() * .8 - .4), LEAF[Math.floor(r() * LEAF.length)], .04));
+        }
       }
     }
   }
   for (let j = 0; j < 2; j++) {const g = new THREE.ConeGeometry(.07, .28, 7);g.translate(.3 - j * .6, .14, .2);stems.push(tint(g, '#8a7a56'));}   // 竹筍是褐色的筍殼
-  part(root, 'six-culms-and-raised-nodes', mergeNatureGeometry(stems), natureMaterial('#ffffff', 'bark', true));
-  part(root, 'folded-bamboo-leaves', mergeNatureGeometry(leaves), natureMaterial('#D0DBCB', 'pine', true));
+  part(root, 'seven-arching-culms', mergeNatureGeometry(stems), natureMaterial('#ffffff', 'bark', true));
+  part(root, 'drooping-bamboo-leaf-fans', mergeNatureGeometry(leaves), natureMaterial('#D0DBCB', 'pine', true));
   return root;
 }
-
 /* v9.16 半寫實：灌木的葉叢卡材質。卡片用 models/tex_leaves.js 的葉叢圖集（和闊葉樹同一張）只取 alpha 與每片葉子的深淺，顏色來自頂點色；
    aNatureCore = 1 的內芯不挖洞。圖集載入前用畫布畫的簡單葉形（props3d 載入圖集後呼叫 setNatureLeaves 換上） */
 let SHRUB_LEAF = null, SHRUB_FALLBACK = null;

@@ -144,7 +144,7 @@ const VTOP = 'uniform float uCurve;\nuniform float uBendF;\nuniform float uTime;
     float g = wn_(vec2(a * 0.04 - t * 0.2, c * 0.03)) * 0.65 + wn_(vec2(a * 0.11 - t * 0.62, c * 0.09 + 3.7)) * 0.35;
     return smoothstep(0.34, 0.86, g); }
 `;
-const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uSnow;\nuniform float uWet;\nuniform float uDew;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform vec4 uCloud;\nuniform vec3 uMist;\nuniform vec3 uMistCol;\nuniform vec3 uSkyRef;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
+const FTOP = 'uniform vec3 uSunV;\nuniform vec3 uRimCol;\nuniform float uRim;\nuniform vec2 uOccP;\nuniform float uOccR;\nuniform float uOccD;\nuniform float uOccY;\nuniform float uTime;\nuniform float uWind;\nuniform float uSnow;\nuniform float uWet;\nuniform float uDew;\nuniform float uFall;\nuniform float uBloom;\nuniform float uShade;\nuniform vec4 uCloud;\nuniform vec3 uMist;\nuniform vec3 uMistCol;\nuniform vec3 uSkyRef;\nuniform float uTrans;\nuniform float uInside;\nvarying vec3 vWP;\nvarying vec3 vWN;\nvarying vec3 vOP;\nvarying float vSeed;\nvarying float vGust;\n';
 /* ---------- 手繪微表面：低對比、可重複的程式色塊；保留 DET 與三平面材質接口 ---------- */
 const neutral = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };
 export const DET = {};
@@ -290,10 +290,16 @@ const LATE_W = `
     vec3 R = normalize(reflect(-V, n));
     vec3 refl = skyR;
     { vec4 cs = uPrj * vec4(R, 0.0);
-      if (cs.w > 1e-3) { vec2 su = cs.xy / cs.w * 0.5 + 0.5; if (su.x > 0.0 && su.x < 1.0 && su.y > 0.0 && su.y < 1.0) {
-        float ds = texture2D(uOpqD, su).x, zs = taLin(ds); vec3 Ps = vec3((su * 2.0 - 1.0) / vec2(uPrj[0][0], uPrj[1][1]) * zs, -zs);
-        bool above = ds > 0.9999 || (zs > 70.0 && cameraPosition.y + dot(Ps, upV) > vWP.y + 2.0);   // 只取天空與水面上方的遠景（城堡、浮空島）；水底的海床不算
-        if (above) { vec3 lk = texture2D(uOpq, su).rgb; if (sea > 0.5) lk = taDusk(lk, R, upV); refl = mix(refl, lk, taEdge(su)); } } } }
+      if (cs.w > 1e-3) { vec2 su0 = cs.xy / cs.w * 0.5 + 0.5; vec3 acc = vec3(0.0);
+        // v9.24.3 遠景的倒影取八點、上下拉長（波浪把倒影沿視線方向抹開）：以前只取一點，雲的倒影是一塊塊邊緣銳利的白斑，像浮在水上的紙
+        float ja = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2832, bk = sea > 0.5 ? 1.0 : 0.3;
+        for (int i = 0; i < 8; i++) { float fi = float(i), a = fi * 2.39996 + ja, r = sqrt((fi + 0.5) / 8.0); vec2 su = su0 + vec2(cos(a) * 0.014, sin(a) * 0.06) * r * bk; vec3 one = skyR;
+          if (su.x > 0.0 && su.x < 1.0 && su.y > 0.0 && su.y < 1.0) {
+            float ds = texture2D(uOpqD, su).x, zs = taLin(ds); vec3 Ps = vec3((su * 2.0 - 1.0) / vec2(uPrj[0][0], uPrj[1][1]) * zs, -zs);
+            bool above = ds > 0.9999 || (zs > 70.0 && cameraPosition.y + dot(Ps, upV) > vWP.y + 2.0);   // 只取天空與水面上方的遠景（城堡、浮空島）；水底的海床不算
+            if (above) { vec3 lk = texture2D(uOpq, su).rgb; if (sea > 0.5) lk = taDusk(lk, R, upV); one = mix(skyR, lk, taEdge(su)); } }
+          acc += one; }
+        refl = acc / 8.0; } }
     if (uSSR > 0.5) {
       float st = 0.1 + zW * 0.01, jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
       vec3 p = P + R * st * (0.3 + jit), pa = P; float hit = 0.0; vec2 huv = vec2(0.5);
@@ -336,6 +342,13 @@ const SEA_GLSL = `
           d0 = normalize(vec2(0.8, -0.6));  sl += d0 * cos(dot(q, d0) * 2.9 + t * 1.7 + 4.1) * 0.05 * (0.4 + 0.6 * lod);
           d0 = normalize(vec2(-0.9, -0.2)); sl += d0 * cos(dot(q, d0) * 4.7 + t * 2.2 + 2.3) * 0.04 * lod;
           sl += (vec2(n_v(q * 0.6 + vec2(t * 0.06, 0.0)), n_v(q * 0.6 + vec2(3.7, 8.1) - vec2(0.0, t * 0.05))) - 0.5) * 0.12;
+          { // v9.24.3 暴風雨：一道道順風的長浪，浪頂碎成白沫（以前暴風雨的海和晴天一樣平）
+            float stm = clamp((uWind - 1.0) / 2.2, 0.0, 1.0); vec2 dS = normalize(vec2(0.97, 0.24)); float phS = dot(q, dS) * 0.62 + t * 1.5 + n_v(q * 0.07) * 4.0, crest = sin(phS);
+            sl += dS * cos(phS) * 0.2 * stm; sl *= 1.0 + stm * 0.9;
+            float brk = n_v(q * 0.11 + vec2(t * 0.05, 3.0)), cz = crest * (0.62 + 0.5 * brk), lc = n_v(q * 3.1 + vec2(t * 0.6, 0.0)) * 0.55 + n_v(q * 8.3 - vec2(0.0, t * 0.9)) * 0.45;
+            vec2 pS = vec2(-dS.y, dS.x); float cap = smoothstep(0.78, 0.96, cz) * smoothstep(0.38, 0.56, lc);   // 浪頂碎開的白沫
+            float streak = smoothstep(0.6, 0.8, n_v(vec2(dot(q, dS) * 0.35 - t * 0.2, dot(q, pS) * 2.6))) * smoothstep(0.15, 0.75, cz) * smoothstep(0.34, 0.6, lc) * 0.5;   // 浪背上順風拉長的泡沫條
+            wCap = stm * max(cap, streak) * (1.0 - smoothstep(70.0, 130.0, dist)); }
           sl *= 1.0 - smoothstep(55.0, 145.0, dist) * 0.88;
           vec3 nV = normalize(mix(normalize((viewMatrix * vec4(-sl.x, 1.0, -sl.y, 0.0)).xyz), normal, 0.2));
           nV = normalize(mix(nV, upV, smoothstep(70.0, 150.0, dist) * 0.9));
@@ -924,7 +937,7 @@ export function bend(mat, kind) {
         #ifdef TA_CASC
           sGl *= taSh;   // v9.24：影子裡沒有陽光，沙粒、雪面、露珠都不閃
         #endif
-        outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? '\n        vec3 wN = normal, wSkyR = vec3(-1.0), wSpec = vec3(0.0);' + SEA_GLSL + `
+        outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? '\n        vec3 wN = normal, wSkyR = vec3(-1.0), wSpec = vec3(0.0); float wCap = 0.0;' + SEA_GLSL + `
         { float lw = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b); outgoingLight *= lw > 1.0 ? (1.0 + (lw - 1.0) * 0.25) / lw : 1.0; }
         #ifdef TA_SEA
         outgoingLight += seaSpec;   // 大海的反光帶在亮度壓縮之後才加
@@ -951,6 +964,7 @@ export function bend(mat, kind) {
           #endif
           #ifdef TA_SEA
             outgoingLight = taLateWater(wN, wIrr, wSkyR, wS, wA, wCalm, wAbs, 1.0, smoothstep(160.0, 138.0, max(abs(vWP.x), abs(vWP.z))));
+            outgoingLight = mix(outgoingLight, (wIrr * 0.9 + wSkyR * 0.6) * vec3(0.94, 0.97, 1.0), wCap * 0.85);   // 暴風雨的浪頂白沫
           #else
             outgoingLight = taLateWater(wN, wIrr, wSkyR, wS, wA, wCalm, wAbs, 0.0, 1.0);
             outgoingLight = mix(outgoingLight, wIrr * vec3(0.92, 0.95, 1.0), clamp(gWW * 0.85, 0.0, 1.0));   // v8.9.1 白浪
