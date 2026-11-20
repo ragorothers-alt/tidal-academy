@@ -73,6 +73,7 @@ import * as glow from './glow.js';
 import * as shadows from './shadows.js';
 import * as walldress from './walldress.js';
 import * as motes from './motes.js';
+import * as skyfx from './skyfx.js';
 import * as grass from './grass.js';
 import * as waves from './waves.js';
 import * as bluetears from './bluetears.js';
@@ -2324,7 +2325,7 @@ function tick(fixed) {
     if (myHouseCls !== (houseSid === 'player')) { myHouseCls = houseSid === 'player'; document.body.classList.toggle('my-house', myHouseCls); }   // 自己家顯示 🛋 裝潢鈕
     houseTick(dt, t, ix, iz, len, moving, run, locked, fpNow); return;
   }
-  if (room.inside || elsewhere()) { seasons.update(dt, t, { inside: true }); fpK = 0; fpLens(0); fpResync = true; }   // 室內、博物館、神秘島不顯示島上的季節，也用一般鏡頭
+  if (room.inside || elsewhere()) { seasons.update(dt, t, { inside: true }); skyfx.setVisible(false); fpK = 0; fpLens(0); fpResync = true; }   // 室內、博物館、神秘島不顯示島上的季節，也用一般鏡頭
   if (room.inside || elsewhere()) { player.userData.umbrella.visible = dreamisle.inside && dreamisle.raining() && !player.userData.tool; villagers.forEach(v => { v.mesh.userData.umbrella.visible = false; }); }   // 室內不撐傘（傘只在島上的每一格依雨勢更新，進門前在下雨就會一直撐著）；回到島上的下一格自動恢復
   if (room.inside) { roomTick(dt, t, ix, iz, len, moving, locked); return; }
   if (elsewhere()) {
@@ -2584,7 +2585,7 @@ function tick(fixed) {
   { const c = U.uCloud.value, w = 0.06 * (0.7 + 0.3 * U.uWind.value) * dt, wd = U.uWindDir.value; c.x = U.uShade.value * (0.5 + bk * 0.22); c.w = bk; c.y -= w * wd.x; c.z -= w * wd.y; }   // v8.9.1 雲影：白天才有，風大時飄得快（約每秒 1.5 公尺）；v9.22.10 多雲時又多又深，順著風向飄（以前逆風飄）
   U.uSkyRef.value.copy(skyU.bot.value).lerp(skyU.mid.value, 0.35);   // v9.22.6 濕地面映出的天光：低空的天色（陰雨天已經轉灰）
   U.uTrans.value = fxClear * (1 - night) * (0.55 + golden * 0.75);   // 葉片透光：晴天有，黃金時段的逆光最明顯
-  motes.update(dt, t, look, golden, night, fxClear);
+  motes.update(dt, t, look, golden, night, fxClear); skyfx.update(dt, t, look, night, fxClear, true, simDate());   // v9.24.6 飄過的種子絨毛、夜裡的流星
   waves.update(dt, player, { night, rain: rainVis, road: onRoad, inAir: jump.air, fish: life.fishShadows && life.fishShadows() });
   spinProps(dt);   // 溪邊的水車
   U.uPlayer.value.copy(player.position);
