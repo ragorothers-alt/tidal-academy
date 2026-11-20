@@ -16,10 +16,10 @@ const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: { valu
 const waveMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: waveU,
   vertexShader: `${BENDV}
-    attribute float side; attribute float along; uniform float uSea; varying float vS; varying float vA;
-    void main(){ vS = side; vA = along; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02; else p.y = max(p.y, uSea + 0.02);   // 水線與海面側貼著海平面（隨潮汐升降）；v9.24 水膜貼著坡面，泡在海面下的那一段浮在海面上
+    attribute float side; attribute float along; attribute float endk; uniform float uSea; varying float vS; varying float vA; varying float vE;
+    void main(){ vS = side; vA = along; vE = endk; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02; else p.y = max(p.y, uSea + 0.02);   // 水線與海面側貼著海平面（隨潮汐升降）；v9.24 水膜貼著坡面，泡在海面下的那一段浮在海面上
       vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`,
-  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; uniform float uSea; varying float vS; varying float vA;
+  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; uniform float uSea; varying float vS; varying float vA; varying float vE;
     float h(float x){ return fract(sin(x * 91.7) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -73,7 +73,7 @@ const waveMat = new THREE.ShaderMaterial({
         c.rgb = mix(c.rgb, vec3(0.05, 0.45, 1.0) * (1.5 + 2.8 * smoothstep(0.45, 0.95, spk)), k);
         c.a = mix(c.a, min(1.0, c.a * (0.95 + 0.9 * spk)), k);
       }
-      gl_FragColor = c;
+      c.a *= vE; gl_FragColor = c;
     }`
 });
 /** 海岸線：把沙灘與海的格子邊界串成連續折線，再用 Chaikin 演算法磨圓，沿著曲線生成浪花帶 */
@@ -117,11 +117,11 @@ function coastLines() {
   return lines.map(l => { let p = l.pts; for (let k = 0; k < 3; k++) p = chaikin(p, l.closed); p = p.map(q => warp(q[0], q[1])); return { pts: p, closed: l.closed }; });   // 跟地形用同樣的扭曲
 }
 function buildShore() {
-  const P = [], S = [], A = [];           // 浪花帶
+  const P = [], S = [], A = [], EK = [];           // 浪花帶（EK：v9.24.4 海岸線斷開的兩端淡出，不留一道直邊）
   const BP = [], BC = [], BN = [], BS = [];        // 沙灘緩坡（蓋住格子狀的階梯邊緣）；BS：v9.23.1 表面分類（沙＋離浪多近）
   const OFF = 0.5, ySand = Y_SAND, WL = 0.6, W_OUT = 2.4, IN = 1.7;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺；v9.22.20 OFF 0.42 → 0.5（海岸線磨平後，2:1 的斜階梯凸角也包得住）
   const sandWet = new THREE.Color('#e0c78a');
-  const push = (x, y, z, s, a) => { P.push(x, y, z); S.push(s); A.push(a); };
+  const push = (x, y, z, s, a, e) => { P.push(x, y, z); S.push(s); A.push(a); EK.push(e); };
   const bpush = (x, y, z, c, nr, wt) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); BN.push(nr[0], nr[1], nr[2]); BS.push(0, 1, -wt, 0); };
   // v9.23.1 緩坡的沙色跟內側的沙地同一套（terrain.js 的 sandC）：以前緩坡是比較黃、比較亮的另一種沙，和沙地之間有一條明顯的色差線。往海的坡面才漸漸偏暖
   const SA = new THREE.Color('#e8d8bc'), SB = new THREE.Color('#d9cdb8');
@@ -176,6 +176,7 @@ function buildShore() {
     const last = closed ? n : n - 1;
     for (let i = 0; i < last; i++) {
       const j = (i + 1) % n, a0 = al[i], a1 = j === 0 ? along + Math.hypot(cp[i][0] - cp[j][0], cp[i][1] - cp[j][1]) : al[j];
+      const ek = a => (closed ? 1 : THREE.MathUtils.smoothstep(Math.min(a, along - a), 0.1, 1.8)), e0 = ek(a0), e1 = ek(a1);
       // 緩坡：內側平台（-IN 到 0）＋往海傾斜（0 到 SLOPE）。v9.22.20 坡肩多切幾段、法線照坡度算（平滑的明暗），以前三段平面的折痕像一層層台階
       const ds = [-IN, -IN * 0.5, -0.55, -0.3, 0, 0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 1.4, SLOPE];
       const nrm = (k, d) => { const g = slopeG(d), l = Math.hypot(ns[k][0] * g, 1, ns[k][1] * g); return [ns[k][0] * g / l, 1 / l, ns[k][1] * g / l]; };
@@ -190,14 +191,14 @@ function buildShore() {
       const FD = [1.3, 1.0, 0.75, 0.6, 0.45, 0.3, 0.2, 0.1, 0, -0.3, -0.7, -1.1, -F_IN], fy = d => Math.max(slopeY(d), ySand - 0.012) + 0.012;
       for (let k = 0; k < FD.length - 1; k++) {
         const d0 = FD[k], d1 = FD[k + 1], p00 = at(i, d0), p10 = at(j, d0), p01 = at(i, d1), p11 = at(j, d1);
-        push(p00[0], fy(d0), p00[1], -2 - d0, a0); push(p01[0], fy(d1), p01[1], -2 - d1, a0); push(p11[0], fy(d1), p11[1], -2 - d1, a1);
-        push(p00[0], fy(d0), p00[1], -2 - d0, a0); push(p11[0], fy(d1), p11[1], -2 - d1, a1); push(p10[0], fy(d0), p10[1], -2 - d0, a1);
+        push(p00[0], fy(d0), p00[1], -2 - d0, a0, e0); push(p01[0], fy(d1), p01[1], -2 - d1, a0, e0); push(p11[0], fy(d1), p11[1], -2 - d1, a1, e1);
+        push(p00[0], fy(d0), p00[1], -2 - d0, a0, e0); push(p11[0], fy(d1), p11[1], -2 - d1, a1, e1); push(p10[0], fy(d0), p10[1], -2 - d0, a1, e1);
       }
       const w0 = at(i, WL), w1 = at(j, WL);
       // 海面側浪線
       const o0 = out(i), o1 = out(j);
-      push(w0[0], 0, w0[1], 0.0001, a0); push(w1[0], 0, w1[1], 0.0001, a1); push(o1[0], 0, o1[1], 1, a1);
-      push(w0[0], 0, w0[1], 0.0001, a0); push(o1[0], 0, o1[1], 1, a1); push(o0[0], 0, o0[1], 1, a0);
+      push(w0[0], 0, w0[1], 0.0001, a0, e0); push(w1[0], 0, w1[1], 0.0001, a1, e1); push(o1[0], 0, o1[1], 1, a1, e1);
+      push(w0[0], 0, w0[1], 0.0001, a0, e0); push(o1[0], 0, o1[1], 1, a1, e1); push(o0[0], 0, o0[1], 1, a0, e0);
     }
   });
   const bg = new THREE.BufferGeometry();
@@ -205,7 +206,7 @@ function buildShore() {
   bg.setAttribute('aSurface', new THREE.Float32BufferAttribute(BS, 4));
   const beach = new THREE.Mesh(bg, surfaceMat); beach.receiveShadow = true; scene.add(beach);
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('side', new THREE.Float32BufferAttribute(S, 1)); g.setAttribute('along', new THREE.Float32BufferAttribute(A, 1));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('side', new THREE.Float32BufferAttribute(S, 1)); g.setAttribute('along', new THREE.Float32BufferAttribute(A, 1)); g.setAttribute('endk', new THREE.Float32BufferAttribute(EK, 1));
   const m = new THREE.Mesh(g, waveMat); m.frustumCulled = false; m.renderOrder = 2; scene.add(m);
 }
 

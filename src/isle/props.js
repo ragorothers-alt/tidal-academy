@@ -867,7 +867,8 @@ function paveTex(kind) {
     for (let y = 0; y < S2; y++) {
       const a = y / S2 * Math.PI * 2, L = 7 + Math.sin(a * 3) * 3 + Math.cos(a * 7) * 2, R = S2 - 8 + Math.sin(a * 5 + 1) * 4;
       const g = c.createLinearGradient(L, 0, R, 0);
-      g.addColorStop(0, 'rgba(134,160,108,0)'); g.addColorStop(0.07, '#86a06c'); g.addColorStop(0.16, base); g.addColorStop(0.84, base); g.addColorStop(0.94, '#86a06c'); g.addColorStop(1, 'rgba(134,160,108,0)');
+      const fr = kind === 'sand' ? ['rgba(200,184,150,0)', '#c8b896'] : ['rgba(134,160,108,0)', '#86a06c'];   // v9.24.4 沙徑走在沙灘上：路緣是沙色（以前和土路一樣是碎草的綠，沙灘上多了兩條綠線）
+      g.addColorStop(0, fr[0]); g.addColorStop(0.07, fr[1]); g.addColorStop(0.16, base); g.addColorStop(0.84, base); g.addColorStop(0.94, fr[1]); g.addColorStop(1, fr[0]);
       c.fillStyle = g; c.fillRect(L, y, R - L, 1);
     }
     h.fillStyle = gray(128); h.fillRect(0, 0, S2, S2);

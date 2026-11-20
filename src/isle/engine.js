@@ -724,6 +724,14 @@ export function bend(mat, kind) {
           diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, vWP * 0.45, gB) * 2.0, 0.3);   // v9.13：石面的顆粒與細縫
         #endif
         gDetN = triN(uN0, vWP * 0.45, gB) * 0.12;
+        #ifdef TA_NATURE
+          { // v9.24.4 圓石與礁石的表面：石頭的顆粒、風化的小坑、幾道細裂縫，法線起伏也加大（以前只有柔和的色塊，近看像一團黏土）；遠看收掉不閃
+            float raa = clamp(1.0 - length(fwidth(vWP)) * 12.0, 0.0, 1.0);
+            diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, vWP * 1.2, gB) * 2.0, 0.6 * raa);
+            float pit = smoothstep(0.6, 0.82, n_v(sp * 8.0 + 3.0)) * raa; diffuseColor.rgb *= 1.0 - pit * 0.2;
+            float crk = smoothstep(0.03, 0.0, abs(n_f(sp * 1.5 + 13.0) - 0.5)) * smoothstep(0.42, 0.6, n_v(sp * 0.6 + 5.0)) * raa; diffuseColor.rgb *= 1.0 - crk * 0.45;
+            gDetN = gDetN * 1.6 + triN(uN0, vWP * 1.2, gB) * 0.42 * raa; }
+        #endif
       }`);
     if (kind === 'plaster') f = f.replace('#include <color_fragment>', `#include <color_fragment>
       { // v7.6 夢幻風住宅的灰泥牆：大片柔和的冷暖斑駁（±2–3%）與很淡的細顆粒，不畫石塊（'stone' 會把奶油灰泥畫成灰色石塊）

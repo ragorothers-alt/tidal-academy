@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { scene, M, mesh, U, bend } from './engine.js';
 import { N, C, T, tileAt, groundAt, warp, waterY, tileOf, isFord, isBridge } from './terrain.js';
 import { tuftKit } from './grass.js';
+import * as wrack from './wrack.js';
 import { trees, blocked, colliders, rockGeo, seats, PIER, SITES, mergeStatic, onRoad } from './props.js';
 
 let seed = 4242;
@@ -291,7 +292,7 @@ function updateFall(t, dt, focus, wet) {
   });
   fallIM.instanceMatrix.needsUpdate = true;
 }
-let leaves = null, petals = null, shrooms = null;
+let leaves = null, petals = null, shrooms = null, wrackN = null;
 export function build() {
   shoreRocks();
   leaves = scatter(leafTex, ['round', 'pink'], 40, 1.7, ['#d5aa58', '#b96b43', '#9f573f', '#d8ac57', '#bd7045', '#c8a03a'], 0.24);   // 秋葉色（Codex 第二輪色票）
@@ -299,10 +300,11 @@ export function build() {
   shrooms = mushrooms();
   pebbles(bankLife());
   pondPlants();
+  wrackN = wrack.build();   // v9.24.4 潮線上的海藻、貝殼、海星、漂流木
   canopyLeaves();
   plane = seaplane();
 }
-export const debug = () => ({ mesh: leaves, leaves: leaves && leaves.count, petals: petals && petals.count, shrooms: shrooms && shrooms.children.length, lv: leaves && leaves.visible });
+export const debug = () => ({ wrack: wrackN, mesh: leaves, leaves: leaves && leaves.count, petals: petals && petals.count, shrooms: shrooms && shrooms.children.length, lv: leaves && leaves.visible });
 export function update(t, dt, focus, wet) {
   if (!leaves) return;
   if (fallIM) updateFall(t, dt == null ? Math.min(0.1, Math.max(0, t - lastT)) : dt, focus, wet); lastT = t;
