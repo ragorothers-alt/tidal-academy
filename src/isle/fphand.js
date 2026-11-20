@@ -201,6 +201,7 @@ function polishArm(geo, source) {
   soft.name = 'fp-peach-skin-lavender-sleeve';
   return soft;
 }
+const LP = new THREE.Vector3(), PT_FILL = 0.55, PT_MAX = 0.17;   // 手從身旁的燈收到的補光：比例與上限
 /** 鏡頭前的手：每幀在鏡頭擺好之後呼叫 update */
 export function createHand(player, scene) {
   const u = player.userData, root = new THREE.Group(), piv = new THREE.Group(), arm = new THREE.Group(), holder = new THREE.Group(), tip = new THREE.Object3D();
@@ -241,8 +242,13 @@ export function createHand(player, scene) {
     u.fpTip = root.visible && kind === 'rod' ? tip : null;
     if (!root.visible) { lastYaw = null; return; }
     if (fillU) {   // 環境補光：天空光的一部分加上一點陽光的反彈
-      if (!lights) { lights = []; scene.traverse(l => { if (l.isHemisphereLight || l.isDirectionalLight || l.isAmbientLight) lights.push(l); }); }
-      fillU.value.setRGB(0, 0, 0); for (const l of lights) if (l.visible) { const k = l.intensity * (l.isDirectionalLight ? 0.035 : 0.16); fillU.value.r += l.color.r * k; fillU.value.g += l.color.g * k; fillU.value.b += l.color.b * k; }
+      if (!lights) { lights = []; scene.traverse(l => { if (l.isHemisphereLight || l.isDirectionalLight || l.isAmbientLight || l.isPointLight) lights.push(l); }); }
+      fillU.value.setRGB(0, 0, 0); let pr = 0, pg = 0, pb = 0;
+      for (const l of lights) if (l.visible && l.intensity > 0) {
+        if (l.isPointLight) { const d2 = l.getWorldPosition(LP).distanceToSquared(o.camera.position), w = l.distance > 0 ? Math.max(0, 1 - d2 * d2 / l.distance ** 4) : 1, k = l.intensity * w * w / Math.max(d2, 1) * PT_FILL; pr += l.color.r * k; pg += l.color.g * k; pb += l.color.b * k; continue; }   // 身旁的燈：手背對著燈時也帶到燈的色溫
+        const k = l.intensity * (l.isDirectionalLight ? 0.035 : 0.16); fillU.value.r += l.color.r * k; fillU.value.g += l.color.g * k; fillU.value.b += l.color.b * k;
+      }
+      const pm = Math.max(pr, pg, pb), pk = pm > PT_MAX ? PT_MAX / pm : 1; fillU.value.multiplyScalar(1 - 0.6 * Math.min(1, pm / PT_MAX)); fillU.value.r += pr * pk; fillU.value.g += pg * pk; fillU.value.b += pb * pk;   // 上限：室內幾盞燈加起來不會把手照平
     }
     // 放在畫面右下角：依視角換算，橫式、直式螢幕看起來位置差不多（直式放高一點，避開右下角的按鈕）
     const cam = o.camera, tv = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2), th = tv * (cam.aspect > 0.2 ? cam.aspect : 1.6), D = 0.45;
