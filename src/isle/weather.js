@@ -41,10 +41,11 @@ export const wetness = () => wetK;
 
 /* ---------- 雨絲 ---------- */
 const N = 700, BOX = 26;
-const pos = new Float32Array(N * 6), speed = new Float32Array(N);
-for (let i = 0; i < N; i++) { const x = (Math.random() - 0.5) * BOX * 2, y = Math.random() * 14, z = (Math.random() - 0.5) * BOX * 2; pos.set([x, y, z, x - 0.05, y - 0.55, z], i * 6); speed[i] = 14 + Math.random() * 6; }
-const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-const mat = bend(new THREE.LineBasicMaterial({ color: '#cfe4ff', transparent: true, opacity: 0, depthWrite: false }));
+const pos = new Float32Array(N * 6), speed = new Float32Array(N), LEN = 0.8, rcol = new Float32Array(N * 8);
+for (let i = 0; i < N; i++) { const x = (Math.random() - 0.5) * BOX * 2, y = Math.random() * 14, z = (Math.random() - 0.5) * BOX * 2; pos.set([x, y, z, x - 0.05, y - LEN, z], i * 6); speed[i] = 14 + Math.random() * 6;
+  const b = 0.45 + Math.random() * 0.55; rcol.set([1, 1, 1, 0, 1, 1, 1, b], i * 8); }   // v9.24.11 每一道雨絲上端透明、下端最亮（像快門拖出來的殘影），亮度有深有淺（以前每一道都是同樣亮的短白線）
+const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(rcol, 4));
+const mat = bend(new THREE.LineBasicMaterial({ color: '#c6d6e6', transparent: true, opacity: 0, depthWrite: false, vertexColors: true }));
 const lines = new THREE.LineSegments(geo, mat); lines.frustumCulled = false; lines.renderOrder = 4; scene.add(lines);
 
 /* ---------- 彩虹：天空裡背對太陽、仰角 42° 的弧（v8.7）----------
@@ -109,9 +110,9 @@ export function update(dt, hour, night, focus, onChange) {
   if (lines.visible) {
     lines.position.set(focus.x, focus.y, focus.z);
     for (let i = 0; i < N; i++) {
-      const o = i * 6, dy = speed[i] * dt * (now === 'storm' ? 1.4 : 1), dx = now === 'storm' ? dy * 0.6 : 0;
+      const o = i * 6, dy = speed[i] * dt * (now === 'storm' ? 1.4 : 1), dx = now === 'storm' ? dy * 0.6 : 0; if (now === 'storm') pos[o + 3] = pos[o] - LEN * 0.6;   // 暴風雨的雨絲順著風斜
       pos[o + 1] -= dy; pos[o + 4] -= dy; pos[o] -= dx; pos[o + 3] -= dx;
-      if (pos[o + 4] < -1) { const x = (Math.random() - 0.5) * BOX * 2, z = (Math.random() - 0.5) * BOX * 2, y = 12 + Math.random() * 3; pos.set([x, y, z, x - 0.05, y - 0.55, z], o); }
+      if (pos[o + 4] < -1) { const x = (Math.random() - 0.5) * BOX * 2, z = (Math.random() - 0.5) * BOX * 2, y = 12 + Math.random() * 3; pos.set([x, y, z, x - 0.05, y - LEN, z], o); }
     }
     geo.attributes.position.needsUpdate = true;
   }
