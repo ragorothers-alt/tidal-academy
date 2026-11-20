@@ -197,13 +197,13 @@ function shrubLeafMaterial() {
     sh.fragmentShader = 'varying float vNatureCore;\n' + sh.fragmentShader.replace('#include <map_fragment>', `
       vec4 leafT = texture2D(map, vMapUv);
       if (vNatureCore < 0.5) {
-        diffuseColor.a *= leafT.a;
+        vec3 cardN = normalize(cross(dFdx(vWP), dFdy(vWP))); diffuseColor.a *= leafT.a * smoothstep(0.05, 0.3, abs(dot(cardN, normalize(cameraPosition - vWP))));   // v9.24：幾乎側對鏡頭的葉卡淡掉
         #ifdef TA_SHRUBTEX
           diffuseColor.rgb *= clamp(dot(leafT.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.139, 0.6, 1.5);
         #endif
       }`);
   };
-  m.customProgramCacheKey = () => 'nature-shrub-v1' + (m.defines.TA_SHRUBTEX !== undefined ? '-tex' : '');
+  m.customProgramCacheKey = () => 'nature-shrub-v2' + (m.defines.TA_SHRUBTEX !== undefined ? '-tex' : '');
   return (SHRUB_LEAF = m);
 }
 /** props3d 載入葉叢圖集後呼叫：灌木的葉叢卡換上 Blender 算的闊葉小枝 */
@@ -299,10 +299,10 @@ export function natureCrown(model) {
       const core = new THREE.IcosahedronGeometry(1, 2), pp = core.attributes.position, pn = core.attributes.normal;
       for (let i = 0; i < pp.count; i++) {
         v.fromBufferAttribute(pp, i); const bump = 1 + .1 * Math.sin(v.x * 7 + j) * Math.cos(v.z * 6 - v.y * 5 + j * 1.3);
-        q.set(x + v.x * sx * .7 * bump, y + v.y * sy * .66 * bump, z + v.z * sz * .7 * bump); pp.setXYZ(i, q.x, q.y, q.z);
+        q.set(x + v.x * sx * .62 * bump, y + v.y * sy * .58 * bump, z + v.z * sz * .62 * bump); pp.setXYZ(i, q.x, q.y, q.z);
         nC.copy(q).sub(crownC).normalize(); nOut.copy(v).normalize().multiplyScalar(.6).addScaledVector(nC, .4).normalize(); pn.setXYZ(i, nOut.x, nOut.y, nOut.z);
       }
-      tint(core, '#56794a', .04); core.applyMatrix4(model.matrix); core.translate(-origin.x, -origin.y, -origin.z); cores.push(core);
+      tint(core, '#3f5c38', .04); core.applyMatrix4(model.matrix); core.translate(-origin.x, -origin.y, -origin.z); cores.push(core);
     }
     // 葉叢卡：數量跟這一團的體積成正比（大團約 150 張、小團約 60 張），散在 0.62–1.04 倍半徑的外殼裡，偏上半部
     const n = Math.round(48 + 860 * sx * sy * sz);
@@ -314,7 +314,7 @@ export function natureCrown(model) {
       cn.set(nOut.x + (rng() - .5) * .9, nOut.y + (rng() - .5) * .9 + .15, nOut.z + (rng() - .5) * .9).normalize();   // 卡片朝外、亂一點，看起來不像貼在球面上的鱗片
       const tangent = new THREE.Vector3().crossVectors(cn, Math.abs(cn.y) > .95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).normalize(), up = new THREE.Vector3().crossVectors(tangent, cn).normalize();
       const roll = rng() * Math.PI * 2, right = tangent.clone().multiplyScalar(Math.cos(roll)).addScaledVector(up, Math.sin(roll)), vert = up.clone().multiplyScalar(Math.cos(roll)).addScaledVector(tangent, -Math.sin(roll));
-      const span = (.19 + rng() * .1) * (r > .9 ? 1 : .9), cell = Math.floor(rng() * 4), u0 = (cell % 2) * .5, v0 = Math.floor(cell / 2) * .5, flip = rng() < .5;
+      const span = (.31 + rng() * .15) * (r > .9 ? 1 : .9), cell = Math.floor(rng() * 4), u0 = (cell % 2) * .5, v0 = Math.floor(cell / 2) * .5, flip = rng() < .5;
       const P = [], UV = [];
       for (const [u, w] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
         q.copy(pos).addScaledVector(right, u * span / 2).addScaledVector(vert, w * span / 2).applyMatrix4(model.matrix).sub(origin); P.push(q.x, q.y, q.z);

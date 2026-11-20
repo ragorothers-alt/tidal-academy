@@ -577,7 +577,7 @@ export function bend(mat, kind) {
         { // v7.7 夢幻風：粉珍珠色的大色塊、順著風的淡淡沙紋，近處陽光下有零星的細閃光
           float rip = sin(dot(p, vec2(0.8, 0.6)) * 7.0 + n_v(p * 0.7) * 5.0) * 0.5 + 0.5;
           sd *= (0.965 + smoothstep(0.2, 1.0, rip) * 0.07) * mix(vec3(1.0), vec3(1.04, 0.98, 0.99), smoothstep(0.35, 0.7, n_v(p * 0.3 + 2.0)));
-          tGlint = step(0.992, n_h(floor(p * 40.0))) * clamp(1.0 - length(fwidth(p)) * 30.0, 0.0, 1.0); }
+          tGlint = step(0.992, n_h(floor(p * 40.0))) * clamp(1.0 - length(fwidth(p)) * 30.0, 0.0, 1.0) * smoothstep(0.4, 0.1, length(fract(p * 40.0) - 0.5)) * 2.0; }   // v9.24：圓的一小點（以前整格發亮，近看是一塊塊白色方格）
         // 材質濕邊依低頻位置改變寬度；不動沙面、水面或任何高度查詢。
         float wetEdge = 0.22 + (n_v(p * 0.42 + 3.0) - 0.5) * 0.24;
         float wet = 1.0 - smoothstep(wetEdge - 0.12, wetEdge + 0.24, vWP.y);
@@ -906,7 +906,7 @@ export function bend(mat, kind) {
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.14, 1.13, 0.96) + vec3(0.012, 0.016, 0.0), clamp(vGust, 0.0, 1.0) * 0.5);   // 陣風壓過去的草露出較亮的葉背
 `);
     f = f.replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  float sGl = 0.0;\n' + seasonGLSL(kind) + REAL(kind));
-    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade * taSunK();\n  if (tShore > 0.01) { roughnessFactor = mix(roughnessFactor, 0.24, tShore * 0.85); float cvS = max(dot(normalize(cameraPosition - vWP), normalize(vWN)), 0.0); totalEmissiveRadiance += uSkyRef * (0.03 + 0.97 * pow(1.0 - cvS, 5.0)) * tShore * 0.2 * (1.0 - uInside); }');   // 晴天才閃（雲影裡不閃）；v9.23.1 濕沙像一層薄水膜，斜看映著天光
+    if (kind === 'terrain') f = f.replace('float sGl = 0.0;', 'float sGl = 0.0;\n  sGl = tGlint * (0.5 + 0.5 * sin(uTime * 2.1 + n_h(floor(vWP.xz * 40.0)) * 40.0)) * 0.7 * uShade * taSunK();\n  if (tShore > 0.01) { roughnessFactor = mix(roughnessFactor, 0.36, tShore * 0.85); float cvS = max(dot(normalize(cameraPosition - vWP), normalize(vWN)), 0.0); totalEmissiveRadiance += uSkyRef * (0.03 + 0.97 * pow(1.0 - cvS, 5.0)) * tShore * 0.12 * (1.0 - uInside); }');   // 晴天才閃（雲影裡不閃）；v9.23.1 濕沙像一層薄水膜，斜看映著天光；v9.24 反光收一點（粗糙度 0.24 → 0.36、天光 0.2 → 0.12）：坡肩那道又細又亮的高光加上偏藍的反光，濕沙像一條灰色果凍
     if (kind === 'grass') f = f.replace('float sGl = 0.0;', `float sGl = 0.0;
   if (uDew > 0.001) {   // v9.22.30 晴天的早上草葉掛著露珠：稀疏的細點在晨光裡隨著視角一閃一閃（只在近處，遠處的細點會變成閃爍的雜訊）
     vec3 dqs = vWP * vec3(30.0, 24.0, 30.0), dq = floor(dqs); float dh = n_h(dq.xz + dq.y * 7.13);
@@ -921,6 +921,9 @@ export function bend(mat, kind) {
         #include <opaque_fragment>`);
     if (kind === 'water') f = f.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n  if (vWP.y > 0.8) reflectedLight.indirectSpecular *= 0.3;');   // 小溪：天空倒影淡一點，低角度看也是清透的青綠色、看得到溪底（不會整片泛白）
     f = f.replace('#include <opaque_fragment>', `
+        #ifdef TA_CASC
+          sGl *= taSh;   // v9.24：影子裡沒有陽光，沙粒、雪面、露珠都不閃
+        #endif
         outgoingLight += vec3(sGl) * 0.6;   // 雪面閃光${kind === 'water' ? '\n        vec3 wN = normal, wSkyR = vec3(-1.0), wSpec = vec3(0.0);' + SEA_GLSL + `
         { float lw = max(max(outgoingLight.r, outgoingLight.g), outgoingLight.b); outgoingLight *= lw > 1.0 ? (1.0 + (lw - 1.0) * 0.25) / lw : 1.0; }
         #ifdef TA_SEA
@@ -1056,7 +1059,7 @@ ${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `        { float lw 
         snow *= 0.8 + 0.2 * smoothstep(0.02, 0.14, dot(bc, vec3(0.3, 0.59, 0.11)));   // 葉上的雪留一點針葉的明暗，不是一片平塗的白` : ''}
         diffuseColor.rgb = mix(diffuseColor.rgb, snow, cov);
         roughnessFactor = mix(roughnessFactor, 0.62, cov);
-        float gl = step(0.9965, n_h(floor(vWP.xz * 46.0 + vWP.y * 13.0)));
+        vec2 glq = vWP.xz * 46.0 + vWP.y * 13.0; float gl = step(0.9965, n_h(floor(glq))) * smoothstep(0.4, 0.1, length(fract(glq) - 0.5)) * 2.0;   // v9.24：雪面的閃光也是圓的一小點
         sGl = gl * cov * (0.5 + 0.5 * sin(uTime * 2.4 + n_h(floor(vWP.xz * 46.0)) * 40.0)) * 0.9;
       }
       if (uWet > 0.0) {   // v8.7 雨天：朝上的地面、石板、屋頂顏色變深、表面比較亮滑；低窪的地方多一點水光（雨停後慢慢乾）

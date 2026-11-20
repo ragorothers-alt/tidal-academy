@@ -8,15 +8,18 @@ import { N, C, T, tileAt, groundAt, seaMesh, waterAt, waterY, warp, surfaceMat, 
 const BENDV = `uniform float uCurve; uniform float uBendF;
   vec4 bendPos(vec4 mv){ float bz = max(-mv.z - uBendF, 0.0); mv.y -= bz * bz * uCurve; return mv; }`;
 
+/* 沙灘緩坡的剖面（buildShore 與水膜著色器共用）：沙面高度、坡長、往海每公尺降多少、坡肩圓角、水膜往岸上鋪多遠、水膜從水線算起的長度 */
+const Y_SAND = 0.362, SLOPE = 1.8, S0 = 0.95 / SLOPE, RSH = 0.3, F_IN = 1.4, F_LEN = 2.0;
+
 /* ---------- 沙灘浪花 ---------- */
 const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: { value: 0.1 }, uNight: { value: 0 }, uBlue: { value: 0 }, uDim: { value: 1 } };   // uDim：v9.22.16 陰雨天的天光比較暗
 const waveMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: waveU,
   vertexShader: `${BENDV}
     attribute float side; attribute float along; uniform float uSea; varying float vS; varying float vA;
-    void main(){ vS = side; vA = along; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02;   // 水線與海面側貼著海平面（隨潮汐升降）
+    void main(){ vS = side; vA = along; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02; else p.y = max(p.y, uSea + 0.02);   // 水線與海面側貼著海平面（隨潮汐升降）；v9.24 水膜貼著坡面，泡在海面下的那一段浮在海面上
       vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`,
-  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; varying float vS; varying float vA;
+  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; uniform float uSea; varying float vS; varying float vA;
     float h(float x){ return fract(sin(x * 91.7) * 43758.5453); }
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -46,19 +49,23 @@ const waveMat = new THREE.ShaderMaterial({
         c.a = min(c.a, 0.9);
       } else {
         // 沙灘那一側：一層薄薄的海水推上來再退去，前緣是一條斷續的泡沫，退去後留下濕沙與殘留的泡泡
-        float v = -vS;   // 0 = 水線，1 = 沙灘內側
-        float reach = 0.55 + 0.4 * sin(t * 0.55 + a * 0.35) * (0.7 + 0.3 * sin(a * 1.3)) + (vn(vec2(a * 1.1, 2.0)) - 0.5) * 0.15;
-        float f = clamp(reach, 0.05, 0.95);
-        float film = 1.0 - smoothstep(f - 0.08, f, v);
-        float lc = lace(vec2(a * 5.0, v * 14.0 + t * 0.4)), dd = f - v;   // dd > 0：水膜前緣後方（往海那一側）
-        float foam = smoothstep(-0.03, 0.0, dd) * exp(-max(dd, 0.0) / 0.1) * mix(0.9, lc, smoothstep(0.0, 0.06, dd));   // v9.22.12 前緣一道泡沫，往海那一側拖著漸散的蕾絲泡（以前是一條細線）
-        float bubbles = film * smoothstep(0.55, 0.85, lace(vec2(a * 9.0, v * 30.0 - t * 0.3))) * 0.5;   // 薄水膜上的小泡泡
-        float wet = (1.0 - smoothstep(0.9, 1.0, v)) * (1.0 - film);
-        c = mix(vec4(0.32, 0.25, 0.14, wet * 0.16), vec4(0.6, 0.92, 0.96, 0.16), film);
-        float sheen = (1.0 - film) * smoothstep(f + 0.3, f + 0.02, v) * (0.55 + 0.45 * vn(vec2(a * 2.0, t * 0.2)));   // 浪剛退去的濕沙：映著天空的一層淡淡反光，越往上越乾
-        c = mix(c, vec4(0.82, 0.9, 1.0, 0.2), sheen * 0.7);
-        foam *= 0.3 + 0.7 * smoothstep(0.25, 0.6, vn(vec2(a * 0.9 + 3.1, t * 0.05)));   // v8.7 一段有泡、一段只剩濕沙，浪線不再是整條等亮的白線
-        c = mix(c, vec4(1.0, 1.0, 1.0, 0.6), max(foam, bubbles));   // v8.7 泡沫淡一點（以前 0.85）
+        // v9.24：水膜貼著坡面往上鋪到平台上（以前是一片 85 公分寬的斜板，浪推到頂時前緣剛好落在板子邊緣，只剩一條髮絲細的弧線）；水線跟著潮汐沿坡面移動
+        float d = -vS - 2.0, dW = (${Y_SAND} - uSea) / ${S0.toFixed(4)} + ${(RSH / 2).toFixed(3)};   // d：離海岸曲線多遠（往海為正）；dW：現在的水線在哪
+        float v = (dW - d) / ${F_LEN.toFixed(1)};   // 0 = 水線，1 = 往岸上兩公尺
+        float reach = 0.3 + 0.24 * sin(t * 0.55 + a * 0.35) * (0.7 + 0.3 * sin(a * 1.3)) + (vn(vec2(a * 1.1, 2.0)) - 0.5) * 0.12 + (vn(vec2(a * 0.45, t * 0.07)) - 0.5) * 0.2;
+        float f = clamp(reach, 0.04, 0.78) + (vn(vec2(a * 4.0, t * 0.22)) - 0.5) * 0.03;   // 前緣不是平滑的弧線：幾十公分一個小舌頭
+        float film = 1.0 - smoothstep(f - 0.035, f, v);
+        float lc = lace(vec2(a * 5.0, v * 10.0 + t * 0.4)), dd = f - v;   // dd > 0：水膜前緣後方（往海那一側）
+        float foam = smoothstep(-0.012, 0.0, dd) * exp(-max(dd, 0.0) / 0.06) * mix(0.9, lc, smoothstep(0.0, 0.03, dd));   // 前緣一道幾公分寬的泡沫，往海那一側拖著十幾公分漸散的蕾絲泡
+        float bubbles = film * smoothstep(0.55, 0.85, lace(vec2(a * 9.0, v * 18.0 - t * 0.3))) * 0.42 * smoothstep(f - 0.4, f - 0.05, v);   // 薄水膜上的小泡泡：集中在前緣後面幾十公分，沿岸與離岸同樣的尺度（不拉成橫條）
+        float wet = (1.0 - smoothstep(0.55, 0.95, v)) * (1.0 - film);
+        float thick = film * (0.3 + 0.7 * (1.0 - smoothstep(0.0, f, v)));   // 水膜靠海那一側厚、前緣薄得幾乎看不見
+        c = mix(vec4(0.32, 0.25, 0.14, wet * 0.08), vec4(0.74, 0.86, 0.9, 0.04 + 0.1 * thick), film);   // 清水的顏色（以前偏青綠，疊在濕沙上成了橄欖色的果凍）；濕沙的深色交給地形著色器
+        float sheen = (1.0 - film) * (1.0 - smoothstep(f + 0.01, f + 0.13, v)) * (0.55 + 0.45 * vn(vec2(a * 2.0, t * 0.2)));   // 浪剛退去的濕沙：映著天空的一層淡淡反光，越往上越乾
+        c = mix(c, vec4(0.9, 0.93, 0.97, 0.14), sheen * 0.7);
+        foam *= 0.45 + 0.55 * smoothstep(0.25, 0.6, vn(vec2(a * 0.9 + 3.1, t * 0.05)));   // 一段泡多、一段泡少，浪線不是整條等亮的白線
+        c = mix(c, vec4(1.0, 1.0, 1.0, 0.7), max(foam, bubbles));
+        c.a *= smoothstep(-0.01, 0.012, v) * smoothstep(${(-F_IN).toFixed(2)}, ${(-F_IN + 0.2).toFixed(2)}, d);   // 海面下的那一段不畫；網格內緣淡出
       }
       c.rgb *= mix(vec3(1.0), vec3(0.22, 0.25, 0.32), uNight) * uDim;   // v9.22.16 浪花不受光照：夜裡只有冷冷的月光那麼亮（以前 0.45 的白在暗藍的夜海上太搶眼），雨天再暗一點
       if (uBlue > 0.001) {   // 藍眼淚：浪花裡的夜光藻被拍打就發光——一點一點閃，泡沫越濃越亮；亮度超過 1，泛光讓它真的像在發光（濕沙與水膜不亮）
@@ -112,7 +119,7 @@ function coastLines() {
 function buildShore() {
   const P = [], S = [], A = [];           // 浪花帶
   const BP = [], BC = [], BN = [], BS = [];        // 沙灘緩坡（蓋住格子狀的階梯邊緣）；BS：v9.23.1 表面分類（沙＋離浪多近）
-  const OFF = 0.5, ySand = 0.362, WL = 0.6, W_OUT = 2.4, IN = 1.7, SLOPE = 1.8;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺；v9.22.20 OFF 0.42 → 0.5（海岸線磨平後，2:1 的斜階梯凸角也包得住）
+  const OFF = 0.5, ySand = Y_SAND, WL = 0.6, W_OUT = 2.4, IN = 1.7;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺；v9.22.20 OFF 0.42 → 0.5（海岸線磨平後，2:1 的斜階梯凸角也包得住）
   const sandWet = new THREE.Color('#e0c78a');
   const push = (x, y, z, s, a) => { P.push(x, y, z); S.push(s); A.push(a); };
   const bpush = (x, y, z, c, nr, wt) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); BN.push(nr[0], nr[1], nr[2]); BS.push(0, 1, -wt, 0); };
@@ -123,7 +130,6 @@ function buildShore() {
   // 三角形一律朝上（海岸線串接方向不固定，要依法線校正繞向，不然一半會被背面剔除）
   const btri = (a, b, c) => { const cy = (b[2] - a[2]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[2] - a[2]); const L = cy >= 0 ? [a, b, c] : [a, c, b]; L.forEach(v => bpush(v[0], v[1], v[2], v[3], v[4], v[5])); };
   // d：從海岸曲線往海的距離。v9.22.20 坡肩是圓的（前 RSH 公尺坡度慢慢加大），以前平台和坡面之間是一道折線
-  const S0 = 0.95 / SLOPE, RSH = 0.3;
   const slopeY = d => (d <= 0 ? ySand - Math.max(0, -d - IN * 0.5) * 0.022 : ySand - S0 * (d < RSH ? d * d / (2 * RSH) : d - RSH / 2));   // v9.23.9 內緣沉到沙地底下約 7 公釐（以前高出 9 公釐，接縫是一條有陰影的細線）
   const slopeG = d => (d <= 0 ? 0 : S0 * Math.min(1, d / RSH));   // 往海每公尺降多少（算法線用）
   coastLines().forEach(({ pts: raw, closed }) => {
@@ -180,9 +186,14 @@ function buildShore() {
         btri(v00, v10, v11); btri(v00, v11, v01);
       }
       // 沙灘側水膜：從水線（著色器設成海平面）沿著緩坡往上到內側
-      const w0 = at(i, WL), w1 = at(j, WL), i0 = at(i, -0.25), i1 = at(j, -0.25);
-      push(w0[0], 0, w0[1], -0.0001, a0); push(i0[0], slopeY(-0.25) + 0.012, i0[1], -1, a0); push(i1[0], slopeY(-0.25) + 0.012, i1[1], -1, a1);
-      push(w0[0], 0, w0[1], -0.0001, a0); push(i1[0], slopeY(-0.25) + 0.012, i1[1], -1, a1); push(w1[0], 0, w1[1], -0.0001, a1);
+      // v9.24：一條條貼著坡面（高 1.2 公分），從坡腳一路鋪到平台上 1.4 公尺；side = -(2 + d)，著色器由 d 與潮位算出離水線多遠
+      const FD = [1.3, 1.0, 0.75, 0.6, 0.45, 0.3, 0.2, 0.1, 0, -0.3, -0.7, -1.1, -F_IN], fy = d => Math.max(slopeY(d), ySand - 0.012) + 0.012;
+      for (let k = 0; k < FD.length - 1; k++) {
+        const d0 = FD[k], d1 = FD[k + 1], p00 = at(i, d0), p10 = at(j, d0), p01 = at(i, d1), p11 = at(j, d1);
+        push(p00[0], fy(d0), p00[1], -2 - d0, a0); push(p01[0], fy(d1), p01[1], -2 - d1, a0); push(p11[0], fy(d1), p11[1], -2 - d1, a1);
+        push(p00[0], fy(d0), p00[1], -2 - d0, a0); push(p11[0], fy(d1), p11[1], -2 - d1, a1); push(p10[0], fy(d0), p10[1], -2 - d0, a1);
+      }
+      const w0 = at(i, WL), w1 = at(j, WL);
       // 海面側浪線
       const o0 = out(i), o1 = out(j);
       push(w0[0], 0, w0[1], 0.0001, a0); push(w1[0], 0, w1[1], 0.0001, a1); push(o1[0], 0, o1[1], 1, a1);

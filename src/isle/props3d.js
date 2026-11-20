@@ -112,14 +112,14 @@ function buildCanopy(g, model, kind, H) {
           if (vNatureCore < 0.5) leafVar = clamp(dot(leafT.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.139, 0.55, 1.6);   // v9.14：葉叢圖集裡每片葉子的深淺（綠葉的平均亮度 0.139 = 1）
         #endif
         diffuseColor.rgb *= natureWash * leafVar;
-        if (vNatureCore < 0.5) diffuseColor.a *= leafT.a;
+        if (vNatureCore < 0.5) { vec3 cardN = normalize(cross(dFdx(vWP), dFdy(vWP))); diffuseColor.a *= leafT.a * smoothstep(0.05, 0.3, abs(dot(cardN, normalize(cameraPosition - vWP)))); }   // v9.24：幾乎側對鏡頭的葉卡淡掉（以前看得到一條條薄片的邊）
         #ifdef TA_LEAFTEX
           // Compensated material input for the unchanged seasonGLSL multipliers.
           vec3 goldC = vNatureAutumn * natureWash * leafVar;
           if (vNatureCore < 0.5) goldC *= mix(vec3(1.0), clamp(texture2D(uGoldMap, vMapUv).rgb / vec3(0.58, 0.37, 0.05), vec3(0.7), vec3(1.4)), 0.3);   // 秋葉的色差：圖集裡有的偏橘、有的偏黃、少數還帶綠
         #endif`);
     };
-    card.customProgramCacheKey = () => `nature-crown-v3-${kind}`;
+    card.customProgramCacheKey = () => `nature-crown-v4-${kind}`;
     loadLeaves().then(tx => {
       if (!tx) return;
       useLeafTex(tx[0], tx[1]); card.map = tx[0]; card.color.set('#ffffff'); goldU.value = tx[1];

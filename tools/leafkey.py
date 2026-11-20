@@ -1,6 +1,6 @@
 """潮汐小島 · 樹葉貼圖去背：洋紅幕上的葉叢（Codex 畫的）→ 透明背景的 WebP，打包成 src/isle/models/tex_leaves.js。
 
-  python tools/leafkey.py <gold.png> <green.png> [--size 512]
+  python tools/leafkey.py <gold.png> <green.png> [--size 512] [--q 88]
 
 - 葉子有黃綠色，不能用綠幕，所以用洋紅幕（#FF00FF）：每個像素的不透明度由「紅、藍都比綠多多少」決定。
 - 半透明的邊緣把背景的洋紅反算掉（觀察到的顏色 = a·葉 + (1-a)·背景），殘留的洋紅再壓掉（藍不超過綠），邊緣不會有粉紅邊。
@@ -14,11 +14,11 @@ from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).resolve().parent.parent
 
-def key(path, size):
+def key(path, size, q=88):
     src = Image.open(path)
     if src.mode == 'RGBA' and all(src.getpixel(p)[3] == 0 for p in [(0, 0), (src.width - 1, 0), (0, src.height - 1), (src.width - 1, src.height - 1)]):
         out = src.resize((size, size), Image.LANCZOS)   # 已經是透明背景、透明處也填好葉色（Blender 算的葉叢圖集）：不去背，直接縮放
-        buf = io.BytesIO(); out.save(buf, 'WEBP', quality=88, method=6)
+        buf = io.BytesIO(); out.save(buf, 'WEBP', quality=q, method=6)
         return 'data:image/webp;base64,' + base64.b64encode(buf.getvalue()).decode(), len(buf.getvalue())
     im = src.convert('RGB'); w, h = im.size; px = im.load()
     corners = [px[x, y] for x in (3, w - 4) for y in (3, h - 4)]
@@ -48,9 +48,11 @@ if __name__ == '__main__':
     args = sys.argv[1:]
     size = int(args[args.index('--size') + 1]) if '--size' in args else 512
     if '--size' in args: i = args.index('--size'); del args[i:i + 2]
+    q = int(args[args.index('--q') + 1]) if '--q' in args else 88   # 已去背的圖集的 WebP 品質（照片質感的葉叢用 76 左右，檔案小一半）
+    if '--q' in args: i = args.index('--q'); del args[i:i + 2]
     pack = {}
     for name, f in zip(('gold', 'green'), args):
-        url, n = key(f, size); pack[name] = url
+        url, n = key(f, size, q); pack[name] = url
         print(f'{name}: {Path(f).name} -> {size}x{size} webp {n:,} B')
     out = ROOT / 'src' / 'isle' / 'models' / 'tex_leaves.js'
     out.write_text('/* 潮汐小島 · 樹冠的葉叢貼圖（2×2 圖集，金／綠共用 alpha；tools/leafkey.py 打包，不要手動修改） */\n'
