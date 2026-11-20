@@ -796,6 +796,13 @@ export function bend(mat, kind) {
         reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.1 + 0.07 * (1.0 - qwn.y)) * (1.0 - uInside);
       }
       #endif`);
+    if (kind === 'terrain') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+      #if NUM_DIR_LIGHTS > 0
+      { // v9.24.9 地形的直立面（河岸與溪岸的土壁、矮崖）背光時：水面和對岸的草地把陽光反彈上來，不是一道黑邊
+        vec3 twn = normalize(vWN); float tvert = 1.0 - smoothstep(0.3, 0.75, twn.y);
+        reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * 0.2 * tvert * (1.0 - uInside);
+      }
+      #endif`);
     if (kind === 'bark') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
       #if NUM_DIR_LIGHTS > 0
       { // v9.23.2 樹蔭下的樹幹不是一根黑柱子：被陽光照亮的地面和葉子把光反彈回來（朝下、朝旁邊的面多一點）

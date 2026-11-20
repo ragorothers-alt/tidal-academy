@@ -53,15 +53,16 @@ const CELL = `vec2 h2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(
 const WV = 'varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }';
 /* v9.18 焦散：水面是幾道不同方向的正弦波疊起來的，光穿過起伏的水面會折射；海底某一點收到的光 = 1 / |折射對應的雅可比行列式|。
    行列式接近 0 的地方就是光聚在一起的亮線——彎彎曲曲、粗細亮度不一、會慢慢流動（以前是格狀的 Voronoi 邊線，看起來像龜裂的磁磚） */
-const CAUS_F = `uniform float uTime; uniform float uK; uniform vec3 uCol; uniform vec3 uCam; uniform float uFog; varying vec3 vW;
+const CAUS_F = `uniform float uTime; uniform float uK; uniform float uScale; uniform vec3 uCol; uniform vec3 uCam; uniform float uFog; varying vec3 vW;
   float caus(vec2 p, float t){ float hxx = 0.0, hyy = 0.0, hxy = 0.0;
     for (int i = 0; i < 6; i++) { float fi = float(i), a = fi * 2.39996 + 0.4, f = 1.5 + fi * 0.33; vec2 d = vec2(cos(a), sin(a));
       float s = sin(dot(d, p) * f + t * (0.8 + fi * 0.17) + fi * 1.7) * (0.8 + 0.2 * sin(fi * 3.1));   // 這道波在這裡的曲率（波高乘上頻率平方，各道差不多）
       hxx -= s * d.x * d.x; hyy -= s * d.y * d.y; hxy -= s * d.x * d.y; }
     float k = 0.85, det = (1.0 + k * hxx) * (1.0 + k * hyy) - k * k * hxy * hxy;
     return 1.0 / max(abs(det), 0.04); }
-  void main(){ vec2 p = vW.xz * 2.7;
-    float I = caus(p, uTime), c = smoothstep(2.2, 11.0, I) * 0.85 + smoothstep(0.8, 2.6, I) * 0.06;   // 亮線之外還有一點點散開的光
+  void main(){ vec2 p = vW.xz * uScale;   // v9.24.9：光紋的大小跟著水深（淺灘細、深處粗而淡），再疊一層細一倍的，不會到處都是同一種大格子
+    float I = caus(p, uTime), c = smoothstep(2.2, 11.0, I) * 0.7 + smoothstep(0.8, 2.6, I) * 0.06;   // 亮線之外還有一點點散開的光
+    float I2 = caus(p.yx * 1.83 + vec2(3.7, 1.9), uTime * 1.25 + 2.0); c += smoothstep(2.6, 10.0, I2) * 0.34;
     c *= 0.3 + 0.7 * smoothstep(0.2, 0.8, sin(vW.x * 0.41 + uTime * 0.06) * sin(vW.z * 0.37 - uTime * 0.05) * 0.5 + 0.5);   // 一片亮、一片暗
     float d = length(vW - uCam) * uFog; gl_FragColor = vec4(uCol * c * uK * exp(-d * d), 1.0); }`;
 const SURF_F = `uniform float uTime; uniform vec3 uCol; uniform vec3 uHi; uniform vec3 uCam; uniform vec3 uFar; varying vec3 vW; ${CELL}
@@ -123,7 +124,7 @@ function build() {
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
   bed = new THREE.Mesh(g, O(bend(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.96 })))); bed.receiveShadow = true; sc.add(bed);
-  caus = new THREE.Mesh(g, O(new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uK: { value: 0.32 * dark * (H.depth > 8 ? 0.35 : 1) }, uCol: { value: new THREE.Color('#d8fbff') }, uCam: { value: new THREE.Vector3() }, uFog: { value: H.fog } },
+  caus = new THREE.Mesh(g, O(new THREE.ShaderMaterial({ uniforms: { uTime: { value: 0 }, uK: { value: 0.32 * dark * (H.depth > 8 ? 0.35 : 1) }, uScale: { value: 4.4 - 0.2 * H.depth }, uCol: { value: new THREE.Color('#d8fbff') }, uCam: { value: new THREE.Vector3() }, uFog: { value: H.fog } },
     vertexShader: WV, fragmentShader: CAUS_F, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2, fog: false })));
   sc.add(caus);
   // 從下往上看的海面

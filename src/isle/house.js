@@ -353,6 +353,40 @@ export const has = key => !!(key && I.INTERIORS && I.INTERIORS[key]);
 export const hostNow = () => host;
 export const spawnYaw = () => (cur && cur.ud.spawn ? cur.ud.spawn[3] ?? Math.PI : Math.PI);
 
+/* v9.24.9 室內的盆栽：各棟室內的資料檔都用「壓扁的低面數球」當葉片、三角柱當葉柄，近看是一塊塊稜角。
+   這裡在合併零件之前統一換掉——壓扁的球（或二十面體）換成一片葉子（橢圓、微微內凹成淺碟、葉緣有一點波浪、一端收成葉尖，正反兩面），
+   沒壓扁的球（一團葉叢、果子）換成面數夠的圓球，三角柱的葉柄換成七邊。只動 kind 是 foliage 的材質，位置、大小、角度都照原本的。 */
+const LEAF_GEO = new Map();
+function leafBlade(r, order) {
+  const key = r.toFixed(3) + order.join('');
+  if (LEAF_GEO.has(key)) return LEAF_GEO.get(key);
+  const SEG = 14, RINGS = [0, 0.42, 0.78, 1], pos = [], uv = [], ix = [], put = (L, T, Wd) => { const v = [0, 0, 0]; v[order[0]] = L; v[order[1]] = T; v[order[2]] = Wd; pos.push(v[0], v[1], v[2]); };
+  for (const side of [1, -1]) {   // 正面與背面（背面往下偏一點，葉子有厚度；兩面在葉緣共用位置但各自的法線）
+    const base = pos.length / 3;
+    RINGS.forEach((rho, j) => { for (let i = 0; i < (j ? SEG : 1); i++) {
+      const a = i / SEG * Math.PI * 2, tip = 1 + 0.2 * Math.pow(Math.max(0, Math.cos(a)), 6), rr = rho * (1 + (tip - 1) * rho);
+      const dish = 0.55 * rho * rho - 0.22 + 0.09 * rho * rho * Math.sin(a * 3 + 0.6) - 0.16 * Math.exp(-rho * rho * 14);   // 淺碟、葉緣波浪、中央葉柄接點的小凹
+      put(Math.cos(a) * rr * r, (dish - (side < 0 ? 0.07 * (1 - rho * rho) : 0)) * r, Math.sin(a) * rho * 0.96 * r); uv.push(0.5 + Math.cos(a) * rho * 0.5, 0.5 + Math.sin(a) * rho * 0.5);
+    } });
+    const at = (j, i) => base + (j ? 1 + (j - 1) * SEG + (i % SEG) : 0), tri = (p, q, s) => (side > 0 ? ix.push(p, s, q) : ix.push(p, q, s));
+    for (let i = 0; i < SEG; i++) tri(at(0, 0), at(1, i), at(1, i + 1));
+    for (let j = 1; j < RINGS.length - 1; j++) for (let i = 0; i < SEG; i++) { tri(at(j, i), at(j + 1, i), at(j + 1, i + 1)); tri(at(j, i), at(j + 1, i + 1), at(j, i + 1)); }
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(ix); geo.computeVertexNormals();
+  LEAF_GEO.set(key, geo); return geo;
+}
+function refineFoliage(root) {
+  root.traverse(o => {
+    if (!o.isMesh || Array.isArray(o.material) || !o.material || (o.material.userData || {}).kind !== 'foliage') return;
+    const P = o.geometry.parameters, type = o.geometry.type; if (!P) return;
+    if ((type === 'SphereGeometry' && P.widthSegments <= 10) || (/^(Icosahedron|Octahedron|Dodecahedron)Geometry$/.test(type) && (P.detail || 0) <= 1)) {
+      const s = [Math.abs(o.scale.x), Math.abs(o.scale.y), Math.abs(o.scale.z)], order = [0, 1, 2].sort((a, b) => s[b] - s[a]);   // order：[最長的軸, 中間, 最扁的軸]
+      const old = o.geometry;
+      if (s[order[2]] < s[order[0]] * 0.62) o.geometry = leafBlade(P.radius, [order[0], order[2], order[1]]); else o.geometry = new THREE.SphereGeometry(P.radius, 16, 11, P.phiStart, P.phiLength, P.thetaStart, P.thetaLength);
+      old.dispose();
+    } else if (type === 'CylinderGeometry' && P.radialSegments <= 4) { const old = o.geometry; o.geometry = new THREE.CylinderGeometry(P.radiusTop, P.radiusBottom, P.height, 7, 1, P.openEnded); old.dispose(); }
+  });
+}
 /** 建立一戶（第一次進門時）：收集地板、碰撞箱，依材質合併零件，算出主光的陰影範圍 */
 function build(key) {
   if (built.has(key)) return built.get(key);
@@ -365,6 +399,7 @@ function build(key) {
     if (o.isMesh) { o.castShadow = !(o.material && o.material.transparent); o.receiveShadow = true; }
   });
   (ud.cols || []).forEach(c => cols.push(new THREE.Box3(new THREE.Vector3(c[0], c[1], c[2]), new THREE.Vector3(c[3], c[4], c[5]))));
+  refineFoliage(g);
   mergeStatic(g, true);
   const isView = o => !!(o.material && o.material.uniforms && o.material.uniforms.uEnv);   // 窗景（玻璃外的那一層）也擋鏡頭：不然鏡頭會從窗戶、門上的小窗穿到屋外
   const blockers = []; g.traverse(o => { if (o.isMesh && o.visible && (isView(o) || !o.userData.camThrough && !(o.material && o.material.transparent))) blockers.push(o); });
