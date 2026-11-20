@@ -8,7 +8,11 @@
    - v6.20：懸崖開放到第三層；面向高兩層的懸崖蓋斜坡會切出兩格長的斜坡；可以跳躍（最多三段跳），二段跳能跳上一層懸崖、跳過一格寬的河。
    存檔 S().dreams = [ { size, name, items: [{ k, id, x, z, r, c, g }], ter: { "x,z": 1|2|3|'w<層>'|'r<方向><層>' }, paint: { "x,z": 小路 id }, shards: [[x, z, 空中]], shardDay, best, hour, weather, villagers: [sid] } | null ×3 ] */
 import * as THREE from 'three';
-import { renderer, camera, M, mesh, U, CURVE, bend, scene as mainScene, leafGeo, canopyCards, cardMat, CARD_DEPTH } from './engine.js';
+import { renderer, camera, M, mesh, U, CURVE, bend, scene as mainScene } from './engine.js';
+import { natureModel, flowerClump, BROADLEAF_LOBES } from './naturemodels.js';
+import { natureRockModel } from './naturerocks.js';
+import { modelClone } from './props.js';
+import { soloCrown } from './props3d.js';
 import { tuftKit } from './grass.js';
 import { animate, chibi, lookAt, setExpr, setSit, gesture } from './chars.js';
 import { buildFurniture, disposeFurniture, loadThumbs, furn } from './room.js';
@@ -52,43 +56,64 @@ const OLD_FLOWER = { '#ff7a9a': '#cf8597', '#ffffff': '#eeebe3', '#ffd23f': '#d8
 /** 小路：[名稱, 底色]，花紋在 buildTerrain 裡依 id 畫 */
 const PAINTS = { stone: ['石板小路', '#e4d8bd'], brick: ['紅磚路', '#c96a4c'], plank: ['木棧道', '#c59866'], sand: ['沙地小路', '#f2e1b6'], dirt: ['泥土小徑', '#b48e66'], star: ['星砂小路', '#d9d6cc'], meadow: ['花草地', '#7f9a5c'] };
 const hs = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
-function treeModel(id, grow) {
-  const g = new THREE.Group(), s = [0.45, 0.7, 1][grow ?? 2];
-  if (id === 'palm') {
-    let px = 0, py = 0;
-    for (let i = 0; i < 6; i++) { const seg = mesh(ownGeo(new THREE.CylinderGeometry(0.12 * s, 0.15 * s, 0.5 * s, 7)), M('#a57a4f'), px, py + 0.25 * s, 0); seg.rotation.z = -0.08 * i; g.add(seg); px += 0.05 * i * s; py += 0.48 * s; }
-    for (let i = 0; i < 7; i++) { const lf = mesh(ownGeo(new THREE.SphereGeometry(0.5 * s, 8, 6)), M('#5b8a45', {}, 'pine'), px + Math.cos(i * 0.9) * 0.7 * s, py - 0.12 * s, Math.sin(i * 0.9) * 0.7 * s); lf.scale.set(1.6, 0.12, 0.38); lf.rotation.y = -i * 0.9; lf.rotation.z = -0.35; g.add(lf); }
-  } else if (id === 'cedar') {
-    g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.13 * s, 0.17 * s, 0.8 * s, 7)), M('#7a5238'), 0, 0.4 * s, 0));
-    [[1.0, 0.9], [0.8, 1.55], [0.55, 2.15], [0.3, 2.62]].forEach(([r, h]) => g.add(mesh(ownGeo(new THREE.ConeGeometry(r * s, 1.0 * s, 16)), M('#3d6b4a', {}, 'pine'), 0, h * s, 0)));
-  } else if (id === 'bamboo') {
-    for (let i = 0; i < 6; i++) { const a = i * 1.05, h = (2.2 + (i % 3) * 0.5) * s; g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.045 * s, 0.055 * s, h, 7)), M('#8aa25a', {}, 'pine'), Math.cos(a) * 0.22, h / 2, Math.sin(a) * 0.22)); const lf = mesh(ownGeo(new THREE.SphereGeometry(0.3 * s, 7, 5)), M('#6a8f48', {}, 'pine'), Math.cos(a) * 0.3, h - 0.1, Math.sin(a) * 0.3); lf.scale.set(1.3, 0.35, 0.8); g.add(lf); }
+/* v9.24.7：夢境島的樹、花和戶外擺設換成主島同一套模型（以前是圓錐、圓柱和球拼的積木）——闊葉樹是主島的枝幹＋葉叢卡樹冠，
+   櫻花樹一年四季開花，杉樹是主島的松、椰子和竹子是主島的椰子樹與竹叢，石頭是主島的岩石，長椅與路燈是主島的那一款。
+   樣板的幾何與材質都是共用的（不登記 ownGeo／ownMat，拆掉時不釋放）；v：依擺放位置算的變化（哪一款、轉幾度） */
+const fitH = (m, h, sink = 0) => { const b = new THREE.Box3().setFromObject(m), k = h / (b.max.y - b.min.y); m.scale.multiplyScalar(k); m.position.y = -b.min.y * k - sink; return m; };
+let FRUIT = null;
+function treeModel(id, grow, v = 0) {
+  const g = new THREE.Group(), s = [0.45, 0.7, 1][grow ?? 2], body = new THREE.Group(); body.rotation.y = v * 0.618; g.add(body);
+  if (id === 'palm' || id === 'bamboo') body.add(fitH(natureModel(id === 'palm' ? 'prop_palm' : 'prop_bamboo').scene.clone(true), (id === 'palm' ? 3.7 : 3.4) * s));
+  else if (id === 'cedar') {
+    const pm = modelClone('PROPMODELS', ['pine_a', 'pine_b', 'pine_c'][v % 3]);
+    if (pm) body.add(fitH(pm, 3.9 * s));
+    else { g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.13 * s, 0.17 * s, 0.8 * s, 7)), M('#7a5238'), 0, 0.4 * s, 0)); [[1.0, 0.9], [0.8, 1.55], [0.55, 2.15], [0.3, 2.62]].forEach(([r, h]) => g.add(mesh(ownGeo(new THREE.ConeGeometry(r * s, 1.0 * s, 16)), M('#3d6b4a', {}, 'pine'), 0, h * s, 0))); }
   } else {
-    g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.12 * s, 0.21 * s, 1.25 * s, 8)), M('#8a5a3b', {}, 'stone'), 0, 0.62 * s, 0));
-    const leaf = id === 'pink' ? M('#ecc6cf', {}, 'sway') : M('#5b8a40', {}, 'sway');
-    [[0, 1.75, 0, 0.85], [0.45, 1.45, 0.2, 0.62], [-0.42, 1.5, -0.15, 0.6], [0.05, 2.25, -0.05, 0.55], [0.6, 1.95, -0.32, 0.42], [-0.52, 2.0, 0.34, 0.44]].forEach(([a, b, c, r], i) => { g.add(mesh(leafGeo(r * s * 0.7, i), leaf, a * s, b * s, c * s)); const cd = mesh(canopyCards(r * s, i), cardMat(id === 'pink' ? '#ecc6cf' : '#5b8a40', 'sway'), a * s, b * s, c * s); cd.customDepthMaterial = CARD_DEPTH; g.add(cd); });
-    if (id === 'fruit' && grow === 2) for (let i = 0; i < 5; i++) { const a = i * 1.3; g.add(mesh(ownGeo(new THREE.SphereGeometry(0.11, 8, 6)), M('#e8843a'), Math.cos(a) * 0.72, 1.5 + (i % 2) * 0.3, Math.sin(a) * 0.72)); }
+    const c = id === 'pink' ? soloCrown('sakura', 0.55, { TA_EVERBLOOM: '' }) : soloCrown('sway', id === 'fruit' ? 0.2 : 0.55);
+    body.scale.setScalar(1.28 * s); body.add(c.model.clone(true));
+    c.parts.forEach(([geo, mat, depth]) => { const m = new THREE.Mesh(geo, mat); m.position.copy(c.C0); m.customDepthMaterial = depth; body.add(m); });
+    if (id === 'fruit' && grow === 2) {   // 果子掛在幾團葉叢的外緣下方
+      FRUIT = FRUIT || [new THREE.SphereGeometry(0.062, 10, 8), M('#d8792c', { roughness: 0.55 })];
+      [0, 1, 3, 4, 5, 7, 8, 10].forEach((j, i) => { const [x, y, z, sx, sy, sz] = BROADLEAF_LOBES[j], d = Math.hypot(x, z + 0.08) || 1, a = i * 2.1; body.add(mesh(FRUIT[0], FRUIT[1], x + x / d * sx * 0.8 + Math.cos(a) * 0.06, y - sy * 0.62, z + (z + 0.08) / d * sz * 0.8 + Math.sin(a) * 0.06)); });
+    }
   }
   return g;
 }
-function flowerModel(c) {
-  const g = new THREE.Group();
-  for (let i = 0; i < 5; i++) { const a = i * 1.26 + 0.3, r = 0.12 + (i % 2) * 0.18; g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.012, 0.012, 0.28, 4)), M('#4f9a3a'), Math.cos(a) * r, 0.14, Math.sin(a) * r, { noCast: true }), mesh(ownGeo(new THREE.SphereGeometry(0.075, 8, 6)), M(OLD_FLOWER[c] || c), Math.cos(a) * r, 0.3, Math.sin(a) * r, { noCast: true })); }
-  return g;
+function flowerModel(c) { const g = new THREE.Group(), m = flowerClump(OLD_FLOWER[c] || c); m.scale.setScalar(1.35); g.add(m); return g; }   // 放大一點，花才高過草
+let FLAG = null;
+/** 石板：一塊邊緣不規則、頂面微微鼓起的扁石 */
+function flagstone() {
+  if (FLAG) return FLAG;
+  const p = [0, 0.055, 0], ix = [], N = 11, rad = i => 0.4 + 0.045 * Math.sin(i * 2.3) + 0.03 * Math.sin(i * 5.1 + 1);
+  for (let i = 0; i < N; i++) { const a = i / N * Math.PI * 2, r = rad(i); p.push(Math.cos(a) * r * 0.86, 0.05, Math.sin(a) * r * 0.86, Math.cos(a) * r, 0.03, Math.sin(a) * r, Math.cos(a) * (r + 0.015), 0, Math.sin(a) * (r + 0.015)); }
+  for (let i = 0; i < N; i++) { const a = 1 + i * 3, b = 1 + ((i + 1) % N) * 3; ix.push(0, b, a, a, b, b + 1, a, b + 1, a + 1, a + 1, b + 1, b + 2, a + 1, b + 2, a + 2); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); geo.setIndex(ix); geo.computeVertexNormals();
+  return (FLAG = geo);
 }
-function outdoorModel(id) {
+function outdoorModel(id, v = 0) {
   const g = new THREE.Group();
-  if (id === 'rock') { const m = mesh(ownGeo(new THREE.IcosahedronGeometry(0.45, 2)), M('#bdb6aa', {}, 'stone'), 0, 0.2, 0); m.scale.set(1.2, 0.75, 1); g.add(m); }
-  else if (id === 'bench') { g.add(mesh(ownGeo(new THREE.BoxGeometry(1.4, 0.08, 0.45)), M('#c48a54'), 0, 0.45, 0), mesh(ownGeo(new THREE.BoxGeometry(1.4, 0.4, 0.06)), M('#c48a54'), 0, 0.7, -0.2)); [-0.6, 0.6].forEach(bx => g.add(mesh(ownGeo(new THREE.BoxGeometry(0.06, 0.45, 0.4)), M('#5a5f6a'), bx, 0.22, 0))); }
-  else if (id === 'lamp') { g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.06, 0.08, 2, 8)), M('#4a4f5c'), 0, 1, 0)); const head = mesh(ownGeo(new THREE.SphereGeometry(0.22, 12, 8)), M('#fff6d8', { emissive: new THREE.Color('#ffc870'), emissiveIntensity: 0.9 }), 0, 2.1, 0); g.add(head); g.userData.head = head; }
-  else if (id === 'fence') { [-0.45, 0.45].forEach(dx => g.add(mesh(ownGeo(new THREE.BoxGeometry(0.1, 0.7, 0.1)), M('#c99a62'), dx, 0.35, 0))); [0.25, 0.52].forEach(y => g.add(mesh(ownGeo(new THREE.BoxGeometry(1.0, 0.08, 0.06)), M('#b98a55'), 0, y, 0))); }
-  else if (id === 'stone') { const m = mesh(ownGeo(new THREE.CylinderGeometry(0.42, 0.44, 0.06, 14)), M('#cfc4ae', {}, 'stone'), 0, 0.03, 0, { noCast: true }); g.add(m); }
+  if (id === 'rock') { const m = natureRockModel('prop_boulder', v).scene.clone(true), b = new THREE.Box3().setFromObject(m), k = 1.04 / Math.max(b.max.x - b.min.x, b.max.z - b.min.z); m.scale.multiplyScalar(k); m.position.y = -b.min.y * k - 0.04; m.rotation.y = v * 0.618; g.add(m); }
+  else if (id === 'bench') {
+    const pm = modelClone('PROPMODELS', 'bench');
+    if (pm) g.add(pm);
+    else { g.add(mesh(ownGeo(new THREE.BoxGeometry(1.4, 0.08, 0.45)), M('#c48a54'), 0, 0.45, 0), mesh(ownGeo(new THREE.BoxGeometry(1.4, 0.4, 0.06)), M('#c48a54'), 0, 0.7, -0.2)); [-0.6, 0.6].forEach(bx => g.add(mesh(ownGeo(new THREE.BoxGeometry(0.06, 0.45, 0.4)), M('#5a5f6a'), bx, 0.22, 0))); }
+  } else if (id === 'lamp') {
+    const pm = modelClone('PROPMODELS', 'lamp');
+    if (pm) {   // 燈芯的材質每盞各自一份：夜裡調亮只動這一盞（樣板的材質是主島路燈共用的）
+      let lit = null; pm.traverse(o => { if (o.isMesh && !Array.isArray(o.material) && o.material.emissive && o.material.emissiveIntensity > 0 && o.material.emissive.getHex()) { lit = lit || ownMat(o.material.clone()); o.material = lit; g.userData.head = g.userData.head || o; } });
+      pm.position.x = -0.14; g.add(pm);
+    } else { g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.06, 0.08, 2, 8)), M('#4a4f5c'), 0, 1, 0)); const head = mesh(ownGeo(new THREE.SphereGeometry(0.22, 12, 8)), M('#fff6d8', { emissive: new THREE.Color('#ffc870'), emissiveIntensity: 0.9 }), 0, 2.1, 0); g.add(head); g.userData.head = head; }
+  } else if (id === 'fence') {   // 兩根削尖的圓木樁、兩條釘得不太齊的橫板
+    [-0.45, 0.45].forEach((dx, i) => { g.add(mesh(ownGeo(new THREE.CylinderGeometry(0.048, 0.056, 0.7, 8)), M('#9c7a55', {}, 'wood'), dx, 0.35, 0), mesh(ownGeo(new THREE.ConeGeometry(0.048, 0.07, 8)), M('#9c7a55', {}, 'wood'), dx, 0.735, 0)); });
+    [[0.25, 0.012, '#a98761'], [0.52, -0.015, '#94714c']].forEach(([y, tilt, col]) => { const r = mesh(ownGeo(new THREE.BoxGeometry(1.0, 0.085, 0.03)), M(col, {}, 'wood'), 0, y, 0.05); r.rotation.z = tilt; g.add(r); });
+  } else if (id === 'stone') { const m = mesh(flagstone(), M('#b9b1a2', {}, 'stone'), 0, 0, 0, { noCast: true }); m.rotation.y = v * 0.618; g.add(m); }
   return g;
 }
 function modelOf(it) {
-  if (it.k === 'tree') return treeModel(it.id, it.g);
+  const v = Math.floor(hs(it.x || 0, it.z || 0) * 97);
+  if (it.k === 'tree') return treeModel(it.id, it.g, v);
   if (it.k === 'flower') return flowerModel(it.c);
-  if (it.k === 'out') return outdoorModel(it.id);
+  if (it.k === 'out') return outdoorModel(it.id, v);
   const f = furn(it.id); return f ? buildFurniture(f) : new THREE.Group();
 }
 const footOf = it => { if (it.k !== 'furn') return [1, 1]; const f = furn(it.id); const [w, d] = (f && f.size) || [1, 1]; return it.r % 2 ? [d, w] : [w, d]; };
@@ -500,7 +525,8 @@ function leave() {
 /* ---------- 造島工具 ---------- */
 function clearGhost() { removeObject(ghost); ghost = null; }
 function select(s) { sel = s; rot = 0; clearGhost(); if (!s || s.k === 'remove') return;
-  if (s.k === 'ter' || s.k === 'paint') { ghost = new THREE.Mesh(ownGeo(new THREE.BoxGeometry(1, 0.08, 1)), ownMat(new THREE.MeshBasicMaterial({ color: s.k === 'paint' ? (s.id === 'erase' ? '#ffffff' : PAINTS[s.id][1]) : { river: '#5fc8f0', cliff: '#c8945a', ramp: '#ffd36b', lower: '#ffffff' }[s.op], transparent: true, opacity: 0.55, depthWrite: false }))); sc.add(ghost); return; } ghost = modelOf(s); ghost.traverse(o => { if (o.isMesh) { o.material = ownMat(o.material.clone()); o.material.transparent = true; o.material.opacity = 0.55; o.castShadow = false; } }); sc.add(ghost); }
+  if (s.k === 'ter' || s.k === 'paint') { ghost = new THREE.Mesh(ownGeo(new THREE.BoxGeometry(1, 0.08, 1)), ownMat(new THREE.MeshBasicMaterial({ color: s.k === 'paint' ? (s.id === 'erase' ? '#ffffff' : PAINTS[s.id][1]) : { river: '#5fc8f0', cliff: '#c8945a', ramp: '#ffd36b', lower: '#ffffff' }[s.op], transparent: true, opacity: 0.55, depthWrite: false }))); sc.add(ghost); return; } ghost = modelOf(s); ghost.traverse(o => { if (o.isMesh) { o.material = ownMat(o.material.clone()); o.material.transparent = true; o.material.opacity = 0.55; if (o.material.alphaTest) o.material.alphaTest = 0.2; o.castShadow = false; } }); sc.add(ghost); }   // alphaTest 0.2：葉叢卡半透明後還看得到樹冠
+export const dbg = { select: s => select(s) };   // 測試用：直接選一樣要擺的東西（看半透明的預覽）
 const front = () => { const fx = P.position.x + Math.sin(P.rotation.y) * 1.3, fz = P.position.z + Math.cos(P.rotation.y) * 1.3; return [Math.round(fx), Math.round(fz)]; };
 function cellsOf(it) { const [w, d] = footOf(it), x0 = it.x - Math.floor((w - 1) / 2), z0 = it.z - Math.floor((d - 1) / 2), out = []; for (let dz = 0; dz < d; dz++) for (let dx = 0; dx < w; dx++) out.push((x0 + dx) + ',' + (z0 + dz)); return out; }
 function free(it) {

@@ -286,6 +286,40 @@ export function natureModel(id, variant = 0) {
   return MODELS.get(key);
 }
 
+/** 夢境島的花叢（v9.24.7）：七枝高低不一的花——微彎的細莖、莖上兩片小葉、六瓣的花與花心、一個花苞，底下一圈基生葉。
+    同一個顏色共用一份幾何；回傳 Mesh（原點在地面、整叢約 0.5 公尺寬） */
+const CLUMPS = new Map();
+export function flowerClump(color) {
+  if (!CLUMPS.has(color)) {
+    const r = natureRandom(4409), list = [], base = new THREE.Color(color), Y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion();
+    const hsl = base.getHSL({}), heart = hsl.h > .1 && hsl.h < .2 && hsl.s > .3 ? '#7a5228' : '#d6ae3a';   // 黃花配褐色花心，其他配黃花心
+    for (let i = 0; i < 9; i++) {
+      const a = i * 2.399 + r(), d = new THREE.Vector3(Math.cos(a) * .8, .5 + r() * .55, Math.sin(a) * .8);
+      list.push(tint(orientLeaf(leaf(.1 + r() * .08, .03 + r() * .012, .02), new THREE.Vector3(Math.cos(a) * .03, .004, Math.sin(a) * .03), d, Math.PI / 2 - a), i % 2 ? '#5f8546' : '#4f7540', .05));
+    }
+    for (let s = 0; s < 7; s++) {
+      const a = s * 2.399 + .4, rad = s ? .07 + r() * .17 : 0, h = .2 + r() * .2, lean = .03 + r() * .06;
+      const bx = Math.cos(a) * rad, bz = Math.sin(a) * rad, tx = bx + Math.cos(a) * lean, tz = bz + Math.sin(a) * lean;
+      list.push(tint(curvedWood([[bx, 0, bz], [bx + (tx - bx) * .25, h * .55, bz + (tz - bz) * .25], [tx, h, tz]], [.0065, .0055, .0045], 4, 5), '#55783f', .04));
+      for (let k = 0; k < 2; k++) {
+        const t = .28 + k * .27 + r() * .08, la = a + (k ? 2.2 : -1.6) + r();
+        list.push(tint(orientLeaf(leaf(.07 + r() * .03, .022, .012), new THREE.Vector3(bx + (tx - bx) * t * .4, h * t, bz + (tz - bz) * t * .4), new THREE.Vector3(Math.cos(la), .7, Math.sin(la)), Math.PI / 2 - la), '#5b7f44', .05));
+      }
+      const top = new THREE.Vector3(tx, h, tz); q.setFromUnitVectors(Y, new THREE.Vector3(Math.cos(a) * .4, 1, Math.sin(a) * .4).normalize());
+      const head = g => { g.applyQuaternion(q); g.translate(top.x, top.y, top.z); list.push(g); };
+      if (s === 5) { const bud = new THREE.IcosahedronGeometry(.016, 1); bud.scale(.8, 1.5, .8); bud.translate(0, .016, 0); head(tint(bud, base.clone().multiplyScalar(.82), .04)); continue; }
+      const n = 5 + (s % 2), shade = base.clone().multiplyScalar(.9 + r() * .16), open = .32 + r() * .3, size = .85 + r() * .3;
+      for (let p = 0; p < n; p++) {
+        const pa = p / n * Math.PI * 2 + s;
+        head(tint(orientLeaf(leaf(.062 * size, .044 * size, .009), new THREE.Vector3(Math.cos(pa) * .006, 0, Math.sin(pa) * .006), new THREE.Vector3(Math.cos(pa), open, Math.sin(pa)), Math.PI / 2 - pa), shade, .05));
+      }
+      const c = new THREE.IcosahedronGeometry(.013 * size, 1); c.scale(1, .55, 1); c.translate(0, .006, 0); head(tint(c, heart, .06));
+    }
+    CLUMPS.set(color, mergeNatureGeometry(list));
+  }
+  const m = new THREE.Mesh(CLUMPS.get(color), natureMaterial('#ffffff', 'plain', true)); m.name = 'flower-clump'; m.frustumCulled = false; return m;
+}
+
 /** Crown geometry only; callers retain TA_GOLD/TA_TREEK/TA_LEAFTEX material hooks.
     v9.14 半寫實：以前每一團樹冠是好幾顆不透明的扁球（遠看像一朵朵棉花），現在內芯縮成一顆暗一點、凹凸的小球（只負責擋住樹冠後面的天空），
     外形交給幾百張葉叢卡：models/tex_leaves.js 的 2×2 葉叢圖集（Blender 算的闊葉小枝），每張卡挑一格、隨機翻轉，

@@ -235,6 +235,21 @@ function canopy(g, model, p) {
   const hold = new THREE.Object3D(); hold.scale.setScalar(p.h / c.h); hold.position.set(0, 0, 0); g.add(hold);
   c.trees.push({ g, hold, vis: true, k: g.userData.natureTreeK }); return hold;
 }
+/** 夢境島用：一棵一組網格的闊葉樹冠（主島是全島共用的 InstancedMesh）。葉叢卡與著色和主島同一套；秋色與色群寫成每個頂點的常數。
+    回傳 { model 樹幹枝椏的樣板（呼叫的人自己 clone）, parts [[幾何, 材質, 深度材質] ×2], C0 樹冠原點 } */
+const SOLO = {};
+export function soloCrown(kind = 'sway', k = 0.55, defs = null) {
+  const key = kind + '|' + k + '|' + Object.keys(defs || {}).join();
+  if (SOLO[key]) return SOLO[key];
+  const model = natureModel('prop_tree').scene, c = buildCanopy(null, model, kind, 1), au = autumnInput(k, kind);
+  c.parts.forEach(([geo, mat]) => {
+    const n = geo.attributes.position.count;
+    geo.setAttribute('aNatureAutumn', new THREE.Float32BufferAttribute(Float32Array.from({ length: n * 3 }, (_, i) => au[i % 3]), 3));
+    if (kind === 'sway') geo.setAttribute('aTreeK', new THREE.Float32BufferAttribute(new Float32Array(n).fill(k), 1));
+    if (defs) { mat.defines = { ...mat.defines, ...defs }; mat.needsUpdate = true; }
+  });
+  return (SOLO[key] = { model, parts: c.parts, C0: c.C0 });
+}
 const INST = [], mA = new THREE.Matrix4(), mOff = new THREE.Matrix4();
 /** 依目前看得到的樹，重填每種樹冠的 InstancedMesh */
 function fillCanopies() {
