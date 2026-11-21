@@ -12,77 +12,116 @@ const BENDV = `uniform float uCurve; uniform float uBendF;
 const Y_SAND = 0.362, SLOPE = 1.8, S0 = 0.95 / SLOPE, RSH = 0.3, F_IN = 1.4, F_LEN = 2.0;
 
 /* ---------- 沙灘浪花 ---------- */
-const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: U.uSeaY, uNight: { value: 0 }, uBlue: { value: 0 }, uDim: { value: 1 }, uSky: U.uSkyRef };   // uDim：v9.22.16 陰雨天的天光比較暗；uSea：v9.24.11 和地形的濕沙共用同一個海面高度
+const foamBlank = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); foamBlank.needsUpdate = true;   // 浪沫圖集載入前的替身（1×1）；uFoamOn = 0 時著色器改用程式雜訊當遮罩
+const waveU = { uTime: U.uTime, uCurve: U.uCurve, uBendF: U.uBendF, uSea: U.uSeaY, uNight: { value: 0 }, uBlue: { value: 0 }, uDim: { value: 1 }, uSky: U.uSkyRef, uSunV: U.uSunV, uFoam: { value: foamBlank }, uFoamOn: { value: 0 } };   // uDim：v9.22.16 陰雨天的天光比較暗；uSea：v9.24.11 和地形的濕沙共用同一個海面高度
+/** 浪沫遮罩圖集（models/tex_foam.js，tools/foampack.py 打包）：紅 = 退浪留在濕沙上的薄泡沫網、綠 = 浪頭的厚白泡、藍 = 快消散的零星小泡。
+    和松針圖集一樣：全域變數已經在就直接用，不然掛一個 script 載入；載不到（或沒有 DOM）就維持替身。遮罩是資料，不做 sRGB 轉換 */
+function loadFoam() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  const TA = window.TA = window.TA || {};
+  const apply = url => new THREE.TextureLoader().load(url, tx => { tx.wrapS = tx.wrapT = THREE.RepeatWrapping; tx.colorSpace = THREE.NoColorSpace; tx.generateMipmaps = true; tx.minFilter = THREE.LinearMipmapLinearFilter; tx.magFilter = THREE.LinearFilter; tx.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); waveU.uFoam.value = tx; waveU.uFoamOn.value = 1; }, undefined, () => {});
+  const pack = () => { const u = TA.FOAM; if (u) { apply(u); delete TA.FOAM; } };
+  if (TA.FOAM) pack();
+  else { const sc = document.createElement('script'); sc.src = (window.__MODEL_BASE || 'src/isle/models/') + 'tex_foam.js'; sc.onload = pack; sc.onerror = () => {}; document.head.appendChild(sc); }
+}
 const waveMat = new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: waveU,
   vertexShader: `${BENDV}
-    attribute float side; attribute float along; attribute float endk; uniform float uSea; varying float vS; varying float vA; varying float vE; varying vec3 vW;
-    void main(){ vS = side; vA = along; vE = endk; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02; else p.y = max(p.y, uSea + 0.02);   // 水線與海面側貼著海平面（隨潮汐升降）；v9.24 水膜貼著坡面，泡在海面下的那一段浮在海面上
+    attribute float side; attribute float along; attribute float endk; attribute float dist; uniform float uSea; varying float vS; varying float vA; varying float vE; varying float vD; varying vec3 vW;
+    void main(){ vS = side; vA = along; vE = endk; vD = dist; vec3 p = position; if (side > -0.01) p.y = uSea + 0.02; else p.y = max(p.y, uSea + 0.02);   // 水線與海面側貼著海平面（隨潮汐升降）；v9.24 水膜貼著坡面，泡在海面下的那一段浮在海面上
       vW = p; vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * bendPos(mv); }`,
-  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; uniform float uSea; uniform vec3 uSky; varying float vS; varying float vA; varying float vE; varying vec3 vW;
-    float h(float x){ return fract(sin(x * 91.7) * 43758.5453); }
+  fragmentShader: `uniform float uTime; uniform float uNight; uniform float uBlue; uniform float uDim; uniform float uSea; uniform float uFoamOn; uniform vec3 uSky; uniform vec3 uSunV; uniform sampler2D uFoam;
+    varying float vS; varying float vA; varying float vE; varying float vD; varying vec3 vW;
     float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
       return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }
-    /* 泡沫的蕾絲紋：一團團氣泡之間有破洞，沿著岸邊斷斷續續 */
-    float lace(vec2 p){ float n = vn(p) * 0.6 + vn(p * 2.3 + 4.1) * 0.3 + vn(p * 5.1 + 9.7) * 0.1; return smoothstep(0.38, 0.62, n); }
-    /* v9.24.11 泡沫網：一格格氣泡之間的邊界（到最近兩個格心的距離差）。真的浪沫是白線圍著一個個洞的網，越久洞越大、線越細，最後斷開消失 */
-    float cell(vec2 p){ vec2 i = floor(p), f = fract(p); float d1 = 9.0, d2 = 9.0;
-      for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 g = vec2(float(x), float(y)), c = i + g; float d = length(g + fract(sin(vec2(dot(c, vec2(127.1, 311.7)), dot(c, vec2(269.5, 183.3)))) * 43758.5453) - f); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
-      return d2 - d1; }
-    float net(float e, float m){ return smoothstep(0.0, 0.3, m - smoothstep(0.0, 0.36, e) * 0.8); }   // m：泡沫多濃。接近 1 是一整團白沫，中間是白線圍著洞，越小線越細，0.07 以下沒有
     float fb(vec2 p){ return vn(p) * 0.6 + vn(p * 2.3 + 4.1) * 0.4; }
-    float brk(float m, vec2 p){ return mix(m * (0.2 + 0.8 * smoothstep(0.3, 0.62, vn(p))), m, smoothstep(0.7, 1.0, m)); }   // v9.24.13 把泡沫網打斷：一段有線、一段沒有，不再是一圈圈封閉的多邊形；濃泡的地方照舊成團
-    vec2 wp(vec2 p){ return p + (vec2(vn(p * 0.5 + 1.7), vn(p * 0.5 + 8.3)) - 0.5) * 1.1; }   // 把格子扭一扭：泡沫的洞有大有小、不排成整齊的網
+    /* 泡沫遮罩 → 覆蓋。k：這裡的泡沫多濃；k 越小門檻越高，只剩遮罩裡最亮的線芯與泡泡——線斷開、洞變大，不是整片一起變淡。w：門檻的軟邊（遠處遮罩被縮圖平均，軟邊放寬才不會整片消失或閃爍） */
+    float cov(float m, float k, float w){ return smoothstep(1.0 - k, 1.0 - k + w, m); }
     void main(){
+      // 泡沫畫在哪裡（碎浪線、水膜的推進與退去、潮位）沿用原本的節奏；泡沫長什麼樣子改由三張手繪遮罩決定：浪頭的厚白泡（綠）、後面與退浪的薄泡沫網（紅）、最後留在沙上的零星小泡（藍）
+      // 以前是程式算的格子邊界（白線圍成一個個尖角的多邊形），漲潮時一張網鋪到腳邊
       float t = uTime, a = vA;
-      vec4 c = vec4(0.0); float foamK = 1.0;   // foamK：這個像素是泡沫（1）還是映著天色的水膜（0）
-      if (vS > 0.0) {
-        // 海面那一側：一道道碎浪往岸邊推進——寬窄不一、斷斷續續，靠岸越近越碎
-        // v9.24.11 每道浪：前緣一小段緻密的白沫，後面留下一片泡沫網，越往後洞越大、線越細（以前是一條寬度差不多的白線，三道疊起來像等高線）；有的段落整段沒有浪
-        float v = vS;   // 0 = 岸邊，1 = 外海
-        vec2 q = wp(vec2(a * 4.6 + t * 0.03, v * 11.0 + t * 0.05)); float e1 = cell(q), e2 = cell(q * 2.7 + 7.0), m = 0.0;
+      float dW = (${Y_SAND} - uSea) / ${S0.toFixed(4)} + ${(RSH / 2).toFixed(3)}, x = vD - dW, v = -x / ${F_LEN.toFixed(1)};   // dW：現在的水線離海岸曲線多遠；x：離水線幾公尺（往海為正）；v：0 = 水線，1 = 往岸上兩公尺
+      // 沙灘上的水膜：一層薄薄的海水推上來再退去（v9.24 貼著坡面，水線跟著潮汐沿坡面移動）
+      float amp = 0.24 * (0.7 + 0.3 * sin(a * 1.3)), ph = t * 0.55 + a * 0.35;
+      float base = 0.3 + (vn(vec2(a * 1.1, 2.0)) - 0.5) * 0.12 + (vn(vec2(a * 0.45, t * 0.07)) - 0.5) * 0.2, reach = base + amp * sin(ph);   // base：這一段來回的中心（沿岸慢慢變）
+      float f = clamp(reach, 0.04, 0.78) + (vn(vec2(a * 4.0, t * 0.22)) - 0.5) * 0.03 + (vn(vec2(a * 12.0, t * 0.3)) - 0.5) * 0.012;   // 前緣不是平滑的弧線：幾十公分一個小舌頭，再加幾公分的碎齒
+      float fF = f * ${F_LEN.toFixed(1)}, film = 1.0 - smoothstep(f - 0.02, f, v), dd = (f - v) * ${F_LEN.toFixed(1)}, adv = smoothstep(-0.3, 0.4, cos(ph));   // fF：前緣推到水線以上幾公尺；dd：在前緣後方幾公尺；adv：1 = 正在往上推，0 = 正在退
+      float sea = smoothstep(0.0, 0.05, x);
+      // 海面上的碎浪：一道道往岸邊推進，寬窄不一、斷斷續續；以水線為準（跟著潮汐進退）
+      float T = 0.0, L = 0.0, Bk = 0.0, cpos = 0.0;   // 厚泡、薄網、小泡各有多濃；cpos：這個像素最近的浪頭在哪
+      if (x > -0.05) {
+        float vv = x / 2.4, best = 0.0;
         for (int k = 0; k < 3; k++) {
           float fk = float(k), p = fract(t * 0.18 + fk / 3.0 + sin(a * 0.4 + fk) * 0.06);
           float pos = 1.0 - p + (vn(vec2(a * 0.7, fk * 3.0)) - 0.5) * 0.1 + (vn(vec2(a * 2.6 + fk * 5.0, t * 0.08)) - 0.5) * 0.04;   // 浪線不是平行的：沿岸前後錯開，再加一層小曲折
-          float d = v - pos, tl = (0.05 + 0.2 * vn(vec2(a * 0.9 + fk * 7.0, t * 0.1))) * (0.45 + p);   // d > 0：浪頭後方；tl：泡沫拖多長（越靠岸越長，約 10–80 公分）
-          float brk = smoothstep(0.3, 0.6, vn(vec2(a * 0.55 + fk * 11.0, t * 0.08 + fk)));   // 有些段落沒有浪
-          float on = smoothstep(-0.012, 0.0, d) * brk * smoothstep(0.0, 0.22, p) * (1.0 - p * 0.3);
-          float age = exp(-max(d, 0.0) / tl), cw = 0.015 + 0.03 * vn(vec2(a * 3.0 + fk * 2.0, t * 0.2));
-          float crest = (1.0 - smoothstep(cw * 0.4, cw, d)) * (0.75 + 0.35 * vn(vec2(a * 6.0 + fk, t * 0.3)));   // 前緣 3–9 公分的濃泡
-          m = max(m, on * max(crest, age * (0.12 + 1.05 * fb(vec2(a * 1.4 + fk * 3.0, d * 6.0 + t * 0.05)))));   // 浪頭後面：一塊濃、一塊淡，不是整條一樣
+          float d = vv - pos, tl = (0.05 + 0.2 * vn(vec2(a * 0.9 + fk * 7.0, t * 0.1))) * (0.45 + p);   // d > 0：浪頭後方；tl：泡沫拖多長（越靠岸越長）
+          float on = smoothstep(0.3, 0.6, vn(vec2(a * 0.55 + fk * 11.0, t * 0.08 + fk))) * smoothstep(0.0, 0.22, p) * (1.0 - p * 0.3);   // 有些段落沒有浪
+          float cw = 0.05 + 0.07 * vn(vec2(a * 3.0 + fk * 2.0, t * 0.2));   // 浪頭的厚泡 12–29 公分寬
+          float cr = on * smoothstep(-0.02, 0.006, d) * (1.0 - smoothstep(cw * 0.3, cw, d)) * (0.7 + 0.4 * vn(vec2(a * 6.0 + fk, t * 0.3))) * smoothstep(0.0, 0.08, pos);
+          float back = on * smoothstep(-0.004, 0.004, d);
+          if (cr > best) { best = cr; cpos = pos; }
+          T = max(T, cr);
+          L = max(L, back * exp(-max(d, 0.0) / (tl * 1.3)) * (0.35 + 0.9 * fb(vec2(a * 1.4 + fk * 3.0, d * 6.0 + t * 0.05))));   // 浪頭後面：一塊濃、一塊淡
+          Bk = max(Bk, back * exp(-max(d, 0.0) / (tl * 2.5)) * 0.75);   // 更後面只剩小泡
         }
-        float shore = smoothstep(0.13, 0.0, v);   // 岸邊約 30 公分的碎泡
-        m = max(m, shore * (0.2 + 0.9 * fb(vec2(a * 2.2 + t * 0.1, v * 9.0 - t * 0.4))));
-        c = vec4(0.97, 0.98, 0.97, max(net(e1, brk(m, q * 1.3 + 3.0)), net(e2, brk(m * 0.8, q * 2.9 + 11.0)) * 0.8) * (0.62 + 0.3 * vn(vec2(a * 37.0, v * 90.0))));   // 細泡的質感：不是一片平塗的白
-      } else {
-        // 沙灘那一側：一層薄薄的海水推上來再退去，前緣是一條斷續的泡沫，退去後留下濕沙與殘留的泡泡
-        // v9.24：水膜貼著坡面往上鋪到平台上；水線跟著潮汐沿坡面移動
-        // v9.24.11 水膜本身幾乎透明，只在斜看時映著天光（以前是一張帶白邊的淡藍薄片）；前緣的泡沫寬窄不一、有斷口，後面拖著一片漸散的泡沫網；浪退之後沙上留下幾秒才消的細泡
-        float d = -vS - 2.0, dW = (${Y_SAND} - uSea) / ${S0.toFixed(4)} + ${(RSH / 2).toFixed(3)};   // d：離海岸曲線多遠（往海為正）；dW：現在的水線在哪
-        float v = (dW - d) / ${F_LEN.toFixed(1)};   // 0 = 水線，1 = 往岸上兩公尺
-        float amp = 0.24 * (0.7 + 0.3 * sin(a * 1.3)), ph = t * 0.55 + a * 0.35;
-        float reach = 0.3 + amp * sin(ph) + (vn(vec2(a * 1.1, 2.0)) - 0.5) * 0.12 + (vn(vec2(a * 0.45, t * 0.07)) - 0.5) * 0.2;
-        float f = clamp(reach, 0.04, 0.78) + (vn(vec2(a * 4.0, t * 0.22)) - 0.5) * 0.03 + (vn(vec2(a * 12.0, t * 0.3)) - 0.5) * 0.012;   // 前緣不是平滑的弧線：幾十公分一個小舌頭，再加幾公分的碎齒
-        float film = 1.0 - smoothstep(f - 0.02, f, v), dd = f - v;   // dd > 0：水膜前緣後方（往海那一側）
-        vec2 q = wp(vec2(a * 5.5, (v - f * 0.6) * 11.5)); float e1 = cell(q), e2 = cell(q * 2.7 + 3.0);   // 泡沫大半跟著水走
-        float fw = 0.01 + 0.05 * smoothstep(0.25, 0.8, vn(vec2(a * 2.3 + 9.0, t * 0.12)));   // 前緣的泡沫 2–12 公分寬
-        float fringe = smoothstep(-0.008, 0.0, dd) * (1.0 - smoothstep(fw * 0.35, fw, dd)) * (0.3 + 0.8 * smoothstep(0.2, 0.55, vn(vec2(a * 1.7 + 3.1, t * 0.09))));   // 一段濃、一段幾乎沒有
-        float age = clamp(dd / 0.4, 0.0, 1.0);
-        float m = max(fringe, film * (1.0 - age) * (1.0 - age) * (0.05 + 1.1 * fb(vec2(a * 1.5 + 3.1, (v - f) * 5.0 + t * 0.05))) * smoothstep(0.0, 0.02, dd));   // 前緣後面 80 公分內漸散的泡沫：一塊濃、一塊只剩細線
-        float trail = max(net(e1, brk(m, q * 1.3 + 3.0)), net(e2, brk(m * 0.8, q * 2.9 + 11.0)) * 0.8) * (0.72 + 0.28 * vn(vec2(a * 37.0, v * 75.0)));
-        // 浪退之後留在沙上的細泡：這一點上次被水蓋住是多久以前（由主要的那一道來回算），兩三秒內淡掉
-        float sv = clamp((v - 0.3) / amp, -0.98, 0.98), since = mod(ph - (3.14159 - asin(sv)), 6.28318);
-        float lk = (1.0 - film) * step(abs((v - 0.3) / amp), 0.98) * exp(-since * 1.6), left = 0.0;
-        if (lk > 0.1) left = smoothstep(0.72, 0.9, vn(vec2(a * 46.0, v * 95.0)) * 0.6 + vn(vec2(a * 17.0 + 3.0, v * 35.0)) * 0.4 + lk * 0.22) * lk * fb(vec2(a * 1.9 + 5.0, v * 4.0)) * 0.6;   // v9.24.13 剛退水的沙上留下一點一點的碎泡（以前也是網狀的線，印在裸沙上看得出網孔）
+        float churn = 1.0 - smoothstep(0.0, 0.32, x);   // 水線邊約 30 公分的碎泡
+        L = max(L, churn * (0.25 + 0.85 * fb(vec2(a * 2.2 + t * 0.1, x * 3.75 - t * 0.4)))); Bk = max(Bk, churn * 0.6);
+        T *= sea; L *= sea; Bk *= sea;
+      }
+      // 貼圖座標：沿岸幾公尺 × 離岸幾公尺。泡沫跟著水走（前緣推多遠，圖就跟著移四成，所以沿水流方向略微拉長）；水退之後留在沙上的那一段停在原地
+      float sh = x > 0.0 ? fF * (1.0 - smoothstep(0.0, 2.0, x)) : max(fF, -x);
+      vec2 Q = vec2(a, vD), P = vec2(a, vD + 0.4 * sh);
+      vec2 Pw = P + (vec2(vn(P * 0.8 + vec2(t * 0.13, 0.0)), vn(P * 0.8 + vec2(5.2, t * 0.11))) - 0.5) * 0.12 * sea;   // 海面上的泡沫隨波輕輕晃
+      vec2 Pc = vec2(a, vD + (x > 0.0 ? -cpos * 2.4 : fF));   // 厚泡那一張跟著浪頭（或水膜前緣）一起走，不是浪從一張不動的圖上滑過去
+      mat2 rc = mat2(0.777, -0.629, 0.629, 0.777) * 1.3; vec2 uvC = rc * Pc;
+      // 往太陽的方向在這套座標裡是哪一邊（由螢幕微分換算）：厚泡朝太陽那一側亮、背面暗一點，看起來有厚度
+      vec3 sW = (vec4(uSunV, 0.0) * viewMatrix).xyz; vec2 wx = dFdx(vW.xz), wy = dFdy(vW.xz); float det = wx.x * wy.y - wy.x * wx.y;
+      vec2 dl = vec2(wy.y * sW.x - wy.x * sW.z, wx.x * sW.z - wx.y * sW.x) / (abs(det) > 1e-10 ? det : 1.0);
+      vec2 dq = dFdx(Q) * dl.x + dFdy(Q) * dl.y; dq = dq / max(length(dq), 1e-4) * 0.012;
+      // 四次取樣：兩張不同大小、不同角度的（紅綠藍三個遮罩一次拿到），加上跟著浪頭走的厚泡與它往太陽偏一點的那一點。轉過角度之後，沿著岸邊看不到整齊的重複
+      vec3 A = texture2D(uFoam, mat2(0.819, 0.574, -0.574, 0.819) * Pw * 1.25).rgb, B = texture2D(uFoam, mat2(0.391, -0.921, 0.921, 0.391) * Pw * 0.62 + 0.37).rgb;
+      float G = texture2D(uFoam, uvC).g, Ge = texture2D(uFoam, uvC + rc * dq).g;
+      if (uFoamOn < 0.5) {   // 圖集還沒載入（或載不到）：用雜訊湊一組遮罩，至少還有泡沫
+        float n = fb(Pw * 5.0), r = 1.0 - abs(n * 2.0 - 1.0);
+        A = B = vec3(r * r * r * r * (0.4 + 0.6 * vn(Pw * 1.7)), smoothstep(0.3, 0.55, n), smoothstep(0.8, 0.9, vn(Pw * 40.0)));
+        G = Ge = smoothstep(0.3, 0.55, fb(Pc * 6.0));
+      }
+      vec2 fq = fwidth(Q); float dfar = smoothstep(0.004, 0.05, max(fq.x, fq.y)), w = mix(0.16, 0.5, dfar), wL = mix(0.22, 0.55, dfar);   // 一個像素蓋住幾公分：腳邊門檻利、遠處放軟
+      float nb = smoothstep(0.42, 0.58, vn(P * 0.23 + 9.0));   // 一段是細網、一段是大洞的網（交界窄，兩張網不疊成碎屑）
+      float mR = mix(A.r, B.r, nb), mB = max(A.b, B.b * 0.9);
+      // 水膜上的泡沫：前緣一條厚泡（往上推的時候濃，退的時候只剩一點），後面拖著漸散的薄網，水面上零星小泡
+      float pat = 0.55 + 0.6 * fb(vec2(a * 1.5 + 3.1, P.y * 2.0));   // 一塊濃、一塊淡（約半公尺一塊）
+      float fw = 0.05 + 0.13 * smoothstep(0.25, 0.8, vn(vec2(a * 2.3 + 9.0, t * 0.12)));   // 前緣的厚泡 5–18 公分寬
+      float fr = smoothstep(-0.03, 0.01, dd) * (1.0 - smoothstep(fw * 0.4, fw, dd)) * (0.35 + 0.75 * smoothstep(0.2, 0.55, vn(vec2(a * 1.7 + 3.1, t * 0.09)))) * mix(0.3, 1.0, adv);   // 一段濃、一段幾乎沒有
+      float age = clamp(dd / 0.8, 0.0, 1.0), wet = film * smoothstep(0.0, 0.03, dd);
+      float Lf = wet * (1.0 - age * 0.75) * (1.0 - age) * pat * mix(0.7, 0.85, adv), Bf = wet * 0.4 * (1.0 - smoothstep(0.0, 0.5, x));
+      // 浪退之後留在沙上的：這一點的水是幾秒前退走的（用這一段來回的中心與振幅反推）。先是斷掉的網線，再只剩小泡，三四秒內消失；水只擦到一下的最高處留得少
+      float sv = (v - base) / amp, since = mod(ph - (3.14159 - asin(clamp(sv, -0.98, 0.98))), 6.28318) / 0.55;   // since：秒
+      float lk = (1.0 - film) * (1.0 - smoothstep(0.75, 1.0, sv)), Ls = lk * (1.0 - smoothstep(0.0, 2.4, since)) * 0.8 * pat, Bs = lk * (1.0 - smoothstep(0.3, 2.8, since)) * 0.42;
+      // 濃度 → 門檻：濃度越低門檻越高，網線斷開、洞變大（濃度封頂，遮罩的黑底永遠是洞，不會整片糊成白膜）
+      float kT = min(max(T, fr) * 0.92, 0.95), kL = min(max(L, max(Lf, Ls)), 0.82), kB = min(max(Bk, max(Bf, Bs)), 0.7);
+      float aT = cov(G, kT, w), aL = cov(mR, kL, wL), aB = cov(mB, kB, w) * min(1.0, kB * 2.5);
+      float emb = clamp((G - Ge) * 3.0, -1.0, 1.0) * (1.0 - dfar) * (1.0 - uNight * 0.7);
+      float fa = max(aT * (0.72 + 0.25 * G), max(aL * (0.45 + 0.45 * mR), aB * 0.6));   // 厚泡幾乎不透明（薄的邊緣透一點）；薄網半透明（網線的芯比邊緣濃），小泡底下透出沙色與水色
+      float br = max(aT * clamp(0.35 + 0.6 * G * G + emb * 0.6, 0.0, 1.0), max(aL * (0.45 + 0.45 * mR), aB * 0.45));   // 厚泡：鼓起來的地方白、泡與泡之間的凹處帶一點天色
+      vec3 skyN = uSky / max(max(uSky.r, uSky.g), max(uSky.b, 0.04)), lit = vec3(0.95, 0.96, 0.95) * mix(vec3(1.0), skyN, 0.1) * (1.0 - 0.16 * (1.0 - smoothstep(0.02, 0.3, sW.y)) * (1.0 - uNight));   // 帶一點天色；清晨傍晚太陽低，泡沫也暗一點，不會比整片海灘亮出一截
+      vec3 fc = mix(lit * mix(vec3(1.0), skyN, 0.3) * 0.78, lit, br);   // 米白；薄的地方、凹下去的地方帶一點天色
+      vec4 c = vec4(fc, 0.0); float part = 1.0;   // part：這一片網格負責畫哪一段的泡沫
+      if (vS > 0.0) part = smoothstep(0.0, 0.03, x) * (1.0 - smoothstep(0.85, 1.0, vS));   // 海面那一片：水線以外；外緣淡出
+      else {
+        // 沙灘那一片：水膜本身幾乎透明，只在斜看時映著天光；浪剛退去的濕沙有一層淡淡的反光
         vec3 Vw = normalize(cameraPosition - vW); float F = 0.02 + 0.98 * pow(1.0 - max(Vw.y, 0.0), 5.0);
         float thick = film * (0.3 + 0.7 * (1.0 - smoothstep(0.0, f, v)));   // 水膜靠海那一側厚、前緣薄得幾乎看不見
         c = vec4(uSky * 0.9, film * (0.02 + 0.05 * thick + 0.55 * F));   // 清水：正著看幾乎看不見，斜著看映著低空的天色
         float sheen = (1.0 - film) * (1.0 - smoothstep(f + 0.01, f + 0.13, v)) * (0.55 + 0.45 * vn(vec2(a * 2.0, t * 0.2)));   // 浪剛退去的濕沙：映著天空的一層淡淡反光，越往上越乾
         c = mix(c, vec4(uSky * 0.95, 0.05 + 0.3 * F), sheen * 0.7);
-        foamK = max(trail, left); c = mix(c, vec4(0.97, 0.98, 0.97, 0.82), foamK);
-        c.a *= smoothstep(-0.01, 0.012, v) * smoothstep(${(-F_IN).toFixed(2)}, ${(-F_IN + 0.2).toFixed(2)}, d);   // 海面下的那一段不畫；網格內緣淡出
+        c.a *= smoothstep(-0.01, 0.012, v);   // 海面下的那一段不畫水膜
+        if (x > 0.0) part = step(vD, 0.6);   // 漲潮時水線退到碎浪帶內緣以內：中間那一段海面上的泡沫由這一片補上（以前是一條沒有泡沫的空帶）
       }
+      float foamK = fa * part; c = mix(c, vec4(fc, 1.0), foamK);   // foamK：這個像素是泡沫（1）還是映著天色的水膜（0）
+      c.a *= smoothstep(${(-F_IN).toFixed(2)}, ${(-F_IN + 0.2).toFixed(2)}, vD);   // 網格內緣淡出
       c.rgb *= mix(vec3(1.0), mix(vec3(1.0), vec3(0.1, 0.12, 0.17), foamK), uNight) * mix(1.0, uDim, foamK);   // v9.22.16 浪花不受光照：夜裡只有冷冷的月光那麼亮，雨天再暗一點；v9.24.11 夜裡再暗一點（0.22 → 0.1，白邊在暗藍的海上太突出），水膜的天色本來就跟著天暗
       if (uBlue > 0.001) {   // 藍眼淚：浪花裡的夜光藻被拍打就發光——一點一點閃，泡沫越濃越亮；亮度超過 1，泛光讓它真的像在發光（濕沙與水膜不亮）
         float spk = vn(vec2(a * 13.0 + t * 0.7, abs(vS) * 46.0 - t * 1.9)), k = uBlue * smoothstep(0.2, 0.5, c.a) * foamK;
@@ -136,7 +175,8 @@ function buildShore() {
   const BP = [], BC = [], BN = [], BS = [];        // 沙灘緩坡（蓋住格子狀的階梯邊緣）；BS：v9.23.1 表面分類（沙＋離浪多近）
   const OFF = 0.5, ySand = Y_SAND, WL = 0.6, W_OUT = 2.4, IN = 1.7;   // v9.22.12 碎浪帶 1.5 → 2.4 公尺；v9.22.20 OFF 0.42 → 0.5（海岸線磨平後，2:1 的斜階梯凸角也包得住）
   const sandWet = new THREE.Color('#e0c78a');
-  const push = (x, y, z, s, a, e) => { P.push(x, y, z); S.push(s); A.push(a); EK.push(e); };
+  const DS = [];   // 每個頂點離海岸曲線多遠（公尺，往海為正）：水膜和碎浪帶用同一把尺，泡沫的貼圖座標才接得起來
+  const push = (x, y, z, s, a, e, d) => { P.push(x, y, z); S.push(s); A.push(a); EK.push(e); DS.push(d); };
   const bpush = (x, y, z, c, nr, wt) => { BP.push(x, y, z); BC.push(c.r, c.g, c.b); BN.push(nr[0], nr[1], nr[2]); BS.push(0, 1, -wt, 0); };
   // v9.23.1 緩坡的沙色跟內側的沙地同一套（terrain.js 的 sandC）：以前緩坡是比較黃、比較亮的另一種沙，和沙地之間有一條明顯的色差線。往海的坡面才漸漸偏暖
   const SA = new THREE.Color('#e8d8bc'), SB = new THREE.Color('#d9cdb8');
@@ -206,14 +246,14 @@ function buildShore() {
       const FD = [1.3, 1.0, 0.75, 0.6, 0.45, 0.3, 0.2, 0.1, 0, -0.3, -0.7, -1.1, -F_IN], fy = d => Math.max(slopeY(d), ySand - 0.012) + 0.012;
       for (let k = 0; k < FD.length - 1; k++) {
         const d0 = FD[k], d1 = FD[k + 1], p00 = at(i, d0), p10 = at(j, d0), p01 = at(i, d1), p11 = at(j, d1);
-        push(p00[0], fy(d0), p00[1], -2 - d0, a0, e0); push(p01[0], fy(d1), p01[1], -2 - d1, a0, e0); push(p11[0], fy(d1), p11[1], -2 - d1, a1, e1);
-        push(p00[0], fy(d0), p00[1], -2 - d0, a0, e0); push(p11[0], fy(d1), p11[1], -2 - d1, a1, e1); push(p10[0], fy(d0), p10[1], -2 - d0, a1, e1);
+        push(p00[0], fy(d0), p00[1], -2 - d0, a0, e0, d0); push(p01[0], fy(d1), p01[1], -2 - d1, a0, e0, d1); push(p11[0], fy(d1), p11[1], -2 - d1, a1, e1, d1);
+        push(p00[0], fy(d0), p00[1], -2 - d0, a0, e0, d0); push(p11[0], fy(d1), p11[1], -2 - d1, a1, e1, d1); push(p10[0], fy(d0), p10[1], -2 - d0, a1, e1, d0);
       }
       const w0 = at(i, WL), w1 = at(j, WL);
       // 海面側浪線
-      const o0 = out(i), o1 = out(j);
-      push(w0[0], 0, w0[1], 0.0001, a0, e0); push(w1[0], 0, w1[1], 0.0001, a1, e1); push(o1[0], 0, o1[1], 1, a1, e1);
-      push(w0[0], 0, w0[1], 0.0001, a0, e0); push(o1[0], 0, o1[1], 1, a1, e1); push(o0[0], 0, o0[1], 1, a0, e0);
+      const o0 = out(i), o1 = out(j), dj = WL + wo[j], di = WL + wo[i];
+      push(w0[0], 0, w0[1], 0.0001, a0, e0, WL); push(w1[0], 0, w1[1], 0.0001, a1, e1, WL); push(o1[0], 0, o1[1], 1, a1, e1, dj);
+      push(w0[0], 0, w0[1], 0.0001, a0, e0, WL); push(o1[0], 0, o1[1], 1, a1, e1, dj); push(o0[0], 0, o0[1], 1, a0, e0, di);
     }
   });
   const bg = new THREE.BufferGeometry();
@@ -221,7 +261,7 @@ function buildShore() {
   bg.setAttribute('aSurface', new THREE.Float32BufferAttribute(BS, 4));
   const beach = new THREE.Mesh(bg, surfaceMat); beach.receiveShadow = true; scene.add(beach);
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('side', new THREE.Float32BufferAttribute(S, 1)); g.setAttribute('along', new THREE.Float32BufferAttribute(A, 1)); g.setAttribute('endk', new THREE.Float32BufferAttribute(EK, 1));
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('side', new THREE.Float32BufferAttribute(S, 1)); g.setAttribute('along', new THREE.Float32BufferAttribute(A, 1)); g.setAttribute('endk', new THREE.Float32BufferAttribute(EK, 1)); g.setAttribute('dist', new THREE.Float32BufferAttribute(DS, 1));
   const m = new THREE.Mesh(g, waveMat); m.frustumCulled = false; m.renderOrder = 2; scene.add(m);
 }
 
@@ -303,7 +343,7 @@ function rainSplashes(dt, p, rain, road, night) {
   splU.uH.value = renderer.domElement.height / 2; splU.uCol.value.setRGB(0.72, 0.77, 0.83).multiplyScalar(night > 0.5 ? 0.35 : 1);   // v9.24.11 陰雨天的水花是灰白的（以前接近純白，在暗色的石板和草地上一樣亮）
   splGeo.attributes.position.needsUpdate = true; splGeo.attributes.aAge.needsUpdate = true; splGeo.attributes.aSize.needsUpdate = true; splGeo.attributes.aSeed.needsUpdate = true;
 }let feet = null, snowFeet = null, rings = null, glowFeet = null, drops = null, stepAcc = 0, stepSide = 1, lastX = null, lastZ = null, rainAcc = 0, fishAcc = 0;
-export function init() { buildShore(); feet = pool(footTex, 60); snowFeet = pool(snowFootTex, 90); rings = pool(ringTex, 48); glowFeet = pool(footTex, 24, true); drops = pool(ringTex, 64); }
+export function init() { buildShore(); loadFoam(); feet = pool(footTex, 60); snowFeet = pool(snowFootTex, 90); rings = pool(ringTex, 48); glowFeet = pool(footTex, 24, true); drops = pool(ringTex, 64); }
 /** v8.9.1 藍眼淚的亮度（0–1，bluetears.js 每格設定） */
 export function setBlue(k) { waveU.uBlue.value = k; }
 /** 離海很近的濕沙（浪打得到的地方） */

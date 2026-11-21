@@ -74,43 +74,58 @@
     return profile(THREE, [[-w / 2 + v, -h / 2 + v], [w / 2 - v, -h / 2 + v], [w / 2 - v, h / 2 - v], [-w / 2 + v, h / 2 - v]], d, v);
   }
   function palette(b) {
+    const rock = b.mat('#ffffff', { vertexColors: true, roughness: .92, name: 'coast-rock' }, 'stone');   // v9.26 岩石只用一個材質：濕的那一段由著色器依離海面多高來算（以前另一個濕材質，一圈一圈的色帶）
+    if (!rock.defines || !('TA_ROCK' in rock.defines)) rock.defines = Object.assign({}, rock.defines, { TA_ROCK: '' });   // engine.js 的海岸岩石：tex_rock 的岩層、孔洞、潮痕
     return {
-      stone: b.mat('#ffffff', { vertexColors: true, roughness: .94 }, 'stone'),
-      wet: b.mat('#ffffff', { vertexColors: true, roughness: .42 }, 'stone'),
+      stone: rock, wet: rock,
       moss: b.mat('#ffffff', { vertexColors: true, roughness: .98 }, 'foliage'),
       chalk: b.mat('#ffffff', { vertexColors: true, roughness: .96 })
     };
   }
-  function rings(rows, seed = 1, n = 12) {
-    return rows.map(([y, rx, rz, cx = 0, cz = 0], j) => Array.from({ length: n }, (_, i) => {
-      const a = i * TAU / n, wobble = 1 + .045 * Math.sin(i * 2.7 + seed) + .025 * Math.sin(i * 4.1 + j * 1.7 + seed);
-      return [cx + Math.cos(a) * rx * wobble, y + (j && j < rows.length - 1 ? .035 * Math.sin(i * 2.4 + seed + j) : 0), cz + Math.sin(a) * rz * wobble];
-    }));
-  }
-  function skin(THREE, b, rows, material, color, caps = true) {
-    const positions = [], indices = [], n = rows[0].length;
-    rows.forEach(row => row.forEach(p => positions.push(...p)));
-    for (let j = 0; j < rows.length - 1; j++) for (let i = 0; i < n; i++) {
-      const a = j * n + i, c = j * n + (i + 1) % n, d = c + n, e = a + n;
-      indices.push(a, e, d, a, d, c);
+  /* v9.26 岩石的低頻起伏：位置的函式（同一點的位移一樣，接縫不會裂開） */
+  function wob(x, y, z, s) { return Math.sin(x * 1.7 + s) * Math.sin(y * 1.3 + s * 1.9) * Math.sin(z * 1.9 - s * .7) + .5 * Math.sin(x * 3.7 - y * 2.9 + s * 2.3) * Math.sin(z * 3.3 + y * 1.1 + s); }
+  /* 北海岸共同的岩層（從平均海面起算的高度）：厚薄不一，硬的層凸出、軟的層凹進去，凸出的量沿著岩面忽大忽小、有的地方整層不見（不是等距的一圈圈） */
+  const BEDS = [[.58, .8], [1.0, -.9], [1.66, .7], [2.06, -.6], [2.82, 1], [3.36, -.7], [3.82, .6], [4.52, -.8], [5.0, .5]];   // [層底的高度, 硬度]
+  const sat = t => Math.min(1, Math.max(0, t)), ss = t => { t = sat(t); return t * t * (3 - 2 * t); };
+  function bedRelief(y, lat) {   // lat：沿著岩面的橫向座標（公尺）
+    let r = 0;
+    for (let k = 0; k < BEDS.length; k++) {
+      const y0 = BEDS[k][0], y1 = k + 1 < BEDS.length ? BEDS[k + 1][0] : 99, inBed = ss((y - y0) / .07 + .5) * (1 - ss((y - y1) / .07 + .5));
+      r += inBed * BEDS[k][1] * Math.max(0, .45 + .7 * Math.sin(lat * .9 + k * 1.7) + .3 * Math.sin(lat * 2.3 - k));
     }
-    b.add(geometry(THREE, positions, indices), material, color);
-    if (caps) { cap(THREE, b, rows[0], material, color, true); cap(THREE, b, rows[rows.length - 1], material, color); }
+    return r;
   }
-  function cap(THREE, b, row, material, color, down = false) {
-    const n = row.length, centre = row.reduce((v, p) => v.map((c, k) => c + p[k] / n), [0, 0, 0]), face = [];
-    for (let i = 0; i < n; i++) face.push(...centre, ...row[down ? i : (i + 1) % n], ...row[down ? (i + 1) % n : i]);
-    b.add(geometry(THREE, face), material, color);
+  const BED_Y = BEDS.flatMap(([y]) => [y - .05, y + .05]);   // 石柱的一圈圈輪廓要落在層界的兩側，凸凹才是一道清楚的邊
+  /** 依高度上色：水邊深一點、上面淺一點，再疊幾公尺大小的深淺斑駁（沒有一條條的色帶） */
+  function tint(THREE, geo, low, high, seed, y0 = -.2, y1 = 1.6) {
+    const P = geo.attributes.position, c0 = new THREE.Color(low), c1 = new THREE.Color(high), c = new THREE.Color(), out = [];
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i), t = Math.min(1, Math.max(0, (y - y0) / (y1 - y0)));
+      c.copy(c0).lerp(c1, t * t * (3 - 2 * t)).multiplyScalar(1 + .055 * wob(x * 1.2, y * .9, z * 1.2, seed)); out.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(out, 3));
   }
-  function boulder(THREE, b, p, size, material, color, seed = 1) {
-    const [w, h, d] = size, rows = rings([[0, w * .33, d * .32], [h * .16, w * .49, d * .49], [h * .64, w * .44, d * .40, w * .025], [h, w * .20, d * .19, -w * .04]], seed, 9);
-    rows.forEach(row => row.forEach(v => { for (let k = 0; k < 3; k++) v[k] += p[k]; }));
-    skin(THREE, b, rows, material, color);
+  /** 一圈圈的輪廓接成一整塊（頂、底各一個中心點，法線全部共用：沒有折角） */
+  function rockSkin(THREE, rows) {
+    const n = rows[0].length, positions = [], indices = [], last = rows.length * n, avg = row => row.reduce((v, p) => v.map((c, k) => c + p[k] / n), [0, 0, 0]);
+    rows.forEach(row => row.forEach(p => positions.push(...p)));
+    positions.push(...avg(rows[0]), ...avg(rows[rows.length - 1]));
+    for (let j = 0; j < rows.length - 1; j++) for (let i = 0; i < n; i++) { const a = j * n + i, c = j * n + (i + 1) % n; indices.push(a, a + n, c + n, a, c + n, c); }
+    for (let i = 0; i < n; i++) { const t = (rows.length - 1) * n; indices.push(last, i, (i + 1) % n, last + 1, t + (i + 1) % n, t + i); }
+    return geometry(THREE, positions, indices);
+  }
+  function boulder(THREE, b, p, size, material, color, seed = 1) {   // v9.26 底邊不再是規則的九邊形、頂面順著層理壓平（以前一顆顆圓麵包）
+    const [w, h, d] = size, n = 14, prof = [[0, .37, .35], [.14, .5, .49], [.5, .47, .45], [.8, .39, .36], [.95, .27, .25], [1, .15, .14]];
+    const rows = prof.map(([fy, fx, fz], j) => Array.from({ length: n }, (_, i) => {
+      const a = i * TAU / n, k = 1 + .1 * Math.sin(2 * a + seed) + .06 * Math.sin(3 * a + seed * 1.7 + j * .4) + .035 * Math.sin(5 * a - seed + j);
+      return [p[0] + Math.cos(a) * w * fx * k + (j > 2 ? w * .05 * Math.sin(seed * 2.3) : 0), p[1] + h * fy + (j && j < prof.length - 1 ? h * .04 * Math.sin(a * 2 + seed + j) : 0), p[2] + Math.sin(a) * d * fz * k];
+    }));
+    const geo = rockSkin(THREE, rows); tint(THREE, geo, color, color, seed); b.add(geo, material);
   }
   function strata(THREE, b, source, m, cave = false) {
     const geo = source.index ? source.toNonIndexed() : source, pos = geo.attributes.position, normal = geo.attributes.normal;
     const levels = [-2, .12, .55, 1.18, 1.30, 2.06, 2.20, 3.02, 3.15, 3.76, 8];
-    const colors = ['#64685f', '#797b70', '#aaa595', '#918c7f', '#beb4a2', '#9c9587', '#b4ac9b', '#928f80', '#c2b8a4', '#b5ae9c'];
+    const colors = ['#7a776d', '#8b877b', '#a49e8f', '#9c9688', '#aaa392', '#a09a8b', '#a7a090', '#9e988a', '#aca594', '#a8a191'];   // v9.26 相鄰色帶的深淺差收小（以前數得出一條條）；濕的那一段由著色器依海面算
     function clip(poly, y, above) {
       const result = [];
       for (let i = 0; i < poly.length; i++) {
@@ -187,18 +202,29 @@
   function stack(THREE, kit, tall) {
     const group = new THREE.Group(); group.name = tall ? 'sea_stack_a' : 'sea_stack_b'; // 原點在海面，正面朝＋Ｚ
     const b = workshop(THREE, kit, group), m = palette(b);
-    const rows = rings(tall ? [
-      [-1.2, 1.30, 1.10], [-.75, 1.48, 1.20], [.12, 1.37, 1.13], [.54, 1.25, 1.07], [.65, 1.37, 1.14],
-      [1.48, 1.16, .98, -.06], [1.62, 1.27, 1.03, -.07], [2.54, 1.01, .86, -.13], [2.68, 1.14, .93, -.13],
-      [3.57, .92, .78, -.06], [3.70, 1.02, .84, -.05], [4.48, .79, .66, .02], [4.61, .89, .73, .02], [5.20, .68, .58, .03], [5.29, .56, .49, .02]
-    ] : [
-      [-1.2, .85, .77], [-.65, .98, .86], [.10, .86, .77, .06], [.48, .77, .67, .12], [.60, .88, .73, .14],
-      [1.25, .65, .59, .25], [1.38, .75, .63, .27], [2.02, .55, .48, .39], [2.16, .65, .53, .41], [2.85, .43, .38, .54], [2.95, .31, .28, .55]
-    ], tall ? 3 : 8);
-    for (let j = 0; j < rows.length - 1; j++) skin(THREE, b, [rows[j], rows[j + 1]], j < 3 ? m.wet : m.stone, j < 3 ? ['#64685e', '#75796d', '#848578'][j] : j % 2 ? '#b7ae9d' : '#999384', false);
-    cap(THREE, b, rows[0], m.wet, '#64685e', true); cap(THREE, b, rows[rows.length - 1], m.stone, '#b9b19d');
-    const top = tall ? 5.29 : 2.95, cx = tall ? .02 : .55;
-    for (let j = 0; j < 4; j++) b.ball([cx - .32 + j * .19, top - .018, -.12 + (j % 2) * .25], [.20, .047, .18], m.moss, j % 2 ? '#88916b' : '#747e59');
+    // v9.26 石柱重做：以前是一層層等距的圓台疊起來（每層一圈外凸的簷、顏色深淺交替，像寶塔），十二邊形看得到折角。
+    // 現在是一整根連續的岩柱：浪打的高度往內凹一圈，上面只有兩道不完整、厚薄不一的硬岩層微微凸出，斷面依共同的節理削出平直的面；岩層、潮痕交給著色器
+    const top = tall ? 5.29 : 2.95, n = 22, sd = tall ? 1.3 : 4.1;
+    const prof = tall ? [[-1.2, 1.34, 1.14, 0], [-.55, 1.46, 1.22, 0], [.4, 1.36, 1.12, 0], [1.3, 1.27, 1.05, -.04], [2.2, 1.18, .98, -.09], [3.1, 1.04, .87, -.1], [3.9, .98, .82, -.05], [4.7, .86, .72, .01], [top, .78, .65, .02]]
+      : [[-1.2, .86, .78, 0], [-.6, .98, .86, 0], [.4, .88, .78, .06], [1.3, .77, .66, .22], [2.15, .62, .54, .39], [top, .5, .44, .55]];
+    const at = y => { let j = 0; while (j < prof.length - 2 && prof[j + 1][0] < y) j++; const p = prof[j], q = prof[j + 1], t = sat((y - p[0]) / (q[0] - p[0])); return [1, 2, 3].map(k => p[k] + (q[k] - p[k]) * t); };
+    const rim = { [top - .3]: .97, [top - .16]: .92, [top - .07]: .8, [top]: .62 };   // 頂面是層面：平的，邊緣圓一點
+    const ys = [...new Set([-1.2, -.6, -.1, .1, .22, .34, .46, ...BED_Y, 1.3, 2.45, 3.1, 4.15].filter(y => y < top - .36).map(y => +y.toFixed(3)))].sort((p, q) => p - q).concat(Object.keys(rim).map(Number).sort((p, q) => p - q));
+    const joints = [.42, .42 + PI / 2, .42 + PI, .42 + PI * 1.5].map((a, k) => [Math.cos(a), Math.sin(a), [.84, .9, .8, .92][k], [3.4, 9, 1.75, 9][k]]);   // 共同的兩組節理：平直的側面都對著同樣的方向；有一兩面在某個高度以上整塊崩掉，往內退一階
+    const rows = ys.map(y => {
+      const [rx, rz, cx] = at(y), edge = rim[y] || 1;
+      return Array.from({ length: n }, (_, i) => {
+        const a = i * TAU / n, notch = Math.exp(-(((y - .28) / .16) ** 2)) * (.1 + .05 * Math.sin(a * 3 + sd));   // 浪打的高度往內凹
+        const k = edge * (1 - notch) * (1 + .085 * Math.sin(2 * a + sd + y * .25) + .05 * Math.sin(3 * a + sd * 1.7 - y * .4) + .03 * Math.sin(5 * a + y + sd) + .022 * Math.sin(8 * a + y * 3 + sd) + .15 * bedRelief(y, a * rx));
+        let x = Math.cos(a) * rx * k, z = Math.sin(a) * rz * k;
+        for (const [jx, jz, c0, yb] of joints) { const c = c0 - .14 * ss((y - yb) / .25 + .5), dd = x * jx / rx + z * jz / rz; if (dd > c) { x -= jx * rx * (dd - c) * .9; z -= jz * rz * (dd - c) * .9; } }
+        return [x + cx, y, z];
+      });
+    });
+    const body = rockSkin(THREE, rows); tint(THREE, body, '#8e8a81', '#aca69a', sd); b.add(body, m.stone);
+    const cx = tall ? .02 : .55;
+    const ms = tall ? .85 : .5;   // v9.26 苔墊收在頂面裡（矮的那根頂面小：以前苔墊伸出邊緣，從下面看是一塊黑）
+    for (let j = 0; j < 4; j++) b.ball([cx + (-.32 + j * .19) * ms, top - .03, (-.12 + (j % 2) * .25) * ms], [.2 * ms, .05, .18 * ms], m.moss, j % 2 ? '#88916b' : '#747e59');
     for (const [a, y, length, w] of [[1.22, top - .16, .75, .052], [1.83, top - .10, 1.1, .045], [.36, top - .32, .55, .04]]) guano(THREE, b, rows, a, y, y - length, w, m.chalk);
     if (tall) {
       const nest = b.mat('#b5a17a', { roughness: .98 }, 'wood');
@@ -219,12 +245,33 @@
   I.NORTHMODELS.sea_arch = function (THREE, kit) {
     const group = new THREE.Group(); group.name = 'sea_arch'; // 原點在海面，拱洞沿Ｚ貫通
     const b = workshop(THREE, kit, group), m = palette(b);
-    const points = [[-3.35, -1.10], [-3.38, .35], [-3.16, 1.37], [-2.89, 2.44], [-2.33, 3.31], [-1.35, 3.93], [-.28, 4.08], [.82, 4.02], [1.86, 3.56], [2.63, 2.73], [3.20, 1.42], [3.38, .12], [3.31, -1.10],
-      [1.60, -1.10], [1.60, 1.30], [1.45, 1.78], [1.12, 2.15], [.56, 2.43], [-.09, 2.50], [-.70, 2.37], [-1.22, 2.04], [-1.60, 1.48], [-1.60, -1.10]];
-    strata(THREE, b, profile(THREE, points, 2.5, .10), m);
-    for (const [x, y, z, w] of [[-1.43, 4.00, .08, .42], [-.50, 4.12, -.20, .25], [.62, 4.09, .12, .29]]) b.ball([x, y, z], [w, .045, .33], m.moss, '#7e8962');
-    boulder(THREE, b, [-2.55, .48, .83], [.85, .32, .65], m.stone, '#a8a18f', 4);
-    boulder(THREE, b, [2.64, .24, -.77], [.92, .34, .70], m.wet, '#7c8071', 9);
+    // v9.26 拱重做：以前是一片輪廓擠出來的厚板，切成十道等距、深淺交替的色帶，倒角只有一刀（遠看數得出一條條平行線、轉角像折紙）。
+    // 現在沿著拱走一圈圈圓角的斷面接成一整塊（法線共用、沒有折角），頂面順著層理平而略有一階，浪打的高度往內凹一圈，表面有幾十公分的起伏；岩層與潮痕交給著色器
+    const M = 44, K = 22, spaced = pts => new THREE.CatmullRomCurve3(pts.map(([x, y]) => new THREE.Vector3(x, y, 0)), false, 'centripetal').getSpacedPoints(M - 1);
+    const inner = spaced([[-1.62, -1.2], [-1.6, -.4], [-1.6, .5], [-1.62, 1.2], [-1.52, 1.75], [-1.3, 2.25], [-.9, 2.6], [-.35, 2.78], [.2, 2.75], [.55, 2.62], [.95, 2.35], [1.25, 2.0], [1.45, 1.55], [1.58, 1.0], [1.6, .3], [1.62, -1.2]]);   // 洞口不對稱：左高右低
+    const outer = spaced([[-3.36, -1.2], [-3.42, -.4], [-3.42, 1.0], [-3.55, 1.6], [-3.7, 2.3], [-3.72, 2.9], [-3.55, 3.5], [-3.2, 3.95], [-2.6, 4.25], [-1.8, 4.38], [-1.0, 4.4], [-.5, 4.36], [-.2, 4.2], [.3, 4.05], [1.1, 4.0], [1.8, 3.85], [2.35, 3.55], [2.7, 3.1], [2.95, 2.6], [3.15, 2.1], [3.3, 1.4], [3.36, .7], [3.4, -.4], [3.36, -1.2]]);   // 左邊的岩體厚、上面往外懸出一點（水面上，船碰不到），右肩低一階；水裡的拱腳仍在碰撞圓裡
+    const rows = inner.map((p, i) => {
+      const o = outer[i], u = i / (M - 1), D = 1.3 - .25 * Math.sin(PI * u) + .08 * Math.sin(u * 4 + 1), zc = .14 * Math.sin(PI * u * 1.3 + .4);   // 拱頂薄一點、整條微微彎
+      return Array.from({ length: K }, (_, k) => {
+        const a = k / K * TAU, ca = Math.cos(a), sa = Math.sin(a), s = .5 + .5 * Math.sign(ca) * Math.pow(Math.abs(ca), .3);   // 圓角的方形斷面：面是平的，轉角收得比較緊
+        return [p.x + (o.x - p.x) * s, p.y + (o.y - p.y) * s, zc - D * Math.sign(sa) * Math.pow(Math.abs(sa), .3)];
+      });
+    });
+    const arch = rockSkin(THREE, rows), P = arch.attributes.position, N = arch.attributes.normal;
+    const cuts = [[.31, .2, .08], [.87, .26, -.1], [1.62, .16, .05], [2.23, .22, .12], [2.88, .18, -.06]].map(([a, depth, tz]) => [a, Math.max(...outer.map(o => o.x * Math.cos(a) + (o.y - 1.3) * Math.sin(a))) / Math.hypot(1, tz) - depth, tz]);   // 節理切出的平面：從外緣往內削 depth
+    for (let i = 0; i < P.count; i++) {
+      const x = P.getX(i), y = P.getY(i), z = P.getZ(i), side = 1 - Math.abs(N.getY(i));
+      const d = wob(x, y, z, 3.1) * .1 + wob(x * 2.2, y * 2.2, z * 2.2, 7.3) * .035 - Math.exp(-(((y - .28) / .24) ** 2)) * side * (.17 + .07 * Math.sin(x * 2.1 + z * 1.7));   // 表面幾十公分的起伏；浪打的高度往內凹
+      let px = x + N.getX(i) * d, py = y + N.getY(i) * d, pz = z + N.getZ(i) * d;
+      for (const [a, R, tz] of cuts) {   // 外緣的輪廓是一段段折線，不是一條圓弧
+        const nx = Math.cos(a), ny = Math.sin(a), nl = Math.hypot(nx, ny, tz), dd = (px * nx + (py - 1.3) * ny + pz * tz) / nl;
+        if (dd > R) { const k = (dd - R) * .9 / nl; px -= nx * k; py -= ny * k; pz -= tz * k; }
+      }
+      P.setXYZ(i, px, py, pz);
+    }
+    arch.computeVertexNormals(); tint(THREE, arch, '#8f897b', '#b0a897', 3.1, -.3, 2.2); b.add(arch, m.stone);
+    for (const [x, z, w] of [[-1.45, .1, .4], [-.45, -.2, .26], [.6, .12, .3]]) { let y = 0; for (let i = 0; i < P.count; i++) if (Math.abs(P.getX(i) - x) < .3 && Math.abs(P.getZ(i) - z) < .3) y = Math.max(y, P.getY(i)); b.ball([x, y - .04, z], [w, .06, .33], m.moss, '#7e8962'); }   // 苔貼著（削過之後的）頂面
+    for (const [x, z, w, h, d, sd] of [[-2.15, 1.55, .8, .8, .6, 3], [-2.95, 1.3, .6, .72, .5, 7], [2.3, -1.5, .9, .82, .75, 5], [2.95, -1.2, .55, .7, .5, 11], [2.0, 1.45, .5, .74, .45, 13]]) boulder(THREE, b, [x, -.45, z], [w, h, d], m.stone, '#958f80', sd);   // 拱腳落下的岩塊，半泡在水裡（都在拱腳的碰撞圓裡）
     return b.finish();
   };
 
@@ -285,7 +332,7 @@
     const b = workshop(THREE, kit, group), m = palette(b);
     const rocks = [[-.84, -.36, .82, .55, .72], [.80, -.40, .90, .46, .68], [-.92, .32, .58, .31, .52], [.87, .38, .65, .38, .56], [-.36, .72, .70, .26, .50], [.25, .73, .62, .32, .52]];
     rocks.forEach(([x, z, w, h, d], j) => {
-      boulder(THREE, b, [x, 0, z], [w, h, d], m.wet, j % 2 ? '#8d968f' : '#7c8781', j + 2);
+      boulder(THREE, b, [x, 0, z], [w, h, d], m.wet, j % 2 ? '#938f84' : '#858176', j + 2);   // v9.26 和其他海岸岩石同一種灰褐（以前偏青綠）
       barnacles(THREE, b, [[x - .04, h + .002, z], [x + .03, h + .002, z + .025], [x + .005, h + .002, z - .04]], m.chalk);
     });
     const pool = [], indices = [];

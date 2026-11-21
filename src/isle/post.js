@@ -25,6 +25,8 @@ export const fx = {
   haze: new THREE.Color('#bfe2ff'),   // 遠景空氣的顏色（跟著霧色）
   fog: new THREE.Vector4(0.003, 0.11, 0.4, 0.24),   // v7.6：薄一點、有顏色的霧（不是一片白幕）   // 高度霧：密度（每公尺）、隨高度變稀的速率、霧的基準高度、最濃
   air: 0.0016,       // 遠景大氣（每公尺，和高度無關）
+  airIn: 1,          // v9.25.2 戶外 1、室內 0：島外場景「遠處摻天空色」的量與遮蔽帶的天光藍（house.js 畫室內時設 0，畫完還原）
+  aoWide: 1.15,      // v9.25.2 大範圍遮蔽（桌底、櫃內、牆腳）的強度：室內畫的時候自己調高，畫完還原成 1.15
   hold: false         // 作答中（main.js 每一格設定）：畫面停在最後一格，不重畫
 };
 /* 作答時背景不重畫：畫布保留最後一格的畫面。視窗大小變了（畫布會被清空）或從背景切回來時補畫一格 */
@@ -65,7 +67,7 @@ const BLUR = mat(SAFE + `uniform sampler2D tex; uniform vec2 dir; varying vec2 v
 /* ---------- 環境光遮蔽：從深度重建視空間的位置與法線，沿螺旋取樣，只算法線那一側的半球（牆角、物件貼地處、屋簷下有柔和的接觸陰影，
    平地不會整片變灰）。g 通道存線性深度，模糊時依深度分開前景與背景，不會在輪廓外暈出一圈 ---------- */
 const AO = mat(`#include <packing>
-  uniform sampler2D dep; uniform vec2 res; uniform float near; uniform float far; uniform vec2 pinv; uniform float pscale; uniform float rad; uniform float taps; varying vec2 vUv;
+  uniform sampler2D dep; uniform vec2 res; uniform float near; uniform float far; uniform vec2 pinv; uniform float pscale; uniform float rad; uniform float taps; uniform float wide; varying vec2 vUv;
   float vz(vec2 uv){ return -perspectiveDepthToViewZ(texture2D(dep, uv).x, near, far); }
   vec3 vp(vec2 uv){ float z = vz(uv); return vec3((uv * 2.0 - 1.0) * pinv * z, -z); }
   void main(){
@@ -84,8 +86,8 @@ const AO = mat(`#include <packing>
       float o = max(dot(v, N) / max(L, 1e-4) - 0.12, 0.0) * (1.0 - smoothstep(R * 0.45, R, L));
       occ += o * (1.0 - big); occL += o * big; nL += big;
     }
-    gl_FragColor = vec4(clamp(1.0 - occ / max(taps - nL, 1.0) * 1.9 - occL / max(nL, 1.0) * 1.15, 0.0, 1.0), z0, 0.0, 1.0); }`,
-  { dep: { value: null }, res: { value: new THREE.Vector2() }, near: { value: 0.5 }, far: { value: 500 }, pinv: { value: new THREE.Vector2(1, 1) }, pscale: { value: 500 }, rad: { value: 0.9 }, taps: { value: 16 } });
+    gl_FragColor = vec4(clamp(1.0 - occ / max(taps - nL, 1.0) * 1.9 - occL / max(nL, 1.0) * wide, 0.0, 1.0), z0, 0.0, 1.0); }`,
+  { dep: { value: null }, res: { value: new THREE.Vector2() }, near: { value: 0.5 }, far: { value: 500 }, pinv: { value: new THREE.Vector2(1, 1) }, pscale: { value: 500 }, rad: { value: 0.9 }, taps: { value: 16 }, wide: { value: 1.15 } });
 const BIL = mat(`uniform sampler2D tex; uniform vec2 dir; varying vec2 vUv;
   void main(){ vec2 c0 = texture2D(tex, vUv).rg; float z0 = c0.g, s = c0.r * 0.227, ws = 0.227, tol = z0 * 0.05 + 0.04;
     for (int i = 0; i < 4; i++) { float o = i == 0 ? 1.385 : i == 1 ? -1.385 : i == 2 ? 3.231 : -3.231, w = i < 2 ? 0.316 : 0.07;
@@ -103,12 +105,12 @@ const COMP = new THREE.ShaderMaterial({
     tex: { value: null }, b1: { value: null }, b2: { value: null }, rays: { value: null }, sun: { value: new THREE.Vector2() }, sunCol: { value: new THREE.Color() },
     aspect: { value: 1 }, golden: { value: 0 }, vis: { value: 0 }, clear: { value: 1 }, night: { value: 0 }, time: { value: 0 }, hazeC: { value: new THREE.Color("#bfe2ff") }, px: { value: new THREE.Vector2(1 / 1024, 1 / 1024) }, sharp: { value: 0.4 },
     atmo: { value: 0 }, camW: { value: new THREE.Matrix4() }, pinv: { value: new THREE.Vector2(1, 1) }, curve: { value: 0 }, bendF: { value: 15 }, sunW: { value: new THREE.Vector3(0, 1, 0) },
-    fogC: { value: new THREE.Color() }, fogP: { value: new THREE.Vector4() }, airK: { value: 0 } },
+    fogC: { value: new THREE.Color() }, fogP: { value: new THREE.Vector4() }, airK: { value: 0 }, airIn: { value: 1 } },
   fragmentShader: `#include <packing>
     uniform sampler2D dep; uniform sampler2D dep0; uniform sampler2D ao; uniform sampler2D sh; uniform sampler2D sq; uniform float near; uniform float far; uniform float focus; uniform float dofAmt; uniform float aoAmt;
     uniform sampler2D tex; uniform sampler2D b1; uniform sampler2D b2; uniform sampler2D rays; uniform vec2 sun; uniform vec3 sunCol;
     uniform float aspect; uniform float golden; uniform float vis; uniform float clear; uniform float night; uniform float time; uniform vec3 hazeC; uniform vec2 px; uniform float sharp; varying vec2 vUv;
-    uniform float atmo; uniform mat4 camW; uniform vec2 pinv; uniform float curve; uniform float bendF; uniform vec3 sunW; uniform vec3 fogC; uniform vec4 fogP; uniform float airK;
+    uniform float atmo; uniform mat4 camW; uniform vec2 pinv; uniform float curve; uniform float bendF; uniform vec3 sunW; uniform vec3 fogC; uniform vec4 fogP; uniform float airK; uniform float airIn;
     ${SAFE}
     void main(){
       vec3 c = safe(texture2D(tex, vUv).rgb);
@@ -128,7 +130,7 @@ const COMP = new THREE.ShaderMaterial({
       // 環境光遮蔽（遠處淡出；水面與玻璃底下的遮蔽淡一點——那是水底的，不是水面的）
       { float a = texture2D(ao, vUv).r, z0 = -perspectiveDepthToViewZ(texture2D(dep0, vUv).x, near, far);
         float ak = aoAmt * (1.0 - smoothstep(focus * 2.2, focus * 4.5, z)) * mix(1.0, 0.35, step(z + 0.05, z0));
-        c *= mix(vec3(1.0), vec3(a * 0.96, a * 0.97, mix(a, 1.0, 0.12)), ak); }   // v9.13 半寫實：接觸陰影接近中性，只帶一點天光的藍   // 角落與接縫的陰影偏一點藍紫（天空的冷色補光），不是灰黑
+        c *= mix(vec3(1.0), mix(vec3(a * 1.0, a * 0.985, a * 0.97), vec3(a * 0.96, a * 0.97, mix(a, 1.0, 0.12)), airIn), ak); }   // v9.25.2 室內（airIn 0）沒有天光的藍：桌底、牆角的陰影是中性偏暖（以前偏藍，牆緣一道灰紫）   // v9.13 半寫實：接觸陰影接近中性，只帶一點天光的藍   // 角落與接縫的陰影偏一點藍紫（天空的冷色補光），不是灰黑
       // 大氣：還原滾筒彎曲，用真正的世界高度算高度霧（低處、遠處的薄霧），霧裡朝太陽的方向亮一點（米氏散射）；遠景再淡進天空色
       if (atmo > 0.0 && sky < 0.5) {
         vec3 vp = vec3((vUv * 2.0 - 1.0) * pinv * z, -z); float Lv = length(vp);   // Lv：真正的視距（遠景沒有彎曲，大氣用這個）
@@ -159,7 +161,7 @@ const COMP = new THREE.ShaderMaterial({
         c = mix(c, c * vec3(1.04, 1.0, 0.94), g * 0.7 * hiK);   // v7.6 夢幻風：亮部只帶一點奶油暖（以前 1.06／0.86 偏橘）
         c = mix(c, c * vec3(0.97, 0.99, 1.04), g * (1.0 - hiK) * 0.8); }
       // 空氣遠近：越遠越偏向明亮的天藍（日系 CG 的大氣層次）——有大氣霧的場景交給上面的霧
-      c = mix(c, hazeC, smoothstep(focus * 1.8, focus * 6.5, z) * mix(0.12, 0.06, step(70.0, z)) * (1.0 - night) * (1.0 - sky) * (1.0 - atmo));   // v7.6：空氣色變成薰衣草粉，量收一點（以前 0.18／0.08），中景的房子不泡在霧裡   // 天空本身不加；遠景物件自己已經做了大氣透視
+      c = mix(c, hazeC, smoothstep(focus * 1.8, focus * 6.5, z) * mix(0.12, 0.06, step(70.0, z)) * (1.0 - night) * (1.0 - sky) * (1.0 - atmo) * airIn);   // v7.6：空氣色變成薰衣草粉，量收一點（以前 0.18／0.08），中景的房子不泡在霧裡   // 天空本身不加；遠景物件自己已經做了大氣透視
       // 暗角
       vec2 v = vUv - 0.5; v.x *= aspect * 0.8; c *= mix(1.0, smoothstep(0.95, 0.25, length(v)), 0.06 + g * 0.03);   // 白天的暗角很淡，黃金時段才明顯
       gl_FragColor = vec4(c, 1.0);
@@ -272,7 +274,7 @@ export function render(time, sc0, cam0) {
     // 環境光遮蔽（半解析度，只看不透明的深度）再依深度模糊
     const P = camera.projectionMatrix.elements; pinv.set(1 / P[0], 1 / P[5]);
     const A = AO.uniforms; A.dep.value = main.depthTexture; A.res.value.set(aoA.width, aoA.height); A.near.value = camera.near; A.far.value = camera.far; A.pinv.value.copy(pinv);
-    A.pscale.value = P[5] * aoA.height * 0.5; A.rad.value = island ? 0.9 : 0.6; A.taps.value = fx.q >= 2 ? 16 : 8; pass(AO, aoA);
+    A.pscale.value = P[5] * aoA.height * 0.5; A.rad.value = island ? 0.9 : 0.6; A.taps.value = fx.q >= 2 ? 16 : 8; A.wide.value = fx.aoWide; pass(AO, aoA);
     blur(BIL, aoA, aoB, aoA, 1 / aoA.width, 1 / aoA.height);
     const rayOn = fx.sunVis > 0.01 && fx.clear > 0.05;
     if (rayOn) { RAYS.uniforms.tex.value = pre.texture; RAYS.uniforms.dep.value = depth; RAYS.uniforms.sun.value.copy(fx.sun); RAYS.uniforms.aspect.value = aspect; pass(RAYS, rayRT); }
@@ -283,7 +285,7 @@ export function render(time, sc0, cam0) {
     U.dep.value = depth; U.dep0.value = main.depthTexture; U.ao.value = aoA.texture; U.sh.value = sh1.texture; U.sq.value = sq1.texture;
     U.near.value = camera.near; U.far.value = camera.far; U.focus.value = fx.focus; U.dofAmt.value = fx.dof; U.aoAmt.value = fx.ao; U.px.value.set(1 / w, 1 / h); U.sharp.value = fx.sharp;
     U.atmo.value = island ? 1 : 0; U.camW.value.copy(camera.matrixWorld); U.pinv.value.copy(pinv); U.curve.value = island ? EU.uCurve.value : 0; U.bendF.value = EU.uBendF.value;
-    U.sunW.value.copy(fx.sunW); U.fogC.value.copy(fx.haze); U.fogP.value.copy(fx.fog); U.airK.value = fx.air;
+    U.sunW.value.copy(fx.sunW); U.fogC.value.copy(fx.haze); U.fogP.value.copy(fx.fog); U.airK.value = fx.air; U.airIn.value = fx.airIn;
     pass(COMP, null);
   } catch (e) { console.warn('後製關閉：', e); failed = true; WL.uLate.value = 0; WL.uSplit.value = 0; renderer.setRenderTarget(null); renderer.render(scene, camera); }
 }

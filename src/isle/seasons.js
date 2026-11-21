@@ -4,6 +4,15 @@ import * as THREE from 'three';
 import { scene, bend, U, skyU, sun, hemi, water, renderer } from './engine.js';
 import { S } from './state.js';
 import * as memo from './memo.js';
+import { surfaceMat } from './terrain.js';
+
+/* v9.26 積雪的遮蔽圖：雪堆在樹根、柱腳、牆腳邊，背風的一側拖得長一點。一張 512×512 的單色貼圖（props.js 的 shelter.bake 依碰撞物與台地的落差算一次），
+   冬天第一次用到才算；只接在主島的地面材質上（著色器裡的 sSh，engine.js seasonGLSL），不下雪時著色器不讀它 */
+export const shelter = { bake: null, done: false };
+const shelterU = { value: null };
+{ const compile = surfaceMat.onBeforeCompile, key = surfaceMat.customProgramCacheKey();
+  surfaceMat.onBeforeCompile = (sh, rd) => { compile(sh, rd); sh.uniforms.uShelter = shelterU; sh.fragmentShader = 'uniform sampler2D uShelter;\n' + sh.fragmentShader.replace('float sSh = 0.0;', 'float sSh = texture2D(uShelter, vWP.xz / 104.0 + 0.5).r;'); };
+  surfaceMat.customProgramCacheKey = () => key + '-shelter'; }
 
 export const NAMES = { spring: '春', summer: '夏', autumn: '秋', winter: '冬' };
 export const ORDER = ['auto', 'spring', 'summer', 'autumn', 'winter'];
@@ -77,6 +86,7 @@ export function update(dt, t, ctx) {
     if (on && auroraK.v > 0.6) memo.add(`${d.getFullYear()} 年冬天看到了極光`, '北方的天空在發光', { key: 'aurora:' + d.getFullYear(), icon: '🌌' }); }
   if (!out) { pts.visible = false; return; }
   const w = K.snow;
+  if (w > 0.001 && !shelter.done && shelter.bake) { shelter.done = true; try { shelterU.value = shelter.bake(); } catch (e) { console.warn('shelter', e); } }   // 遮蔽圖：冬天第一次到島上時算一次
   if (w > 0.001) {
     // 冬天：海與河轉深藍、天空偏冷帶雲、地面反光讓陰影帶一點藍紫
     if (water.sea) { water.sea.color.lerp(C.seaW, w * 0.8); water.sea.opacity = 0.62 + w * 0.22; }

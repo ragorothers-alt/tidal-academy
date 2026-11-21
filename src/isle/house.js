@@ -265,7 +265,7 @@ function fxTick(dt, t, n, gold) {
   dustU.uAmt.value = 0.8 + gold * 0.3 + n * 0.3; dustU.uCol.value.set(n > 0.5 ? '#ffe6b8' : '#fff4dc');   // 晚上的微塵被燈照成暖金色
   dustU.uScale.value = camera.projectionMatrix.elements[5] * renderer.domElement.height * 0.5;
   _c.copy(skyU.mid.value).lerp(skyU.bot.value, 0.5).lerp(_c2.set('#fff0dc'), 0.55);   // 天光：當下天色、帶暖（屋裡的牆與木頭把天光反射成暖色）
-  FX.sky.forEach(({ l, w, a }) => { const sunK = Math.max(0, w.out.dot(FX.sd)); l.color.copy(_c).lerp(_c2.set('#ffd9b0'), sunK * 0.4 * day); l.intensity = a * (day * (5.6 + sunK * 3.4 + gold * 1.2) + n * 0.4); });
+  FX.sky.forEach(({ l, w, a }) => { const sunK = Math.max(0, w.out.dot(FX.sd)); l.color.copy(_c).lerp(_c2.set('#ffd9b0'), sunK * 0.4 * day); l.intensity = a * (day * (6.7 + sunK * 4.1 + gold * 1.4) + n * 0.4); });   // v9.25.2 白天的窗光亮兩成（補回收掉的均勻補光：窗邊亮、屋子深處暗）
   FX.halos.forEach((s, i) => { const k = 0.35 + n * 0.65, fl = 1 + Math.sin(t * 2.3 + i * 1.7) * 0.03 * n; s.material.opacity = (0.22 + n * 0.5) * fl; s.scale.setScalar((0.9 + k * 0.7) * fl * s.userData.h); });
   // 屋裡的空氣：只有大房子的深處微微泛霧；霧色是屋裡散射光的亮度（中間調），不會把遠處洗成一片亮白
   if (scene.fog) { scene.fog.color.set(n > 0.5 ? '#3a2d2e' : '#b9afa4').lerp(_c.set('#c9a593'), gold * day * 0.6); const bk = cur.ud.bounce || 1; scene.fog.near = (8 + n * 4) * bk; scene.fog.far = (60 + n * 16) * bk; }
@@ -325,7 +325,7 @@ function glowEnter() {
 }
 function glowTick(n) {
   const lv = 0.22 * (1 - n) + n;   // 調光：白天開一點點（間接光一直都在，只是暗），晚上全亮
-  FX.glow.forEach(g => { g.l.intensity = g.k * lv; });
+  FX.glow.forEach(g => { g.l.intensity = g.k * (g.l.isSpotLight ? 0.85 * (1 - n) + n : lv); });   // v9.25.2 重點投射燈白天也開著（以前和燈帶一樣只開兩成）：骨架、畫、書櫃比背後的牆亮一階
   stripMat.color.copy(GLOW.col).multiplyScalar(0.6 + lv * 2.4); stripDim.color.copy(GLOW.col).multiplyScalar(0.5 + lv * 0.7);
 }
 const _c = new THREE.Color(), _c2 = new THREE.Color();
@@ -649,7 +649,8 @@ export function enter(key, opt = {}) {
   try { cur = build(key); } catch (e) { console.warn('室內建立失敗：' + key, e); return false; }
   const { g, ud } = cur; scene.add(g);
   extraCols.length = 0;
-  (ud.lights || []).slice(0, 7).forEach(([x, y, z, c, k]) => { const l = new THREE.PointLight(new THREE.Color(c || '#ffd6a0').multiply(WARM), 1, 0, 2); l.position.set(x, y, z); l.userData.k = k || 1; scene.add(l); extra.push(l); });   // v8.7 第七盞留給圖書館接待區的淡薰衣草補光（書棲的臉白天不再收在暗面）
+  cur.cut = new Map((ud.lights || []).map(L => { const g = floorAt(L[0], L[2], L[1]), h = g === null ? 0 : L[1] - g; return [L, h > 0.3 && h < 1.6 ? h * 1.15 : 0]; }));   // v9.25.2 桌燈（離地不到 1.6 公尺）是一圈光池：照度在一個多燈高的地方收到 0，桌面底下的地板只剩一成（燈罩與桌面擋住；以前桌底的地毯比桌前還亮）
+  (ud.lights || []).slice(0, 7).forEach(L => { const [x, y, z, c, k] = L, l = new THREE.PointLight(new THREE.Color(c || '#ffd6a0').multiply(WARM), 1, cur.cut.get(L), 2); l.position.set(x, y, z); l.userData.k = (k || 1) * (cur.cut.get(L) ? 1.3 : 1); scene.add(l); extra.push(l); });   // 收掉的光補回光池中間   // v8.7 第七盞留給圖書館接待區的淡薰衣草補光（書棲的臉白天不再收在暗面）
   pool = (ud.lights || []).length > 7 ? { ls: extra.filter(l => l.isPointLight), t: 0 } : null;   // v9.3 燈比七盞多（天上城堡十間教室）：只開離玩家最近的七盞，走到哪裡就換到哪裡
   viewMat.uniforms.map.value = ud.view === 'sky' ? SKYTEX : VIEWTEX;
   (opt.gifts || []).slice(0, (ud.gifts || []).length).forEach((f, i) => {
@@ -804,17 +805,18 @@ export function tick(dt, t, o) {
   /* v7.8 真實的室內光：屋裡沒有均勻打亮的補光——光從窗戶（天光與直射進來的陽光）和燈來，照度隨距離平方衰減，
      離窗、離燈越遠越暗，角落與屋子深處自然暗下來；只留一點點四處反彈的光（亮面偏暖、背光面與桌底是薰衣草色） */
   const day = 1 - n, bk = cur.ud.bounce || 1;
-  hemi.color.set(n > 0.5 ? '#d2b296' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#4a3a3c' : '#a49484');   // v9.18 白天地板反彈上來的是木頭與牆的暖灰（以前是薰衣草色，整間屋子帶一層紫）   // v8.0：晚上四處反彈的是燈的暖光（月光只從窗戶進來）
-  if (bk > 1) hemi.groundColor.lerp(_c.set('#d6b89c'), Math.min(1, (bk - 1) * 0.7) * day);   // v8.1 大廳：白天從蜂蜜木地板、奶油牆反彈上來的光偏暖
+  hemi.color.set(n > 0.5 ? '#d2b296' : '#ffeadb'); hemi.groundColor.set(n > 0.5 ? '#4a3a3c' : '#8c7f72');   // v9.18 白天地板反彈上來的是木頭與牆的暖灰（以前是薰衣草色，整間屋子帶一層紫）   // v8.0：晚上四處反彈的是燈的暖光（月光只從窗戶進來）
+  if (bk > 1) hemi.groundColor.lerp(_c.set('#b8a088'), Math.min(1, (bk - 1) * 0.7) * day);   // v8.1 大廳：白天從蜂蜜木地板、奶油牆反彈上來的光偏暖
   const inn = !!cur.ud.indoor;
-  hemi.intensity = inn ? 0.3 * bk : 0.22 * day * bk + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.1 * day * bk + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0'); camFill.intensity = (0.25 * day + 1.2 * n) * (1 - fpNow);
+  const bkA = 1 + (bk - 1) * 0.5;   // v9.25.2 大廳的均勻補光收斂（以前直接乘 bounce：博物館地板八成五的亮度來自沒有方向的半球光，桌底、櫃內、遠牆都一樣亮），少掉的亮度交給吊燈、壁燈與投射燈的一圈圈光
+  hemi.intensity = inn ? 0.3 * bk : 0.16 * day * bkA + 0.15 * n * Math.sqrt(bk); fill.intensity = 0.065 * day * bkA + 0.04 * n; fill.color.set(n > 0.5 ? '#e6cab4' : '#ffdfd0'); camFill.intensity = (0.4 * day + 1.2 * n) * (1 - fpNow);   // v9.25.2 白天沒有方向的補光再收三成（0.22／0.1）：亮度改由窗光與燈的光池撐起；鏡頭側的柔光白天 0.25 → 0.4（背對窗的玩家不會只剩一團暗影）
   sun.intensity = inn ? 0.4 : day * (3.4 - gold * 0.6) + n * 0.35; sun.color.set(n > 0.5 ? '#b4c3e0' : gold > 0.1 ? '#ffcf9a' : '#ffe8cc');
   scene.background.set(cur.ud.bg || (n > 0.5 ? '#171b24' : '#c9cdd0'));
   if (pool && (pool.t -= dt) <= 0) {   // v9.3 七盞燈換到離玩家最近的七個燈位（隔著牆的房間本來就照不到，換過去看不出來）
     pool.t = 0.4; const px = P.position.x, pz = P.position.z;
-    cur.ud.lights.map(l => [l, Math.hypot(l[0] - px, l[2] - pz)]).sort((a, b) => a[1] - b[1]).slice(0, pool.ls.length).forEach(([[x, y, z, c, k], ], i) => { const l = pool.ls[i]; l.position.set(x, y, z); l.color.set(c || '#ffd6a0').multiply(WARM); l.userData.k = k || 1; });
+    cur.ud.lights.map(l => [l, Math.hypot(l[0] - px, l[2] - pz)]).sort((a, b) => a[1] - b[1]).slice(0, pool.ls.length).forEach(([L], i) => { const [x, y, z, c, k] = L, l = pool.ls[i]; l.position.set(x, y, z); l.color.set(c || '#ffd6a0').multiply(WARM); l.distance = cur.cut.get(L) || 0; l.userData.k = (k || 1) * (l.distance ? 1.3 : 1); });
   }
-  extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (inn ? 7 : 2.4 * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光
+  extra.concat(decorObjs).forEach(l => { if (l.isPointLight) l.intensity = (inn ? 7 : (2.8 + (bk - 1) * 1.3) * day + 10 * n) * l.userData.k; });   // 燈：白天開得小，晚上撐起一圈圈暖光
   lampMats.forEach(m => { m.emissiveIntensity = 0.6 + n * 0.6; });   // v8.0：燈泡與擴散片收一點（以前晚上 1.9，泛光把小小的擴散片暈成一片白）
   shadeMats.forEach(m => { m.emissiveIntensity = 0.04 + n * 0.3; });   // 透光的燈罩：晚上透出一層琥珀色的光
   viewMat.uniforms.uNight.value = n;
@@ -822,10 +824,11 @@ export function tick(dt, t, o) {
   fxTick(dt, t, n, gold);
   glowTick(n);
   updateCam(dt, fpNow, yawNow, o.pitch || 0, o.tilt || 0, o.zoom ?? 1);
-  const fx = post.fx, dof0 = fx.dof, ao0 = fx.ao;
-  fx.golden = Math.max(gold * 0.5, 0.2) * (1 - n); fx.clear = 1; fx.sunVis = 0; fx.night = n * 0.6; fx.focus = camera.position.distanceTo(P.position); fx.dof = dof0 * (fpNow > 0.5 ? 0.15 : 0.35); fx.ao = ao0 * 1.2;   // v7.8：屋裡一直帶一點暖光（亮部奶油、窗與燈的光暈柔一點）
+  const fx = post.fx, dof0 = fx.dof, ao0 = fx.ao, air0 = fx.airIn, aw0 = fx.aoWide;
+  fx.golden = Math.max(gold * 0.5, 0.2) * (1 - n); fx.clear = 1; fx.sunVis = 0; fx.night = n * 0.6; fx.focus = Math.max(camera.position.distanceTo(P.position), 7); fx.dof = dof0 * (fpNow > 0.5 ? 0.15 : 0.35); fx.ao = ao0 * 1.25; fx.airIn = 0; fx.aoWide = 2;   // v9.25.2 屋裡不摻「遠處的天空色」（第一人稱時對焦距離只有一公尺多，三公尺外就罩一層灰白），接觸陰影也不在幾公尺外淡掉；大範圍遮蔽加重（桌底、櫃底、牆腳），整體強度 1.25（再高，花盆、桌腳的底部會被壓成全黑）   // v7.8：屋裡一直帶一點暖光（亮部奶油、窗與燈的光暈柔一點）
   const lon = U.uLOn.value; U.uLOn.value = 0; U.uInside.value = 1;   // 島上的燈光格子是島上的座標：畫室內時關掉（以前晚上廣場的路燈會照進同一個座標的屋裡）
+  const ex0 = renderer.toneMappingExposure; renderer.toneMappingExposure = ex0 * (1 + (bk - 1) * 0.07 * day);   // v9.25.2 白天的大廳曝光高一成：補回拿掉的灰白霧與均勻補光（亮暗的比例不變，整體不陰沉）
   post.render(t, scene, camera);
-  U.uLOn.value = lon; U.uInside.value = 0;
-  fx.dof = dof0; fx.ao = ao0;
+  renderer.toneMappingExposure = ex0; U.uLOn.value = lon; U.uInside.value = 0;
+  fx.dof = dof0; fx.ao = ao0; fx.airIn = air0; fx.aoWide = aw0;
 }

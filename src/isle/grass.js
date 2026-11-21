@@ -230,10 +230,10 @@ export function cull() {
     return on ? Math.max(depth, 1) : -1;
   };
   const share = depth => { const px = pxK / depth; return px > (ULTRA ? 12 : 7) ? 1 : px > (ULTRA ? 6 : 3.5) ? 0.6 : 0.35; };   // 極省電：近一點就開始少畫
-  const cp = camera.position;
+  const cp = camera.position, thin = 1 - 0.5 * THREE.MathUtils.smoothstep(U.uSnow.value, 0.1, 0.5);   // v9.26 冬天從雪裡露出來的草稀疏一半（塊內順序已打亂，少畫的是隨機的一部分）
   for (const ch of chunks) {
     const depth = seen(ch, R); ch.im.visible = depth > 0; if (depth <= 0) continue;
-    ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth)));
+    ch.im.count = Math.max(1, Math.round(ch.list.length * share(depth) * thin));
     const d = geoNear ? Math.hypot(Math.max(Math.abs(ch.gx - cp.x) - CH / 2, 0), Math.max(Math.abs(ch.gz - cp.z) - CH / 2, 0), cp.y - ch.y - 1.5) : 99;   // 鏡頭到這一塊外框的距離（第三人稱鏡頭拉高時也算進去）
     const g = d < NEAR ? geoNear : d < MID ? geoMid : geoFar; if (ch.im.geometry !== g) ch.im.geometry = g;   // v9.25 腳邊的草塊用細緻的葉片（同一個 InstancedMesh 換幾何，不多畫東西）
   }

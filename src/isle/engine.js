@@ -287,10 +287,20 @@ const LATE_W = `
     vec3 body = irr * alb;   // 水體把光散射回來的顏色（越深越多）
     vec3 refr = under * Tr + body * (1.0 - Tr);
     // 倒影：先看鏡頭在這個方向看到的遠景（天空、雲、城堡——遠到視差可以忽略），再用螢幕空間追蹤找近處的東西
-    vec3 R = normalize(reflect(-V, n));
+    // v9.26 淡水（池塘、河）的倒影：照平一點的水面去找，柱子的倒影留在柱子正下方（以前被一兩公尺寬的波紋捲成一團一團）；再用細波把倒影的邊緣打碎。大海照舊
+    vec3 nR = n; vec2 fRf = vec2(0.0), fSl = vec2(0.0); float fFp = max(length(dFdx(vWP.xz)), length(dFdy(vWP.xz)));   // fFp：一個像素蓋住多大的水面；比它細的波紋收掉，不然只會閃
+    if (sea < 0.5) { vec2 wq = vWP.xz; float wt = uTime, gu = (0.3 + 0.7 * smoothstep(0.32, 0.68, n_v(wq * 0.3 + vec2(wt * 0.05, -wt * 0.03)))) * (calm > 1.0 ? 1.0 : 1.4);   // 風吹到的地方才起細波，其餘比較平
+      vec2 r1 = vec2(n_v(wq * 4.0 + vec2(wt * 0.45, wt * 0.2)), n_v(wq * 4.0 + vec2(5.1 - wt * 0.3, 2.7 + wt * 0.4))) - 0.5;
+      vec2 r2 = vec2(n_v(wq * 11.0 + vec2(-wt * 0.8, wt * 0.6) + 9.0), n_v(wq * 11.0 + vec2(1.3 + wt * 0.7, 6.6 + wt * 0.9))) - 0.5;
+      vec2 r3 = vec2(n_v(wq * 27.0 + vec2(wt * 1.3, -wt * 1.1)), n_v(wq * 27.0 + vec2(3.3 - wt * 1.2, 8.1 - wt * 1.4))) - 0.5;
+      float fLt = min(length(dFdx(wq)), length(dFdy(wq)));   // 橫向一個像素多寬：閃光可以碎到這麼細
+      fRf = (r1 * 0.04 * (1.0 - smoothstep(0.08, 0.25, fFp)) + r2 * 0.03 * (1.0 - smoothstep(0.03, 0.09, fFp))) * gu;   // fRf：細波把倒影推開的角度（很小：只打碎邊緣）
+      fSl = (r1 * 0.04 + r2 * 0.06 * (1.0 - smoothstep(0.022, 0.055, fLt)) + r3 * 0.06 * (1.0 - smoothstep(0.009, 0.022, fLt))) * gu;   // fSl：閃光用的細波斜率
+      nR = normalize(mix(n, upV, calm > 1.5 ? 0.85 : 0.75)); }
+    vec3 R = normalize(reflect(-V, nR));
     vec3 refl = skyR;
     { vec4 cs = uPrj * vec4(R, 0.0);
-      if (cs.w > 1e-3) { vec2 su0 = cs.xy / cs.w * 0.5 + 0.5; vec3 acc = vec3(0.0);
+      if (cs.w > 1e-3) { vec2 su0 = cs.xy / cs.w * 0.5 + 0.5 + vec2(fRf.x * max(cosV, 0.5), fRf.y) * (0.5 * uPrj[1][1]); vec3 acc = vec3(0.0);   // 斜看時細波幾乎只把倒影上下推（左右只剩一點）
         // v9.24.3 遠景的倒影取八點、上下拉長（波浪把倒影沿視線方向抹開）：以前只取一點，雲的倒影是一塊塊邊緣銳利的白斑，像浮在水上的紙
         float ja = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2832, bk = sea > 0.5 ? 1.0 : 0.3;
         for (int i = 0; i < 8; i++) { float fi = float(i), a = fi * 2.39996 + ja, r = sqrt((fi + 0.5) / 8.0); vec2 su = su0 + vec2(cos(a) * 0.014, sin(a) * 0.06) * r * bk; vec3 one = skyR;
@@ -309,13 +319,19 @@ const LATE_W = `
         if (zp > zs && zp - zs < max(0.35, st * 2.2)) {
           vec3 a = pa, b = p;
           for (int k = 0; k < 5; k++) { vec3 m = (a + b) * 0.5; vec2 um = taUV(m); if (-m.z > taLin(texture2D(uOpqD, um).x)) b = m; else a = m; }
-          huv = taUV(b); hit = taEdge(huv) * smoothstep(1.0, 0.9, huv.y) * (1.0 - float(i) / 30.0 * 0.5); break;
+          huv = taUV(b);
+          if (sea < 0.5) { float Lr = min(length(b - P), 6.0); vec3 b2 = b + (upV * fRf.y + normalize(cross(upV, V) + vec3(1e-4, 0.0, 0.0)) * (fRf.x * max(cosV, 0.5))) * Lr; vec2 h2 = taUV(b2);   // 細波：倒影離物體越遠碎得越開（到六公尺為止，遠處的柱子還認得出來）
+            if (taLin(texture2D(uOpqD, h2).x) > -b2.z - max(0.6, Lr * 0.25)) huv = h2; }   // 推到了前景（水底、近岸）就不推
+          hit = taEdge(huv) * smoothstep(1.0, 0.9, huv.y) * (1.0 - float(i) / 30.0 * 0.5); break;
         }
         pa = p; p += R * st; st *= 1.13;
       }
       if (hit > 0.0) refl = mix(refl, texture2D(uOpq, huv).rgb, hit);
     }
     float F = 0.035 + 0.965 * pow(1.0 - clamp(dot(n, V), 0.0, 1.0), 4.6);   // 風格化的菲涅耳：斜看時倒影比物理值明顯一點（像插畫裡的水）
+    if (sea < 0.5) { float sl = max(max(spec.r, spec.g), spec.b);   // v9.26 淡水的太陽反光：碎成朝著太陽的一個個小波面（以前低角度的太陽在池面上是一整團白光）；夜裡的月光與燈光照舊
+      vec3 nS = normalize(n + (viewMatrix * vec4(-fSl.x, 0.0, -fSl.y, 0.0)).xyz); float ss = max(dot(reflect(-V, nS), uSunV), 0.0);
+      spec = mix(spec / max(sl, 1e-4) * (min(sl, 1.0) * 0.10 + smoothstep(0.02, 0.4, sl) * min(pow(ss, 2000.0) * 14.0, 4.0)), spec, uNight); }
     vec3 col = mix(refr, refl, F * mix(0.68, 0.78, min(calm, 1.0))) + spec * 0.6;   // calm 大於 1（池塘）只用來減少白沫
     if (uDbg > 0.5) return uDbg < 1.5 ? refl : uDbg < 2.5 ? refr : uDbg < 3.5 ? vec3(F) : vec3(thick0 * 0.5, vdep * 2.0, 0.0);
     // 岸線：貼著岸的地方一圈斷斷續續的碎泡（依真的水深），再依深度柔和地淡進岸上
@@ -442,6 +458,18 @@ const LG_GLSL = `
     }
   }
   #endif`;
+/** v9.26 海岸岩石的紋理圖集（models/tex_rock.js，tools/rockpack.py 打包）：紅 = 岩層高度、綠 = 海蝕孔洞高度、藍 = 潮痕與藤壺。
+    和松針圖集一樣：全域變數已經在就直接用，不然第一次編譯石材時掛一個 script 載入；載不到就維持 1×1 的中性替身（沒有起伏、沒有潮痕）。資料圖，不做 sRGB 轉換 */
+export const ROCKT = { value: (() => { const t = new THREE.DataTexture(new Uint8Array([150, 175, 0, 255]), 1, 1); t.needsUpdate = true; return t; })() };
+let rockAsked = false;
+function loadRock() {
+  if (rockAsked || typeof document === 'undefined') return; rockAsked = true;
+  const TA = window.TA = window.TA || {};
+  const apply = url => new THREE.TextureLoader().load(url, t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; t.generateMipmaps = true; t.minFilter = THREE.LinearMipmapLinearFilter; t.magFilter = THREE.LinearFilter; t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy()); ROCKT.value = t; }, undefined, () => {});
+  const pack = () => { const u = TA.ROCK; if (u) { apply(u); delete TA.ROCK; } };
+  if (TA.ROCK) pack();
+  else { const sc = document.createElement('script'); sc.src = (window.__MODEL_BASE || 'src/isle/models/') + 'tex_rock.js'; sc.onload = pack; sc.onerror = () => {}; document.head.appendChild(sc); }
+}
 export function bend(mat, kind) {
   kind = kind || 'plain';
   mat.onBeforeCompile = sh => {
@@ -544,10 +572,12 @@ export function bend(mat, kind) {
     Object.assign(sh.uniforms, { uSunV: U.uSunV, uRimCol: U.uRimCol, uRim: U.uRim, uOccP: U.uOccP, uOccR: U.uOccR, uOccD: U.uOccD, uOccY: U.uOccY, uSnow: U.uSnow, uWet: U.uWet, uDew: U.uDew, uFall: U.uFall, uBloom: U.uBloom, uShade: U.uShade, uCloud: U.uCloud, uMist: U.uMist, uMistCol: U.uMistCol, uSkyRef: U.uSkyRef, uSeaY: U.uSeaY, uTrans: U.uTrans, uInside: U.uInside, uLGrid: U.uLGrid, uLData: U.uLData, uLOn: U.uLOn, uLMax: U.uLMax });
     const dk = DETK[kind];
     if (dk) dk.forEach((n, i) => { sh.uniforms['uD' + i] = DET[n].d; sh.uniforms['uN' + i] = DET[n].n; });
+    if (kind === 'stone') { sh.uniforms.uRockT = ROCKT; loadRock(); }   // v9.26 海岸岩石的紋理圖集
     if (kind === 'terrain') Object.assign(sh.uniforms, { uCliffW: CLIFF.w, uCliffE: CLIFF.e, uCliffOn: CLIFF.on, uMasonry: CLIFF.mason, uSplit: WL.uSplit });
     if (kind === 'water') Object.assign(sh.uniforms, { uSkyT: skyU.top, uSkyM: skyU.mid, uSkyB: skyU.bot, uSunCol: skyU.sunCol, uGlow: skyU.glow, uNight: skyU.night });   // 大海的倒影用當下的天色
     if (kind === 'water') Object.assign(sh.uniforms, WL);   // 第二階段：讀得到底下的場景
     let f = FTOP + LG_TOP + NOISE + CLOUD_FN + (dk ? TRI : '') + (kind === 'terrain' ? '#ifdef TA_SURFACE\nvarying vec4 vSurface;\n#endif\nuniform sampler2D uCliffW; uniform sampler2D uCliffE; uniform float uCliffOn; uniform float uMasonry; uniform float uSplit;\n' : '') + (kind === 'water' ? 'varying float vPond;\nvarying vec3 vFlow;\n' + WATER_FN + 'uniform vec3 uSkyT; uniform vec3 uSkyM; uniform vec3 uSkyB; uniform vec3 uSunCol; uniform float uGlow; uniform float uNight;\n#ifdef TA_SEA\nvarying float vSeaDepth;\n#endif\n' : '') + sh.fragmentShader;
+    if (kind === 'stone') f = f.replace('void main() {', 'uniform sampler2D uRockT;\nfloat gRockWet = 0.0;\nvoid main() {');   // v9.26 海岸岩石：紋理圖集、顏色階段算好的濕度（粗糙度階段用）
     if (kind === 'terrain') f = f.replace('void main() {', 'float tGlint = 0.0; float tShore = 0.0; float tSat = 0.0;\nvoid main() {');   // 沙灘的閃光（顏色階段算、打光後加）
     if (kind === 'water') f = f.replace('void main() {', '#define TA_CREEK (vWP.y > 0.8 && vPond <= 0.0)\n' + LATE_W + 'void main() {');   // v7.4：高地泉（水面 2.75）以前也被當成高處的小溪，整片光網和一圈白沫
     if (dk) {
@@ -728,21 +758,40 @@ export function bend(mat, kind) {
         vec3 lt = mix(vec3(0.84, 0.92, 0.78), vec3(1.03, 1.0, 0.86), step(0.5, n_v(sp * 0.8 + 2.0)));   // v9.13：苔綠與淡黃的地衣
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * lt, lk * 0.7);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.04, 1.03, 1.0) + 0.012, smoothstep(0.6, 0.95, wn.y) * 0.5);
-        #ifdef TA_NATURE
-          { float sb = sin(vWP.y * 13.0 + n_v(vWP.xz * 1.3) * 3.5) * 0.5 + 0.5;   // 圓岩與海岸礁石：一層層柔和的岩層，暖杏與薰衣草交替
-            diffuseColor.rgb *= mix(vec3(0.93, 0.93, 0.95), vec3(1.05, 1.02, 0.96), smoothstep(0.2, 0.8, sb)); }   // v9.13：岩層是灰與暖褐交替
-        #endif
-        #ifndef TA_MODEL
-          diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, vWP * 0.45, gB) * 2.0, 0.3);   // v9.13：石面的顆粒與細縫
-        #endif
-        gDetN = triN(uN0, vWP * 0.45, gB) * 0.12;
-        #ifdef TA_NATURE
-          { // v9.24.4 圓石與礁石的表面：石頭的顆粒、風化的小坑、幾道細裂縫，法線起伏也加大（以前只有柔和的色塊，近看像一團黏土）；遠看收掉不閃
-            float raa = clamp(1.0 - length(fwidth(vWP)) * 12.0, 0.0, 1.0);
-            diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, vWP * 1.2, gB) * 2.0, 0.6 * raa);
-            float pit = smoothstep(0.6, 0.82, n_v(sp * 8.0 + 3.0)) * raa; diffuseColor.rgb *= 1.0 - pit * 0.2;
-            float crk = smoothstep(0.03, 0.0, abs(n_f(sp * 1.5 + 13.0) - 0.5)) * smoothstep(0.42, 0.6, n_v(sp * 0.6 + 5.0)) * raa; diffuseColor.rgb *= 1.0 - crk * 0.45;
-            gDetN = gDetN * 1.6 + triN(uN0, vWP * 1.2, gB) * 0.42 * raa; }
+        #if defined(TA_NATURE) || defined(TA_ROCK)
+          { // v9.26 圓石、海岸礁石、北海岸的石柱與海蝕拱（tex_rock.js）：世界座標的三平面取樣，相鄰的岩石共用同一套微微往東南傾的岩層（以前每顆各畫各的等距色帶）
+            // 貼近海面、朝上的面是海蝕孔洞，高處的崖面是厚薄不一的層理；海面以上 1–1.5 公尺是潮痕（水漬、藻、藤壺），越靠水越濕。共取樣 6 次，法線起伏用高度的螢幕空間差分
+            float hs = vWP.y - uSeaY, raa = clamp(1.0 - length(fwidth(vWP)) * 7.0, 0.0, 1.0);
+            vec3 rb = pow(abs(wn), vec3(3.0)); rb /= rb.x + rb.y + rb.z;
+            float yl = vWP.y + dot(vWP.xz, vec2(0.05, 0.022)) + (n_v(vWP.xz * 0.08 + 3.0) - 0.5) * 0.7;   // 層理的高度：共同的微傾、十幾公尺尺度的起伏
+            float mb = 1.6 - 0.8 * smoothstep(4.0, 14.0, length(cameraPosition - vWP));   // mip 往模糊偏：近處偏一級半（差分算法線時不會一格格的），遠處少偏一點，岩層才看得清楚
+            vec3 t1 = texture2D(uRockT, vec2(vWP.z, yl) * 0.45, mb).rgb * rb.x + texture2D(uRockT, vec2(vWP.x + 0.31, yl) * 0.45, mb).rgb * rb.z;   // 粗（約 2.2 公尺一格）：岩層、潮痕
+            vec3 t1y = texture2D(uRockT, vWP.xz * 0.45 + 0.57, mb).rgb, q2 = vWP * 1.3;
+            vec3 t2 = texture2D(uRockT, q2.zy + 0.13, mb).rgb * rb.x + texture2D(uRockT, q2.xy + 0.71, mb).rgb * rb.z + texture2D(uRockT, q2.xz + 0.42, mb).rgb * rb.y;   // 細（約 0.8 公尺一格）：孔洞、顆粒
+            float sStr = t1.r + rb.y * (0.55 + (t1y.g - 0.68) * 0.6), stn = t1.b + rb.y * t1y.b;   // 頂面是層面：沒有層線，只有緩緩的起伏
+            float pk = clamp(max(1.0 - smoothstep(0.25, 1.15, hs), smoothstep(0.6, 0.92, wn.y) * 0.7), 0.0, 1.0);   // 孔洞的比重：近水、朝上的面
+            float h = mix(sStr * 0.78 + t2.g * 0.22, t2.g * 0.85 + sStr * 0.15, pk);
+            float lay = n_v(vec2(yl * 3.1, dot(vWP.xz, vec2(0.04, 0.03)))) * 0.6 + n_v(vec2(yl * 8.3 + 4.0, dot(vWP.xz, vec2(-0.03, 0.05)) + 2.0)) * 0.4;   // 每一層的顏色：厚薄不一、橫向慢慢變
+            lay = lay * 0.75 + n_v(vec2(yl * 1.3 + 7.0, dot(vWP.xz, vec2(0.02, -0.03)))) * 0.25;   // 再疊一層幾十公分厚的大岩層：遠看也分得出一層層
+            diffuseColor.rgb *= mix(vec3(1.0), mix(vec3(0.9, 0.91, 0.925), vec3(1.07, 1.03, 0.97), smoothstep(0.22, 0.78, lay)), 1.0 - pk * 0.5);
+            diffuseColor.rgb *= mix(0.7, 1.06, smoothstep(0.18, 0.74, h));   // 層縫、孔洞裡暗
+            float tTop = 1.2 + (n_v(vWP.xz * 0.55 + 11.0) - 0.5) * 0.55, band = 1.0 - smoothstep(tTop - 0.65, tTop, hs), low = 1.0 - smoothstep(0.1, 0.65, hs);
+            diffuseColor.rgb *= mix(vec3(1.0), mix(vec3(0.7, 0.68, 0.64), vec3(0.6, 0.66, 0.5), low), smoothstep(0.07, 0.36, stn) * band * 0.75);   // 潮痕帶：上段深色水漬、往下流的痕，下段橄欖綠的藻
+            float barn = smoothstep(0.47, 0.62, stn) * (1.0 - smoothstep(0.2, 0.75, hs)) * raa;   // 藤壺：低處一群群淺色的小點
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.66, 0.64, 0.58), barn * 0.85); h += barn * 0.25;
+            float wl = 0.32 + (n_v(vWP.xz * 1.4 + 5.0) - 0.5) * 0.24;
+            gRockWet = max(1.0 - smoothstep(wl * 0.25, wl, hs), uWet * 0.45 * (1.0 - smoothstep(0.5, 0.85, wn.y)));   // 剛被浪打過的那一段是濕的；下雨時直立面也濕（朝上的面由季節的雨天處理）
+            diffuseColor.rgb *= mix(1.0, 0.64, gRockWet);
+            vec3 dpx = dFdx(vWP), dpy = dFdy(vWP), r1 = cross(dpy, wn), r2 = cross(wn, dpx); float det = dot(dpx, r1);
+            float hN = h - t2.g * (0.4 * pk + 0.1);   // 算法線用的高度：細孔洞只留一半（螢幕空間差分是 2×2 一格，細的起伏會一格格的）
+            vec3 hg = (dFdx(hN) * r1 + dFdy(hN) * r2) * sign(det) / max(abs(det), 1e-7);
+            gDetN = -hg * 0.016 * (1.0 - 0.6 * gRockWet); gDetN *= raa / max(1.0, length(gDetN) / 0.6);   // 濕的那一段起伏淡一點（比較亮滑，差分的法線一格格的會被高光放大）；遠處收掉，不閃
+          }
+        #else
+          #ifndef TA_MODEL
+            diffuseColor.rgb *= mix(vec3(1.0), triD(uD0, vWP * 0.45, gB) * 2.0, 0.3);   // v9.13：石面的顆粒與細縫
+          #endif
+          gDetN = triN(uN0, vWP * 0.45, gB) * 0.12;
         #endif
       }`);
     if (kind === 'plaster') f = f.replace('#include <color_fragment>', `#include <color_fragment>
@@ -784,14 +833,18 @@ export function bend(mat, kind) {
         { vec3 bwn = normalize(vWN), bt = normalize(vec3(-bwn.z, 0.0, bwn.x) + 1e-4);   // 裂紋的起伏：法線沿著樹幹的橫向偏
           gDetN += bt * (n_v(vec2(bu + 0.35, vWP.y * 2.0)) - n_v(vec2(bu - 0.35, vWP.y * 2.0))) * 0.55 * baa; }
       }`);
+    if (kind === 'stone') f = f.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      #if defined(TA_NATURE) || defined(TA_ROCK)
+        if (gRockWet > 0.001) { roughnessFactor = mix(roughnessFactor, 0.3, gRockWet); float cvR = max(dot(normalize(cameraPosition - vWP), normalize(vWN)), 0.0); totalEmissiveRadiance += uSkyRef * (0.03 + 0.97 * pow(1.0 - cvR, 5.0)) * gRockWet * 0.1 * (1.0 - uInside); }   // v9.26 濕的岩面：比較亮滑，斜看映著天光
+      #endif`);
     if (kind === 'stone') f = f.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
-      #if defined(TA_NATURE) && NUM_DIR_LIGHTS > 0
+      #if (defined(TA_NATURE) || defined(TA_ROCK)) && NUM_DIR_LIGHTS > 0
       { // v9.23.5 圓石與礁石背光的那一面：被陽光照亮的沙地、草地把光反彈上來，不是一團黑
         vec3 swn = normalize(vWN);
         reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * (0.13 + 0.09 * (1.0 - swn.y)) * (1.0 - uInside);
       }
       #endif
-      #if !defined(TA_NATURE) && NUM_DIR_LIGHTS > 0
+      #if !defined(TA_NATURE) && !defined(TA_ROCK) && NUM_DIR_LIGHTS > 0
       { // v9.24.10 石砌的牆、花台、橋身背光的直立面：地面把陽光反彈上來（樹蔭下的白石花台以前是一塊藍黑色）；朝上的面幾乎不加
         vec3 swn2 = normalize(vWN);
         reflectedLight.indirectDiffuse += directionalLights[0].color * diffuseColor.rgb * RECIPROCAL_PI * 0.11 * (1.0 - 0.8 * max(swn2.y, 0.0)) * (1.0 - uInside);
@@ -1037,8 +1090,9 @@ function seasonGLSL(kind) {
       float l0 = dot(bc, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(bc, vec3(l0 * 1.2, l0 * 1.17, l0 * 0.78), uFall * mix(0.3, 0.52, smoothstep(0.25, 0.75, n_f(vWP.xz * 0.1))));   // 一大片一大片橄欖綠與金黃交錯；秋天：柔和的鼠尾草金（v7.6 夢幻風：以前 1.32／1.2／0.56 偏金黃）
       diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.06, 1.08, 0.9), uBloom * 0.4);
       diffuseColor.rgb *= vec3(0.99, 1.03, 0.95);   // v7.6 夢幻風：鮮一點的嫩綠，粉白的花襯在上面才跳得出來
+      if (uSnow > 0.0) { float lw = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lw * 1.5, lw * 1.27, lw * 0.6), smoothstep(0.0, 0.5, uSnow) * 0.85); }   // v9.26 冬天從雪裡露出來的草尖是枯黃的稻草色（以前還是夏天的鮮綠）
     }` : '';
-  const cover = kind === 'terrain' ? 'smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.0, 0.03, sF) * smoothstep(0.55, 0.75, vWP.y)'   // 河床、海床不積雪；v9.17 半寫實：雪塊邊緣是碎的（以前一塊塊邊緣很軟的白色色塊）
+  const cover = kind === 'terrain' ? 'smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.0, 0.03, sE) * smoothstep(0.55, 0.75, vWP.y)'   // 河床、海床不積雪；v9.17 半寫實：雪塊邊緣是碎的（以前一塊塊邊緣很軟的白色色塊）
     : kind === 'sway' || kind === 'pine' || kind === 'sakura' ? 'smoothstep(0.24, 0.66, up) * smoothstep(0.26, 0.6, n_v(vWP.xz * 5.5 + vWP.y * 2.3) + dep * 0.8) * 0.93'   // v9.17 半寫實：雪一團一團積在朝上的枝面，底下和側面露出深綠（以前整棵白得像羽毛）
     : kind === 'wall' ? 'smoothstep(0.62, 0.85, up)'
     : kind === 'stone' ? 'smoothstep(0.5, 0.78, up) * smoothstep(0.25, 0.6, n + 0.15)'
@@ -1114,7 +1168,12 @@ function seasonGLSL(kind) {
         float dep = uSnow - 0.8;
         float up = wn.y + (n - 0.5) * 0.45 + (n2 - 0.5) * 0.12 + dep * 0.9;
         float sF = 1.0, sBase = 1.0;${kind === 'terrain' ? `
-        sF = n + (n_f(vWP.xz * 2.3 + 11.0) - 0.47) * 0.18 + (n2 - 0.5) * 0.1 - (0.42 - (dep + 0.1) * 1.4);   // 大於 0 的地方有雪
+        sF = n + (n_f(vWP.xz * 2.3 + 11.0) - 0.47) * 0.3 + (n2 - 0.5) * 0.1 - (0.42 - (dep + 0.1) * 1.4);   // 大於 0 的地方有雪
+        vec2 sWd = vec2(0.97, 0.24); float sDr = n_v(vec2(dot(vWP.xz, sWd), dot(vWP.xz, vec2(-sWd.y, sWd.x))) * vec2(0.3, 1.4) + 5.0);   // v9.26 盛行風（和 uWindDir 的預設同向）：順著風拉長的雪舌
+        float sSh = 0.0;   // 遮蔽圖：樹幹、柱子、牆腳邊是 1（seasons.js 只替主島的地面接上貼圖，其他用這個著色器的地形是 0）
+        sF += (sDr - 0.5) * 0.16 + dot(wn.xz, sWd) * 0.5 - (1.0 - wn.y) * 0.8 + sSh * 0.8;   // 背風的坡積得多，迎風的坡和陡坡被吹薄、先露出地面；雪堆在樹根、柱腳、牆腳邊
+        float sHn = mix(0.5, n_v(vWP.xz * 8.5 + (n2 - 0.5) * 1.6 + 31.0), clamp(1.0 - length(fwidth(vWP.xz)) * 7.0, 0.0, 1.0));   // 遠處收掉，不閃
+        float sE = sF + ((sHn - 0.5) * 0.34 + (n2 - 0.5) * 0.08) * (1.0 - smoothstep(0.0, sF > 0.0 ? 0.2 : 0.1, abs(sF)));   // 雪緣一帶碎成一塊塊：裡面有露出草的小洞，外面有零星的殘雪（以前是一條等寬的平滑波浪線）
         sBase = smoothstep(0.5, 0.75, up) * clamp(leafy * 1.5, 0.0, 1.0) * smoothstep(0.55, 0.75, vWP.y) * smoothstep(0.0, 0.5, uSnow);` : ''}
         float cov = ${cover} * smoothstep(0.0, 0.5, uSnow);${kind === 'terrain' ? `
         { float lw = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(lw * 1.25, lw * 1.12, lw * 0.62), leafy * smoothstep(0.0, 0.5, uSnow) * 0.6); }   // 雪下露出的草是枯黃的冬草` : ''}
@@ -1122,13 +1181,16 @@ ${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `        { float lw 
 ` : ''}        vec3 snow = mix(vec3(0.76, 0.81, 0.93), vec3(0.92, 0.935, 0.96), smoothstep(0.2, 0.75, n)) * (0.97 + (n2 - 0.5) * 0.08);   // v9.24.11 窪下去的地方偏藍偏暗，鼓起來的地方亮（以前整片一樣白）${kind === 'sway' || kind === 'pine' || kind === 'sakura' ? `
         snow *= 0.8 + 0.2 * smoothstep(0.02, 0.14, dot(bc, vec3(0.3, 0.59, 0.11)));   // 葉上的雪留一點針葉的明暗，不是一片平塗的白` : ''}
         float sRim = smoothstep(0.0, 0.2, cov) * (1.0 - smoothstep(0.2, 0.6, cov)) * 0.34, sBev = cov;   // v9.24.11 雪的邊緣：融雪把地面浸濕，雪緣在地上壓出一圈暗邊，看得出雪有厚度${kind === 'terrain' ? `
-        sRim = max(sRim, sBase * smoothstep(-0.09, 0.0, sF) * (1.0 - smoothstep(0.0, 0.03, sF)) * 0.45); sBev = sBase * smoothstep(0.0, 0.16, sF);   // 草地上的雪塊：邊緣收成一道清楚的線，外面一圈濕暗的地，雪緣是圓鼓鼓的斜面` : ''}
+        float sWw = mix(0.07, 0.24, sDr), sWet = sBase * smoothstep(-sWw, -sWw * 0.3, sE) * (1.0 - smoothstep(0.0, 0.03, sE));   // v9.26 融雪浸濕的地：寬窄不一（以前一圈等寬的暗邊）
+        snow *= mix(vec3(0.84, 0.87, 0.9), vec3(1.0), smoothstep(0.0, 0.12, sE));   // 雪緣薄薄一層半融的雪，灰一點、透一點
+        float sRw = mix(0.06, 0.3, sDr); sRim = sWet * 0.4; sBev = sBase * smoothstep(0.0, sRw, sE) * clamp(sRw / max(fwidth(sE), 1e-4) * 0.25, 0.0, 1.0);   // 草地上的雪塊：外面一圈濕暗的地，雪緣有的地方是清楚的一道邊、有的地方慢慢薄掉；雪緣的斜面窄過四個像素就壓低（不然起伏是一格格的鋸齒）
+        { float sMud = sWet * smoothstep(-sWw * 0.55, -sWw * 0.12, sE) * smoothstep(0.32, 0.62, n2 + (sHn - 0.5) * 0.6); diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.15, 0.1), sMud * 0.75); roughnessFactor = mix(roughnessFactor, 0.5, sWet * 0.5); }   // 緊貼雪緣的地方露出一塊塊濕泥土` : ''}
         diffuseColor.rgb *= 1.0 - sRim;
         diffuseColor.rgb = mix(diffuseColor.rgb, snow, cov);
         roughnessFactor = mix(roughnessFactor, 0.62, cov);
         #if SNOW_RELIEF_ON
         { // v9.24.11 積雪的起伏：雪緣鼓起來、風吹出一道道緩緩的雪丘、近看有一團團的顆粒。高度場的斜率用螢幕空間的差分換回世界座標
-          float sAA = clamp(1.0 - length(fwidth(vWP)) * 2.0, 0.0, 1.0), sH = sBev * 0.16 + cov * ((n - 0.5) * 1.0 + (n2 - 0.5) * 0.1 * sAA);
+          float sAA = clamp(1.0 - length(fwidth(vWP)) * 2.0, 0.0, 1.0), sH = sBev * 0.16 + min(cov, sBev) * ((n - 0.5) * 1.0 + (n2 - 0.5) * 0.1 * sAA);
           vec3 dpx = dFdx(vWP), dpy = dFdy(vWP), r1 = cross(dpy, wn), r2 = cross(wn, dpx); float det = dot(dpx, r1);
           vec3 sg = (dFdx(sH) * r1 + dFdy(sH) * r2) * sign(det) / max(abs(det), 1e-7);
           sNrm += -sg / max(1.0, length(sg) / 0.9) * sAA; }   // 遠處一個像素蓋住好幾十公分：收掉，不閃
@@ -1296,6 +1358,8 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
       return mix(mix(h2(i), h2(i + vec2(1.0, 0.0)), f.x), mix(h2(i + vec2(0.0, 1.0)), h2(i + vec2(1.0, 1.0)), f.x), f.y); }
     float fbm(vec2 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 5; i++) { s += a * vn(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; } return s; }
+    vec3 bil6(vec2 p, float fw, int oc){ float a = 0.5; vec3 s = vec3(0.0); for (int i = 0; i < 6; i++) { if (i >= oc) break; p = mat2(0.8, 0.6, -0.6, 0.8) * p; float k = 1.0 - smoothstep(0.3, 0.6, fw), v = k > 0.0 ? 2.0 * vn(p) - 1.0 : 0.0; s.y += a * mix(0.382, sqrt(v * v + 0.01), k); if (i == 1) s.z = s.y; if (i == 3) s.x = s.y; p = p * 2.03 + vec2(1.7, 9.2); a *= 0.6; fw *= 2.03; } return s; }   // v9.25.2 一團團鼓起的雜訊（團與團之間是窄的凹縫）：雲層底下的雲團，細的兩層讓雲緣碎成花椰菜。x 是前四層（平均約 0.41）、y 是六層（約 0.45）、z 是前兩層（約 0.31）；fw 是一個像素蓋住幾格雜訊，比像素細的那層換成平均值，遠處不閃；oc 是算幾層
+    float cmass(vec2 p){ float w = (2.0 * vn(p * 1.7 + 3.1) - 1.0) * 0.65 + (2.0 * vn(p * 3.57 + 7.7) - 1.0) * 0.35; return smoothstep(-0.35, 0.35, w); }   // v9.25.2 多雲的大尺度分布：整片天空幾大塊厚的雲（1），之間是碎雲與放晴的雲縫（0）
     /* 一團團的雲：每格一顆大小不一的圓，回傳「覆蓋度最高的那顆」的 (1 - d/r, 從圓心指出來的方向)；用來做花椰菜般的輪廓與每團各自的受光 */
     vec3 puffs(vec2 p){ vec2 i = floor(p), f = fract(p); vec3 best = vec3(-1.0, 0.0, 1.0);
       for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 g = vec2(float(x), float(y)), o = vec2(h2(i + g), h2(i + g + 17.0)) * 0.8 + 0.1;
@@ -1445,31 +1509,43 @@ export const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 48, 24), new THR
            + (glowC * pow(s, 32.0) * 0.12 + vec3(1.0, 0.88, 0.64) * max(glowC.r, max(glowC.g, glowC.b)) * pow(s, 6.0) * 0.05) * sv * smoothstep(-0.02, 0.01, e); }   // 寬的日暈偏淡金（橘色直接疊在藍天上會變成粉紫）
       // 積雲：在天幕上投影的分形雜訊，上緣受光、下緣帶天空色的陰影，慢慢飄動。
       // v9.22.2 陰雨天變成整片的雨層雲：蓋滿天空、一路垂到海平線，厚的地方深灰、薄的地方淺灰；暴風雨飄得快，再多一層低空掠過的碎雲
-      if (d.y > -0.08) {
-        float ov = wx.x, sto = wx.y;
-        vec2 p = d.xz / (d.y + 0.32) * 0.95 + vec2(time * 0.006, time * 0.002) * (1.0 + sto * 3.0);
-        float n = fbm(p), n2 = fbm(p + vec2(0.0, 0.09));
-        float thr = mix(mix(0.55, 0.44, cover), 0.14, ov);
-        float m = smoothstep(thr, thr + 0.05 + ov * ov * 0.2, n + (fbm(p * 4.3) - 0.5) * 0.06) * smoothstep(mix(0.1, 0.0, ov), mix(0.22, 0.05, ov), e) * (1.0 - smoothstep(0.7, 0.95, d.y) * (1.0 - ov)) * smoothstep(0.3, 0.6, max(cover, ov));   // 晴天不畫高空的大片軟雲（大朵積雲由 cumulus.js 負責）   // 邊緣收清楚一點、帶細碎的捲邊
-        float lit = clamp((n - n2) * 9.0 + 0.55, 0.0, 1.0) * (0.7 + 0.3 * smoothstep(thr, thr + 0.3, n));
-        vec3 shade = mix(vec3(0.7, 0.74, 0.8), mix(bot, top, 0.3), 0.3) * mix(0.9, 0.35, night);   // 雲的背光面是天光的藍灰（v9.13：以前薰衣草紫）
-        vec3 bright = mix(vec3(1.06, 1.05, 1.02), sunCol * 1.15, 0.25 + glow * 0.5) * mix(1.0, 0.3, night);
+      float dkF = length(fwidth(d.xz / max(d.y + 0.32, 0.05))) * 0.95 * 5.5;   // v9.25.2 雲層的雲團：一個像素蓋住幾格雜訊（導數要在分支外面算）
+      if (d.y > -0.08 && wx.x > 0.001) {   // v9.25.2 晴天整段跳過（以前晴天也白算四次雜訊）
+        float ov = wx.x, sto = wx.y, rainy = smoothstep(0.34, 1.0, ov);   // rainy：0 多雲、1 下雨
+        vec2 p0 = d.xz / (d.y + 0.32) * 0.95, p = p0 + vec2(time * 0.006, time * 0.002) * (1.0 + sto * 3.0);
+        vec3 Ld = mix(sunSky, moonDir, smoothstep(0.5, 0.7, night)); float ly = clamp(Ld.y / max(length(Ld), 1e-3), 0.0, 1.0);   // 光（夜裡是月亮）有多高
+        vec2 tl = (p0 / (length(p0) + 1e-3) * (1.0 - smoothstep(0.3, 0.9, d.y)) * mix(0.4, 1.0, ly) + Ld.xz / (length(Ld.xz) + 1e-3) * (1.0 - ly) * 1.2) * 0.04;   // v9.25.2 雲層上的光向，和底下的積雲一樣：上緣（雲層上往外＝畫面上方）受光，太陽低時再加上朝太陽的那一側（以前朝著太陽在雲層上的投影點：太陽在頭頂時反而是雲團的下緣亮）
+        float amp = mix(0.6, 0.4, rainy);   // 中尺度的雲團：雲層有一團團厚薄，不再是一整片糊開的白
+        vec3 lq = bil6(p * 5.5 + 7.0, dkF, 6), lt = bil6((p + tl) * 5.5 + 7.0, dkF, 4); float nb = fbm(p), lb = (lq.y - 0.45) * amp, n = nb + lb;   // nb：大片雲的分布；lb：雲團（六層：輪廓碎成一團團，和積雲的雲團差不多大）；lt：往光的方向挪一點再取一次（算受光面）
+        float ms = rainy < 1.0 ? cmass(p) : 0.5, relE = (lq.x - lt.x) * amp * 8.0, fq = (lq.x - lq.z - 0.104) * amp;   // ms：大尺度的雲塊與雲縫；relE：雨天用的受光（四層，雲團朝光的那一側：往光的方向雲變薄）；fq：第三、四層（細的明暗）
+        float thr = mix(mix(0.55, 0.44, cover), 0.14, ov) - 0.035 * (1.0 - rainy);   // v9.25.2 雲團讓輪廓碎了、透出的藍天變多：門檻低一點，雲量和以前差不多
+        float dep = mix((ms - 0.5) * 0.6 + (nb - 0.484) * 0.5 + lb * 0.85 + 0.307, nb + lb * 0.85 - thr, rainy), edge = 1.0 - smoothstep(0.0, 0.12, dep);   // dep：在雲裡多深（0 是雲緣）。多雲：大塊的雲裡雲團連成一整片、只在塊緣碎成花椰菜，塊與塊之間是較薄或放晴的雲縫（雲量和以前一樣）；雨天照舊。edge：雲緣那一圈
+        float rel = clamp(mix((lq.z - lt.z) * amp * 7.0 + (lq.x - lq.z - lt.x + lt.z) * amp * mix(2.5, 4.0, edge) + (rainy < 1.0 ? ms - cmass(p + tl * 4.0) : 0.0) * 2.0, relE, rainy), -1.0, 1.0);   // rel：朝光的那一側。多雲：明暗主要看前兩層（每團從受光的上緣柔和地暗到雲底），細的兩層只剩三到五成（以前一點一點的），整大塊的雲也是朝光那一邊亮。雨天照舊
+        float m = smoothstep(0.0, 0.03 + ov * ov * 0.2, dep) * smoothstep(mix(0.1, 0.0, ov), mix(0.22, 0.05, ov), e) * (1.0 - smoothstep(0.7, 0.95, d.y) * (1.0 - ov)) * smoothstep(0.0, 0.2, ov);   // 晴天不畫高空的大片軟雲（大朵積雲由 cumulus.js 負責）   // v9.25.2 跟著雲量慢慢出現、散去（以前看 cover：天氣一變整片雲瞬間冒出來或消失）   // 邊緣收清楚一點、帶細碎的捲邊
+        float nt = n - lb * 0.33, tk = mix(mix(smoothstep(-0.1, 1.0, 0.3 + dep * 0.7 + (lq.z - 0.306) * amp * 1.5 + fq * 0.5) * 0.95, smoothstep(-0.02, 0.2, dep * 0.6 + (lq.z - 0.306) * amp * 1.1 + fq * 0.6), edge), smoothstep(0.3, 0.66, nt), rainy), sunK = pow(s, 5.0);   // tk：雲有多厚（0 薄邊、1 厚的雲底）。多雲：大塊的雲裡整片偏厚、不飽和成一片死灰；團心厚、團緣薄看前兩層，細的兩層只剩一半（不再一點一點的）
+        float nk = smoothstep(0.55, 0.95, night), lit = clamp((1.0 - tk) * 0.85 * (0.8 + 0.2 * rel) * mix(1.0, 0.4 + 0.6 * pow(max(dot(d, moonDir), 0.0), 4.0), nk) + rel * 0.45 + 0.05 + sunK * 0.3 * (1.0 - tk * 0.5), 0.0, 1.0);   // v9.25.2 從底下看雲：薄的地方透光發亮、厚的雲底灰暗，朝太陽的雲團邊緣亮一點（以前整片白、只有模糊的輪廓）；夜裡薄雲只在月亮附近透光
+        vec3 shade = mix(vec3(0.7, 0.74, 0.8), mix(bot, top, 0.3), 0.3) * mix(0.9, 0.2, night);   // 雲的背光面是天光的藍灰（v9.13：以前薰衣草紫）   // v9.25.2 夜裡的雲層暗一半（以前比夜空亮很多的一片灰白）
+        vec3 bright = mix(vec3(1.06, 1.05, 1.02), sunCol * 1.15, 0.25 + glow * 0.5) * mix(1.0, 0.16, night);
         { float gl = min(gloom, 1.0), st = 1.0 - max(gloom - 1.0, 0.0) * 0.8;   // gloom 超過 1 是暴風雨：雲再暗一截
-          shade = mix(shade, vec3(0.22, 0.24, 0.29) * st * mix(0.9, 0.35, night), gl * 0.9); bright = mix(bright, vec3(0.44, 0.47, 0.54) * st * mix(1.0, 0.3, night), gl * 0.9); }   // v8.7 雨雲：灰藍的雲底、沒有被太陽照白的雲頂
+          shade = mix(shade, vec3(0.22, 0.24, 0.29) * st * mix(0.9, 0.2, night), min(1.0, gl * 1.5)); bright = mix(bright, vec3(0.44, 0.47, 0.54) * st * mix(1.0, 0.16, night), gl * 0.6); }   // v9.25.2 多雲：雲底是灰的、透光的薄邊還是白的（厚薄看得出來）   // v8.7 雨雲：灰藍的雲底、沒有被太陽照白的雲頂
+        shade = mix(shade, vec3(0.02, 0.025, 0.037), nk); bright = mix(bright, vec3(0.07, 0.082, 0.112), nk);   // v9.25.2 夜裡：月光下的雲底是暗的藍灰、薄的地方（月亮附近最亮）淡淡透光，和底下積雲的夜色同一組（以前是比夜空亮很多的暖灰）
         vec3 cl = mix(shade, bright, lit);
-        { // 雨層雲：沒有受光面，只有厚薄——厚的地方深灰、薄的地方透一點天光；越靠近海平線越淡（隔著更多空氣）；太陽躲在雲後的地方亮一點
-          float th = smoothstep(0.28, 0.78, n + (fbm(p * 2.7 + 7.0) - 0.5) * 0.3);
-          vec3 lo = mix(vec3(0.4, 0.42, 0.46), vec3(0.24, 0.26, 0.3), sto), hi = mix(vec3(0.2, 0.22, 0.26), vec3(0.085, 0.095, 0.12), sto);
-          vec3 deck = mix(lo, hi, th);
-          deck = mix(deck, lo * 1.3, smoothstep(0.22, 0.0, e) * 0.6);
+        if (rainy > 0.0) { // 雨層雲：沒有受光面，只有厚薄——厚的地方深灰、薄的地方透一點天光；越靠近海平線越淡（隔著更多空氣）；太陽躲在雲後的地方亮一點（v9.25.2 多雲時不算）
+          float th = tk;
+          vec3 lo = mix(vec3(0.4, 0.42, 0.46), vec3(0.2, 0.215, 0.25), sto), hi = mix(vec3(0.165, 0.18, 0.215), vec3(0.085, 0.095, 0.12), sto);
+          vec3 deck = mix(lo, hi, th) * (1.0 + rel * 0.25);
+          float eb = mix(0.06, 0.11, sto) + (vn(ha * 2.6 + 3.0) - 0.5) * 0.1, gap = smoothstep(eb + 0.035, eb - 0.015, e + (n - 0.5) * 0.14);   // v9.25.2 雲底和海平線之間透光的一道縫：雲底參差不齊，縫裡比雲層亮
+          vec2 vx = (ha + vec2(-ha.y, ha.x) * e * 1.6) * 7.0 + vec2(time * 0.01 * (1.0 + sto * 3.0), 0.0); float veil = smoothstep(0.42, 0.72, vn(vx) * 0.7 + vn(vx * 2.4 + 5.0) * 0.3);   // 雨幡：從雲底斜斜垂到海面的灰色雨幕
+          deck = mix(deck, mix(lo * mix(1.35, 1.6, sto), mix(lo, hi, 0.35), veil * 0.75), gap * mix(0.6, 0.9, sto));
+          deck = mix(deck, lo * 1.3, smoothstep(0.035, 0.0, e) * 0.5);   // 貼著海平線淡進雨霧
           deck += vec3(0.85, 0.84, 0.8) * pow(s, 10.0) * 0.22 * (1.0 - sto) * (1.0 - th * 0.6);
-          cl = mix(cl, deck * mix(1.0, 0.09, night), ov); }
+          cl = mix(cl, deck * mix(1.0, 0.09, night), rainy); }
         c = mix(c, cl, m * mix(0.95, 1.0, ov));
-        c += sunCol * pow(s, 6.0) * m * 0.35 * (1.0 - min(gloom, 1.0));   // 太陽附近的雲邊發亮
+        c += sunCol * pow(s, 6.0) * m * 0.35 * (1.0 - min(gloom, 1.0)) * (1.0 - tk * 0.6);   // 太陽附近的雲邊發亮（薄的地方才透光）
         if (sto > 0.01) {   // 暴風雨：低空飛快掠過的深灰碎雲
-          vec2 q = d.xz / (d.y + 0.1) * 1.6 + vec2(time * 0.05, time * 0.018);
-          float sc = smoothstep(0.5, 0.68, fbm(q) + (fbm(q * 3.1) - 0.5) * 0.12) * smoothstep(-0.003, 0.05, e) * (1.0 - smoothstep(0.3, 0.7, d.y));
-          c = mix(c, vec3(0.1, 0.115, 0.14) * mix(1.0, 0.15, night), sc * sto * 0.85);
+          vec2 q = d.xz / (d.y + 0.3) * 3.2 + vec2(time * 0.05, time * 0.018);   // v9.25.2 投影不再貼著海平線壓扁（以前 d.y + 0.1：碎雲被拉成一條條橫的黑斑）
+          float sn = fbm(q) + (fbm(q * 2.7 + 3.0) - 0.48) * 0.3, sc = smoothstep(0.52, 0.64, sn) * smoothstep(0.03, 0.14, e) * (1.0 - smoothstep(0.35, 0.75, d.y));   // 碎雲的邊緣是扯碎的絲（以前用雲團雜訊：一圈圈像煙圈）
+          c = mix(c, mix(vec3(0.17, 0.185, 0.215), vec3(0.11, 0.122, 0.145), smoothstep(0.56, 0.8, sn)) * mix(1.0, 0.12, night), sc * sto * 0.6);   // 碎雲是灰的、邊緣薄而亮一點，不是純黑
         }
       }
       // 極光：北方地平線上方飄動的光簾。v9.22.27 兩層光簾，下緣沿著方位起伏、摺疊，亮而清楚，往上指數淡掉；

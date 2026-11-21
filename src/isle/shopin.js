@@ -457,10 +457,10 @@ export function tick(dt, t, ix, iz, len, moving, run, locked, night = 0) {
   }
   const tx = P.position.x * 0.45, tz = P.position.z * (P.position.z > 0 ? 0.3 : 0.45), za = camera.aspect < 1 ? 1 + (1 - camera.aspect) * 1.05 : 1;
   camPos.lerp(new THREE.Vector3(tx, 7.0 * za, tz + 9.0 * za), Math.min(1, dt * 3)); camera.position.copy(camPos); camera.lookAt(tx, 1.0, tz - 1.45);   // 注視點偏後牆一點：站在門口時，後牆上的店名招牌也在畫面裡
-  const fx = post.fx, dof0 = fx.dof, ao0 = fx.ao;
-  fx.golden = 0.25; fx.clear = 1; fx.sunVis = 0; fx.night = Math.min(1, Math.max(0, night)) * 0.5; fx.focus = camera.position.distanceTo(P.position); fx.dof = dof0 * 0.45; fx.ao = ao0 * 1.5;
+  const fx = post.fx, dof0 = fx.dof, ao0 = fx.ao, air0 = fx.airIn;
+  fx.golden = 0.25; fx.clear = 1; fx.sunVis = 0; fx.night = Math.min(1, Math.max(0, night)) * 0.5; fx.focus = camera.position.distanceTo(P.position); fx.dof = dof0 * 0.45; fx.ao = ao0 * 1.5; fx.airIn = 0;   // v9.25.2 室內：不摻遠處的天空色，牆角的陰影不偏藍
   post.render(t, sc, camera);
-  fx.dof = dof0; fx.ao = ao0;
+  fx.dof = dof0; fx.ao = ao0; fx.airIn = air0;
 }
 export const hint = () => { if (P && Math.abs(P.position.x) < DOOR_HW && P.position.z > HD - 1.5) return '往下走出商店'; const z = zone(); return z ? z.label : ''; };
 export function handler() {

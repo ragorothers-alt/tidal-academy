@@ -130,6 +130,7 @@ export function update(show, horizonNdc, yForNdc, golden, night, dt, inCone) {
   const dusk = (1 - ss(se, -0.16, -0.06)) * ss(se, -0.45, -0.3);   // 太陽再沉深一點：雲頂的暖色也褪掉，剩灰藍
   { const dw = skyU.dawn.value, gl = gloom();   // 雲的三色跟著時段
     ['uCShd', 'uCLit', 'uCRim'].forEach((u, i) => { TRI[u].value.copy(triC.day[i]).lerp(triC.dawn[i], dw).lerp(triC.gold[i], golden).lerp(triC.sunset[i], sunset).lerp(triC.after[i], after).lerp(triC.dusk[i], dusk).lerp(triC.night[i], nk); });
+    { const fl = gl * (1 - nk); TRI.uCRim.value.lerp(TRI.uCLit.value, fl * 0.7); TRI.uCLit.value.lerp(TRI.uCShd.value, fl * 0.4); }   // v9.25.2 頭上有雲層時，積雲的受光面收斂（雲頂不再是被太陽直射的亮白、明暗差小一點）；夜裡照舊
     TRI.uCMix.value = Math.min(0.92, 0.6 + 0.3 * nk + gl * 0.3); }   // v9.15：夜裡多用三色、少用貼圖本身的白亮高光——月光下的雲是暗的剪影   // v9.22.10 陰雨天也多用三色（白天那組是灰藍）：以前反而少用，貼圖本身帶粉的陰影就透出來
   col.setRGB(0.98, 0.99, 1.08).lerp(dawnC, skyU.dawn.value * 0.8).lerp(gold, golden * 0.4).lerp(sunsetC, sunset).lerp(afterC, after).lerp(duskC, dusk).lerp(nightC, nk);   // 清晨粉桃、黃昏橘粉；天一暗雲就跟著暗下來，夜裡是月光下的深藍
   { const gl = gloom() * (1 - night * 0.6), st = Math.max(0, skyU.gloom.value - 1); col.lerp(rainC, gl * 0.85).multiplyScalar((1 - gl * 0.5) * (1 - st * 0.7)); }   // v8.7 再暗一點，暴風雨更暗   // 陰雨天：雲是灰藍色、不再被陽光照得雪白

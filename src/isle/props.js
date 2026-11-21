@@ -5,7 +5,7 @@ import { register, unregister, registerAt, realize } from './props3d.js';
 import { ULTRA } from './perf.js';
 import { roadPavers, plazaModel, homeClearance } from './plazamodels.js';
 import * as glow from './glow.js';
-import { current as seasonNow, auto as seasonAuto } from './seasons.js';
+import { current as seasonNow, auto as seasonAuto, shelter } from './seasons.js';
 import { N, C, T, tileAt as tileNow, groundAt, riverDist, FORD_Y, warp, tileOf, isBridge, BRIDGES, STAIRS } from './terrain.js';
 const tileAt = tileNow;
 /** 島嶼規劃（data/islandplan.js）：v6.79 起所有建築、道路與擺設都照規劃放 */
@@ -1196,9 +1196,74 @@ function flowerOne() {
   o.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); o.setAttribute('aTint', new THREE.Float32BufferAttribute(T, 1));
   return o;
 }
+/* v9.26 冬天的花壇、花台、門口的盆花（flower_bed／planter／flower_pots）：花謝了，花頭縮成一顆乾枯的褐色種子頭（朝上的面由積雪著色蓋上一點雪），葉子轉成枯黃的橄欖色。
+   只改這三種模型共用幾何的頂點色與花瓣位置（換季時改一次、換回來時還原），不多畫東西 */
+const DRESS_BASE = new Map(), DRESS_POS = new Map();   // 幾何 → 原本的頂點色；原本的位置與找到的花頭
+/** 找出花頭：連著五片花瓣。propmodels3 的 bloom 每片 8 個三角形、第一個頂點都是花瓣根；propmodels1 的 blade 每片 12 個、單雙數各共用一點，花瓣根是第 2 個頂點。
+    五片的花瓣根圍成正五邊形，平均就是花心。回傳 [起點, 頂點數, 花心 x, y, z] */
+function bloomHeads(p) {
+  const n = p.length / 3, same = (i, j) => p[i * 3] === p[j * 3] && p[i * 3 + 1] === p[j * 3 + 1] && p[i * 3 + 2] === p[j * 3 + 2];
+  const petal = i => { let ok = i + 24 <= n; for (let t = 1; t < 8 && ok; t++) ok = same(i, i + t * 3); if (ok) return [24, i];
+    ok = i + 36 <= n; for (let t = 1; t < 6 && ok; t++) ok = same(i, i + t * 6) && same(i + 3, i + 3 + t * 6); return ok ? [36, i + 1] : null; };
+  const out = []; let i = 0;
+  while (i < n) { const f = petal(i); if (!f) { i += 3; continue; }
+    let j = i, k = 0, x = 0, y = 0, z = 0;
+    for (; k < 5; k++) { const g = petal(j); if (!g || g[0] !== f[0]) break; x += p[g[1] * 3]; y += p[g[1] * 3 + 1]; z += p[g[1] * 3 + 2]; j += g[0]; }
+    if (k === 5) { out.push([i, j - i, x / 5, y / 5, z / 5]); i = j; } else i += f[0]; }
+  return out;
+}
+function dressWinter(on) {
+  ['flower_bed', 'flower_pots', 'planter'].forEach(key => (PARTS.get('PROPMODELS:' + key) || []).forEach(pt => {
+    const kind = pt.mat.userData.kind, c = pt.geo.attributes.color; if (!c || c.count < 100 || (kind !== 'plain' && kind !== 'sway')) return;   // 花是 plain 那一份、葉子是 sway；土（36 個頂點）不動
+    let base = DRESS_BASE.get(pt.geo); if (!base) { if (!on) return; DRESS_BASE.set(pt.geo, base = c.array.slice()); }
+    if (kind === 'plain') {   // 花頭往花心縮到四成：一小顆，不再是一朵朵頂著雪的白花
+      const P = pt.geo.attributes.position, A = P.array; let ps = DRESS_POS.get(pt.geo); if (!ps) DRESS_POS.set(pt.geo, ps = { base: A.slice(), heads: bloomHeads(A) });
+      if (!on) A.set(ps.base); else for (const [s, len, cx, cy, cz] of ps.heads) for (let v = s * 3; v < (s + len) * 3; v += 3) { A[v] = cx + (ps.base[v] - cx) * 0.4; A[v + 1] = cy + (ps.base[v + 1] - cy) * 0.4; A[v + 2] = cz + (ps.base[v + 2] - cz) * 0.4; }
+      if (ps.heads.length) P.needsUpdate = true;
+    }
+    const a = c.array;
+    if (!on) a.set(base); else for (let i = 0; i < a.length; i += 3) {
+      const r = base[i], g = base[i + 1], b = base[i + 2], l = r * 0.3 + g * 0.59 + b * 0.11;
+      if (kind === 'sway') { if (g > r && g > b) { a[i] = r + (l * 1.4 - r) * 0.85; a[i + 1] = g + (l * 1.1 - g) * 0.85; a[i + 2] = b + (l * 0.58 - b) * 0.85; } }   // 枯葉：稻草褐，只留一點點綠
+      else if (b > g || l > 0.4) { const k = 0.07 + l * 0.2; a[i] = k * 1.3; a[i + 1] = k * 0.95; a[i + 2] = k * 0.6; }   // 粉、紫、黃、白的花瓣依原本的深淺換成深褐到淺褐；鋪面的碎石不動
+    }
+    c.needsUpdate = true;
+  }));
+}
+/** 冬天的野花（v9.26）：花謝了，剩一根枯黃的莖、垂著頭的種子頭、兩片捲起來的枯葉、一枝斷掉的側梗（50 個三角形，開花時 91）。
+    全部用頂點色（aTint = 0，不染每朵的花色）；極省電只留莖和種子頭 */
+function flowerDry() {
+  const P = [], N = [], C = [], T = [], V = (x, y, z) => new THREE.Vector3(x, y, z), ab = V(0, 0, 0), ac = V(0, 0, 0), fn = V(0, 0, 0), UP = V(0, 1, 0);
+  const cS = new THREE.Color('#8f7b54'), cH = new THREE.Color('#4b3a29'), cL = new THREE.Color('#9d8a60');   // 枯莖的稻草色、種子頭的深褐、枯葉的淺褐
+  const tri = (col, a, b, c, sa, sb, sc, ref) => {   // 面法線要和 ref 同一邊
+    fn.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a)).normalize(); if (fn.dot(ref) < 0) { fn.negate(); [b, c, sb, sc] = [c, b, sc, sb]; }
+    [[a, sa], [b, sb], [c, sc]].forEach(([q, s]) => { P.push(q.x, q.y, q.z); N.push(fn.x, fn.y, fn.z); C.push(col.r * s, col.g * s, col.b * s); T.push(0); });
+  };
+  const ring = (c, a, r) => V(c.x + Math.cos(a) * r, c.y, c.z + Math.sin(a) * r);
+  const tube = (c0, c1, r0, r1, s0, s1) => { for (let k = 0; k < 3; k++) { const a0 = k * 2.0944, a1 = a0 + 2.0944, out = V(Math.cos(a0 + 1.0472), 0.15, Math.sin(a0 + 1.0472)), p00 = ring(c0, a0, r0), p01 = ring(c0, a1, r0), p10 = ring(c1, a0, r1), p11 = ring(c1, a1, r1); tri(cS, p00, p01, p11, s0, s0, s1, out); tri(cS, p00, p11, p10, s0, s1, s1, out); } };
+  const pod = (c, ax, len, r, n) => { const a0 = c.clone().addScaledVector(ax, -len * 0.4), a1 = c.clone().addScaledVector(ax, len * 0.6), u = V(0, 0, 0).crossVectors(ax, V(0.3, 0.2, 1)).normalize(), w = V(0, 0, 0).crossVectors(ax, u);   // 種子頭：兩頭尖的紡錘
+    for (let k = 0; k < n; k++) { const q = j => c.clone().addScaledVector(u, Math.cos(j * 6.2832 / n) * r).addScaledVector(w, Math.sin(j * 6.2832 / n) * r), p0 = q(k), p1 = q(k + 1), out = p0.clone().add(p1).sub(c).sub(c); tri(cH, a0, p0, p1, 0.8, 1.05, 1.05, out); tri(cH, p0, p1, a1, 1.05, 1.05, 1.3, out); } };
+  const spine = t => V(0.018 * t * t, 0.215 * t, -0.03 * t * t), top = spine(1);
+  if (ULTRA) { tube(spine(0), top, 0.006, 0.004, 0.72, 1); pod(V(top.x, top.y + 0.012, top.z), UP, 0.034, 0.012, 3); }
+  else {
+    for (let i = 0; i < 3; i++) tube(spine(i / 3), spine((i + 1) / 3), 0.0058 - 0.0014 * i / 3, 0.0058 - 0.0014 * (i + 1) / 3, 0.7 + 0.3 * i / 3, 0.7 + 0.3 * (i + 1) / 3);
+    const nod = V(top.x + 0.02, top.y + 0.012, top.z - 0.022), ax = V(0.5, -0.45, -0.74).normalize(); tube(top, nod, 0.0044, 0.0036, 1, 0.95);   // 莖頂彎下去，種子頭垂著
+    pod(nod.clone().addScaledVector(ax, 0.014), ax, 0.04, 0.0135, 5);
+    const b0 = spine(0.55), b1 = V(b0.x - 0.03, b0.y + 0.045, b0.z + 0.02); tube(b0, b1, 0.004, 0.003, 0.9, 1); pod(V(b1.x - 0.004, b1.y + 0.008, b1.z + 0.002), V(-0.4, 0.9, 0.15).normalize(), 0.024, 0.008, 3);   // 側梗上一顆小的
+    [[0.24, 0.6, 0.075], [0.42, 3.7, 0.06]].forEach(([t, az, len]) => {   // 枯葉：捲成一條、往下垂
+      const b = spine(t), dx = Math.cos(az), dz = Math.sin(az), m = V(b.x + dx * len * 0.55, b.y + len * 0.1, b.z + dz * len * 0.55), tip = V(b.x + dx * len * 0.8, b.y - len * 0.5, b.z + dz * len * 0.8), w = 0.007;
+      const ml = V(m.x + dz * w, m.y + 0.004, m.z - dx * w), mr = V(m.x - dz * w, m.y + 0.004, m.z + dx * w);
+      tri(cL, b, ml, mr, 0.85, 1, 0.9, UP); tri(cL, ml, tip, mr, 1, 0.8, 0.9, UP);
+    });
+  }
+  const o = new THREE.BufferGeometry();
+  o.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); o.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
+  o.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); o.setAttribute('aTint', new THREE.Float32BufferAttribute(T, 1));
+  return o;
+}
 /* 野花按16m分塊，一材質、一朵91 tris；5–9株一叢，保留原花色與flowerSpots。 */
 {
-  const oneG = flowerOne(), FC = 16, TOTAL = 6000, SPARE = 120;
+  const oneG = flowerOne(), FC = 16, TOTAL = 6000, SPARE = 120; let dryG = null, winterOn = false;
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide }); mat.defines = { TA_FLOWERTINT: '' }; bend(mat, 'flower');
   const chunks = new Map(); let total = 0, gardenSeed = 7741;
   const R = () => { gardenSeed = (gardenSeed * 16807) % 2147483647; return (gardenSeed - 1) / 2147483646; };
@@ -1276,11 +1341,17 @@ function flowerOne() {
   const build = (c, cap) => {
     c.cap = cap; const g = new THREE.Group(); g.name = 'w04-flower-chunk';
     const im = new THREE.InstancedMesh(oneG, mat, cap); im.name = 'w04-flowers'; im.receiveShadow = true; im.castShadow = false; im.frustumCulled = false; im.count = 0; g.add(im); c.im = im;
-    c.n = 0; scene.add(g); let lo = 1e9, hi = -1e9;
+    c.n = 0; c.win = winterOn; if (winterOn) im.geometry = dryG; scene.add(g); let lo = 1e9, hi = -1e9;
     for (let i = 0; i <= 2; i++) for (let j = 0; j <= 2; j++) { const gy = groundAt(c.x + (i - 1) * FC * 0.5, c.z + (j - 1) * FC * 0.5); lo = Math.min(lo, gy); hi = Math.max(hi, gy); }
     registerAt(g, c.x, (lo + hi) / 2 + 0.3, c.z, FC * 0.75 + 0.5, null, (hi - lo) / 2 + 0.8);
   };
-  const write = (c, m, token) => { const i = c.n++, im = c.im; c.tints[i] = token; im.setMatrixAt(i, m); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(tint(token))); im.instanceColor.needsUpdate = true; };
+  /* v9.26 冬天的野花：同一個 InstancedMesh 換成枯莖的幾何（不多畫東西），六成的株縮到看不見（稀疏）、留下的矮一點、高矮不一。
+     只把每株矩陣的三個軸乘上倍率，換季時除回來：藏花（hideFlowers／clearFlowers）縮成 0 的照樣是 0 */
+  const wK = (c, i) => { const h = Math.abs(Math.sin(i * 12.9898 + c.x * 0.731 + c.z * 1.377) * 43758.5453) % 1, h2 = (h * 57.31) % 1, h3 = (h * 113.7) % 1; return h > 0.4 ? [1e-4, 1e-4, 1e-4] : [0.85 + h2 * 0.35, 0.5 + h3 * 0.55, 0.85 + h2 * 0.35]; };
+  const wOne = (c, i, on) => { const a = c.im.instanceMatrix.array, o = i * 16, k = wK(c, i); for (let j = 0; j < 3; j++) { const s = on ? k[j] : 1 / k[j]; a[o + j * 4] *= s; a[o + j * 4 + 1] *= s; a[o + j * 4 + 2] *= s; } };
+  const setWinter = on => { winterOn = on; if (on && !dryG) dryG = flowerDry(); dressWinter(on);
+    chunks.forEach(c => { if (!c.im || !!c.win === on) return; c.win = on; c.im.geometry = on ? dryG : oneG; for (let i = 0; i < c.n; i++) wOne(c, i, on); c.im.instanceMatrix.needsUpdate = true; }); };
+  const write = (c, m, token) => { const i = c.n++, im = c.im; c.tints[i] = token; im.setMatrixAt(i, m); if (c.win) wOne(c, i, true); im.count = c.n; im.instanceMatrix.needsUpdate = true; im.setColorAt(i, col.set(tint(token))); im.instanceColor.needsUpdate = true; };
   const matrix = (x, z, size, level = 1) => m4.compose(v.set(x, groundAt(x, z), z), q.setFromEuler(e.set((R() - 0.5) * 0.3, R() * Math.PI * 2, (R() - 0.5) * 0.3)), sc.set(size, [0.4, 0.8, 1.2][level], size));   // v9.25 每株往不同方向歪一點（亂數的次數和順序不變）
   const safe = (x, z, pad = 0.13) => {
     const t = tileAt(x, z); return (t === 1 || t === 2) && !onRoad(x, z) && !blocked(x, z, pad) && !homeKeepout(x, z, pad) && !isBridgeAt(x, z) && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > 6.72;
@@ -1340,8 +1411,9 @@ function flowerOne() {
   }
   chunks.forEach(c => { build(c, c.mats.length + SPARE); c.mats.forEach((m, i) => write(c, m, c.cols[i])); c.mats = c.cols = null; });
   // 設定頁即時換季時也更新instanceColor；保留FP四季色盤與aTint，不必重建幾何。
+  if (FS === 'winter') setWinter(true);
   mat.onBeforeRender = () => {
-    const now = seasonNow(); if (now === FS || !SEASON_FP[now]) return; FS = now;
+    const now = seasonNow(); if (now === FS || !SEASON_FP[now]) return; FS = now; setWinter(now === 'winter');
     chunks.forEach(c => { if (!c.im) return; for (let i = 0; i < c.n; i++) c.im.setColorAt(i, col.set(tint(c.tints[i]))); c.im.instanceColor.needsUpdate = true; });
   };
   wildFlowers = (x, z, color) => {
@@ -1349,9 +1421,38 @@ function flowerOne() {
     if (total >= TOTAL || !safe(x, z)) return; const ch = chunkOf(x, z); if (!ch.im) build(ch, SPARE * 2); if (ch.n >= ch.cap) return;
     write(ch, matrix(x, z, 0.9 + R() * 0.2, 1), color); total++; flowerSpots.push([x, z]);
   };
-  hideFlowers = hit => { const kept = []; chunks.forEach(c => { if (!c.im) return; let n = 0; for (let i = 0; i < c.n; i++) { c.im.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); if (hit(v.x, v.z)) { kept.push([c, i, m4.clone()]); c.im.setMatrixAt(i, m4.makeScale(0, 0, 0).setPosition(v)); n++; } } if (n) c.im.instanceMatrix.needsUpdate = true; });
-    return () => kept.forEach(([c, i, m]) => { c.im.setMatrixAt(i, m); c.im.instanceMatrix.needsUpdate = true; }); };
+  hideFlowers = hit => { const kept = []; chunks.forEach(c => { if (!c.im) return; let n = 0; for (let i = 0; i < c.n; i++) { c.im.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); if (hit(v.x, v.z)) { kept.push([c, i, m4.clone(), !!c.win]); c.im.setMatrixAt(i, m4.makeScale(0, 0, 0).setPosition(v)); n++; } } if (n) c.im.instanceMatrix.needsUpdate = true; });
+    return () => kept.forEach(([c, i, m, w]) => { c.im.setMatrixAt(i, m); if (w !== !!c.win) wOne(c, i, !!c.win); c.im.instanceMatrix.needsUpdate = true; }); };   // 藏起來的期間換了季：長回來時換成現在這一季的樣子
   clearFlowers = hit => chunks.forEach(c => { if (!c.im) return; let n = 0; for (let i = 0; i < c.n; i++) { c.im.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); if (hit(v.x, v.z)) { c.im.setMatrixAt(i, m4.makeScale(0, 0, 0).setPosition(v)); n++; } } if (n) c.im.instanceMatrix.needsUpdate = true; });
 }
+/* v9.26 積雪的遮蔽圖（seasons.js 在冬天第一次到島上時呼叫一次，約幾十毫秒）：512×512、每格約 20 公分，涵蓋整座島。
+   樹幹、柱子、石頭、長椅、房子的牆腳邊是 1，往外半公尺多淡出，背風的一側（風從西往東吹）拖長一倍多；台地牆腳、崖腳也算（背風面最多）。
+   地面的積雪著色用它把雪堆在這些東西的腳邊（不加任何網格） */
+shelter.bake = () => {
+  const SZ = 512, EXT = 104, cell = EXT / SZ, d = new Float32Array(SZ * SZ), WX = 0.97, WZ = 0.24, ix = v => (v + EXT / 2) / cell;
+  const stamp = (x0, z0, x1, z1, r, reach, k) => {
+    const R = r + reach * 2.4 + cell, i0 = Math.max(0, Math.floor(ix(x0 - R))), i1 = Math.min(SZ - 1, Math.ceil(ix(x1 + R))), j0 = Math.max(0, Math.floor(ix(z0 - R))), j1 = Math.min(SZ - 1, Math.ceil(ix(z1 + R)));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const x = (i + 0.5) * cell - EXT / 2, z = (j + 0.5) * cell - EXT / 2, ox = x - Math.min(Math.max(x, x0), x1), oz = z - Math.min(Math.max(z, z0), z1), len = Math.hypot(ox, oz), dist = len - r;
+      let v = k;
+      if (dist > 0) { const lee = Math.max(0, (ox * WX + oz * WZ) / len), t = dist / (reach * (1 + 1.4 * lee * lee)); if (t >= 1) continue; v = k * (1 - t) * (1 - t); }
+      const q = j * SZ + i; if (v > d[q]) d[q] = v;
+    }
+  };
+  colliders.forEach(c => { if (c.r) stamp(c.x, c.z, c.x, c.z, c.r * 0.8, c.r < 0.25 ? 0.4 : 0.6, 1); else stamp(c.x0, c.z0, c.x1, c.z1, 0, 0.7, 0.85); });
+  { // 台地的牆腳、崖腳：往四個方向一公尺多內有高出一截的地面（每格約 40 公分）
+    const G = 256, gc = EXT / G, gh = new Float32Array(G * G), NB = [[-1, 0, 1, 4], [1, 0, 0.6, 2], [0, -1, 0.8, 3], [0, 1, 0.8, 3]];   // [方向, 強度, 最遠幾格]：風從 -x 來，牆的東側（背風）積得最多、拖得最遠
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) gh[j * G + i] = groundAt((i + 0.5) * gc - EXT / 2, (j + 0.5) * gc - EXT / 2);
+    for (let j = 4; j < G - 4; j++) for (let i = 4; i < G - 4; i++) {
+      const h = gh[j * G + i]; let v = 0;
+      for (const [di, dj, k, far] of NB) for (let s = 1; s <= far; s++) if (gh[(j + dj * s) * G + i + di * s] - h > 0.45) { v = Math.max(v, k * (1 - (s - 1) / far)); break; }   // 離牆越遠越薄
+      if (v) for (let b = 0; b < 4; b++) { const q = (j * 2 + (b >> 1)) * SZ + i * 2 + (b & 1); if (v * 0.9 > d[q]) d[q] = v * 0.9; }
+    }
+  }
+  const out = new Uint8Array(SZ * SZ);   // 3×3 平均：邊緣柔一點
+  for (let j = 1; j < SZ - 1; j++) for (let i = 1; i < SZ - 1; i++) { const q = j * SZ + i; out[q] = Math.round((d[q - SZ - 1] + d[q - SZ] + d[q - SZ + 1] + d[q - 1] + d[q] + d[q + 1] + d[q + SZ - 1] + d[q + SZ] + d[q + SZ + 1]) / 9 * 255); }
+  const tex = new THREE.DataTexture(out, SZ, SZ, THREE.RedFormat, THREE.UnsignedByteType); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  return tex;
+};
 /** v6.78 以前：溪畔那一棟島民的家挪到構圖較好的位置。新島照規劃擺好了，不用挪 */
 export function nudgeHome() { return false; }

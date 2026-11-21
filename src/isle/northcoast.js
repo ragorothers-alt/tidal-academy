@@ -3,7 +3,7 @@
    模型在 data/northmodels.js（Codex 製作）；擺好的東西登記碰撞，小船與游泳也會繞開海蝕柱。 */
 import * as THREE from 'three';
 import { scene } from './engine.js';
-import { groundAt, seaMesh } from './terrain.js';
+import { groundAt } from './terrain.js';
 import { colliders, modelClone } from './props.js';
 import { register } from './props3d.js';
 import * as cave from './cave.js';
@@ -13,7 +13,7 @@ export const MOUTH = [17, -37.6], DOOR = [17, -38.4];   // 潮洞洞口的門檻
 const CLIFF = -36.25;   // 洞口這段台地崖壁的 z
 const SEA = [['sea_stack_a', -12, -47.5, 0.4], ['sea_stack_b', 5, -47, 2.1], ['sea_arch', 27, -41, Math.PI / 2]];   // 拱洞朝東西：沿著北海岸划船剛好穿過去
 const LAND = [['driftwood', 8.5, -39.6, 0.35, 1.0], ['tide_rocks', -2, -42.6, 1.2, 0], ['tide_rocks', 11.5, -40.7, 4.1, 0], ['driftwood', -9, -41.2, 2.6, 1.0], ['tide_rocks', 13.9, -37.9, 2.3, 0], ['tide_rocks', 20.2, -37.3, 5.4, 0]];   // 最後兩組靠著潮洞洞口的兩側
-const floats = [];
+const SEA_MEAN = 0.02;   // tide.js 的海面高度 0.02 ± 0.2 的中間
 let ctx = null;
 export function init(c) {
   ctx = c;
@@ -21,7 +21,7 @@ export function init(c) {
   if (cm) { cm.position.set(MOUTH[0], groundAt(MOUTH[0], MOUTH[1] - 0.3) - 0.05, MOUTH[1] + 2.5); cm.rotation.y = Math.PI; cm.scale.y = 0.74; shade(cm); deepen(cm, MOUTH[1] + 2.5 - (CLIFF - 0.15)); scene.add(cm); register(cm); colliders.push({ x0: MOUTH[0] - 3.4, x1: MOUTH[0] + 3.4, z0: MOUTH[1] + 0.35, z1: MOUTH[1] + 1.6 }); }   // 開口朝北（模型的 +Z 轉向 -z）；模型深 5 公尺，後面 3.6 公尺埋進台地的崖壁，壓矮到頂和台地差不多高；碰撞只擋崖前露出來的那段
   SEA.forEach(([key, x, z, ry]) => {
     const m = modelClone('NORTHMODELS', key); if (!m) return;
-    m.position.set(x, seaMesh.position.y, z); m.rotation.y = ry; scene.add(m); floats.push(m);
+    m.position.set(x, SEA_MEAN, z); m.rotation.y = ry; scene.add(m);   // v9.26 石柱與拱固定在平均海面：潮水在岩石上漲退，濕的那一段由著色器依當下的海面算（以前整根跟著海面上下浮）
     if (key === 'sea_arch') [-1, 1].forEach(s => [-0.6, 0.6].forEach(w => { const lx = s * 2.5; colliders.push({ x: x + lx * Math.cos(ry) + w * Math.sin(ry), z: z - lx * Math.sin(ry) + w * Math.cos(ry), r: 1.1 }); }));   // 拱的兩根腳（水面上各約 2 × 2.5 公尺，沿水道放兩個圓）；中間的洞划得過去
     else colliders.push({ x, z, r: key === 'sea_stack_a' ? 1.7 : 1.2 });
   });
@@ -57,8 +57,8 @@ function signText(g) {
   const p = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.86, h * 0.8), new THREE.MeshStandardMaterial({ map: t, roughness: 0.85 }));
   p.position.set((bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, bb.max.z + 0.004); b.add(p);
 }
-/** 每一格：海裡的石柱跟著潮水（海面）上下 */
-export function update() { const y = seaMesh.position.y; floats.forEach(m => { m.position.y = y; }); }
+/** 每一格：v9.26 起石柱固定不動，這裡不必再做什麼（保留給 main.js 呼叫） */
+export function update() {}
 const nearMouth = (px, pz) => Math.hypot(px - DOOR[0], pz - DOOR[1]) < 1.5;
 export function hint(px, pz) { return nearMouth(px, pz) ? (cave.open() ? '走進潮洞' : '看看洞口') : ''; }
 export function act(px, pz) {

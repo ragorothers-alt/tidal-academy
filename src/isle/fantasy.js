@@ -515,7 +515,7 @@ function updateBg(night, gold) {
   camera.getWorldDirection(camF);
   bgs.forEach(o => {
     const c = o.c, sx = Math.sin(c.az), sz = -Math.cos(c.az);
-    o.m.color.copy(bgCol); o.m.opacity = 1 - THREE.MathUtils.smoothstep(skyU.wx.value.x, 0.35, 0.9) * 0.8;   // v9.22.2 下雨時遠山隱進雨霧
+    o.m.color.copy(bgCol); o.m.opacity = 1 - THREE.MathUtils.smoothstep(skyU.wx.value.x, 0.35, 0.9) * (0.8 + skyU.wx.value.y * 0.14);   // v9.22.2 下雨時遠山隱進雨霧   // v9.25.2 暴風雨幾乎看不見（以前在暗的雲層前面留下一座比天空亮的白山影）
     o.s.visible = sx * camF.x + sz * camF.z > -0.35; if (!o.s.visible) return;   // 在鏡頭背後：藏起來、不用重算位置（還沒定位過的看板停在原點，不能露出來）
     const x = camera.position.x + sx * c.d, z = camera.position.z + sz * c.d;
     o.s.position.set(x, yForNdc(x, z, seaNdc(x, z) + c.up), z);
@@ -756,7 +756,7 @@ export function update(dt, t, night, show) {
   const lit = Math.max(THREE.MathUtils.smoothstep(night, 0.15, 0.7), gold * 0.35 * THREE.MathUtils.smoothstep(skyU.sunDir.value.y, 0.45, 0.1));   // 黃昏開始亮燈
   lights.forEach(o => { o.sp.visible = lit > 0.01; o.sm.opacity = lit * (0.8 + 0.2 * Math.sin(t * 2.3 + o.ph)); });
   puffCol.copy(skyU.bot.value).lerp(WHITE, 0.55 * (1 - night) * (1 - gloomK * 0.7)).multiplyScalar((1 - night * 0.55) * (1 - gloomK * 0.3));   // v8.7 雨天的低雲也暗一點
-  puffs.forEach(m => { m.color.copy(puffCol); if (m.userData.op0 == null) m.userData.op0 = m.opacity; m.opacity = m.userData.op0 * (1 - skyU.wx.value.x * 0.55); });   // v9.22.6 雨裡島底的雲霧也淡進雨霧（以前在灰色的雨天裡還是一團白亮的雲）
+  puffs.forEach(m => { m.color.copy(puffCol).multiplyScalar(1 - skyU.wx.value.y * 0.3); if (m.userData.op0 == null) m.userData.op0 = m.opacity; m.opacity = m.userData.op0 * (1 - skyU.wx.value.x * 0.55 - skyU.wx.value.y * 0.25); });   // v9.22.6 雨裡島底的雲霧也淡進雨霧（以前在灰色的雨天裡還是一團白亮的雲）   // v9.25.2 暴風雨再暗、再淡一點（以前在暗的雲層前面是一圈發亮的藍紫色雲）
   far.forEach(o => {
     const x = Math.sin(o.az) * o.d, z = -Math.cos(o.az) * o.d, on = inCone(x, z, (o.size || 60) * 0.8);
     o.g.visible = on; if (o.fall) o.fall.sp.visible = o.fall.mist.visible = on;
